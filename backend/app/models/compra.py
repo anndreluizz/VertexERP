@@ -1,0 +1,51 @@
+from datetime import datetime
+
+from sqlalchemy import DateTime, Float, ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.database.base import Base
+
+
+class Compra(Base):
+
+    __tablename__ = "compras"
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        index=True,
+    )
+
+    fornecedor_id: Mapped[int] = mapped_column(
+        ForeignKey("fornecedores.id"),
+    )
+
+    data: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+    valor_total: Mapped[float] = mapped_column(
+        Float,
+        default=0,
+    )
+
+    observacao: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="FINALIZADA",
+    )
+
+    fornecedor = relationship(
+        "Fornecedor",
+        back_populates="compras",
+    )
+
+    itens = relationship(
+        "ItemCompra",
+        back_populates="compra",
+        cascade="all, delete-orphan",
+    )

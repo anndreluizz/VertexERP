@@ -1,0 +1,100 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.auth.dependencies import get_current_user
+from app.database.session import SessionLocal
+from app.schemas.movimento_caixa import (
+    MovimentoCaixaCreate,
+    MovimentoCaixaResponse,
+)
+from app.services.movimento_caixa_service import (
+    MovimentoCaixaService,
+)
+
+router = APIRouter(
+    prefix="/movimentos-caixa",
+    tags=["Movimentos Caixa"],
+)
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@router.post("/", response_model=MovimentoCaixaResponse)
+def criar_movimento(
+    dados: MovimentoCaixaCreate,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        movimento = MovimentoCaixaService.criar(
+            db,
+            dados,
+            usuario.id,
+        )
+
+        return MovimentoCaixaResponse.from_orm(movimento)
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
+
+
+@router.get("/", response_model=list[MovimentoCaixaResponse])
+def listar_movimentos(
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    movimentos = MovimentoCaixaService.listar(db)
+
+    return [
+        MovimentoCaixaResponse.from_orm(m)
+        for m in movimentos
+    ]
+
+
+@router.get(
+    "/caixa/{caixa_id}",
+    response_model=list[MovimentoCaixaResponse],
+)
+def listar_por_caixa(
+    caixa_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    movimentos = MovimentoCaixaService.listar_por_caixa(
+        db,
+        caixa_id,
+    )
+
+    return [
+        MovimentoCaixaResponse.from_orm(m)
+        for m in movimentos
+    ]
+
+
+@router.get(
+    "/tipo/{tipo}",
+    response_model=list[MovimentoCaixaResponse],
+)
+def listar_por_tipo(
+    tipo: str,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    movimentos = MovimentoCaixaService.listar_por_tipo(
+        db,
+        tipo,
+    )
+
+    return [
+        MovimentoCaixaResponse.from_orm(m)
+        for m in movimentos
+    ]

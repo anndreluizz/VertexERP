@@ -1,0 +1,28 @@
+from pydantic import BaseModel, EmailStr
+
+
+class ClienteCreate(BaseModel):
+    nome: str
+    cpf_cnpj: str | None = None
+    email: EmailStr | None = None
+    telefone: str | None = None
+
+
+class ClienteUpdate(BaseModel):
+    nome: str
+    cpf_cnpj: str | None = None
+    email: EmailStr | None = None
+    telefone: str | None = None
+    ativo: bool
+
+
+class ClienteResponse(BaseModel):
+    id: int
+    nome: str
+    cpf_cnpj: str | None
+    email: EmailStr | None
+    telefone: str | None
+    ativo: bool
+
+    class Config:
+        orm_mode = True

@@ -411,11 +411,15 @@ class Clientes(QWidget):
         self.card_faturamento = StatCard(
             "📈", "#7B1FA2", "FATURAMENTO", "Histórico", "R$ 0,00"
         )
+        self.card_a_receber = StatCard(
+            "💳", "#C62828", "A RECEBER", "Fiado em aberto", "R$ 0,00"
+        )
 
         resumo_layout.addWidget(self.card_total, 0, 0)
         resumo_layout.addWidget(self.card_ativos, 0, 1)
         resumo_layout.addWidget(self.card_inativos, 0, 2)
         resumo_layout.addWidget(self.card_faturamento, 0, 3)
+        resumo_layout.addWidget(self.card_a_receber, 0, 4)
 
         layout.addLayout(resumo_layout)
 
@@ -563,11 +567,18 @@ class Clientes(QWidget):
 
         faturamento_total = sum(self.vendas_por_cliente.values())
 
+        total_a_receber = sum(
+            float(c.get("saldo_fiado", 0) or 0) for c in self.clientes
+        )
+
         self.card_total.atualizar(str(total))
         self.card_ativos.atualizar(str(ativos))
         self.card_inativos.atualizar(str(inativos))
         self.card_faturamento.atualizar(
             f"R$ {faturamento_total:.2f}"
+        )
+        self.card_a_receber.atualizar(
+            f"R$ {total_a_receber:.2f}"
         )
 
     # ==========================================

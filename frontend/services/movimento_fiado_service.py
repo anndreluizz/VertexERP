@@ -38,3 +38,17 @@ def registrar_pagamento(
             "descricao": descricao,
         },
     )
+
+
+def lancar_fiado_manual(cliente_id, valor, descricao, data=None):
+
+    return post(
+        "/fiado/movimentos",
+        {
+            "cliente_id": cliente_id,
+            "tipo": "COMPRA",
+            "valor": valor,
+            "descricao": descricao,
+            "data": data,
+        },
+    )

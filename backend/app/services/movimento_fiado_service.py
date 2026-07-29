@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy.orm import Session
 
 from app.models.movimento_fiado import MovimentoFiado
@@ -85,19 +87,25 @@ class MovimentoFiadoService:
             valor=dados.valor,
             descricao=dados.descricao,
             forma_pagamento=forma_pagamento,
+            data=dados.data or datetime.utcnow(),
         )
 
         return MovimentoFiadoRepository.criar(db, movimento)
 
     @staticmethod
-    def criar_compra_da_venda(db: Session, venda, usuario_id: int):
+    def criar_compra_da_venda(
+        db: Session, venda, usuario_id: int, valor: float | None = None
+    ):
+        # 'valor' existe pra venda dividida em 2 formas de pagamento —
+        # nesse caso so a parcela que foi de fato pro fiado deve virar
+        # divida no caderninho, nao o total da venda inteira.
 
         movimento = MovimentoFiado(
             cliente_id=venda.cliente_id,
             venda_id=venda.id,
             usuario_id=usuario_id,
             tipo="COMPRA",
-            valor=venda.valor_total,
+            valor=valor if valor is not None else venda.valor_total,
             descricao=f"Venda #{venda.id}",
         )
 

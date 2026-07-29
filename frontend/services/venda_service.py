@@ -18,6 +18,8 @@ def finalizar_venda(
     desconto=0,
     observacao=None,
     data_vencimento=None,
+    forma_pagamento_2=None,
+    valor_forma_2=None,
 ):
 
     dados = {
@@ -25,6 +27,8 @@ def finalizar_venda(
         "observacao": observacao,
         "desconto": desconto,
         "forma_pagamento": forma_pagamento,
+        "forma_pagamento_2": forma_pagamento_2,
+        "valor_forma_2": valor_forma_2,
         "data_vencimento": data_vencimento,
         "itens": [],
     }

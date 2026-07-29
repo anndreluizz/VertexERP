@@ -1,4 +1,6 @@
-from PySide6.QtCore import Qt
+from datetime import date, datetime
+
+from PySide6.QtCore import Qt, QDate
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -6,6 +8,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QLabel,
     QLineEdit,
+    QDateEdit,
     QPushButton,
     QFrame,
     QTableWidget,
@@ -14,10 +17,13 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
+from services.produto_service import listar_produtos
+from services.venda_service import listar_vendas
 from services.movimento_fiado_service import (
     saldo_cliente,
     listar_movimentos_cliente,
     registrar_pagamento,
+    lancar_fiado_manual,
 )
 
 FORMAS_PAGAMENTO = [
@@ -26,6 +32,206 @@ FORMAS_PAGAMENTO = [
     ("Débito", "DEBITO"),
     ("Crédito", "CREDITO"),
 ]
+
+
+class LancarFiadoDialog(QDialog):
+    """Lançamento manual de uma compra fiada — pensado pra migrar o
+    saldo que já existia nas fichas de papel (caderninho tradicional),
+    onde a loja quer registrar o valor e os itens sem precisar recriar
+    a venda inteira no PDV."""
+
+    def __init__(self, cliente, parent=None):
+
+        super().__init__(parent)
+
+        self.cliente = cliente
+
+        self.setWindowTitle("Lançar Fiado")
+        self.setFixedSize(400, 440)
+        self.setStyleSheet("background:white;")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(14)
+
+        titulo = QLabel("Lançar Fiado")
+        titulo.setStyleSheet(
+            "background:transparent; font-size:17px; "
+            "font-weight:bold; color:#202225;"
+        )
+
+        subtitulo = QLabel(
+            f"Registra uma compra fiada de {cliente['nome']} — "
+            "use pra colocar no sistema o saldo que já estava "
+            "anotado na ficha de papel."
+        )
+        subtitulo.setWordWrap(True)
+        subtitulo.setStyleSheet(
+            "background:transparent; font-size:12px; color:gray;"
+        )
+
+        layout.addWidget(titulo)
+        layout.addWidget(subtitulo)
+        layout.addSpacing(6)
+
+        lbl_valor_titulo = QLabel("VALOR (R$)")
+        lbl_valor_titulo.setStyleSheet(
+            "background:transparent; font-size:11px; "
+            "font-weight:bold; color:gray;"
+        )
+
+        self.valor = QLineEdit()
+        self.valor.setPlaceholderText("0,00")
+        self.valor.setAlignment(Qt.AlignCenter)
+        self.valor.setStyleSheet("""
+            QLineEdit {
+                font-size:32px;
+                font-weight:bold;
+                color:#C62828;
+                border:none;
+                border-bottom:2px solid #e0e0e0;
+                padding:6px 0;
+            }
+        """)
+
+        layout.addWidget(lbl_valor_titulo)
+        layout.addWidget(self.valor)
+
+        lbl_itens_titulo = QLabel("ITENS COMPRADOS")
+        lbl_itens_titulo.setStyleSheet(
+            "background:transparent; font-size:11px; "
+            "font-weight:bold; color:gray;"
+        )
+
+        self.itens = QLineEdit()
+        self.itens.setPlaceholderText(
+            "Ex: mochila, caderno"
+        )
+        self.itens.setMinimumHeight(42)
+        self.itens.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #cccccc;
+                border-radius: 8px;
+                padding: 0 12px;
+                font-size: 13px;
+                color: #202225;
+            }
+            QLineEdit:focus {
+                border: 1px solid #C62828;
+            }
+        """)
+
+        layout.addWidget(lbl_itens_titulo)
+        layout.addWidget(self.itens)
+
+        lbl_data_titulo = QLabel("DATA DA COMPRA")
+        lbl_data_titulo.setStyleSheet(
+            "background:transparent; font-size:11px; "
+            "font-weight:bold; color:gray;"
+        )
+
+        self.data = QDateEdit()
+        self.data.setCalendarPopup(True)
+        self.data.setDisplayFormat("dd/MM/yyyy")
+        self.data.setDate(QDate.currentDate())
+        self.data.setMinimumHeight(42)
+        self.data.setStyleSheet("""
+            QDateEdit {
+                border: 1px solid #cccccc;
+                border-radius: 8px;
+                padding: 0 12px;
+                font-size: 13px;
+                color: #202225;
+            }
+            QDateEdit:focus {
+                border: 1px solid #C62828;
+            }
+        """)
+
+        layout.addWidget(lbl_data_titulo)
+        layout.addWidget(self.data)
+
+        layout.addStretch()
+
+        botoes = QHBoxLayout()
+
+        bt_cancelar = QPushButton("Cancelar")
+        bt_cancelar.setMinimumHeight(46)
+        bt_cancelar.setAutoDefault(False)
+        bt_cancelar.setStyleSheet("""
+            QPushButton {
+                background:white;
+                color:#202225;
+                border:1px solid #cccccc;
+                border-radius:10px;
+            }
+            QPushButton:hover {
+                background:#e8e8e8;
+            }
+        """)
+        bt_cancelar.clicked.connect(self.reject)
+
+        bt_confirmar = QPushButton("Lançar")
+        bt_confirmar.setMinimumHeight(46)
+        bt_confirmar.setAutoDefault(False)
+        bt_confirmar.setStyleSheet("""
+            QPushButton {
+                background:#C62828;
+                color:white;
+                font-weight:bold;
+                border-radius:10px;
+            }
+            QPushButton:hover {
+                background:#8E1616;
+            }
+        """)
+        bt_confirmar.clicked.connect(self.confirmar)
+
+        botoes.addWidget(bt_cancelar)
+        botoes.addWidget(bt_confirmar)
+
+        layout.addLayout(botoes)
+
+        self.valor.setFocus()
+
+    def confirmar(self):
+
+        try:
+            valor = float(self.valor.text().replace(",", "."))
+        except ValueError:
+            QMessageBox.warning(
+                self, "Atenção", "Informe um valor válido."
+            )
+            return
+
+        if valor <= 0:
+            QMessageBox.warning(
+                self, "Atenção", "Informe um valor maior que zero."
+            )
+            return
+
+        itens = self.itens.text().strip() or None
+
+        data_qt = self.data.date()
+        data_iso = (
+            date(data_qt.year(), data_qt.month(), data_qt.day())
+            .isoformat()
+            + "T00:00:00"
+        )
+
+        response = lancar_fiado_manual(
+            self.cliente["id"], valor, itens, data_iso
+        )
+
+        if response.status_code in (200, 201):
+            self.accept()
+        else:
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+
+            QMessageBox.critical(self, "Erro", str(erro))
 
 
 class RegistrarPagamentoDialog(QDialog):
@@ -312,6 +518,25 @@ class FichaClienteDialog(QDialog):
         """)
         self.bt_pagar.clicked.connect(self.registrar_pagamento)
 
+        self.bt_lancar_fiado = QPushButton("+ Lançar Fiado")
+        self.bt_lancar_fiado.setMinimumHeight(46)
+        self.bt_lancar_fiado.setAutoDefault(False)
+        self.bt_lancar_fiado.setStyleSheet("""
+            QPushButton {
+                background:white;
+                color:#C62828;
+                border:1px solid #C62828;
+                font-weight:bold;
+                border-radius:10px;
+                padding:0 18px;
+            }
+            QPushButton:hover {
+                background:#FFEBEE;
+            }
+        """)
+        self.bt_lancar_fiado.clicked.connect(self.lancar_fiado)
+
+        saldo_layout.addWidget(self.bt_lancar_fiado)
         saldo_layout.addWidget(self.bt_pagar)
 
         corpo.addWidget(saldo_frame)
@@ -492,6 +717,35 @@ class FichaClienteDialog(QDialog):
 
             QMessageBox.critical(self, "Erro", str(erro))
 
+    def _descricao_com_itens(self, mov):
+        """Pra compras vindas de uma venda de verdade do PDV, troca o
+        texto generico ("Venda #12") pela lista dos produtos —
+        exatamente o que aparecia escrito a mao na ficha de papel.
+        Lancamentos manuais (sem venda_id) ja tem os itens digitados
+        direto na descricao, entao ficam como estao."""
+
+        venda_id = mov.get("venda_id")
+        descricao = mov.get("descricao") or ""
+
+        if mov.get("tipo") != "COMPRA" or venda_id is None:
+            return descricao
+
+        venda = self._vendas_por_id.get(venda_id)
+
+        if not venda or not venda.get("itens"):
+            return descricao
+
+        partes = []
+
+        for item in venda["itens"]:
+            nome = self._nomes_produto.get(
+                item.get("produto_id"), "Produto removido"
+            )
+            quantidade = item.get("quantidade", 1)
+            partes.append(f"{nome} x{quantidade}")
+
+        return ", ".join(partes) if partes else descricao
+
     def carregar(self):
 
         saldo = saldo_cliente(self.cliente["id"])
@@ -504,6 +758,13 @@ class FichaClienteDialog(QDialog):
         )
 
         self.bt_pagar.setEnabled(saldo > 0)
+
+        self._vendas_por_id = {
+            v["id"]: v for v in listar_vendas()
+        }
+        self._nomes_produto = {
+            p["id"]: p["nome"] for p in listar_produtos()
+        }
 
         movimentos = listar_movimentos_cliente(self.cliente["id"])
 
@@ -540,7 +801,7 @@ class FichaClienteDialog(QDialog):
             self.tabela.setItem(
                 linha,
                 3,
-                QTableWidgetItem(mov.get("descricao") or ""),
+                QTableWidgetItem(self._descricao_com_itens(mov)),
             )
 
     def registrar_pagamento(self):
@@ -560,6 +821,15 @@ class FichaClienteDialog(QDialog):
             saldo,
             parent=self,
         )
+
+        if dialogo.exec() != QDialog.Accepted:
+            return
+
+        self.carregar()
+
+    def lancar_fiado(self):
+
+        dialogo = LancarFiadoDialog(self.cliente, parent=self)
 
         if dialogo.exec() != QDialog.Accepted:
             return

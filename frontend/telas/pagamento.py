@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QFrame,
     QLineEdit,
+    QCheckBox,
     QMessageBox,
 )
 
@@ -26,6 +27,8 @@ FORMAS = [
     ("PIX", "PIX"),
     ("A Prazo", "PRAZO"),
 ]
+
+NOMES_FORMA = {valor: rotulo for rotulo, valor in FORMAS}
 
 VALORES_RAPIDOS = [1, 2, 5, 10, 20, 50, 100]
 
@@ -43,8 +46,13 @@ class PagamentoWindow(QDialog):
         self.cliente_id = None
         self.cliente_nome = None
 
+        # pagamento dividido (opcional, no maximo 2 formas)
+        self.dividir_pagamento = False
+        self.forma_pagamento_2 = None
+        self.valor_forma_2 = 0.0
+
         self.setWindowTitle("Pagamento")
-        self.setFixedSize(980, 560)
+        self.setFixedSize(980, 720)
         self.setStyleSheet("background:white;")
 
         raiz = QVBoxLayout(self)
@@ -213,6 +221,89 @@ class PagamentoWindow(QDialog):
             formas_layout.addWidget(bt)
 
         dir_layout.addLayout(formas_layout)
+
+        # ---- dividir pagamento (2ª forma) ----
+
+        self.check_dividir = QCheckBox(
+            "Dividir com uma 2ª forma de pagamento"
+        )
+        self.check_dividir.setStyleSheet(
+            "background:transparent; font-size:12px; color:#202225;"
+        )
+        self.check_dividir.stateChanged.connect(
+            self.alternar_divisao
+        )
+
+        dir_layout.addWidget(self.check_dividir)
+
+        self.bloco_divisao = QFrame()
+        self.bloco_divisao.setStyleSheet(
+            "background:#f4f5f7; border-radius:8px;"
+        )
+        self.bloco_divisao.setVisible(False)
+
+        divisao_layout = QVBoxLayout(self.bloco_divisao)
+        divisao_layout.setContentsMargins(14, 12, 14, 12)
+        divisao_layout.setSpacing(8)
+
+        lbl_2forma_titulo = QLabel("2ª FORMA DE PAGAMENTO")
+        lbl_2forma_titulo.setStyleSheet(
+            "background:transparent; font-size:11px; "
+            "font-weight:bold; color:gray;"
+        )
+        divisao_layout.addWidget(lbl_2forma_titulo)
+
+        formas_2_layout = QHBoxLayout()
+        formas_2_layout.setSpacing(6)
+
+        self.botoes_forma_2 = {}
+
+        for rotulo, valor in FORMAS:
+
+            bt = QPushButton(rotulo)
+            bt.setCheckable(True)
+            bt.setMinimumHeight(40)
+            bt.setAutoDefault(False)
+            bt.clicked.connect(
+                lambda checked, v=valor: self.selecionar_forma_2(v)
+            )
+
+            self.botoes_forma_2[valor] = bt
+            formas_2_layout.addWidget(bt)
+
+        divisao_layout.addLayout(formas_2_layout)
+
+        lbl_valor_2_titulo = QLabel("VALOR NESTA FORMA (R$)")
+        lbl_valor_2_titulo.setStyleSheet(
+            "background:transparent; font-size:11px; "
+            "font-weight:bold; color:gray;"
+        )
+        divisao_layout.addWidget(lbl_valor_2_titulo)
+
+        self.valor_2 = QLineEdit()
+        self.valor_2.setPlaceholderText("0,00")
+        self.valor_2.setStyleSheet("""
+            QLineEdit {
+                background:white;
+                font-size:18px;
+                font-weight:bold;
+                color:#202225;
+                border:1px solid #cccccc;
+                border-radius:8px;
+                padding:6px 10px;
+            }
+        """)
+        self.valor_2.textChanged.connect(self.atualizar_valor_principal)
+        divisao_layout.addWidget(self.valor_2)
+
+        self.lbl_valor_principal = QLabel()
+        self.lbl_valor_principal.setStyleSheet(
+            "background:transparent; font-size:12px; "
+            "font-weight:bold; color:#2E7D32;"
+        )
+        divisao_layout.addWidget(self.lbl_valor_principal)
+
+        dir_layout.addWidget(self.bloco_divisao)
 
         # ---- entrada de valor (dinheiro) ----
 
@@ -414,6 +505,88 @@ class PagamentoWindow(QDialog):
         if valor == "PRAZO" and self.cliente_id is None:
             self.abrir_selecionar_cliente()
 
+        # a 2ª forma nao pode repetir a principal
+        if valor in self.botoes_forma_2:
+            self.botoes_forma_2[valor].setEnabled(False)
+            if self.forma_pagamento_2 == valor:
+                self.selecionar_forma_2(None)
+
+        for chave, botao in self.botoes_forma_2.items():
+            if chave != valor:
+                botao.setEnabled(True)
+
+        self.atualizar_valor_principal()
+
+    def valor_principal(self):
+        """Quanto da venda fica coberto pela forma de pagamento
+        principal — o total inteiro, ou o total menos a 2ª forma
+        quando o pagamento foi dividido."""
+
+        if not self.dividir_pagamento:
+            return self.total
+
+        return max(0.0, self.total - self.valor_forma_2)
+
+    def alternar_divisao(self, estado):
+
+        self.dividir_pagamento = bool(estado)
+
+        self.bloco_divisao.setVisible(self.dividir_pagamento)
+
+        if not self.dividir_pagamento:
+            self.selecionar_forma_2(None)
+            self.valor_2.clear()
+
+        self.atualizar_valor_principal()
+
+    def selecionar_forma_2(self, valor):
+
+        self.forma_pagamento_2 = valor
+
+        for chave, botao in self.botoes_forma_2.items():
+
+            selecionado = chave == valor
+
+            botao.setChecked(selecionado)
+
+            botao.setStyleSheet(f"""
+                QPushButton {{
+                    background: {"#C62828" if selecionado else "white"};
+                    color: {"white" if selecionado else "#202225"};
+                    border-radius: 6px;
+                    font-weight: bold;
+                }}
+                QPushButton:hover {{
+                    background: {"#8E1616" if selecionado else "#e8e8e8"};
+                }}
+            """)
+
+        if valor == "PRAZO" and self.cliente_id is None:
+            self.abrir_selecionar_cliente()
+
+    def atualizar_valor_principal(self):
+
+        try:
+            self.valor_forma_2 = float(
+                self.valor_2.text().replace(",", ".") or 0
+            )
+        except ValueError:
+            self.valor_forma_2 = 0.0
+
+        principal = self.valor_principal()
+        nome_principal = NOMES_FORMA.get(
+            self.forma_pagamento, self.forma_pagamento
+        )
+
+        self.lbl_valor_principal.setText(
+            f"Nesta forma ({nome_principal}): R$ {principal:.2f}"
+        )
+
+        self.calcular_troco()
+
+        if self.forma_pagamento == "PIX":
+            self.gerar_qrcode_pix()
+
     def abrir_selecionar_cliente(self):
 
         dialogo = SelecionarClienteDialog(self)
@@ -454,7 +627,7 @@ class PagamentoWindow(QDialog):
             chave=chave,
             nome=nome,
             cidade=cidade,
-            valor=self.total,
+            valor=self.valor_principal(),
         )
 
         imagem = qrcode.make(payload)
@@ -475,8 +648,8 @@ class PagamentoWindow(QDialog):
         )
 
         self.lbl_pix_info.setText(
-            f"Aponte a câmera do banco para pagar R$ {self.total:.2f} "
-            f"via PIX para {chave}"
+            f"Aponte a câmera do banco para pagar "
+            f"R$ {self.valor_principal():.2f} via PIX para {chave}"
         )
 
     def adicionar_valor(self, valor):
@@ -494,7 +667,7 @@ class PagamentoWindow(QDialog):
         except ValueError:
             recebido = 0
 
-        troco = recebido - self.total
+        troco = recebido - self.valor_principal()
 
         if troco < 0:
             troco = 0
@@ -504,6 +677,33 @@ class PagamentoWindow(QDialog):
     # ======================================
 
     def confirmar(self):
+
+        if self.dividir_pagamento:
+
+            if not self.forma_pagamento_2:
+                QMessageBox.warning(
+                    self,
+                    "Atenção",
+                    "Escolha a 2ª forma de pagamento.",
+                )
+                return
+
+            if not (0 < self.valor_forma_2 < self.total):
+                QMessageBox.warning(
+                    self,
+                    "Atenção",
+                    "O valor da 2ª forma precisa ser maior que "
+                    "zero e menor que o total da venda.",
+                )
+                return
+
+        else:
+            self.forma_pagamento_2 = None
+            self.valor_forma_2 = 0.0
+
+        formas_da_venda = [self.forma_pagamento]
+        if self.forma_pagamento_2:
+            formas_da_venda.append(self.forma_pagamento_2)
 
         if self.forma_pagamento == "DINHEIRO":
 
@@ -519,16 +719,17 @@ class PagamentoWindow(QDialog):
                 )
                 return
 
-            if recebido < self.total:
+            if recebido < self.valor_principal():
 
                 QMessageBox.warning(
                     self,
                     "Atenção",
-                    "O valor recebido é menor que o total."
+                    "O valor recebido é menor que o valor "
+                    "coberto por essa forma."
                 )
                 return
 
-        if self.forma_pagamento == "PRAZO" and self.cliente_id is None:
+        if "PRAZO" in formas_da_venda and self.cliente_id is None:
 
             QMessageBox.warning(
                 self,

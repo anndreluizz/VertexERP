@@ -543,11 +543,29 @@ class Relatorios(QWidget):
         totais_por_forma = {}
 
         for venda in vendas_periodo:
-            forma = venda.get("forma_pagamento", "DINHEIRO")
-            valor = float(venda.get("valor_total", 0))
-            totais_por_forma[forma] = (
-                totais_por_forma.get(forma, 0) + valor
-            )
+
+            valor_total = float(venda.get("valor_total", 0))
+            forma_2 = venda.get("forma_pagamento_2")
+            valor_2 = float(venda.get("valor_forma_2") or 0)
+
+            if forma_2 and valor_2:
+                # venda dividida em 2 formas — cada parcela conta
+                # separado, senao o mix fica atribuindo o valor
+                # inteiro pra forma principal
+                forma_1 = venda.get("forma_pagamento", "DINHEIRO")
+                valor_1 = valor_total - valor_2
+
+                totais_por_forma[forma_1] = (
+                    totais_por_forma.get(forma_1, 0) + valor_1
+                )
+                totais_por_forma[forma_2] = (
+                    totais_por_forma.get(forma_2, 0) + valor_2
+                )
+            else:
+                forma = venda.get("forma_pagamento", "DINHEIRO")
+                totais_por_forma[forma] = (
+                    totais_por_forma.get(forma, 0) + valor_total
+                )
 
         total_geral = sum(totais_por_forma.values())
 

@@ -21,6 +21,39 @@ from app.services.movimento_fiado_service import (
 )
 
 
+def _parcelas_pagamento(venda_ou_dados, valor_total):
+    """Monta a lista de (forma, valor) que compoem o pagamento da
+    venda — 1 parcela na maioria dos casos, ou 2 quando a venda foi
+    dividida (ex: parte dinheiro parte pix, ou entrada + resto fiado).
+    Serve tanto pra criar quanto pra estornar, pra nao duplicar essa
+    conta em dois lugares."""
+
+    forma_2 = getattr(venda_ou_dados, "forma_pagamento_2", None)
+    valor_2 = getattr(venda_ou_dados, "valor_forma_2", None)
+
+    forma_1 = venda_ou_dados.forma_pagamento
+    if hasattr(forma_1, "value"):
+        forma_1 = forma_1.value
+
+    if hasattr(forma_2, "value"):
+        forma_2 = forma_2.value
+
+    if not forma_2 or not valor_2:
+        return [(forma_1, valor_total)]
+
+    valor_2 = float(valor_2)
+    valor_1 = valor_total - valor_2
+
+    parcelas = []
+
+    if valor_1 > 0:
+        parcelas.append((forma_1, valor_1))
+
+    parcelas.append((forma_2, valor_2))
+
+    return parcelas
+
+
 class VendaService:
 
     @staticmethod
@@ -56,7 +89,24 @@ class VendaService:
 
             forma_pagamento = dados.forma_pagamento.value
 
-            if forma_pagamento == "PRAZO" and dados.cliente_id is None:
+            forma_pagamento_2 = (
+                dados.forma_pagamento_2.value
+                if dados.forma_pagamento_2
+                else None
+            )
+
+            if forma_pagamento_2 == forma_pagamento:
+                raise Exception(
+                    "A segunda forma de pagamento precisa ser "
+                    "diferente da primeira."
+                )
+
+            tem_prazo = (
+                forma_pagamento == "PRAZO"
+                or forma_pagamento_2 == "PRAZO"
+            )
+
+            if tem_prazo and dados.cliente_id is None:
                 raise Exception(
                     "Venda a prazo exige selecionar um cliente."
                 )
@@ -65,7 +115,13 @@ class VendaService:
                 cliente_id=dados.cliente_id,
                 observacao=dados.observacao,
                 desconto=float(dados.desconto),
-                forma_pagamento=dados.forma_pagamento.value,
+                forma_pagamento=forma_pagamento,
+                forma_pagamento_2=forma_pagamento_2,
+                valor_forma_2=(
+                    float(dados.valor_forma_2)
+                    if dados.valor_forma_2
+                    else None
+                ),
                 data_vencimento=dados.data_vencimento,
                 status="FINALIZADA",
             )
@@ -139,34 +195,52 @@ class VendaService:
                 - float(dados.desconto)
             )
 
+            if (
+                venda.valor_forma_2 is not None
+                and not (0 < venda.valor_forma_2 < venda.valor_total)
+            ):
+                raise Exception(
+                    "O valor da segunda forma de pagamento precisa "
+                    "ser maior que zero e menor que o total da venda."
+                )
+
             db.add(venda)
 
             # so dinheiro fisico mexe no saldo do caixa; pix/cartao/
             # prazo nao entram na gaveta, mas o movimento fica
-            # registrado pra aparecer no fechamento do caixa
-            if forma_pagamento == "DINHEIRO":
-                caixa.saldo_final += venda.valor_total
-                db.add(caixa)
+            # registrado pra aparecer no fechamento do caixa. Quando a
+            # venda foi dividida em 2 formas, cada parcela gera seu
+            # proprio movimento — cada uma com a forma e o valor que
+            # de fato corresponde a ela.
+            for forma_parcela, valor_parcela in _parcelas_pagamento(
+                venda, venda.valor_total
+            ):
 
-            db.add(
-                MovimentoCaixa(
-                    caixa_id=caixa.id,
-                    usuario_id=usuario_id,
-                    tipo="VENDA",
-                    valor=venda.valor_total,
-                    forma_pagamento=forma_pagamento,
-                    descricao=f"Venda #{venda.id}",
-                )
-            )
+                if forma_parcela == "DINHEIRO":
+                    caixa.saldo_final += valor_parcela
+                    db.add(caixa)
 
-            # venda a prazo vira lancamento de compra no caderninho
-            # do cliente (mesma transacao, atomico com o resto)
-            if forma_pagamento == "PRAZO":
-                MovimentoFiadoService.criar_compra_da_venda(
-                    db,
-                    venda,
-                    usuario_id,
+                db.add(
+                    MovimentoCaixa(
+                        caixa_id=caixa.id,
+                        usuario_id=usuario_id,
+                        tipo="VENDA",
+                        valor=valor_parcela,
+                        forma_pagamento=forma_parcela,
+                        descricao=f"Venda #{venda.id}",
+                    )
                 )
+
+                # a parcela a prazo vira lancamento de compra no
+                # caderninho do cliente (mesma transacao, atomico
+                # com o resto)
+                if forma_parcela == "PRAZO":
+                    MovimentoFiadoService.criar_compra_da_venda(
+                        db,
+                        venda,
+                        usuario_id,
+                        valor=valor_parcela,
+                    )
 
             db.commit()
 
@@ -222,54 +296,65 @@ class VendaService:
                     )
                 )
 
-        # Estorna o valor no caixa aberto, se a venda tiver sido
-        # em dinheiro (pix/cartao/prazo nao afetam a gaveta fisica)
-        if venda.forma_pagamento == "DINHEIRO":
+        # Estorna cada parcela do pagamento — normalmente so 1, mas
+        # pode ser 2 quando a venda foi dividida entre duas formas
+        for forma_parcela, valor_parcela in _parcelas_pagamento(
+            venda, venda.valor_total
+        ):
 
-            caixa = CaixaRepository.buscar_aberto(db)
+            # Estorna o valor no caixa aberto, se a parcela tiver sido
+            # em dinheiro (pix/cartao/prazo nao afetam a gaveta fisica)
+            if forma_parcela == "DINHEIRO":
 
-            if caixa:
+                caixa = CaixaRepository.buscar_aberto(db)
 
-                caixa.saldo_final -= venda.valor_total
-                db.add(caixa)
+                if caixa:
 
-                db.add(
-                    MovimentoCaixa(
-                        caixa_id=caixa.id,
-                        usuario_id=usuario_id,
-                        tipo="ESTORNO",
-                        valor=-venda.valor_total,
-                        forma_pagamento=venda.forma_pagamento,
-                        descricao=f"Estorno da venda #{venda_id}",
+                    caixa.saldo_final -= valor_parcela
+                    db.add(caixa)
+
+                    db.add(
+                        MovimentoCaixa(
+                            caixa_id=caixa.id,
+                            usuario_id=usuario_id,
+                            tipo="ESTORNO",
+                            valor=-valor_parcela,
+                            forma_pagamento=forma_parcela,
+                            descricao=f"Estorno da venda #{venda_id}",
+                        )
+                    )
+
+            # Zera a divida do caderninho referente a essa parcela, se
+            # ela tiver sido a prazo. Se o cliente ja tiver pago parte
+            # do saldo (de forma geral, nao especifica dessa venda —
+            # o caderninho e um saldo unico corrido), o estorno nao
+            # pode "devolver" mais do que ele ainda deve, senao o
+            # saldo fica negativo indevidamente.
+            if forma_parcela == "PRAZO" and venda.cliente_id:
+
+                saldo_atual = (
+                    MovimentoFiadoRepository.saldo_por_cliente(
+                        db,
+                        venda.cliente_id,
                     )
                 )
 
-        # Zera a divida do caderninho, se a venda tiver sido a prazo.
-        # Se o cliente ja tiver pago parte do saldo (de forma geral,
-        # nao especifica dessa venda - o caderninho e um saldo unico
-        # corrido), o estorno nao pode "devolver" mais do que ele
-        # ainda deve, senao o saldo fica negativo indevidamente.
-        if venda.forma_pagamento == "PRAZO" and venda.cliente_id:
+                valor_estorno = min(valor_parcela, saldo_atual)
 
-            saldo_atual = MovimentoFiadoRepository.saldo_por_cliente(
-                db,
-                venda.cliente_id,
-            )
+                if valor_estorno > 0:
 
-            valor_estorno = min(venda.valor_total, saldo_atual)
-
-            if valor_estorno > 0:
-
-                db.add(
-                    MovimentoFiado(
-                        cliente_id=venda.cliente_id,
-                        venda_id=None,
-                        usuario_id=usuario_id,
-                        tipo="PAGAMENTO",
-                        valor=valor_estorno,
-                        descricao=f"Estorno da venda #{venda_id}",
+                    db.add(
+                        MovimentoFiado(
+                            cliente_id=venda.cliente_id,
+                            venda_id=None,
+                            usuario_id=usuario_id,
+                            tipo="PAGAMENTO",
+                            valor=valor_estorno,
+                            descricao=(
+                                f"Estorno da venda #{venda_id}"
+                            ),
+                        )
                     )
-                )
 
         # Garante que nenhum lancamento antigo do fiado fique
         # apontando pra essa venda antes de apaga-la

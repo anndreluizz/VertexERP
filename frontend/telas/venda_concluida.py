@@ -25,6 +25,8 @@ class VendaConcluidaDialog(QDialog):
         itens,
         forma_pagamento,
         cliente_nome=None,
+        forma_pagamento_2=None,
+        valor_forma_2=None,
         parent=None,
     ):
 
@@ -34,6 +36,8 @@ class VendaConcluidaDialog(QDialog):
         self.itens = itens
         self.forma_pagamento = forma_pagamento
         self.cliente_nome = cliente_nome
+        self.forma_pagamento_2 = forma_pagamento_2
+        self.valor_forma_2 = valor_forma_2 or 0.0
 
         self.setWindowTitle("Venda Finalizada")
         self.setFixedSize(420, 520)
@@ -83,9 +87,23 @@ class VendaConcluidaDialog(QDialog):
         layout.addSpacing(10)
         layout.addWidget(valor)
 
-        if forma_pagamento == "PRAZO" and cliente_nome:
+        tem_fiado = (
+            forma_pagamento == "PRAZO"
+            or forma_pagamento_2 == "PRAZO"
+        )
 
-            lbl_fiado = QLabel(f"Fiado de {cliente_nome}")
+        if tem_fiado and cliente_nome:
+
+            texto_fiado = (
+                f"Fiado de {cliente_nome}"
+                if forma_pagamento == "PRAZO"
+                else (
+                    f"Fiado de {cliente_nome} — "
+                    f"R$ {self.valor_forma_2:.2f}"
+                )
+            )
+
+            lbl_fiado = QLabel(texto_fiado)
             lbl_fiado.setAlignment(Qt.AlignCenter)
             lbl_fiado.setWordWrap(True)
             lbl_fiado.setStyleSheet("""
@@ -161,7 +179,20 @@ class VendaConcluidaDialog(QDialog):
 
         linhas.append("-" * 40)
         linhas.append(f"TOTAL: R$ {self.total:.2f}".rjust(40))
-        linhas.append(f"Forma de pagamento: {self.forma_pagamento}")
+
+        if self.forma_pagamento_2:
+            valor_principal = self.total - self.valor_forma_2
+            linhas.append(
+                f"Pagamento: R$ {valor_principal:.2f} "
+                f"({self.forma_pagamento}) + "
+                f"R$ {self.valor_forma_2:.2f} "
+                f"({self.forma_pagamento_2})"
+            )
+        else:
+            linhas.append(
+                f"Forma de pagamento: {self.forma_pagamento}"
+            )
+
         linhas.append("-" * 40)
         linhas.append("Este comprovante não tem valor fiscal.")
 

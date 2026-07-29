@@ -10,6 +10,7 @@ class MovimentoFiadoBase(BaseModel):
     valor: float
     descricao: str | None = None
     forma_pagamento: str | None = None
+    data: datetime | None = None
 
 
 class MovimentoFiadoCreate(MovimentoFiadoBase):

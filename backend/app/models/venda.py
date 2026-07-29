@@ -50,6 +50,20 @@ class Venda(Base):
         default="AVISTA"
     )
 
+    # pagamento dividido (no maximo 2 formas por venda): a forma
+    # principal usa valor_total - valor_forma_2, e essa segunda forma
+    # cobre o restante — usado pra casos tipo "parte dinheiro parte
+    # pix" ou "entrada + resto no fiado"
+    forma_pagamento_2: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    valor_forma_2: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
     # NOVO
     data_vencimento: Mapped[datetime | None] = mapped_column(
         DateTime,

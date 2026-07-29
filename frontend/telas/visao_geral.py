@@ -735,6 +735,12 @@ class VisaoGeral(QWidget):
             forma = venda.get("forma_pagamento", "DINHEIRO")
             forma_texto = NOMES_FORMA_PAGAMENTO.get(forma, forma)
 
+            forma_2 = venda.get("forma_pagamento_2")
+            if forma_2:
+                forma_texto += (
+                    f" + {NOMES_FORMA_PAGAMENTO.get(forma_2, forma_2)}"
+                )
+
             self.tabela_transacoes.setItem(
                 linha, 0, QTableWidgetItem(hora_texto)
             )

@@ -577,6 +577,10 @@ class PDV(QWidget):
                 desconto=0,
                 observacao=None,
                 data_vencimento=None,
+                forma_pagamento_2=tela.forma_pagamento_2,
+                valor_forma_2=(
+                    tela.valor_forma_2 if tela.forma_pagamento_2 else None
+                ),
             )
 
             if response.status_code == 201:
@@ -586,6 +590,8 @@ class PDV(QWidget):
                     self.itens,
                     tela.forma_pagamento,
                     cliente_nome=tela.cliente_nome,
+                    forma_pagamento_2=tela.forma_pagamento_2,
+                    valor_forma_2=tela.valor_forma_2,
                     parent=self,
                 )
                 concluida.exec()

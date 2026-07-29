@@ -31,6 +31,12 @@ class VendaCreate(BaseModel):
     # AVISTA, PIX, DEBITO, CREDITO, BOLETO, PRAZO
     forma_pagamento: FormaPagamento = FormaPagamento.DINHEIRO
 
+    # pagamento dividido (opcional, no maximo 2 formas): valor_forma_2
+    # cobre parte do total nessa segunda forma, o restante fica na
+    # forma_pagamento principal
+    forma_pagamento_2: FormaPagamento | None = None
+    valor_forma_2: Decimal | None = None
+
     data_vencimento: datetime | None = None
 
     itens: list[ItemVendaCreate]
@@ -52,6 +58,9 @@ class VendaResponse(BaseModel):
     status: str
 
     forma_pagamento: FormaPagamento
+
+    forma_pagamento_2: FormaPagamento | None = None
+    valor_forma_2: Decimal | None = None
 
     data_vencimento: datetime | None = None
 

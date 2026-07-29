@@ -42,6 +42,11 @@ class MovimentoCaixa(Base):
         Float
     )
 
+    forma_pagamento: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True
+    )
+
     caixa = relationship(
         "Caixa",
         back_populates="movimentos"

@@ -65,3 +65,17 @@ def excluir_produto(produto_id):
     return delete(
         f"/produtos/{produto_id}"
     )
+
+
+# ==========================================
+# OBTER FOTO DO PRODUTO
+# ==========================================
+
+def obter_foto_produto(produto_id):
+
+    response = get(f"/produtos/{produto_id}/foto")
+
+    if response.status_code != 200:
+        return None
+
+    return response.content

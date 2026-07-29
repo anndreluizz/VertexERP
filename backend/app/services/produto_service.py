@@ -1,3 +1,6 @@
+import base64
+
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.produto import Produto
@@ -17,7 +20,35 @@ class ProdutoService:
 
     @staticmethod
     def criar(db: Session, dados: ProdutoCreate):
-        produto = Produto(**dados.dict())
+
+        condicoes = [Produto.codigo == dados.codigo]
+
+        if dados.codigo_barras:
+            condicoes.append(Produto.codigo_barras == dados.codigo_barras)
+
+        existente = (
+            db.query(Produto)
+            .filter(or_(*condicoes))
+            .first()
+        )
+
+        if existente:
+            if existente.codigo == dados.codigo:
+                raise ValueError(
+                    f'Já existe um produto com o código '
+                    f'"{dados.codigo}".'
+                )
+            raise ValueError(
+                f'Já existe um produto ("{existente.nome}") '
+                f'cadastrado com esse código de barras.'
+            )
+
+        campos = dados.dict(exclude={"foto_base64"})
+        produto = Produto(**campos)
+
+        if dados.foto_base64:
+            produto.foto = base64.b64decode(dados.foto_base64)
+
         return ProdutoRepository.criar(db, produto)
 
     @staticmethod
@@ -27,8 +58,13 @@ class ProdutoService:
         if not produto:
             return None
 
-        for campo, valor in dados.dict().items():
+        campos = dados.dict(exclude={"foto_base64"})
+
+        for campo, valor in campos.items():
             setattr(produto, campo, valor)
+
+        if dados.foto_base64:
+            produto.foto = base64.b64decode(dados.foto_base64)
 
         return ProdutoRepository.atualizar(db, produto)
 

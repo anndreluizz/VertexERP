@@ -1,21 +1,33 @@
 from PySide6.QtWidgets import QMessageBox
 
 from telas.cadastro_produto import CadastroProdutoWindow
+from telas.cadastro_rapido import CadastroRapidoDialog
+from telas.produto_criado import ProdutoCriadoDialog
 
+from services.api import configuracoes
+from services.categoria_service import listar_categorias
 from services.produto_service import (
     listar_produtos,
     cadastrar_produto,
     atualizar_produto,
     excluir_produto,
+    obter_foto_produto,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 
-from PySide6.QtGui import QShortcut, QKeySequence
+from PySide6.QtGui import (
+    QShortcut,
+    QKeySequence,
+    QPixmap,
+    QPainter,
+    QPainterPath,
+)
 
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
+    QGridLayout,
     QLabel,
     QPushButton,
     QLineEdit,
@@ -25,73 +37,177 @@ from PySide6.QtWidgets import (
     QDialog,
 )
 
+from widgets.card import Card
+from widgets.banner import Banner
+
 
 class Produtos(QWidget):
+
+    voltar = Signal()
 
     def __init__(self):
         super().__init__()
 
         self.produtos = []
+        self.categorias = []
+        self.filtro_categoria = None
+        self.botoes_categoria = {}
+        self._cache_fotos = {}
+
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setStyleSheet("background:white;")
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 16, 24, 16)
+        layout.setSpacing(16)
 
-        titulo = QLabel("PRODUTOS")
+        # ======================
+        # CABEÇALHO
+        # ======================
 
-        titulo.setAlignment(Qt.AlignCenter)
+        cabecalho = QHBoxLayout()
 
-        titulo.setStyleSheet("""
-            font-size:24px;
-            font-weight:bold;
+        self.bt_voltar = QPushButton("← Voltar")
+        self.bt_voltar.setStyleSheet("""
+            QPushButton {
+                background:transparent;
+                color:gray;
+                border:none;
+                font-size:13px;
+            }
+            QPushButton:hover {
+                color:#202225;
+            }
         """)
+        self.bt_voltar.clicked.connect(self.voltar.emit)
 
-        layout.addWidget(titulo)
+        col_titulo = QVBoxLayout()
+        col_titulo.setSpacing(0)
+
+        config = configuracoes()
+        nome_loja = config.get("nome_loja") or "Vertex ERP"
+
+        titulo = QLabel(nome_loja)
+        titulo.setStyleSheet(
+            "background:transparent; font-size:20px; "
+            "font-weight:bold; color:#202225;"
+        )
+
+        subtitulo = QLabel("LOJA OPERACIONAL")
+        subtitulo.setStyleSheet(
+            "background:transparent; font-size:11px; "
+            "color:#2E7D32; font-weight:bold;"
+        )
+
+        col_titulo.addWidget(titulo)
+        col_titulo.addWidget(subtitulo)
+
+        cabecalho.addWidget(self.bt_voltar)
+        cabecalho.addSpacing(12)
+        cabecalho.addLayout(col_titulo)
+        cabecalho.addStretch()
+
+        layout.addLayout(cabecalho)
+
+        # ======================
+        # CARDS DE RESUMO
+        # ======================
+
+        resumo_layout = QGridLayout()
+        resumo_layout.setSpacing(12)
+
+        self.card_total = Card("Total de Produtos", "0")
+        self.card_alerta = Card("Estoque em Alerta", "0")
+        self.card_patrimonio = Card("Valor em Estoque", "R$ 0,00")
+        self.card_categorias = Card("Categorias Ativas", "0")
+
+        resumo_layout.addWidget(self.card_total, 0, 0)
+        resumo_layout.addWidget(self.card_alerta, 0, 1)
+        resumo_layout.addWidget(self.card_patrimonio, 0, 2)
+        resumo_layout.addWidget(self.card_categorias, 0, 3)
+
+        layout.addLayout(resumo_layout)
+
+        # ======================
+        # BANNERS DE AÇÃO
+        # ======================
+
+        banners_layout = QHBoxLayout()
+        banners_layout.setSpacing(12)
+
+        self.banner_rapido = Banner(
+            "ALTA VELOCIDADE",
+            "+ Cadastro Rápido",
+            "⚡",
+            "#1fa065",
+        )
+
+        self.banner_novo = Banner(
+            "PERSONALIZADO",
+            "+ Novo Produto",
+            "➕",
+            "#202225",
+        )
+
+        self.banner_rapido.clicado.connect(self.abrir_cadastro_rapido)
+        self.banner_novo.clicado.connect(self.novo_produto)
+
+        banners_layout.addWidget(self.banner_rapido)
+        banners_layout.addWidget(self.banner_novo)
+
+        layout.addLayout(banners_layout)
+
+        # ======================
+        # BUSCA
+        # ======================
 
         barra = QHBoxLayout()
 
         self.pesquisa = QLineEdit()
 
         self.pesquisa.setPlaceholderText(
-            "Pesquisar produto..."
+            "Buscar produto pelo nome ou código de barras..."
         )
-
-        self.bt_pesquisar = QPushButton("Pesquisar")
+        self.pesquisa.setMinimumHeight(40)
+        self.pesquisa.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #cccccc;
+                border-radius: 8px;
+                padding: 0 12px;
+                font-size: 14px;
+                color: #202225;
+                background: white;
+            }
+            QLineEdit:focus {
+                border: 1px solid #2E7D32;
+            }
+        """)
 
         self.pesquisa.textChanged.connect(
             self.filtrar_produtos
         )
 
-        self.bt_pesquisar.clicked.connect(
-            self.filtrar_produtos
-        )
-
-        self.bt_novo = QPushButton("Novo Produto")
-
-        self.bt_novo.setStyleSheet("""
-            QPushButton{
-                background:#2E7D32;
-                color:white;
-                font-weight:bold;
-            }
-            QPushButton:hover{
-                background:#1B5E20;
-            }
-        """)
-
         barra.addWidget(self.pesquisa)
 
-        barra.addWidget(self.bt_pesquisar)
-
-        barra.addWidget(self.bt_novo)
-
         layout.addLayout(barra)
+
+        # ======================
+        # FILTRO DE CATEGORIAS
+        # ======================
+
+        self.categorias_layout = QHBoxLayout()
+        self.categorias_layout.setSpacing(8)
+        self.categorias_layout.addStretch()
+
+        layout.addLayout(self.categorias_layout)
 
         self.tabela = QTableWidget()
 
         self.tabela.setColumnCount(7)
 
         self.tabela.setHorizontalHeaderLabels([
+            "Foto",
             "Código",
-            "Barras",
             "Produto",
             "Categoria",
             "Estoque",
@@ -99,9 +215,15 @@ class Produtos(QWidget):
             "Status",
         ])
 
+        self.tabela.verticalHeader().setDefaultSectionSize(60)
+
         self.tabela.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch
         )
+        self.tabela.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.Fixed
+        )
+        self.tabela.setColumnWidth(0, 52)
 
         self.tabela.setAlternatingRowColors(True)
 
@@ -123,7 +245,29 @@ class Produtos(QWidget):
 
         self.tabela.horizontalHeader().setStretchLastSection(True)
 
-        layout.addWidget(self.tabela)
+        self.tabela.setStyleSheet("""
+            QTableWidget {
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                color: #202225;
+                background: white;
+                alternate-background-color: #f8f9fb;
+            }
+            QTableWidget::item:selected {
+                background: #1565C0;
+                color: white;
+            }
+            QHeaderView::section {
+                background: #f4f5f7;
+                color: #202225;
+                font-weight: bold;
+                padding: 6px;
+                border: none;
+                border-bottom: 1px solid #e0e0e0;
+            }
+        """)
+
+        layout.addWidget(self.tabela, stretch=1)
 
         rodape = QHBoxLayout()
 
@@ -134,6 +278,8 @@ class Produtos(QWidget):
                 background:#1565C0;
                 color:white;
                 font-weight:bold;
+                border-radius:8px;
+                padding:8px 14px;
             }
             QPushButton:hover{
                 background:#0D47A1;
@@ -147,6 +293,8 @@ class Produtos(QWidget):
                 background:#C62828;
                 color:white;
                 font-weight:bold;
+                border-radius:8px;
+                padding:8px 14px;
             }
             QPushButton:hover{
                 background:#B71C1C;
@@ -160,6 +308,8 @@ class Produtos(QWidget):
                 background:#616161;
                 color:white;
                 font-weight:bold;
+                border-radius:8px;
+                padding:8px 14px;
             }
             QPushButton:hover{
                 background:#424242;
@@ -190,6 +340,7 @@ class Produtos(QWidget):
         dicas.setAlignment(Qt.AlignCenter)
 
         dicas.setStyleSheet("""
+            background:transparent;
             color:#9E9E9E;
             font-size:12px;
             padding:6px;
@@ -203,10 +354,6 @@ class Produtos(QWidget):
 
         self.bt_atualizar.clicked.connect(
             self.carregar
-        )
-
-        self.bt_novo.clicked.connect(
-            self.novo_produto
         )
 
         self.bt_editar.clicked.connect(
@@ -256,8 +403,104 @@ class Produtos(QWidget):
     def carregar(self):
 
         self.produtos = listar_produtos()
+        self.categorias = listar_categorias()
 
-        self.preencher_tabela(self.produtos)
+        self.atualizar_cards_resumo()
+        self.atualizar_filtro_categorias()
+
+        self.filtrar_produtos()
+
+    # ==========================================
+    # CARDS DE RESUMO
+    # ==========================================
+
+    def atualizar_cards_resumo(self):
+
+        total = len(self.produtos)
+
+        em_alerta = sum(
+            1
+            for p in self.produtos
+            if p["estoque"] <= p.get("estoque_minimo", 0)
+        )
+
+        patrimonio = sum(
+            float(p.get("preco_venda") or 0) * p["estoque"]
+            for p in self.produtos
+        )
+
+        categorias_ativas = sum(
+            1
+            for c in self.categorias
+            if c.get("ativo", True)
+        )
+
+        self.card_total.atualizar(str(total))
+        self.card_alerta.atualizar(str(em_alerta))
+        self.card_patrimonio.atualizar(f"R$ {patrimonio:.2f}")
+        self.card_categorias.atualizar(str(categorias_ativas))
+
+    # ==========================================
+    # FILTRO DE CATEGORIAS (ABAS)
+    # ==========================================
+
+    def atualizar_filtro_categorias(self):
+
+        while self.categorias_layout.count():
+            item = self.categorias_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        self.botoes_categoria = {}
+
+        nomes = ["TODOS"] + [
+            c["nome"]
+            for c in self.categorias
+            if c.get("ativo", True)
+        ]
+
+        for nome in nomes:
+
+            bt = QPushButton(nome)
+            bt.setCheckable(True)
+            bt.setMinimumHeight(32)
+            bt.clicked.connect(
+                lambda checked, n=nome: self.selecionar_categoria(n)
+            )
+
+            self.botoes_categoria[nome] = bt
+            self.categorias_layout.addWidget(bt)
+
+        self.categorias_layout.addStretch()
+
+        self.selecionar_categoria("TODOS")
+
+    def selecionar_categoria(self, nome):
+
+        self.filtro_categoria = None if nome == "TODOS" else nome
+
+        for chave, botao in self.botoes_categoria.items():
+
+            selecionado = chave == nome
+
+            botao.setChecked(selecionado)
+
+            botao.setStyleSheet(f"""
+                QPushButton {{
+                    background: {"#202225" if selecionado else "#f4f5f7"};
+                    color: {"white" if selecionado else "#202225"};
+                    border-radius: 16px;
+                    padding: 0 14px;
+                    font-weight: bold;
+                    font-size: 12px;
+                }}
+                QPushButton:hover {{
+                    background: {"#33363b" if selecionado else "#e8e8e8"};
+                }}
+            """)
+
+        self.filtrar_produtos()
 
     # ==========================================
     # FILTRAR PRODUTOS
@@ -267,15 +510,21 @@ class Produtos(QWidget):
 
         texto = self.pesquisa.text().lower().strip()
 
-        if texto == "":
+        produtos = self.produtos
 
-            produtos = self.produtos
+        if self.filtro_categoria:
 
-        else:
+            produtos = [
+                p
+                for p in produtos
+                if (p.get("categoria") or "") == self.filtro_categoria
+            ]
 
-            produtos = []
+        if texto != "":
 
-            for produto in self.produtos:
+            filtrados = []
+
+            for produto in produtos:
 
                 codigo = str(
                     produto["codigo"]
@@ -300,7 +549,9 @@ class Produtos(QWidget):
                     or texto in categoria
                 ):
 
-                    produtos.append(produto)
+                    filtrados.append(produto)
+
+            produtos = filtrados
 
         self.preencher_tabela(produtos)
 
@@ -310,26 +561,28 @@ class Produtos(QWidget):
 
     def preencher_tabela(self, produtos):
 
+        self.produtos_exibidos = produtos
+
         self.tabela.setRowCount(len(produtos))
 
         for linha, produto in enumerate(produtos):
 
-            self.tabela.setItem(
+            self.tabela.setCellWidget(
                 linha,
                 0,
-                QTableWidgetItem(
-                    str(produto["codigo"])
-                )
+                self._criar_widget_foto(produto)
+            )
+
+            codigo_exibido = (
+                produto.get("codigo_barras")
+                or produto["codigo"]
             )
 
             self.tabela.setItem(
                 linha,
                 1,
                 QTableWidgetItem(
-                    produto.get(
-                        "codigo_barras",
-                        ""
-                    ) or ""
+                    str(codigo_exibido)
                 )
             )
 
@@ -381,6 +634,91 @@ class Produtos(QWidget):
             )
 
     # ==========================================
+    # FOTO (MINIATURA COM CACHE)
+    # ==========================================
+
+    def _criar_widget_foto(self, produto):
+
+        lbl = QLabel()
+        lbl.setAlignment(Qt.AlignCenter)
+        lbl.setFixedSize(52, 52)
+
+        pixmap = self._obter_pixmap_produto(produto)
+
+        if pixmap:
+            lbl.setPixmap(self._pixmap_circular(pixmap, 48))
+        else:
+            lbl.setText("📦")
+            lbl.setStyleSheet("""
+                font-size:20px;
+                background:#eef0f3;
+                border-radius:24px;
+            """)
+
+        return lbl
+
+    def _pixmap_circular(self, pixmap, tamanho):
+
+        origem = pixmap.scaled(
+            tamanho,
+            tamanho,
+            Qt.KeepAspectRatioByExpanding,
+            Qt.SmoothTransformation,
+        )
+
+        if origem.width() != tamanho or origem.height() != tamanho:
+            x = (origem.width() - tamanho) // 2
+            y = (origem.height() - tamanho) // 2
+            origem = origem.copy(x, y, tamanho, tamanho)
+
+        circular = QPixmap(tamanho, tamanho)
+        circular.fill(Qt.transparent)
+
+        painter = QPainter(circular)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        caminho = QPainterPath()
+        caminho.addEllipse(0, 0, tamanho, tamanho)
+        painter.setClipPath(caminho)
+
+        painter.drawPixmap(0, 0, origem)
+        painter.end()
+
+        return circular
+
+    def _obter_pixmap_produto(self, produto):
+
+        produto_id = produto["id"]
+
+        if produto_id in self._cache_fotos:
+            return self._cache_fotos[produto_id]
+
+        pixmap = None
+
+        if produto.get("tem_foto"):
+
+            foto_bytes = obter_foto_produto(produto_id)
+
+            if foto_bytes:
+                pixmap = QPixmap()
+                pixmap.loadFromData(foto_bytes)
+
+        self._cache_fotos[produto_id] = pixmap
+
+        return pixmap
+
+    # ==========================================
+    # CADASTRO RÁPIDO (via código de barras)
+    # ==========================================
+
+    def abrir_cadastro_rapido(self):
+
+        tela = CadastroRapidoDialog(self)
+
+        if tela.exec() == QDialog.Accepted:
+            self.carregar()
+
+    # ==========================================
     # NOVO PRODUTO
     # ==========================================
 
@@ -397,13 +735,25 @@ class Produtos(QWidget):
 
         if response.status_code == 201:
 
-            QMessageBox.information(
+            produto_criado = response.json()
+
+            if tela.imagem_bytes:
+                pixmap = QPixmap()
+                pixmap.loadFromData(tela.imagem_bytes)
+                self._cache_fotos[produto_criado["id"]] = pixmap
+
+            sucesso = ProdutoCriadoDialog(
+                produto_criado["nome"],
+                float(produto_criado["preco_venda"]),
+                tela.imagem_bytes,
                 self,
-                "Sucesso",
-                "Produto cadastrado com sucesso."
             )
+            sucesso.exec()
 
             self.carregar()
+
+            if sucesso.editar_solicitado:
+                self._abrir_edicao(produto_criado)
 
         else:
 
@@ -434,7 +784,11 @@ class Produtos(QWidget):
             )
             return
 
-        produto = self.produtos[linha]
+        produto = self.produtos_exibidos[linha]
+
+        self._abrir_edicao(produto)
+
+    def _abrir_edicao(self, produto):
 
         tela = CadastroProdutoWindow(produto)
 
@@ -447,6 +801,11 @@ class Produtos(QWidget):
         )
 
         if response.status_code == 200:
+
+            if tela.imagem_bytes:
+                pixmap = QPixmap()
+                pixmap.loadFromData(tela.imagem_bytes)
+                self._cache_fotos[produto["id"]] = pixmap
 
             QMessageBox.information(
                 self,
@@ -485,7 +844,7 @@ class Produtos(QWidget):
             )
             return
 
-        produto = self.produtos[linha]
+        produto = self.produtos_exibidos[linha]
 
         resposta = QMessageBox.question(
             self,

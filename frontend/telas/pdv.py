@@ -1,15 +1,21 @@
 from telas.pagamento import PagamentoWindow
+from telas.buscar_produto import BuscarProdutoDialog
+from telas.venda_concluida import VendaConcluidaDialog
+from telas.cadastro_rapido import CadastroRapidoDialog
 from services.venda_service import finalizar_venda as enviar_venda
 from services.pdv_service import buscar_produto
+from services.api import configuracoes
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QShortcut, QKeySequence
 from PySide6.QtWidgets import (
     QWidget,
     QDialog,
     QVBoxLayout,
     QHBoxLayout,
+    QFrame,
+    QHeaderView,
     QLabel,
-    QLineEdit,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -17,49 +23,147 @@ from PySide6.QtWidgets import (
 )
 
 
+class BotaoAtalho(QFrame):
+
+    clicado = Signal()
+
+    def __init__(self, icone, titulo, atalho, cor):
+
+        super().__init__()
+
+        self.setCursor(Qt.PointingHandCursor)
+        self.setMinimumHeight(64)
+
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {cor};
+                border-radius: 10px;
+            }}
+
+            QLabel {{
+                border: none;
+                background: transparent;
+                color: white;
+            }}
+        """)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(18, 8, 18, 8)
+        layout.setSpacing(14)
+
+        lbl_icone = QLabel(icone)
+        lbl_icone.setStyleSheet("font-size:22px;")
+
+        col_texto = QVBoxLayout()
+        col_texto.setSpacing(0)
+
+        lbl_titulo = QLabel(titulo)
+        lbl_titulo.setStyleSheet(
+            "font-size:14px; font-weight:bold;"
+        )
+
+        lbl_atalho = QLabel(atalho)
+        lbl_atalho.setStyleSheet("font-size:11px; color:#dddddd;")
+
+        col_texto.addWidget(lbl_titulo)
+        col_texto.addWidget(lbl_atalho)
+
+        layout.addWidget(lbl_icone)
+        layout.addLayout(col_texto)
+        layout.addStretch()
+
+    def mousePressEvent(self, event):
+        self.clicado.emit()
+        super().mousePressEvent(event)
+
+
 class PDV(QWidget):
+
+    voltar = Signal()
 
     def __init__(self):
         super().__init__()
 
         self.itens = []
 
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setStyleSheet("background:white;")
+
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 16, 24, 20)
+        layout.setSpacing(14)
 
-        titulo = QLabel("PONTO DE VENDA")
-        titulo.setAlignment(Qt.AlignCenter)
-        titulo.setStyleSheet("""
-            font-size:24px;
-            font-weight:bold;
+        # ======================
+        # CABEÇALHO
+        # ======================
+
+        cabecalho = QHBoxLayout()
+
+        self.bt_voltar = QPushButton("←")
+        self.bt_voltar.setFixedSize(36, 36)
+        self.bt_voltar.setStyleSheet("""
+            QPushButton {
+                background:#f0f0f0;
+                border-radius:8px;
+                font-size:16px;
+            }
+            QPushButton:hover {
+                background:#e0e0e0;
+            }
         """)
+        self.bt_voltar.clicked.connect(self.voltar.emit)
 
-        layout.addWidget(titulo)
+        col_titulo = QVBoxLayout()
+        col_titulo.setSpacing(0)
 
-        pesquisa = QHBoxLayout()
-
-        self.codigo = QLineEdit()
-        self.codigo.setPlaceholderText(
-            "Código ou Código de Barras"
+        titulo = QLabel("FRENTE DE CAIXA")
+        titulo.setStyleSheet(
+            "background:transparent; font-size:20px; "
+            "font-weight:bold; color:#202225;"
         )
 
-        self.bt_buscar = QPushButton("Buscar")
+        config = configuracoes()
+        nome_loja = config.get("nome_loja") or ""
 
-        self.bt_buscar.clicked.connect(
-            self.adicionar_produto
+        self.lbl_loja = QLabel(nome_loja)
+        self.lbl_loja.setStyleSheet(
+            "background:transparent; font-size:11px; "
+            "color:#2E7D32; font-weight:bold;"
         )
 
-        self.codigo.returnPressed.connect(
-            self.adicionar_produto
-        )
+        col_titulo.addWidget(titulo)
+        col_titulo.addWidget(self.lbl_loja)
 
-        pesquisa.addWidget(self.codigo)
-        pesquisa.addWidget(self.bt_buscar)
+        self.bt_cancelar = QPushButton("Cancelar Venda")
+        self.bt_cancelar.setStyleSheet("""
+            QPushButton {
+                background:#C62828;
+                color:white;
+                border-radius:8px;
+                padding:8px 14px;
+                font-weight:bold;
+            }
+            QPushButton:hover {
+                background:#B71C1C;
+            }
+        """)
+        self.bt_cancelar.clicked.connect(self.cancelar_venda)
 
-        layout.addLayout(pesquisa)
+        cabecalho.addWidget(self.bt_voltar)
+        cabecalho.addSpacing(12)
+        cabecalho.addLayout(col_titulo)
+        cabecalho.addStretch()
+        cabecalho.addWidget(self.bt_cancelar)
+
+        layout.addLayout(cabecalho)
+
+        # ======================
+        # TABELA DE ITENS
+        # ======================
 
         self.tabela = QTableWidget()
 
-        self.tabela.setColumnCount(5)
+        self.tabela.setColumnCount(6)
 
         self.tabela.setHorizontalHeaderLabels([
             "Código",
@@ -67,97 +171,125 @@ class PDV(QWidget):
             "Qtde",
             "Unitário",
             "Total",
+            "",
         ])
 
-        self.tabela.horizontalHeader().setStretchLastSection(True)
-
-        layout.addWidget(self.tabela)
-
-        total_layout = QHBoxLayout()
-
-        self.bt_cancelar = QPushButton("Cancelar Venda")
-        self.bt_finalizar = QPushButton("Finalizar Venda")
-
-        self.bt_cancelar.setMinimumHeight(45)
-        self.bt_finalizar.setMinimumHeight(45)
-
-        self.bt_cancelar.setStyleSheet("""
-        QPushButton{
-            background:#C62828;
-            color:white;
-            font-size:15px;
-            font-weight:bold;
-        }
-
-        QPushButton:hover{
-            background:#B71C1C;
-        }
+        self.tabela.horizontalHeader().setStretchLastSection(False)
+        self.tabela.setColumnWidth(2, 120)
+        self.tabela.setColumnWidth(5, 48)
+        self.tabela.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.Stretch
+        )
+        self.tabela.setStyleSheet("""
+            QTableWidget {
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                gridline-color: #eeeeee;
+                color: #202225;
+                background: white;
+            }
+            QHeaderView::section {
+                background: #f4f5f7;
+                color: #202225;
+                font-weight: bold;
+                padding: 6px;
+                border: none;
+                border-bottom: 1px solid #e0e0e0;
+            }
         """)
 
-        self.bt_finalizar.setStyleSheet("""
-        QPushButton{
-            background:#2E7D32;
-            color:white;
-            font-size:15px;
-            font-weight:bold;
-        }
+        layout.addWidget(self.tabela, stretch=1)
 
-        QPushButton:hover{
-            background:#1B5E20;
-        }
-        """)
+        # ======================
+        # RESUMO (ITENS / TOTAL)
+        # ======================
 
-        self.total = QLabel("TOTAL: R$ 0,00")
+        resumo = QHBoxLayout()
 
+        col_itens = QVBoxLayout()
+        col_itens.setSpacing(0)
+
+        lbl_itens_titulo = QLabel("ITENS")
+        lbl_itens_titulo.setStyleSheet(
+            "font-size:12px; color:gray;"
+        )
+
+        self.lbl_itens_valor = QLabel("0")
+        self.lbl_itens_valor.setStyleSheet(
+            "font-size:26px; font-weight:bold;"
+        )
+
+        col_itens.addWidget(lbl_itens_titulo)
+        col_itens.addWidget(self.lbl_itens_valor)
+
+        self.total = QLabel("R$ 0,00")
+        self.total.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.total.setStyleSheet("""
-            font-size:26px;
+            font-size:36px;
             font-weight:bold;
-            color:#1565C0;
+            color:#2E7D32;
         """)
 
-        total_layout.addWidget(self.bt_cancelar)
-        total_layout.addStretch()
-        total_layout.addWidget(self.total)
-        total_layout.addStretch()
-        total_layout.addWidget(self.bt_finalizar)
+        resumo.addLayout(col_itens)
+        resumo.addStretch()
+        resumo.addWidget(self.total)
 
-        layout.addLayout(total_layout)
+        layout.addLayout(resumo)
 
-        self.bt_cancelar.clicked.connect(
-            self.cancelar_venda
+        # ======================
+        # BARRA DE ATALHOS
+        # ======================
+
+        barra = QHBoxLayout()
+        barra.setSpacing(14)
+
+        self.bt_buscar = BotaoAtalho(
+            "🔍", "BUSCAR", "F1", "#2b2b2b"
+        )
+        self.bt_pagar = BotaoAtalho(
+            "💳", "PAGAR", "F3", "#2E7D32"
+        )
+        self.bt_adicionar = BotaoAtalho(
+            "➕", "ADICIONAR", "F4", "#1565C0"
         )
 
-        self.bt_finalizar.clicked.connect(
-            self.finalizar_venda
+        self.bt_buscar.clicado.connect(self.abrir_busca)
+        self.bt_pagar.clicado.connect(self.finalizar_venda)
+        self.bt_adicionar.clicado.connect(self.abrir_cadastro_rapido)
+
+        barra.addWidget(self.bt_buscar)
+        barra.addWidget(self.bt_pagar)
+        barra.addWidget(self.bt_adicionar)
+
+        layout.addLayout(barra)
+
+        # ======================
+        # ATALHOS DE TECLADO
+        # ======================
+
+        contexto = Qt.WidgetWithChildrenShortcut
+
+        self.atalho_f1 = QShortcut(QKeySequence("F1"), self)
+        self.atalho_f1.setContext(contexto)
+        self.atalho_f1.activated.connect(self.abrir_busca)
+
+        self.atalho_f4 = QShortcut(QKeySequence("F4"), self)
+        self.atalho_f4.setContext(contexto)
+        self.atalho_f4.activated.connect(self.abrir_cadastro_rapido)
+
+    # ==================================================
+    # BUSCAR PRODUTO (F1) - abre o modal de pesquisa
+    # ==================================================
+
+    def abrir_busca(self):
+
+        dialog = BuscarProdutoDialog(self)
+        dialog.produto_selecionado.connect(
+            self.adicionar_produto_ao_carrinho
         )
+        dialog.exec()
 
-        self.codigo.setFocus()
-
-    # ==================================================
-    # ADICIONAR PRODUTO
-    # ==================================================
-
-    def adicionar_produto(self):
-
-        codigo = self.codigo.text().strip()
-
-        if not codigo:
-            return
-
-        produto = buscar_produto(codigo)
-
-        if produto is None:
-
-            QMessageBox.warning(
-                self,
-                "Erro",
-                "Produto não encontrado."
-            )
-
-            self.codigo.clear()
-            self.codigo.setFocus()
-
-            return
+    def adicionar_produto_ao_carrinho(self, produto, quantidade):
 
         encontrou = False
 
@@ -165,7 +297,7 @@ class PDV(QWidget):
 
             if item["id"] == produto["id"]:
 
-                item["quantidade"] += 1
+                item["quantidade"] += quantidade
 
                 encontrou = True
 
@@ -179,15 +311,37 @@ class PDV(QWidget):
                     "codigo": produto["codigo"],
                     "nome": produto["nome"],
                     "preco": float(produto["preco"]),
-                    "quantidade": 1,
+                    "quantidade": quantidade,
                 }
             )
 
         self.atualizar_tabela()
 
-        self.codigo.clear()
+    # ==================================================
+    # ADICIONAR PRODUTO (F4) - cadastro rápido sem sair do PDV
+    # ==================================================
 
-        self.codigo.setFocus()
+    def abrir_cadastro_rapido(self):
+
+        dialog = CadastroRapidoDialog(self)
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        if not dialog.produto_criado:
+            return
+
+        codigo = (
+            dialog.produto_criado.get("codigo_barras")
+            or dialog.produto_criado.get("codigo")
+        )
+
+        produto = buscar_produto(codigo)
+
+        if produto is None:
+            return
+
+        self.adicionar_produto_ao_carrinho(produto, 1)
 
     # ==================================================
     # ATUALIZAR TABELA
@@ -219,10 +373,10 @@ class PDV(QWidget):
                 QTableWidgetItem(item["nome"])
             )
 
-            self.tabela.setItem(
+            self.tabela.setCellWidget(
                 linha,
                 2,
-                QTableWidgetItem(str(item["quantidade"]))
+                self.criar_widget_qtde(linha, item["quantidade"])
             )
 
             self.tabela.setItem(
@@ -241,9 +395,121 @@ class PDV(QWidget):
                 )
             )
 
+            self.tabela.setCellWidget(
+                linha,
+                5,
+                self.criar_widget_excluir(linha)
+            )
+
+        self.lbl_itens_valor.setText(str(len(self.itens)))
+
         self.total.setText(
-            f"TOTAL: R$ {total:.2f}"
+            f"R$ {total:.2f}"
         )
+
+    # ==================================================
+    # WIDGETS DE QUANTIDADE / EXCLUIR (por linha)
+    # ==================================================
+
+    def criar_widget_qtde(self, linha, quantidade):
+
+        widget = QWidget()
+
+        caixa = QHBoxLayout(widget)
+        caixa.setContentsMargins(4, 2, 4, 2)
+        caixa.setSpacing(4)
+
+        estilo_botao = """
+            QPushButton {
+                background:#f0f0f0;
+                border-radius:4px;
+                font-weight:bold;
+            }
+            QPushButton:hover {
+                background:#e0e0e0;
+            }
+        """
+
+        bt_menos = QPushButton("-")
+        bt_menos.setFixedSize(24, 24)
+        bt_menos.setStyleSheet(estilo_botao)
+        bt_menos.clicked.connect(
+            lambda: self.alterar_quantidade(linha, -1)
+        )
+
+        lbl_qtde = QLabel(str(quantidade))
+        lbl_qtde.setAlignment(Qt.AlignCenter)
+        lbl_qtde.setFixedWidth(24)
+        lbl_qtde.setStyleSheet(
+            "background:transparent; color:#202225; font-weight:bold;"
+        )
+
+        bt_mais = QPushButton("+")
+        bt_mais.setFixedSize(24, 24)
+        bt_mais.setStyleSheet(estilo_botao)
+        bt_mais.clicked.connect(
+            lambda: self.alterar_quantidade(linha, 1)
+        )
+
+        caixa.addWidget(bt_menos)
+        caixa.addWidget(lbl_qtde)
+        caixa.addWidget(bt_mais)
+        caixa.addStretch()
+
+        return widget
+
+    def criar_widget_excluir(self, linha):
+
+        widget = QWidget()
+
+        caixa = QHBoxLayout(widget)
+        caixa.setContentsMargins(0, 0, 0, 0)
+
+        bt_excluir = QPushButton("🗑")
+        bt_excluir.setFixedSize(28, 28)
+        bt_excluir.setCursor(Qt.PointingHandCursor)
+        bt_excluir.setStyleSheet("""
+            QPushButton {
+                background:transparent;
+                border:none;
+                font-size:14px;
+            }
+            QPushButton:hover {
+                background:#fdecea;
+                border-radius:6px;
+            }
+        """)
+        bt_excluir.clicked.connect(
+            lambda: self.remover_item(linha)
+        )
+
+        caixa.addWidget(bt_excluir)
+
+        return widget
+
+    def alterar_quantidade(self, linha, delta):
+
+        if linha >= len(self.itens):
+            return
+
+        nova_quantidade = self.itens[linha]["quantidade"] + delta
+
+        if nova_quantidade <= 0:
+            self.remover_item(linha)
+            return
+
+        self.itens[linha]["quantidade"] = nova_quantidade
+
+        self.atualizar_tabela()
+
+    def remover_item(self, linha):
+
+        if linha >= len(self.itens):
+            return
+
+        del self.itens[linha]
+
+        self.atualizar_tabela()
 
     # ==================================================
     # CANCELAR VENDA
@@ -265,20 +531,20 @@ class PDV(QWidget):
         if resposta == QMessageBox.No:
             return
 
+        self.limpar_venda()
+
+    def limpar_venda(self):
+
         self.itens.clear()
 
         self.tabela.setRowCount(0)
 
-        self.total.setText(
-            "TOTAL: R$ 0,00"
-        )
+        self.lbl_itens_valor.setText("0")
 
-        self.codigo.clear()
-
-        self.codigo.setFocus()
+        self.total.setText("R$ 0,00")
 
     # ==================================================
-    # FINALIZAR VENDA
+    # FINALIZAR VENDA (PAGAR - F3)
     # ==================================================
 
     def finalizar_venda(self):
@@ -297,7 +563,7 @@ class PDV(QWidget):
             for item in self.itens
         )
 
-        tela = PagamentoWindow(total)
+        tela = PagamentoWindow(total, self.itens)
 
         if tela.exec() != QDialog.Accepted:
             return
@@ -307,7 +573,7 @@ class PDV(QWidget):
             response = enviar_venda(
                 itens=self.itens,
                 forma_pagamento=tela.forma_pagamento,
-                cliente_id=None,
+                cliente_id=tela.cliente_id,
                 desconto=0,
                 observacao=None,
                 data_vencimento=None,
@@ -315,23 +581,16 @@ class PDV(QWidget):
 
             if response.status_code == 201:
 
-                QMessageBox.information(
-                    self,
-                    "Sucesso",
-                    "Venda realizada com sucesso!"
+                concluida = VendaConcluidaDialog(
+                    total,
+                    self.itens,
+                    tela.forma_pagamento,
+                    cliente_nome=tela.cliente_nome,
+                    parent=self,
                 )
+                concluida.exec()
 
-                self.itens.clear()
-
-                self.tabela.setRowCount(0)
-
-                self.total.setText(
-                    "TOTAL: R$ 0,00"
-                )
-
-                self.codigo.clear()
-
-                self.codigo.setFocus()
+                self.limpar_venda()
 
             else:
 

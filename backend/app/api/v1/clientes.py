@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database.session import SessionLocal
@@ -30,7 +30,10 @@ def criar_cliente(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user)
 ):
-    return ClienteService.criar(db, dados)
+    try:
+        return ClienteService.criar(db, dados)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/", response_model=list[ClienteResponse])
@@ -50,7 +53,10 @@ def buscar_cliente(
     cliente = ClienteService.buscar_por_id(db, cliente_id)
 
     if not cliente:
-        raise Exception("Cliente não encontrado.")
+        raise HTTPException(
+            status_code=404,
+            detail="Cliente não encontrado.",
+        )
 
     return cliente
 
@@ -62,11 +68,14 @@ def atualizar_cliente(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user)
 ):
-    return ClienteService.atualizar(
-        db,
-        cliente_id,
-        dados
-    )
+    try:
+        return ClienteService.atualizar(
+            db,
+            cliente_id,
+            dados
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.delete("/{cliente_id}")
@@ -75,7 +84,10 @@ def excluir_cliente(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user)
 ):
-    return ClienteService.excluir(
-        db,
-        cliente_id
-    )
+    try:
+        return ClienteService.excluir(
+            db,
+            cliente_id
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

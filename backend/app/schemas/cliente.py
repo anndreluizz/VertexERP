@@ -6,6 +6,9 @@ class ClienteCreate(BaseModel):
     cpf_cnpj: str | None = None
     email: EmailStr | None = None
     telefone: str | None = None
+    endereco: str | None = None
+    cidade: str | None = None
+    estado: str | None = None
 
 
 class ClienteUpdate(BaseModel):
@@ -13,6 +16,9 @@ class ClienteUpdate(BaseModel):
     cpf_cnpj: str | None = None
     email: EmailStr | None = None
     telefone: str | None = None
+    endereco: str | None = None
+    cidade: str | None = None
+    estado: str | None = None
     ativo: bool
 
 
@@ -22,6 +28,9 @@ class ClienteResponse(BaseModel):
     cpf_cnpj: str | None
     email: EmailStr | None
     telefone: str | None
+    endereco: str | None = None
+    cidade: str | None = None
+    estado: str | None = None
     ativo: bool
 
     class Config:

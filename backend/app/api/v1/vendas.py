@@ -54,7 +54,10 @@ def criar(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    return VendaService.criar(db, dados)
+    try:
+        return VendaService.criar(db, dados, usuario.id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.delete("/{venda_id}")
@@ -64,7 +67,7 @@ def excluir(
     usuario=Depends(get_current_user),
 ):
 
-    ok = VendaService.excluir(db, venda_id)
+    ok = VendaService.excluir(db, venda_id, usuario.id)
 
     if not ok:
         raise HTTPException(

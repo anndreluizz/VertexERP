@@ -16,10 +16,6 @@ from app.schemas.conta_pagar import (
     ContaPagarUpdate,
 )
 
-from app.services.caixa_operacao_service import (
-    CaixaOperacaoService,
-)
-
 
 class ContaPagarService:
 
@@ -36,7 +32,10 @@ class ContaPagarService:
             data_vencimento=dados.data_vencimento,
             data_pagamento=None,
             valor=float(dados.valor),
+            descricao=dados.descricao,
+            categoria=dados.categoria,
             observacao=dados.observacao,
+            numero_boleto=dados.numero_boleto,
             status=StatusContaPagar.PENDENTE.value,
         )
 
@@ -98,8 +97,11 @@ class ContaPagarService:
     def pagar(
         db: Session,
         conta_id: int,
-        usuario_id: int,
     ):
+        # Despesas do estabelecimento (aluguel, funcionaria, contas)
+        # normalmente sao pagas via transferencia/PIX da conta da loja,
+        # nao saem da gaveta do caixa fisico do PDV — por isso marcar
+        # como paga aqui nao mexe no caixa, diferente de uma venda.
 
         conta = ContaPagarRepository.buscar_por_id(
             db,
@@ -115,31 +117,29 @@ class ContaPagarService:
         if conta.status == StatusContaPagar.CANCELADO.value:
             raise Exception("Conta cancelada.")
 
-        caixa = CaixaOperacaoService.buscar_caixa_aberto(
-            db
-        )
-
-        if not caixa:
-            raise Exception("Nenhum caixa aberto.")
-
         conta.status = StatusContaPagar.PAGO.value
         conta.data_pagamento = datetime.utcnow()
 
-        conta = ContaPagarRepository.atualizar(
+        return ContaPagarRepository.atualizar(
             db,
             conta,
         )
 
-        CaixaOperacaoService.registrar_movimento(
-            db=db,
-            caixa=caixa,
-            usuario_id=usuario_id,
-            tipo="PAGAMENTO",
-            descricao=f"Pagamento Conta Nº {conta.id}",
-            valor=-float(conta.valor),
+    @staticmethod
+    def excluir(
+        db: Session,
+        conta_id: int,
+    ):
+
+        conta = ContaPagarRepository.buscar_por_id(
+            db,
+            conta_id,
         )
 
-        return conta
+        if not conta:
+            raise Exception("Conta não encontrada.")
+
+        ContaPagarRepository.excluir(db, conta)
 
     @staticmethod
     def cancelar(

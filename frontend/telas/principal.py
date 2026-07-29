@@ -2,8 +2,16 @@ from telas.dashboard import Dashboard
 from telas.pdv import PDV
 from telas.caixa import Caixa
 from telas.produtos import Produtos
+from telas.clientes import Clientes
+from telas.relatorios import Relatorios
+from telas.contas_pagar import ContasPagar
+from telas.visao_geral import VisaoGeral
+from telas.configuracoes import Configuracoes
+from telas.caixa_bloqueado import CaixaBloqueadoDialog
+from telas.abrir_caixa import AbrirCaixaWindow
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QShortcut, QKeySequence
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -13,7 +21,11 @@ from PySide6.QtWidgets import (
     QLabel,
     QFrame,
     QStackedWidget,
+    QDialog,
+    QMessageBox,
 )
+
+from services.caixa_service import caixa_aberto, abrir_caixa
 
 
 class PrincipalWindow(QMainWindow):
@@ -70,26 +82,22 @@ class PrincipalWindow(QMainWindow):
 
         menu_layout.addWidget(titulo)
 
-        self.bt_dashboard = QPushButton("🏠 Dashboard")
-        self.bt_pdv = QPushButton("🛒 PDV")
+        self.bt_dashboard = QPushButton("🏠 Início")
         self.bt_produtos = QPushButton("📦 Produtos")
         self.bt_clientes = QPushButton("👥 Clientes")
-        self.bt_fornecedores = QPushButton("🚚 Fornecedores")
-        self.bt_compras = QPushButton("📥 Compras")
-        self.bt_vendas = QPushButton("🧾 Vendas")
         self.bt_caixa = QPushButton("💰 Caixa")
+        self.bt_contas_pagar = QPushButton("📉 Contas a Pagar")
+        self.bt_visao_geral = QPushButton("📈 Visão Geral")
         self.bt_relatorios = QPushButton("📊 Relatórios")
         self.bt_config = QPushButton("⚙ Configurações")
 
         botoes = [
             self.bt_dashboard,
-            self.bt_pdv,
             self.bt_produtos,
             self.bt_clientes,
-            self.bt_fornecedores,
-            self.bt_compras,
-            self.bt_vendas,
             self.bt_caixa,
+            self.bt_contas_pagar,
+            self.bt_visao_geral,
             self.bt_relatorios,
             self.bt_config,
         ]
@@ -109,34 +117,25 @@ class PrincipalWindow(QMainWindow):
         self.pdv = PDV()
         self.produtos = Produtos()
 
-        self.clientes = QLabel("Clientes")
-        self.clientes.setAlignment(Qt.AlignCenter)
-
-        self.fornecedores = QLabel("Fornecedores")
-        self.fornecedores.setAlignment(Qt.AlignCenter)
-
-        self.compras = QLabel("Compras")
-        self.compras.setAlignment(Qt.AlignCenter)
-
-        self.vendas = QLabel("Vendas")
-        self.vendas.setAlignment(Qt.AlignCenter)
+        self.clientes = Clientes()
 
         self.caixa = Caixa()
 
-        self.relatorios = QLabel("Relatórios")
-        self.relatorios.setAlignment(Qt.AlignCenter)
+        self.contas_pagar = ContasPagar()
 
-        self.config = QLabel("Configurações")
-        self.config.setAlignment(Qt.AlignCenter)
+        self.visao_geral = VisaoGeral()
+
+        self.relatorios = Relatorios()
+
+        self.config = Configuracoes()
 
         self.paginas.addWidget(self.dashboard)
         self.paginas.addWidget(self.pdv)
         self.paginas.addWidget(self.produtos)
         self.paginas.addWidget(self.clientes)
-        self.paginas.addWidget(self.fornecedores)
-        self.paginas.addWidget(self.compras)
-        self.paginas.addWidget(self.vendas)
         self.paginas.addWidget(self.caixa)
+        self.paginas.addWidget(self.contas_pagar)
+        self.paginas.addWidget(self.visao_geral)
         self.paginas.addWidget(self.relatorios)
         self.paginas.addWidget(self.config)
 
@@ -151,10 +150,6 @@ class PrincipalWindow(QMainWindow):
             lambda: self.paginas.setCurrentWidget(self.dashboard)
         )
 
-        self.bt_pdv.clicked.connect(
-            lambda: self.paginas.setCurrentWidget(self.pdv)
-        )
-
         self.bt_produtos.clicked.connect(
             lambda: self.paginas.setCurrentWidget(self.produtos)
         )
@@ -163,26 +158,120 @@ class PrincipalWindow(QMainWindow):
             lambda: self.paginas.setCurrentWidget(self.clientes)
         )
 
-        self.bt_fornecedores.clicked.connect(
-            lambda: self.paginas.setCurrentWidget(self.fornecedores)
-        )
-
-        self.bt_compras.clicked.connect(
-            lambda: self.paginas.setCurrentWidget(self.compras)
-        )
-
-        self.bt_vendas.clicked.connect(
-            lambda: self.paginas.setCurrentWidget(self.vendas)
-        )
-
         self.bt_caixa.clicked.connect(
             lambda: self.paginas.setCurrentWidget(self.caixa)
         )
 
-        self.bt_relatorios.clicked.connect(
-            lambda: self.paginas.setCurrentWidget(self.relatorios)
+        self.bt_contas_pagar.clicked.connect(
+            self.ir_para_contas_pagar
         )
+
+        self.bt_visao_geral.clicked.connect(self.ir_para_visao_geral)
+
+        self.bt_relatorios.clicked.connect(self.ir_para_relatorios)
 
         self.bt_config.clicked.connect(
             lambda: self.paginas.setCurrentWidget(self.config)
         )
+
+        self.dashboard.navegar_pdv.connect(self.ir_para_pdv)
+
+        self.dashboard.navegar_estoque.connect(
+            lambda: self.paginas.setCurrentWidget(self.produtos)
+        )
+
+        self.dashboard.navegar_caixa.connect(
+            lambda: self.paginas.setCurrentWidget(self.caixa)
+        )
+
+        self.pdv.voltar.connect(
+            lambda: self.paginas.setCurrentWidget(self.dashboard)
+        )
+
+        self.produtos.voltar.connect(
+            lambda: self.paginas.setCurrentWidget(self.dashboard)
+        )
+
+        self.clientes.voltar.connect(
+            lambda: self.paginas.setCurrentWidget(self.dashboard)
+        )
+
+        self.config.voltar.connect(
+            lambda: self.paginas.setCurrentWidget(self.dashboard)
+        )
+
+        self.relatorios.voltar.connect(
+            lambda: self.paginas.setCurrentWidget(self.dashboard)
+        )
+
+        self.contas_pagar.voltar.connect(
+            lambda: self.paginas.setCurrentWidget(self.dashboard)
+        )
+
+        self.visao_geral.voltar.connect(
+            lambda: self.paginas.setCurrentWidget(self.dashboard)
+        )
+
+        self.paginas.setCurrentWidget(self.dashboard)
+
+        # ======================
+        # ATALHOS
+        # ======================
+
+        self.atalho_pdv = QShortcut(QKeySequence("F3"), self)
+        self.atalho_pdv.activated.connect(self.atalho_f3)
+
+    def atalho_f3(self):
+
+        if self.paginas.currentWidget() is self.pdv:
+            self.pdv.finalizar_venda()
+        else:
+            self.ir_para_pdv()
+
+    def ir_para_pdv(self):
+
+        if caixa_aberto() is not None:
+            self.paginas.setCurrentWidget(self.pdv)
+            return
+
+        bloqueado = CaixaBloqueadoDialog(self)
+
+        if bloqueado.exec() != QDialog.Accepted:
+            return
+
+        if not bloqueado.abrir_solicitado:
+            return
+
+        janela = AbrirCaixaWindow()
+
+        if janela.exec() != QDialog.Accepted:
+            return
+
+        response = abrir_caixa(janela.saldo)
+
+        if response.status_code != 200:
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+
+            QMessageBox.warning(self, "Erro", erro)
+            return
+
+        self.caixa.carregar()
+        self.paginas.setCurrentWidget(self.pdv)
+
+    def ir_para_relatorios(self):
+
+        self.relatorios.carregar()
+        self.paginas.setCurrentWidget(self.relatorios)
+
+    def ir_para_contas_pagar(self):
+
+        self.contas_pagar.carregar()
+        self.paginas.setCurrentWidget(self.contas_pagar)
+
+    def ir_para_visao_geral(self):
+
+        self.visao_geral.carregar()
+        self.paginas.setCurrentWidget(self.visao_geral)

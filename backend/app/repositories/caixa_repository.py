@@ -25,3 +25,12 @@ class CaixaRepository:
         db.commit()
         db.refresh(caixa)
         return caixa
+
+    @staticmethod
+    def listar(db: Session, limite: int = 20):
+        return (
+            db.query(Caixa)
+            .order_by(Caixa.data_abertura.desc())
+            .limit(limite)
+            .all()
+        )

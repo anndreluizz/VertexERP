@@ -29,6 +29,21 @@ class DashboardService:
             .scalar()
         )
 
+        vendas_hoje_qtd = (
+            db.query(Venda)
+            .filter(func.date(Venda.data) == hoje)
+            .count()
+        )
+
+        vendas_mes = (
+            db.query(func.coalesce(func.sum(Venda.valor_total), 0))
+            .filter(
+                func.extract("year", Venda.data) == hoje.year,
+                func.extract("month", Venda.data) == hoje.month,
+            )
+            .scalar()
+        )
+
         compras_hoje = (
             db.query(func.coalesce(func.sum(Compra.valor_total), 0))
             .filter(func.date(Compra.data) == hoje)
@@ -75,6 +90,8 @@ class DashboardService:
 
         return {
             "vendas_hoje": float(vendas_hoje),
+            "vendas_hoje_qtd": vendas_hoje_qtd,
+            "vendas_mes": float(vendas_mes),
             "compras_hoje": float(compras_hoje),
             "saldo_caixa": float(saldo_caixa),
             "contas_receber": float(contas_receber),

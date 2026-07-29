@@ -18,6 +18,10 @@ class UserService:
         if usuario:
             raise Exception("E-mail já cadastrado.")
 
+        # o primeiro usuario do sistema (dono da loja) ja nasce admin;
+        # os demais (cadastrados depois, por um admin) nascem comuns
+        eh_primeiro_usuario = len(UserRepository.listar(db)) == 0
+
         senha_hash = pwd_context.hash(dados.senha)
 
         novo_usuario = User(
@@ -25,7 +29,7 @@ class UserService:
             email=dados.email,
             senha=senha_hash,
             ativo=True,
-            admin=False
+            admin=eh_primeiro_usuario,
         )
 
         return UserRepository.criar(db, novo_usuario)
@@ -33,3 +37,25 @@ class UserService:
     @staticmethod
     def listar_usuarios(db: Session):
         return UserRepository.listar(db)
+
+    @staticmethod
+    def existe_usuario(db: Session) -> bool:
+        return len(UserRepository.listar(db)) > 0
+
+    @staticmethod
+    def atualizar(db: Session, user_id: int, dados, usuario_atual):
+
+        usuario = UserRepository.buscar_por_id(db, user_id)
+
+        if not usuario:
+            raise Exception("Usuário não encontrado.")
+
+        if usuario.id == usuario_atual.id and dados.ativo is False:
+            raise Exception(
+                "Você não pode desativar a própria conta."
+            )
+
+        for campo, valor in dados.dict(exclude_unset=True).items():
+            setattr(usuario, campo, valor)
+
+        return UserRepository.atualizar(db, usuario)

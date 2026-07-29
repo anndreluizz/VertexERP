@@ -51,6 +51,12 @@ def get_current_user(
                 detail="Usuário não encontrado."
             )
 
+        if not usuario.ativo:
+            raise HTTPException(
+                status_code=403,
+                detail="Usuário desativado.",
+            )
+
         return usuario
 
     except JWTError:
@@ -58,3 +64,15 @@ def get_current_user(
             status_code=401,
             detail="Token inválido."
         )
+
+
+def get_current_admin(
+    usuario: User = Depends(get_current_user),
+):
+    if not usuario.admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas administradores podem realizar essa ação.",
+        )
+
+    return usuario

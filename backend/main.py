@@ -1,7 +1,16 @@
-from fastapi import FastAPI
+import os
+import sys
+
+from alembic import command
+from alembic.config import Config
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from app.api.v1.pdv import router as pdv_router
 from app.api.v1.contas_pagar import router as contas_pagar_router
+from app.api.v1.categorias_despesa import (
+    router as categorias_despesa_router,
+)
 from app.api.v1.contas_receber import router as contas_receber_router
 from app.api.v1.movimento_caixa import router as movimento_caixa_router
 from app.api.v1.caixa import router as caixa_router
@@ -14,6 +23,9 @@ from app.api.v1.clientes import router as clientes_router
 from app.api.v1.users import router as users_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.dashboard import router as dashboard_router
+from app.api.v1.estoque import router as estoque_router
+from app.api.v1.financeiro import router as fiado_router
+from app.api.v1.configuracoes import router as configuracoes_router
 
 app = FastAPI(
     title="Vertex ERP",
@@ -30,6 +42,14 @@ def home():
     }
 
 
+@app.exception_handler(Exception)
+def handle_generic_exception(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=400,
+        content={"detail": str(exc)}
+    )
+
+
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(dashboard_router)
@@ -43,4 +63,39 @@ app.include_router(caixa_router)
 app.include_router(movimento_caixa_router)
 app.include_router(contas_receber_router)
 app.include_router(contas_pagar_router)
+app.include_router(categorias_despesa_router)
 app.include_router(pdv_router)
+app.include_router(estoque_router)
+app.include_router(fiado_router)
+app.include_router(configuracoes_router)
+
+# Quando empacotado com PyInstaller (--onefile), __file__ aponta pra dentro
+# da pasta temporária de extração (sys._MEIPASS) — certo pra achar arquivos
+# empacotados como alembic.ini/migrations (read-only).
+ASSETS_DIR = getattr(
+    sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))
+)
+
+
+@app.on_event("startup")
+def preparar_banco():
+    """Roda num banco novo (ou desatualizado) sem precisar de comando
+    manual — essencial pra instalar o sistema numa máquina nova.
+
+    A criação do primeiro usuário/loja é feita pela própria tela de
+    "Comece Grátis" do frontend (telas/cadastro_inicial.py), não aqui —
+    por isso essa função só cuida do schema do banco.
+    """
+
+    if os.getenv("DB_NAME", "").startswith("vertexerp_test"):
+        return
+
+    _rodar_migracoes()
+
+
+def _rodar_migracoes():
+    config = Config(os.path.join(ASSETS_DIR, "alembic.ini"))
+    config.set_main_option(
+        "script_location", os.path.join(ASSETS_DIR, "migrations")
+    )
+    command.upgrade(config, "head")

@@ -23,8 +23,10 @@ class ProdutoRepository:
         return produto
 
     @staticmethod
-    def atualizar(db: Session):
+    def atualizar(db: Session, produto: Produto):
         db.commit()
+        db.refresh(produto)
+        return produto
 
     @staticmethod
     def excluir(db: Session, produto: Produto):

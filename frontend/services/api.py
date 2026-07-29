@@ -1,6 +1,17 @@
+import os
+import sys
+
 import requests
 
-URL = "http://127.0.0.1:8000"
+# Esse mesmo arquivo roda em dois contextos com portas padrao diferentes:
+# o frontend de dev puro (python app.py, sys.frozen=False) fala com
+# "uvicorn main:app" rodando na 8000 (padrao do proprio uvicorn); ja o
+# frontend empacotado (VertexERP-Frontend.exe, sys.frozen=True) fala com
+# o backend empacotado, que usa 58734 de proposito pra nunca colidir com
+# um backend de dev na mesma maquina (ver backend/backend_entry.py).
+# VERTEXERP_PORT sempre pode sobrescrever os dois, pra testes isolados.
+_PORTA_PADRAO = "58734" if getattr(sys, "frozen", False) else "8000"
+URL = f"http://127.0.0.1:{os.getenv('VERTEXERP_PORT', _PORTA_PADRAO)}"
 
 TOKEN = None
 
@@ -24,6 +35,31 @@ def login(usuario: str, senha: str):
         return True
 
     return False
+
+
+def existe_usuario():
+
+    response = requests.get(f"{URL}/users/existe")
+
+    if response.status_code != 200:
+        # se o backend nao respondeu direito, assume que ja existe
+        # usuario pra nao empurrar quem ja usa o sistema de volta
+        # pro cadastro inicial
+        return True
+
+    return response.json().get("data", {}).get("existe", True)
+
+
+def cadastrar_usuario(nome, email, senha):
+
+    return requests.post(
+        f"{URL}/users/",
+        json={
+            "nome": nome,
+            "email": email,
+            "senha": senha,
+        },
+    )
 
 
 def get(endpoint: str):
@@ -88,3 +124,28 @@ def dashboard():
         return response.json()
 
     return {}
+
+
+def me():
+
+    response = get("/auth/me")
+
+    if response.status_code == 200:
+        return response.json()
+
+    return {}
+
+
+def configuracoes():
+
+    response = get("/configuracoes")
+
+    if response.status_code == 200:
+        return response.json()
+
+    return {}
+
+
+def atualizar_configuracoes(dados):
+
+    return put("/configuracoes/", dados)

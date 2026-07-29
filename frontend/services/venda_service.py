@@ -1,4 +1,14 @@
-from services.api import post
+from services.api import get, post
+
+
+def listar_vendas():
+
+    response = get("/vendas/")
+
+    if response.status_code != 200:
+        return []
+
+    return response.json()
 
 
 def finalizar_venda(

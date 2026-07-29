@@ -128,6 +128,30 @@ def atualizar(
         )
 
 
+@router.delete("/{conta_id}")
+def excluir(
+    conta_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+
+    try:
+
+        ContaPagarService.excluir(db, conta_id)
+
+        return {
+            "success": True,
+            "message": "Conta excluída com sucesso.",
+        }
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
+
+
 @router.post(
     "/{conta_id}/pagar",
     response_model=ContaPagarResponse,
@@ -143,7 +167,6 @@ def pagar(
         conta = ContaPagarService.pagar(
             db,
             conta_id,
-            usuario["id"],
         )
 
         return ContaPagarResponse.from_orm(conta)

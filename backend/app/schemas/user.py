@@ -12,6 +12,12 @@ class UserLogin(BaseModel):
     senha: str
 
 
+class UserUpdate(BaseModel):
+    nome: str | None = None
+    ativo: bool | None = None
+    admin: bool | None = None
+
+
 class UserResponse(BaseModel):
     id: int
     nome: str

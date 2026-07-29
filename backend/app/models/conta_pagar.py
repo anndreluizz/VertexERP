@@ -49,6 +49,16 @@ class ContaPagar(Base):
 
     valor: Mapped[float]
 
+    descricao: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+    )
+
+    categoria: Mapped[str | None] = mapped_column(
+        String(60),
+        nullable=True,
+    )
+
     observacao: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
@@ -57,6 +67,11 @@ class ContaPagar(Base):
     status: Mapped[str] = mapped_column(
         String(20),
         default="PENDENTE",
+    )
+
+    numero_boleto: Mapped[str | None] = mapped_column(
+        String(60),
+        nullable=True,
     )
 
     fornecedor = relationship(

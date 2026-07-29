@@ -5,6 +5,10 @@ class DashboardResponse(BaseModel):
 
     vendas_hoje: float
 
+    vendas_hoje_qtd: int
+
+    vendas_mes: float
+
     compras_hoje: float
 
     saldo_caixa: float

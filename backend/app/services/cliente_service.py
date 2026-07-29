@@ -11,19 +11,24 @@ class ClienteService:
     @staticmethod
     def criar(db: Session, dados: ClienteCreate):
 
-        cliente = ClienteRepository.buscar_por_documento(
-            db,
-            dados.cpf_cnpj
-        )
+        if dados.cpf_cnpj:
 
-        if cliente:
-            raise Exception("CPF/CNPJ já cadastrado.")
+            cliente = ClienteRepository.buscar_por_documento(
+                db,
+                dados.cpf_cnpj
+            )
+
+            if cliente:
+                raise Exception("CPF/CNPJ já cadastrado.")
 
         novo_cliente = Cliente(
             nome=dados.nome,
             cpf_cnpj=dados.cpf_cnpj,
             telefone=dados.telefone,
             email=dados.email,
+            endereco=dados.endereco,
+            cidade=dados.cidade,
+            estado=dados.estado,
             ativo=True
 
         )
@@ -72,8 +77,10 @@ class ClienteService:
         if not cliente:
             raise Exception("Cliente não encontrado.")
 
-        ClienteRepository.excluir(db, cliente)
+        cliente.ativo = False
+
+        ClienteRepository.atualizar(db, cliente)
 
         return {
-            "mensagem": "Cliente excluído com sucesso."
+            "mensagem": "Cliente desativado com sucesso."
         }

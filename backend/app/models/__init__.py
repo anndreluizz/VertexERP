@@ -9,3 +9,9 @@ from app.models.venda import Venda
 from app.models.item_venda import ItemVenda
 from app.models.caixa import Caixa
 from app.models.movimento_caixa import MovimentoCaixa
+from app.models.conta_pagar import ContaPagar
+from app.models.categoria_despesa import CategoriaDespesa
+from app.models.conta_receber import ContaReceber
+from app.models.movimento_estoque import MovimentoEstoque
+from app.models.movimento_fiado import MovimentoFiado
+from app.models.configuracao import Configuracao

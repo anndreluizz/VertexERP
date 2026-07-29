@@ -56,6 +56,11 @@ class Venda(Base):
         nullable=True
     )
 
+    data_fechamento: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True
+    )
+
     cliente = relationship(
         "Cliente",
         back_populates="vendas"

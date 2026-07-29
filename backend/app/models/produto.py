@@ -1,6 +1,13 @@
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, Float, Integer, DateTime
+from sqlalchemy import (
+    String,
+    Boolean,
+    Float,
+    Integer,
+    DateTime,
+    LargeBinary,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base
@@ -73,8 +80,22 @@ class Produto(Base):
         DateTime,
         default=datetime.utcnow
     )
+
+    foto: Mapped[bytes | None] = mapped_column(
+        LargeBinary,
+        nullable=True
+    )
+
+    @property
+    def tem_foto(self) -> bool:
+        return self.foto is not None
+
     itens_compra = relationship(
         "ItemCompra",
         back_populates="produto"
     )
-    itens_venda = relationship("ItemVenda")
+    itens_venda = relationship("ItemVenda", back_populates="produto")
+    movimentos_estoque = relationship(
+        "MovimentoEstoque",
+        back_populates="produto"
+    )

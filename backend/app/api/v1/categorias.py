@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database.session import SessionLocal
@@ -30,7 +30,10 @@ def criar_categoria(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user)
 ):
-    return CategoriaService.criar(db, dados)
+    try:
+        return CategoriaService.criar(db, dados)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/", response_model=list[CategoriaResponse])

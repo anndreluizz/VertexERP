@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.models.conta_pagar import ContaPagar
-from app.enums.status_conta_receber import StatusContaReceber
+from app.enums.status_conta_pagar import StatusContaPagar
 
 
 class ContaPagarRepository:
@@ -18,6 +18,11 @@ class ContaPagarRepository:
         db.commit()
         db.refresh(conta)
         return conta
+
+    @staticmethod
+    def excluir(db: Session, conta: ContaPagar):
+        db.delete(conta)
+        db.commit()
 
     @staticmethod
     def buscar_por_id(
@@ -47,7 +52,7 @@ class ContaPagarRepository:
         return (
             db.query(ContaPagar)
             .filter(
-                ContaPagar.status == StatusContaReceber.PENDENTE.value
+                ContaPagar.status == StatusContaPagar.PENDENTE.value
             )
             .all()
         )
@@ -57,7 +62,7 @@ class ContaPagarRepository:
         return (
             db.query(ContaPagar)
             .filter(
-                ContaPagar.status == StatusContaReceber.RECEBIDO.value
+                ContaPagar.status == StatusContaPagar.PAGO.value
             )
             .all()
         )

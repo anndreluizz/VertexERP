@@ -17,9 +17,15 @@ __pycache__/
 logs/
 backend/logs/
 
-# Migrações
-backend/migrations/
-
 # Banco SQLite
 *.db
 *.sqlite3
+
+# Artefatos de build (PyInstaller)
+build/
+dist/
+dist_final/
+*.egg-info/
+
+# Postgres portátil (baixado à parte, não faz parte do código-fonte)
+postgres-portable/

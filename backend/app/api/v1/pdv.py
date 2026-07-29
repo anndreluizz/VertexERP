@@ -23,6 +23,22 @@ def get_db():
 
 
 @router.get(
+    "/produtos",
+    response_model=list[ProdutoPDV],
+)
+def pesquisar_produtos(
+    q: str,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+
+    return PDVService.pesquisar(
+        db,
+        q,
+    )
+
+
+@router.get(
     "/produto/{codigo}",
     response_model=ProdutoPDV,
 )

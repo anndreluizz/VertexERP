@@ -39,6 +39,17 @@ class Caixa(Base):
         String(20),
         default="ABERTO"
     )
+
+    valor_contado: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True
+    )
+
+    observacoes: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True
+    )
+
     movimentos = relationship(
         "MovimentoCaixa",
         back_populates="caixa",

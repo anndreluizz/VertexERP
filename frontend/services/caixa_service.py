@@ -25,12 +25,35 @@ def abrir_caixa(saldo_inicial):
     )
 
 
-def fechar_caixa():
+def fechar_caixa(valor_contado=None, observacoes=None):
 
     return post(
         "/caixa/fechar",
-        {},
+        {
+            "valor_contado": valor_contado,
+            "observacoes": observacoes,
+        },
     )
+
+
+def resumo_caixa():
+
+    response = get("/caixa/resumo")
+
+    if response.status_code != 200:
+        return None
+
+    return response.json()
+
+
+def historico_caixa():
+
+    response = get("/caixa/historico")
+
+    if response.status_code != 200:
+        return []
+
+    return response.json()
 
 
 # ==========================================

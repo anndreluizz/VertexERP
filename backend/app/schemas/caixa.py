@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 
 class CaixaBase(BaseModel):
@@ -11,6 +11,11 @@ class CaixaCreate(CaixaBase):
     pass
 
 
+class FecharCaixaRequest(BaseModel):
+    valor_contado: float | None = None
+    observacoes: str | None = None
+
+
 class CaixaResponse(BaseModel):
     id: int
     data_abertura: datetime
@@ -18,5 +23,21 @@ class CaixaResponse(BaseModel):
     saldo_inicial: float
     saldo_final: float
     status: str
+    valor_contado: float | None = None
+    observacoes: str | None = None
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        orm_mode = True
+
+
+class ResumoCaixaResponse(BaseModel):
+    saldo_inicial: float
+    vendas_dinheiro: float
+    vendas_pix: float
+    vendas_cartao: float
+    vendas_prazo: float
+    suprimentos: float
+    sangrias: float
+    recebimentos_fiado: float
+    total_previsto: float
+    total_geral: float

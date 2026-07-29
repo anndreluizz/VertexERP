@@ -39,6 +39,16 @@ class Compra(Base):
         default="FINALIZADA",
     )
 
+    forma_pagamento: Mapped[str] = mapped_column(
+        String(20),
+        default="AVISTA",
+    )
+
+    data_vencimento: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
     fornecedor = relationship(
         "Fornecedor",
         back_populates="compras",

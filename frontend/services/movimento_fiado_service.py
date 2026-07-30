@@ -26,6 +26,7 @@ def registrar_pagamento(
     valor,
     forma_pagamento,
     descricao=None,
+    data=None,
 ):
 
     return post(
@@ -36,6 +37,7 @@ def registrar_pagamento(
             "valor": valor,
             "forma_pagamento": forma_pagamento,
             "descricao": descricao,
+            "data": data,
         },
     )
 

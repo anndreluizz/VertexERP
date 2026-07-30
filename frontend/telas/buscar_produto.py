@@ -262,5 +262,5 @@ class BuscarProdutoDialog(QDialog):
         self.produto_selecionado.emit(produto, quantidade)
 
         self.busca.clear()
-        self.lista.clear()
+        self.executar_busca()
         self.busca.setFocus()

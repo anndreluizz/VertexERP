@@ -30,14 +30,15 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QLabel,
     QPushButton,
-    QLineEdit,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
     QDialog,
 )
 
-from widgets.card import Card
+from design import tokens
+from design.icons import icone, icone_pixmap
+from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
 from widgets.banner import Banner
 
 
@@ -54,11 +55,10 @@ class Produtos(QWidget):
         self.botoes_categoria = {}
         self._cache_fotos = {}
 
-        self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setStyleSheet("background:white;")
+        self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 16, 24, 16)
+        layout.setContentsMargins(28, 20, 28, 20)
         layout.setSpacing(16)
 
         # ======================
@@ -66,18 +66,18 @@ class Produtos(QWidget):
         # ======================
 
         cabecalho = QHBoxLayout()
+        cabecalho.setSpacing(12)
 
-        self.bt_voltar = QPushButton("← Voltar")
-        self.bt_voltar.setStyleSheet("""
-            QPushButton {
-                background:transparent;
-                color:gray;
-                border:none;
-                font-size:13px;
-            }
-            QPushButton:hover {
-                color:#202225;
-            }
+        self.bt_voltar = QPushButton()
+        self.bt_voltar.setFixedSize(36, 36)
+        self.bt_voltar.setCursor(Qt.PointingHandCursor)
+        self.bt_voltar.setIcon(icone("chevron-left", cor=tokens.TEXTO_SECUNDARIO, tamanho=18))
+        self.bt_voltar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD}; border:1px solid {tokens.BORDA};
+                border-radius:{tokens.RADIUS_SM}px;
+            }}
+            QPushButton:hover {{ background:{tokens.FUNDO}; }}
         """)
         self.bt_voltar.clicked.connect(self.voltar.emit)
 
@@ -88,22 +88,22 @@ class Produtos(QWidget):
         nome_loja = config.get("nome_loja") or "Vertex ERP"
 
         titulo = QLabel(nome_loja)
-        titulo.setStyleSheet(
-            "background:transparent; font-size:20px; "
-            "font-weight:bold; color:#202225;"
-        )
+        titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XL}px;
+            font-weight:800; color:{tokens.TEXTO};
+        """)
 
         subtitulo = QLabel("LOJA OPERACIONAL")
-        subtitulo.setStyleSheet(
-            "background:transparent; font-size:11px; "
-            "color:#2E7D32; font-weight:bold;"
-        )
+        subtitulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            color:{tokens.SECUNDARIA_HOVER}; font-weight:700;
+        """)
 
         col_titulo.addWidget(titulo)
         col_titulo.addWidget(subtitulo)
 
         cabecalho.addWidget(self.bt_voltar)
-        cabecalho.addSpacing(12)
+        cabecalho.addSpacing(4)
         cabecalho.addLayout(col_titulo)
         cabecalho.addStretch()
 
@@ -114,17 +114,20 @@ class Produtos(QWidget):
         # ======================
 
         resumo_layout = QGridLayout()
-        resumo_layout.setSpacing(12)
+        resumo_layout.setSpacing(14)
 
-        self.card_total = Card("Total de Produtos", "0")
-        self.card_alerta = Card("Estoque em Alerta", "0")
-        self.card_patrimonio = Card("Valor em Estoque", "R$ 0,00")
-        self.card_categorias = Card("Categorias Ativas", "0")
+        self.card_total = CardKPI("Total de Produtos", "package", tokens.PRIMARIA)
+        self.card_alerta = CardKPI("Estoque em Alerta", "alert-triangle", tokens.ALERTA)
+        self.card_patrimonio = CardKPI("Valor em Estoque", "dollar-sign", tokens.SECUNDARIA)
+        self.card_categorias = CardKPI("Categorias Ativas", "filter", tokens.PRIMARIA)
 
         resumo_layout.addWidget(self.card_total, 0, 0)
         resumo_layout.addWidget(self.card_alerta, 0, 1)
         resumo_layout.addWidget(self.card_patrimonio, 0, 2)
         resumo_layout.addWidget(self.card_categorias, 0, 3)
+
+        for coluna in range(4):
+            resumo_layout.setColumnStretch(coluna, 1)
 
         layout.addLayout(resumo_layout)
 
@@ -136,17 +139,13 @@ class Produtos(QWidget):
         banners_layout.setSpacing(12)
 
         self.banner_rapido = Banner(
-            "ALTA VELOCIDADE",
-            "+ Cadastro Rápido",
-            "⚡",
-            "#1fa065",
+            "ALTA VELOCIDADE", "Cadastro Rápido", "", tokens.SECUNDARIA,
+            icone_nome="refresh-cw",
         )
 
         self.banner_novo = Banner(
-            "PERSONALIZADO",
-            "+ Novo Produto",
-            "➕",
-            "#202225",
+            "PERSONALIZADO", "Novo Produto", "", tokens.SIDEBAR,
+            icone_nome="plus",
         )
 
         self.banner_rapido.clicado.connect(self.abrir_cadastro_rapido)
@@ -163,29 +162,8 @@ class Produtos(QWidget):
 
         barra = QHBoxLayout()
 
-        self.pesquisa = QLineEdit()
-
-        self.pesquisa.setPlaceholderText(
-            "Buscar produto pelo nome ou código de barras..."
-        )
-        self.pesquisa.setMinimumHeight(40)
-        self.pesquisa.setStyleSheet("""
-            QLineEdit {
-                border: 1px solid #cccccc;
-                border-radius: 8px;
-                padding: 0 12px;
-                font-size: 14px;
-                color: #202225;
-                background: white;
-            }
-            QLineEdit:focus {
-                border: 1px solid #2E7D32;
-            }
-        """)
-
-        self.pesquisa.textChanged.connect(
-            self.filtrar_produtos
-        )
+        self.pesquisa = CampoTexto("Buscar produto pelo nome ou código de barras...")
+        self.pesquisa.textChanged.connect(self.filtrar_produtos)
 
         barra.addWidget(self.pesquisa)
 
@@ -245,83 +223,41 @@ class Produtos(QWidget):
 
         self.tabela.horizontalHeader().setStretchLastSection(True)
 
-        self.tabela.setStyleSheet("""
-            QTableWidget {
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                color: #202225;
-                background: white;
-                alternate-background-color: #f8f9fb;
-            }
-            QTableWidget::item:selected {
-                background: #1565C0;
+        self.tabela.setStyleSheet(f"""
+            QTableWidget {{
+                border: 1px solid {tokens.BORDA};
+                border-radius: {tokens.RADIUS_MD}px;
+                color: {tokens.TEXTO};
+                background: {tokens.CARD};
+                alternate-background-color: {tokens.FUNDO};
+                font-size: {tokens.TAMANHO_BASE}px;
+            }}
+            QTableWidget::item:selected {{
+                background: {tokens.PRIMARIA};
                 color: white;
-            }
-            QHeaderView::section {
-                background: #f4f5f7;
-                color: #202225;
-                font-weight: bold;
-                padding: 6px;
+            }}
+            QHeaderView::section {{
+                background: {tokens.FUNDO};
+                color: {tokens.TEXTO_SECUNDARIO};
+                font-weight: 700;
+                font-size: {tokens.TAMANHO_XS}px;
+                padding: 8px;
                 border: none;
-                border-bottom: 1px solid #e0e0e0;
-            }
+                border-bottom: 1px solid {tokens.BORDA};
+            }}
         """)
 
         layout.addWidget(self.tabela, stretch=1)
 
         rodape = QHBoxLayout()
 
-        self.bt_editar = QPushButton("Editar")
-
-        self.bt_editar.setStyleSheet("""
-            QPushButton{
-                background:#1565C0;
-                color:white;
-                font-weight:bold;
-                border-radius:8px;
-                padding:8px 14px;
-            }
-            QPushButton:hover{
-                background:#0D47A1;
-            }
-        """)
-
-        self.bt_excluir = QPushButton("Excluir")
-
-        self.bt_excluir.setStyleSheet("""
-            QPushButton{
-                background:#C62828;
-                color:white;
-                font-weight:bold;
-                border-radius:8px;
-                padding:8px 14px;
-            }
-            QPushButton:hover{
-                background:#B71C1C;
-            }
-        """)
-
-        self.bt_atualizar = QPushButton("Atualizar")
-
-        self.bt_atualizar.setStyleSheet("""
-            QPushButton{
-                background:#616161;
-                color:white;
-                font-weight:bold;
-                border-radius:8px;
-                padding:8px 14px;
-            }
-            QPushButton:hover{
-                background:#424242;
-            }
-        """)
+        self.bt_editar = BotaoPrimario("Editar", icone_nome="edit-2")
+        self.bt_excluir = BotaoPerigo("Excluir", icone_nome="trash-2")
+        self.bt_atualizar = BotaoSecundario("Atualizar", icone_nome="refresh-cw")
 
         rodape.addWidget(self.bt_editar)
-
         rodape.addWidget(self.bt_excluir)
-
         rodape.addStretch()
-
         rodape.addWidget(self.bt_atualizar)
 
         layout.addLayout(rodape)
@@ -331,19 +267,17 @@ class Produtos(QWidget):
         # ==========================================
 
         dicas = QLabel(
-            "⌨️  Ctrl+N Novo produto    "
-            "F5 Atualizar    "
-            "Delete Excluir selecionado    "
-            "🖱️ Duplo clique Editar"
+            "Ctrl+N Novo produto    ·    "
+            "F5 Atualizar    ·    "
+            "Delete Excluir selecionado    ·    "
+            "Duplo clique Editar"
         )
 
         dicas.setAlignment(Qt.AlignCenter)
 
-        dicas.setStyleSheet("""
-            background:transparent;
-            color:#9E9E9E;
-            font-size:12px;
-            padding:6px;
+        dicas.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px; padding:6px;
         """)
 
         layout.addWidget(dicas)
@@ -435,10 +369,10 @@ class Produtos(QWidget):
             if c.get("ativo", True)
         )
 
-        self.card_total.atualizar(str(total))
-        self.card_alerta.atualizar(str(em_alerta))
-        self.card_patrimonio.atualizar(f"R$ {patrimonio:.2f}")
-        self.card_categorias.atualizar(str(categorias_ativas))
+        self.card_total.definir_valor(str(total))
+        self.card_alerta.definir_valor(str(em_alerta))
+        self.card_patrimonio.definir_valor(f"R$ {patrimonio:.2f}")
+        self.card_categorias.definir_valor(str(categorias_ativas))
 
     # ==========================================
     # FILTRO DE CATEGORIAS (ABAS)
@@ -464,6 +398,7 @@ class Produtos(QWidget):
 
             bt = QPushButton(nome)
             bt.setCheckable(True)
+            bt.setCursor(Qt.PointingHandCursor)
             bt.setMinimumHeight(32)
             bt.clicked.connect(
                 lambda checked, n=nome: self.selecionar_categoria(n)
@@ -488,15 +423,16 @@ class Produtos(QWidget):
 
             botao.setStyleSheet(f"""
                 QPushButton {{
-                    background: {"#202225" if selecionado else "#f4f5f7"};
-                    color: {"white" if selecionado else "#202225"};
-                    border-radius: 16px;
+                    background: {tokens.SIDEBAR if selecionado else tokens.CARD};
+                    color: {"white" if selecionado else tokens.TEXTO};
+                    border: 1px solid {tokens.SIDEBAR if selecionado else tokens.BORDA};
+                    border-radius: {tokens.RADIUS_PILL}px;
                     padding: 0 14px;
-                    font-weight: bold;
-                    font-size: 12px;
+                    font-weight: 700;
+                    font-size: {tokens.TAMANHO_SM}px;
                 }}
                 QPushButton:hover {{
-                    background: {"#33363b" if selecionado else "#e8e8e8"};
+                    background: {"#33363b" if selecionado else tokens.FUNDO};
                 }}
             """)
 
@@ -648,12 +584,11 @@ class Produtos(QWidget):
         if pixmap:
             lbl.setPixmap(self._pixmap_circular(pixmap, 48))
         else:
-            lbl.setText("📦")
-            lbl.setStyleSheet("""
-                font-size:20px;
-                background:#eef0f3;
+            lbl.setStyleSheet(f"""
+                background:{tokens.PRIMARIA_CLARA};
                 border-radius:24px;
             """)
+            lbl.setPixmap(icone_pixmap("package", cor=tokens.PRIMARIA, tamanho=20))
 
         return lbl
 

@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QSize, Signal
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -14,12 +14,16 @@ from PySide6.QtWidgets import (
 from services.api import configuracoes, atualizar_configuracoes
 from telas.gerenciar_usuarios import GerenciarUsuariosDialog
 
+from design import tokens
+from design.icons import icone, icone_pixmap
+from design.widgets import BotaoSecundario, BotaoSucesso
+
 
 class ItemMenuConfig(QPushButton):
 
-    def __init__(self, icone, texto, habilitado=True):
+    def __init__(self, icone_nome, texto, habilitado=True):
 
-        super().__init__(f"{icone}  {texto}")
+        super().__init__(texto if habilitado else f"{texto}  ·  em breve")
 
         self.setCheckable(True)
         self.setEnabled(habilitado)
@@ -28,39 +32,31 @@ class ItemMenuConfig(QPushButton):
             Qt.PointingHandCursor if habilitado else Qt.ArrowCursor
         )
 
+        cor_icone = tokens.TEXTO_SECUNDARIO if habilitado else tokens.TEXTO_TERCIARIO
+        self.setIcon(icone(icone_nome, cor=cor_icone, tamanho=17))
+        self.setIconSize(QSize(17, 17))
+
         if habilitado:
-            self.setStyleSheet("""
-                QPushButton {
-                    background:transparent;
-                    text-align:left;
-                    padding-left:14px;
-                    border:none;
-                    border-radius:8px;
-                    color:#424242;
-                    font-size:13px;
-                }
-                QPushButton:hover {
-                    background:#f4f5f7;
-                }
-                QPushButton:checked {
-                    background:#E3F2FD;
-                    color:#1565C0;
-                    font-weight:bold;
-                }
+            self.setStyleSheet(f"""
+                QPushButton {{
+                    background:transparent; text-align:left; padding-left:12px;
+                    border:none; border-radius:{tokens.RADIUS_SM}px;
+                    color:{tokens.TEXTO_SECUNDARIO}; font-size:{tokens.TAMANHO_SM}px;
+                }}
+                QPushButton:hover {{ background:{tokens.FUNDO}; }}
+                QPushButton:checked {{
+                    background:{tokens.PRIMARIA_CLARA}; color:{tokens.PRIMARIA};
+                    font-weight:700;
+                }}
             """)
         else:
-            self.setStyleSheet("""
-                QPushButton {
-                    background:transparent;
-                    text-align:left;
-                    padding-left:14px;
-                    border:none;
-                    border-radius:8px;
-                    color:#c0c0c0;
-                    font-size:13px;
-                }
+            self.setStyleSheet(f"""
+                QPushButton {{
+                    background:transparent; text-align:left; padding-left:12px;
+                    border:none; border-radius:{tokens.RADIUS_SM}px;
+                    color:{tokens.TEXTO_TERCIARIO}; font-size:{tokens.TAMANHO_SM}px;
+                }}
             """)
-            self.setText(f"{icone}  {texto}  ·  em breve")
 
 
 class Configuracoes(QWidget):
@@ -70,11 +66,10 @@ class Configuracoes(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setStyleSheet("background:white;")
+        self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 16, 24, 16)
+        layout.setContentsMargins(28, 20, 28, 20)
         layout.setSpacing(16)
 
         # ======================
@@ -82,44 +77,32 @@ class Configuracoes(QWidget):
         # ======================
 
         cabecalho = QHBoxLayout()
+        cabecalho.setSpacing(12)
 
-        self.bt_voltar = QPushButton("← Voltar")
-        self.bt_voltar.setStyleSheet("""
-            QPushButton {
-                background:transparent;
-                color:gray;
-                border:none;
-                font-size:13px;
-            }
-            QPushButton:hover {
-                color:#202225;
-            }
+        self.bt_voltar = QPushButton()
+        self.bt_voltar.setFixedSize(36, 36)
+        self.bt_voltar.setCursor(Qt.PointingHandCursor)
+        self.bt_voltar.setIcon(icone("chevron-left", cor=tokens.TEXTO_SECUNDARIO, tamanho=18))
+        self.bt_voltar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD}; border:1px solid {tokens.BORDA};
+                border-radius:{tokens.RADIUS_SM}px;
+            }}
+            QPushButton:hover {{ background:{tokens.FUNDO}; }}
         """)
         self.bt_voltar.clicked.connect(self.voltar.emit)
 
         titulo = QLabel("Configurações")
-        titulo.setStyleSheet(
-            "background:transparent; font-size:20px; "
-            "font-weight:bold; color:#202225;"
-        )
-
-        bt_usuarios = QPushButton("👤 Gerenciar Usuários")
-        bt_usuarios.setStyleSheet("""
-            QPushButton {
-                background:#f4f5f7;
-                color:#202225;
-                border-radius:8px;
-                padding:8px 16px;
-                font-weight:bold;
-            }
-            QPushButton:hover {
-                background:#e8e8e8;
-            }
+        titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XL}px;
+            font-weight:800; color:{tokens.TEXTO};
         """)
+
+        bt_usuarios = BotaoSecundario("Gerenciar Usuários", icone_nome="user")
         bt_usuarios.clicked.connect(self.abrir_gerenciar_usuarios)
 
         cabecalho.addWidget(self.bt_voltar)
-        cabecalho.addSpacing(12)
+        cabecalho.addSpacing(4)
         cabecalho.addWidget(titulo)
         cabecalho.addStretch()
         cabecalho.addWidget(bt_usuarios)
@@ -131,35 +114,31 @@ class Configuracoes(QWidget):
         # ======================
 
         corpo = QHBoxLayout()
-        corpo.setSpacing(24)
+        corpo.setSpacing(20)
 
         # ---- submenu de categorias ----
 
         submenu_frame = QFrame()
         submenu_frame.setFixedWidth(280)
-        submenu_frame.setStyleSheet(
-            "background:#fafafa; border-radius:12px; "
-            "border:1px solid #eeeeee;"
-        )
+        submenu_frame.setStyleSheet(f"""
+            background:{tokens.CARD}; border-radius:{tokens.RADIUS_LG}px;
+            border:1px solid {tokens.BORDA};
+        """)
 
         submenu_layout = QVBoxLayout(submenu_frame)
         submenu_layout.setContentsMargins(10, 10, 10, 10)
         submenu_layout.setSpacing(4)
 
-        self.bt_gerais = ItemMenuConfig("🏪", "Configurações Gerais")
-        self.bt_pix = ItemMenuConfig("⚡", "Pagamentos / PIX")
+        self.bt_gerais = ItemMenuConfig("store", "Configurações Gerais")
+        self.bt_pix = ItemMenuConfig("credit-card", "Pagamentos / PIX")
 
         itens_futuros = [
-            ItemMenuConfig("🏬", "Lojas e Filiais", habilitado=False),
-            ItemMenuConfig("🖥", "Hardware / Scanner", habilitado=False),
-            ItemMenuConfig("🖨", "Impressora / Cupom", habilitado=False),
-            ItemMenuConfig(
-                "⭐", "Fidelidade e Marketing", habilitado=False
-            ),
-            ItemMenuConfig(
-                "💳", "Integrações (TEF/POS)", habilitado=False
-            ),
-            ItemMenuConfig("🛡", "Privacidade & LGPD", habilitado=False),
+            ItemMenuConfig("truck", "Lojas e Filiais", habilitado=False),
+            ItemMenuConfig("settings", "Hardware / Scanner", habilitado=False),
+            ItemMenuConfig("printer", "Impressora / Cupom", habilitado=False),
+            ItemMenuConfig("gift", "Fidelidade e Marketing", habilitado=False),
+            ItemMenuConfig("refresh-cw", "Integrações (TEF/POS)", habilitado=False),
+            ItemMenuConfig("lock", "Privacidade & LGPD", habilitado=False),
         ]
 
         submenu_layout.addWidget(self.bt_gerais)
@@ -194,35 +173,16 @@ class Configuracoes(QWidget):
         # RODAPÉ
         # ======================
 
-        rodape = QFrame()
-        rodape.setStyleSheet(
-            "background:#f4f5f7; border-top:1px solid #e0e0e0;"
-        )
-
-        rodape_layout = QHBoxLayout(rodape)
-        rodape_layout.setContentsMargins(0, 14, 0, 0)
-
+        rodape_layout = QHBoxLayout()
         rodape_layout.addStretch()
 
-        self.bt_salvar = QPushButton("Salvar Alterações")
+        self.bt_salvar = BotaoSucesso("Salvar Alterações")
         self.bt_salvar.setMinimumHeight(46)
-        self.bt_salvar.setStyleSheet("""
-            QPushButton {
-                background:#2E7D32;
-                color:white;
-                font-weight:bold;
-                border-radius:10px;
-                padding:0 24px;
-            }
-            QPushButton:hover {
-                background:#1B5E20;
-            }
-        """)
         self.bt_salvar.clicked.connect(self.salvar)
 
         rodape_layout.addWidget(self.bt_salvar)
 
-        layout.addWidget(rodape)
+        layout.addLayout(rodape_layout)
 
         self.carregar()
 
@@ -243,10 +203,10 @@ class Configuracoes(QWidget):
         layout.setSpacing(14)
 
         lbl_secao = QLabel("DADOS DA LOJA")
-        lbl_secao.setStyleSheet(
-            "background:transparent; font-size:12px; "
-            "font-weight:bold; color:#1565C0;"
-        )
+        lbl_secao.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.PRIMARIA};
+        """)
         layout.addWidget(lbl_secao)
 
         self.nome_loja = self._campo(
@@ -274,10 +234,10 @@ class Configuracoes(QWidget):
         layout.setSpacing(14)
 
         lbl_secao = QLabel("RECEBIMENTO VIA PIX")
-        lbl_secao.setStyleSheet(
-            "background:transparent; font-size:12px; "
-            "font-weight:bold; color:#1565C0;"
-        )
+        lbl_secao.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.PRIMARIA};
+        """)
         layout.addWidget(lbl_secao)
 
         self.pix_chave = self._campo(
@@ -291,13 +251,14 @@ class Configuracoes(QWidget):
         )
 
         dica = QLabel(
-            "+ Esses dados aparecem no QR Code de cobrança gerado "
+            "Esses dados aparecem no QR Code de cobrança gerado "
             "na tela de pagamento."
         )
         dica.setWordWrap(True)
-        dica.setStyleSheet(
-            "background:transparent; font-size:11px; color:gray;"
-        )
+        dica.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
         layout.addWidget(dica)
 
         layout.addStretch()
@@ -307,25 +268,21 @@ class Configuracoes(QWidget):
     def _campo(self, layout, rotulo, placeholder):
 
         lbl = QLabel(rotulo)
-        lbl.setStyleSheet(
-            "background:transparent; font-size:10px; "
-            "font-weight:bold; color:gray;"
-        )
+        lbl.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
 
         campo = QLineEdit()
         campo.setPlaceholderText(placeholder)
         campo.setMinimumHeight(42)
-        campo.setStyleSheet("""
-            QLineEdit {
-                border: 1px solid #cccccc;
-                border-radius: 8px;
-                padding: 0 12px;
-                font-size: 13px;
-                color: #202225;
-            }
-            QLineEdit:focus {
-                border: 1px solid #2E7D32;
-            }
+        campo.setStyleSheet(f"""
+            QLineEdit {{
+                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
+                background: {tokens.CARD};
+            }}
+            QLineEdit:focus {{ border: 1.5px solid {tokens.PRIMARIA}; }}
         """)
 
         layout.addWidget(lbl)

@@ -3,8 +3,11 @@ from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
     QLabel,
-    QPushButton,
 )
+
+from design import tokens
+from design.icons import icone_pixmap
+from design.widgets import BotaoSecundario, BotaoSucesso
 
 
 class CaixaBloqueadoDialog(QDialog):
@@ -17,22 +20,21 @@ class CaixaBloqueadoDialog(QDialog):
 
         self.setWindowTitle("Caixa Fechado")
         self.setFixedSize(400, 320)
-        self.setStyleSheet("background:white;")
+        self.setStyleSheet(f"background:{tokens.CARD};")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(32, 30, 32, 30)
         layout.setSpacing(8)
         layout.setAlignment(Qt.AlignHCenter)
 
-        icone = QLabel("🔒")
+        icone = QLabel()
         icone.setFixedSize(56, 56)
         icone.setAlignment(Qt.AlignCenter)
-        icone.setStyleSheet("""
-            background:#FFF3E0;
-            color:#E65100;
-            font-size:24px;
+        icone.setStyleSheet(f"""
+            background:{tokens.ALERTA_CLARO};
             border-radius:28px;
         """)
+        icone.setPixmap(icone_pixmap("lock", cor=tokens.ALERTA, tamanho=24))
 
         layout.addWidget(icone, alignment=Qt.AlignHCenter)
         layout.addSpacing(10)
@@ -40,10 +42,10 @@ class CaixaBloqueadoDialog(QDialog):
         titulo = QLabel("O caixa precisa estar aberto")
         titulo.setAlignment(Qt.AlignCenter)
         titulo.setWordWrap(True)
-        titulo.setStyleSheet(
-            "background:transparent; font-size:17px; "
-            "font-weight:bold; color:#202225;"
-        )
+        titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_LG}px;
+            font-weight:800; color:{tokens.TEXTO};
+        """)
 
         subtitulo = QLabel(
             "Para acessar o Frente de Caixa e registrar vendas, "
@@ -51,42 +53,21 @@ class CaixaBloqueadoDialog(QDialog):
         )
         subtitulo.setAlignment(Qt.AlignCenter)
         subtitulo.setWordWrap(True)
-        subtitulo.setStyleSheet(
-            "background:transparent; font-size:12px; color:gray;"
-        )
+        subtitulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_SECUNDARIO};
+        """)
 
         layout.addWidget(titulo)
         layout.addWidget(subtitulo)
         layout.addSpacing(16)
 
-        bt_abrir = QPushButton("Abrir Caixa")
+        bt_abrir = BotaoSucesso("Abrir Caixa")
         bt_abrir.setMinimumHeight(46)
-        bt_abrir.setStyleSheet("""
-            QPushButton {
-                background:#2E7D32;
-                color:white;
-                font-weight:bold;
-                border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#1B5E20;
-            }
-        """)
         bt_abrir.clicked.connect(self.abrir)
 
-        bt_cancelar = QPushButton("Agora não")
+        bt_cancelar = BotaoSecundario("Agora não")
         bt_cancelar.setMinimumHeight(46)
-        bt_cancelar.setStyleSheet("""
-            QPushButton {
-                background:white;
-                color:#202225;
-                border:1px solid #cccccc;
-                border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#f4f5f7;
-            }
-        """)
         bt_cancelar.clicked.connect(self.reject)
 
         layout.addWidget(bt_abrir)

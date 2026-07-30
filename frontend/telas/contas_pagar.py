@@ -1,24 +1,30 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
+    QGridLayout,
     QLabel,
     QPushButton,
-    QFrame,
+    QComboBox,
     QScrollArea,
     QMessageBox,
 )
 
 from services.api import configuracoes
+from services.categoria_despesa_service import listar_categorias_despesa
 from services.conta_pagar_service import (
     listar_contas_pagar,
     excluir_conta_pagar,
-    pagar_conta_pagar,
 )
 from telas.cadastro_despesa import CadastroDespesaDialog
+from telas.pagamento_despesa import PagamentoDespesaDialog
+
+from design import tokens
+from design.icons import icone
+from design.widgets import Badge, BotaoPerigo, BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
 
 
 def _formatar_moeda(valor):
@@ -53,62 +59,32 @@ def _status_real(conta):
     return status
 
 
-class CardResumo(QFrame):
-
-    def __init__(self, titulo, subtitulo, cor):
-
-        super().__init__()
-
-        self.setStyleSheet("""
-            QFrame {
-                background:#202225;
-                border-radius:12px;
-            }
-        """)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 14)
-        layout.setSpacing(4)
-
-        lbl_titulo = QLabel(titulo)
-        lbl_titulo.setStyleSheet(
-            "background:transparent; border:none; font-size:11px; "
-            "font-weight:bold; color:#9E9E9E; letter-spacing:1px;"
-        )
-
-        self.lbl_valor = QLabel("R$ 0,00")
-        self.lbl_valor.setStyleSheet(
-            f"background:transparent; border:none; font-size:24px; "
-            f"font-weight:bold; color:{cor};"
-        )
-
-        self.lbl_subtitulo = QLabel(subtitulo)
-        self.lbl_subtitulo.setStyleSheet(
-            "background:transparent; border:none; font-size:11px; "
-            "color:#757575;"
-        )
-
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(self.lbl_valor)
-        layout.addWidget(self.lbl_subtitulo)
-
-    def atualizar(self, valor_texto, subtitulo=None):
-        self.lbl_valor.setText(valor_texto)
-        if subtitulo is not None:
-            self.lbl_subtitulo.setText(subtitulo)
+def _vencimento(conta):
+    try:
+        return datetime.fromisoformat(conta["data_vencimento"]).date()
+    except (ValueError, TypeError, KeyError):
+        return None
 
 
-class DespesaCard(QFrame):
+class DespesaCard(Card):
 
     editar_solicitado = Signal(dict)
     excluir_solicitado = Signal(dict)
     pagar_solicitado = Signal(dict)
+    duplicar_solicitado = Signal(dict)
 
-    CORES_STATUS = {
-        "PAGO": ("#2E7D32", "#E8F5E9", "Paga"),
-        "PENDENTE": ("#F9A825", "#FFF8E1", "Pendente"),
-        "VENCIDA": ("#C62828", "#FFEBEE", "Vencida"),
-        "CANCELADO": ("#9E9E9E", "#F5F5F5", "Cancelada"),
+    VARIANTE_STATUS = {
+        "PAGO": "sucesso",
+        "PENDENTE": "alerta",
+        "VENCIDA": "erro",
+        "CANCELADO": "neutro",
+    }
+
+    TEXTO_STATUS = {
+        "PAGO": "Paga",
+        "PENDENTE": "Pendente",
+        "VENCIDA": "Vencida",
+        "CANCELADO": "Cancelada",
     }
 
     def __init__(self, conta):
@@ -117,36 +93,37 @@ class DespesaCard(QFrame):
 
         self.conta = conta
 
-        self.setStyleSheet("""
-            QFrame {
-                background:white;
-                border-radius:12px;
-                border:1px solid #eeeeee;
-            }
-        """)
-
         layout = QHBoxLayout(self)
         layout.setContentsMargins(18, 14, 18, 14)
         layout.setSpacing(14)
 
         status = _status_real(conta)
-        cor, cor_fundo, texto_status = self.CORES_STATUS.get(
-            status, ("#616161", "#F5F5F5", status)
+
+        icone_cor = {
+            "PAGO": tokens.SECUNDARIA,
+            "PENDENTE": tokens.ALERTA,
+            "VENCIDA": tokens.ERRO,
+            "CANCELADO": tokens.TEXTO_TERCIARIO,
+        }.get(status, tokens.TEXTO_TERCIARIO)
+
+        icone_fundo = {
+            "PAGO": tokens.SUCESSO_CLARO,
+            "PENDENTE": tokens.ALERTA_CLARO,
+            "VENCIDA": tokens.ERRO_CLARO,
+            "CANCELADO": tokens.FUNDO,
+        }.get(status, tokens.FUNDO)
+
+        lbl_icone = QLabel()
+        lbl_icone.setFixedSize(40, 40)
+        lbl_icone.setAlignment(Qt.AlignCenter)
+        lbl_icone.setStyleSheet(f"""
+            background:{icone_fundo}; border-radius:20px;
+        """)
+        lbl_icone.setPixmap(
+            icone("arrow-down", cor=icone_cor, tamanho=18).pixmap(18, 18)
         )
 
-        icone = QLabel("↘")
-        icone.setFixedSize(40, 40)
-        icone.setAlignment(Qt.AlignCenter)
-        icone.setStyleSheet(f"""
-            background:{cor_fundo};
-            color:{cor};
-            border-radius:20px;
-            font-size:16px;
-            font-weight:bold;
-            border:none;
-        """)
-
-        layout.addWidget(icone)
+        layout.addWidget(lbl_icone)
 
         col_texto = QVBoxLayout()
         col_texto.setSpacing(4)
@@ -154,29 +131,19 @@ class DespesaCard(QFrame):
         topo = QHBoxLayout()
         topo.setSpacing(8)
 
-        badge_status = QLabel(texto_status)
-        badge_status.setStyleSheet(f"""
-            background:{cor_fundo};
-            color:{cor};
-            border-radius:8px;
-            padding:2px 10px;
-            font-size:11px;
-            font-weight:bold;
-            border:none;
-        """)
-
+        badge_status = Badge(
+            self.TEXTO_STATUS.get(status, status),
+            self.VARIANTE_STATUS.get(status, "neutro"),
+        )
         topo.addWidget(badge_status)
 
         categoria = conta.get("categoria")
 
         if categoria:
             badge_categoria = QLabel(categoria.upper())
-            badge_categoria.setStyleSheet("""
-                background:transparent;
-                color:#9E9E9E;
-                font-size:11px;
-                font-weight:bold;
-                border:none;
+            badge_categoria.setStyleSheet(f"""
+                background:transparent; color:{tokens.TEXTO_TERCIARIO};
+                font-size:{tokens.TAMANHO_XS}px; font-weight:700; border:none;
             """)
             topo.addWidget(badge_categoria)
 
@@ -185,121 +152,96 @@ class DespesaCard(QFrame):
         col_texto.addLayout(topo)
 
         descricao = QLabel(conta.get("descricao") or "Despesa")
-        descricao.setStyleSheet(
-            "background:transparent; border:none; font-size:14px; "
-            "font-weight:bold; color:#202225;"
-        )
+        descricao.setStyleSheet(f"""
+            background:transparent; border:none; font-size:{tokens.TAMANHO_MD}px;
+            font-weight:700; color:{tokens.TEXTO};
+        """)
         col_texto.addWidget(descricao)
 
-        vencimento_texto = conta.get("data_vencimento", "")
-        try:
-            vencimento_formatado = datetime.fromisoformat(
-                vencimento_texto
-            ).strftime("%d/%m/%Y")
-        except (ValueError, TypeError):
-            vencimento_formatado = vencimento_texto
-
-        lbl_vencimento = QLabel(f"📅 Vencimento: {vencimento_formatado}")
-        lbl_vencimento.setStyleSheet(
-            "background:transparent; border:none; font-size:12px; "
-            "color:#9E9E9E;"
+        vencimento_formatado = _vencimento(conta)
+        texto_vencimento = (
+            vencimento_formatado.strftime("%d/%m/%Y")
+            if vencimento_formatado else conta.get("data_vencimento", "")
         )
+
+        lbl_vencimento = QLabel(f"Vencimento: {texto_vencimento}")
+        lbl_vencimento.setStyleSheet(f"""
+            background:transparent; border:none; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
         col_texto.addWidget(lbl_vencimento)
 
         layout.addLayout(col_texto, stretch=1)
 
         lbl_valor = QLabel(_formatar_moeda(conta.get("valor", 0)))
-        lbl_valor.setStyleSheet(
-            "background:transparent; border:none; font-size:18px; "
-            "font-weight:bold; color:#202225;"
-        )
+        lbl_valor.setStyleSheet(f"""
+            background:transparent; border:none; font-size:{tokens.TAMANHO_LG}px;
+            font-weight:800; color:{tokens.TEXTO};
+        """)
         layout.addWidget(lbl_valor)
 
         acoes = QHBoxLayout()
-        acoes.setSpacing(4)
+        acoes.setSpacing(6)
 
         if status in ("PENDENTE", "VENCIDA"):
 
-            bt_pagar = QPushButton("Pagar")
-            bt_pagar.setCursor(Qt.PointingHandCursor)
-            bt_pagar.setStyleSheet("""
-                QPushButton {
-                    background:#2E7D32;
-                    color:white;
-                    border-radius:8px;
-                    padding:6px 14px;
-                    font-size:12px;
-                    font-weight:bold;
-                    border:none;
-                }
-                QPushButton:hover {
-                    background:#1B5E20;
-                }
-            """)
+            bt_pagar = BotaoSecundario("Pagar", icone_nome="check")
             bt_pagar.clicked.connect(
                 lambda: self.pagar_solicitado.emit(self.conta)
             )
             acoes.addWidget(bt_pagar)
 
-        bt_editar = QPushButton("✏")
-        bt_editar.setFixedSize(34, 34)
-        bt_editar.setCursor(Qt.PointingHandCursor)
-        bt_editar.setStyleSheet("""
-            QPushButton {
-                background:#E3F2FD;
-                color:#1565C0;
-                border-radius:8px;
-                border:none;
-            }
-            QPushButton:hover {
-                background:#BBDEFB;
-            }
-        """)
-        bt_editar.clicked.connect(
-            lambda: self.editar_solicitado.emit(self.conta)
-        )
-
-        bt_excluir = QPushButton("🗑")
-        bt_excluir.setFixedSize(34, 34)
-        bt_excluir.setCursor(Qt.PointingHandCursor)
-        bt_excluir.setStyleSheet("""
-            QPushButton {
-                background:#FFEBEE;
-                color:#C62828;
-                border-radius:8px;
-                border:none;
-            }
-            QPushButton:hover {
-                background:#FFCDD2;
-            }
-        """)
-        bt_excluir.clicked.connect(
-            lambda: self.excluir_solicitado.emit(self.conta)
-        )
-
-        acoes.addWidget(bt_editar)
-        acoes.addWidget(bt_excluir)
+        acoes.addWidget(self._botao_icone("edit-2", self.editar_solicitado))
+        acoes.addWidget(self._botao_icone("file-text", self.duplicar_solicitado))
+        acoes.addWidget(self._botao_icone("trash-2", self.excluir_solicitado, perigo=True))
 
         layout.addLayout(acoes)
+
+    def _botao_icone(self, icone_nome, sinal, perigo=False):
+
+        bt = QPushButton()
+        bt.setFixedSize(34, 34)
+        bt.setCursor(Qt.PointingHandCursor)
+
+        cor = tokens.ERRO if perigo else tokens.TEXTO_SECUNDARIO
+        fundo_hover = tokens.ERRO_CLARO if perigo else tokens.FUNDO
+
+        bt.setIcon(icone(icone_nome, cor=cor, tamanho=15))
+        bt.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px; border:none;
+            }}
+            QPushButton:hover {{ background:{fundo_hover}; }}
+        """)
+        bt.clicked.connect(lambda: sinal.emit(self.conta))
+
+        return bt
 
 
 class ContasPagar(QWidget):
 
     voltar = Signal()
 
-    FILTROS = ["TODAS", "PAGA", "PENDENTE", "VENCIDA"]
+    FILTROS_STATUS = ["TODAS", "PAGA", "PENDENTE", "VENCIDA"]
+    FILTROS_PERIODO = [
+        ("TODOS", "Todos"),
+        ("HOJE", "Hoje"),
+        ("SEMANA", "Semana"),
+        ("MES", "Mês"),
+        ("ANO", "Ano"),
+    ]
 
     def __init__(self):
         super().__init__()
 
         self.contas = []
-        self.filtro_atual = "TODAS"
+        self.filtro_status = "TODAS"
+        self.filtro_periodo = "TODOS"
 
-        self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setStyleSheet("background:#f4f5f7;")
+        self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 16, 24, 16)
+        layout.setContentsMargins(28, 20, 28, 20)
         layout.setSpacing(16)
 
         # ======================
@@ -307,18 +249,18 @@ class ContasPagar(QWidget):
         # ======================
 
         cabecalho = QHBoxLayout()
+        cabecalho.setSpacing(12)
 
-        self.bt_voltar = QPushButton("← Voltar")
-        self.bt_voltar.setStyleSheet("""
-            QPushButton {
-                background:transparent;
-                color:gray;
-                border:none;
-                font-size:13px;
-            }
-            QPushButton:hover {
-                color:#202225;
-            }
+        self.bt_voltar = QPushButton()
+        self.bt_voltar.setFixedSize(36, 36)
+        self.bt_voltar.setCursor(Qt.PointingHandCursor)
+        self.bt_voltar.setIcon(icone("chevron-left", cor=tokens.TEXTO_SECUNDARIO, tamanho=18))
+        self.bt_voltar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD}; border:1px solid {tokens.BORDA};
+                border-radius:{tokens.RADIUS_SM}px;
+            }}
+            QPushButton:hover {{ background:{tokens.FUNDO}; }}
         """)
         self.bt_voltar.clicked.connect(self.voltar.emit)
 
@@ -329,39 +271,26 @@ class ContasPagar(QWidget):
         nome_loja = config.get("nome_loja") or "Vertex ERP"
 
         titulo = QLabel(nome_loja)
-        titulo.setStyleSheet(
-            "background:transparent; font-size:20px; "
-            "font-weight:bold; color:#202225;"
-        )
+        titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XL}px;
+            font-weight:800; color:{tokens.TEXTO};
+        """)
 
-        subtitulo = QLabel("LOJA OPERACIONAL")
-        subtitulo.setStyleSheet(
-            "background:transparent; font-size:11px; "
-            "color:#2E7D32; font-weight:bold;"
-        )
+        subtitulo = QLabel("CONTAS A PAGAR")
+        subtitulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            color:{tokens.SECUNDARIA_HOVER}; font-weight:700;
+        """)
 
         col_titulo.addWidget(titulo)
         col_titulo.addWidget(subtitulo)
 
         cabecalho.addWidget(self.bt_voltar)
-        cabecalho.addSpacing(12)
+        cabecalho.addSpacing(4)
         cabecalho.addLayout(col_titulo)
         cabecalho.addStretch()
 
-        self.bt_nova_despesa = QPushButton("＋ Nova Despesa")
-        self.bt_nova_despesa.setCursor(Qt.PointingHandCursor)
-        self.bt_nova_despesa.setStyleSheet("""
-            QPushButton {
-                background:#C62828;
-                color:white;
-                border-radius:8px;
-                padding:10px 18px;
-                font-weight:bold;
-            }
-            QPushButton:hover {
-                background:#8E1616;
-            }
-        """)
+        self.bt_nova_despesa = BotaoPerigo("Nova Despesa", icone_nome="plus")
         self.bt_nova_despesa.clicked.connect(self.nova_despesa)
 
         cabecalho.addWidget(self.bt_nova_despesa)
@@ -369,75 +298,109 @@ class ContasPagar(QWidget):
         layout.addLayout(cabecalho)
 
         # ======================
-        # CARDS DE RESUMO
+        # KPIS
         # ======================
 
-        cards_layout = QHBoxLayout()
-        cards_layout.setSpacing(12)
+        kpis_layout = QGridLayout()
+        kpis_layout.setSpacing(14)
 
-        self.card_previsao = CardResumo(
-            "PREVISÃO TOTAL", "total acumulado", "#EF5350"
-        )
-        self.card_pago = CardResumo(
-            "TOTAL PAGO", "liquidadas", "#66BB6A"
-        )
-        self.card_aberto = CardResumo(
-            "EM ABERTO", "a vencer", "#FFA726"
-        )
-        self.card_vencidas = CardResumo(
-            "VENCIDAS", "tudo em dia", "#EF5350"
-        )
+        self.card_previsao = CardKPI("Total Previsto", "file-text", tokens.PRIMARIA)
+        self.card_pago = CardKPI("Pago", "check", tokens.SECUNDARIA)
+        self.card_aberto = CardKPI("Em Aberto", "wallet", tokens.ALERTA)
+        self.card_vencidas = CardKPI("Vencidas", "alert-triangle", tokens.ERRO)
+        self.card_vence_hoje = CardKPI("Vence Hoje", "calendar", tokens.ERRO)
+        self.card_proximos_7 = CardKPI("Próximos 7 dias", "trending-up", tokens.ALERTA)
+        self.card_valor_medio = CardKPI("Valor Médio", "dollar-sign", tokens.PRIMARIA)
 
-        cards_layout.addWidget(self.card_previsao)
-        cards_layout.addWidget(self.card_pago)
-        cards_layout.addWidget(self.card_aberto)
-        cards_layout.addWidget(self.card_vencidas)
+        cartoes = [
+            self.card_previsao, self.card_pago, self.card_aberto, self.card_vencidas,
+            self.card_vence_hoje, self.card_proximos_7, self.card_valor_medio,
+        ]
 
-        layout.addLayout(cards_layout)
+        for i, card in enumerate(cartoes):
+            kpis_layout.addWidget(card, i // 4, i % 4)
+
+        for coluna in range(4):
+            kpis_layout.setColumnStretch(coluna, 1)
+
+        layout.addLayout(kpis_layout)
 
         # ======================
         # FILTROS
         # ======================
 
-        filtro_layout = QHBoxLayout()
-        filtro_layout.setSpacing(8)
+        linha_busca = QHBoxLayout()
+        linha_busca.setSpacing(10)
 
-        self.botoes_filtro = {}
+        self.pesquisa = CampoTexto("Buscar por descrição ou categoria...")
+        self.pesquisa.textChanged.connect(self._renderizar_lista)
+        linha_busca.addWidget(self.pesquisa, stretch=1)
 
-        for filtro in self.FILTROS:
+        self.combo_categoria = QComboBox()
+        self.combo_categoria.setMinimumHeight(44)
+        self.combo_categoria.setMinimumWidth(180)
+        self.combo_categoria.setCursor(Qt.PointingHandCursor)
+        self.combo_categoria.setStyleSheet(f"""
+            QComboBox {{
+                border:1.5px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
+                padding:0 12px; background:{tokens.CARD}; color:{tokens.TEXTO};
+            }}
+        """)
+        self.combo_categoria.currentTextChanged.connect(self._renderizar_lista)
+        linha_busca.addWidget(self.combo_categoria)
+
+        layout.addLayout(linha_busca)
+
+        linha_filtros = QHBoxLayout()
+        linha_filtros.setSpacing(20)
+
+        self.botoes_status = {}
+
+        grupo_status = QHBoxLayout()
+        grupo_status.setSpacing(8)
+
+        for filtro in self.FILTROS_STATUS:
 
             botao = QPushButton(filtro.capitalize())
             botao.setCheckable(True)
             botao.setCursor(Qt.PointingHandCursor)
             botao.setMinimumHeight(34)
-            botao.setStyleSheet("""
-                QPushButton {
-                    background:white;
-                    color:#616161;
-                    border:1px solid #dcdcdc;
-                    border-radius:17px;
-                    padding:0 18px;
-                    font-size:12px;
-                    font-weight:bold;
-                }
-                QPushButton:checked {
-                    background:#C62828;
-                    color:white;
-                    border:1px solid #C62828;
-                }
-            """)
             botao.clicked.connect(
-                lambda _checked, f=filtro: self._filtrar(f)
+                lambda _checked, f=filtro: self._filtrar_status(f)
             )
 
-            self.botoes_filtro[filtro] = botao
-            filtro_layout.addWidget(botao)
+            self.botoes_status[filtro] = botao
+            grupo_status.addWidget(botao)
 
-        filtro_layout.addStretch()
+        linha_filtros.addLayout(grupo_status)
 
-        layout.addLayout(filtro_layout)
+        linha_filtros.addWidget(self._separador_vertical())
 
-        self.botoes_filtro["TODAS"].setChecked(True)
+        self.botoes_periodo = {}
+
+        grupo_periodo = QHBoxLayout()
+        grupo_periodo.setSpacing(8)
+
+        for chave, rotulo in self.FILTROS_PERIODO:
+
+            botao = QPushButton(rotulo)
+            botao.setCheckable(True)
+            botao.setCursor(Qt.PointingHandCursor)
+            botao.setMinimumHeight(34)
+            botao.clicked.connect(
+                lambda _checked, f=chave: self._filtrar_periodo(f)
+            )
+
+            self.botoes_periodo[chave] = botao
+            grupo_periodo.addWidget(botao)
+
+        linha_filtros.addLayout(grupo_periodo)
+        linha_filtros.addStretch()
+
+        layout.addLayout(linha_filtros)
+
+        self._estilizar_pills(self.botoes_status, self.filtro_status)
+        self._estilizar_pills(self.botoes_periodo, self.filtro_periodo)
 
         # ======================
         # LISTA
@@ -460,6 +423,35 @@ class ContasPagar(QWidget):
 
         layout.addWidget(self.area_rolagem, stretch=1)
 
+    def _separador_vertical(self):
+
+        linha = QLabel()
+        linha.setFixedWidth(1)
+        linha.setFixedHeight(30)
+        linha.setStyleSheet(f"background:{tokens.BORDA};")
+        return linha
+
+    def _estilizar_pills(self, botoes, ativo):
+
+        for chave, botao in botoes.items():
+
+            selecionado = chave == ativo
+
+            botao.setChecked(selecionado)
+
+            botao.setStyleSheet(f"""
+                QPushButton {{
+                    background: {tokens.SIDEBAR if selecionado else tokens.CARD};
+                    color: {"white" if selecionado else tokens.TEXTO};
+                    border: 1px solid {tokens.SIDEBAR if selecionado else tokens.BORDA};
+                    border-radius: {tokens.RADIUS_PILL}px;
+                    padding: 0 16px; font-size: {tokens.TAMANHO_SM}px; font-weight: 700;
+                }}
+                QPushButton:hover {{
+                    background: {"#33363b" if selecionado else tokens.FUNDO};
+                }}
+            """)
+
     # ==========================================
     # CARREGAMENTO
     # ==========================================
@@ -468,15 +460,36 @@ class ContasPagar(QWidget):
 
         self.contas = listar_contas_pagar()
 
-        self._atualizar_cards()
+        self._carregar_categorias()
+        self._atualizar_kpis()
         self._renderizar_lista()
 
-    def _atualizar_cards(self):
+    def _carregar_categorias(self):
+
+        selecionada = self.combo_categoria.currentText()
+
+        self.combo_categoria.blockSignals(True)
+        self.combo_categoria.clear()
+        self.combo_categoria.addItem("Todas as categorias")
+
+        nomes = sorted({
+            c.get("categoria") for c in self.contas if c.get("categoria")
+        })
+        self.combo_categoria.addItems(nomes)
+
+        if selecionada and self.combo_categoria.findText(selecionada) >= 0:
+            self.combo_categoria.setCurrentText(selecionada)
+
+        self.combo_categoria.blockSignals(False)
+
+    def _atualizar_kpis(self):
 
         contas_validas = [
             c for c in self.contas
             if c.get("status") != "CANCELADO"
         ]
+
+        hoje = date.today()
 
         previsao_total = sum(
             float(c.get("valor", 0)) for c in contas_validas
@@ -496,33 +509,70 @@ class ContasPagar(QWidget):
             c for c in contas_validas
             if _status_real(c) == "VENCIDA"
         ]
+        vencidas_total = sum(float(c.get("valor", 0)) for c in vencidas_lista)
 
-        vencidas_total = sum(
-            float(c.get("valor", 0)) for c in vencidas_lista
+        vence_hoje_total = sum(
+            float(c.get("valor", 0)) for c in contas_validas
+            if _status_real(c) == "PENDENTE" and _vencimento(c) == hoje
         )
 
-        self.card_previsao.atualizar(_formatar_moeda(previsao_total))
-        self.card_pago.atualizar(_formatar_moeda(total_pago))
-        self.card_aberto.atualizar(_formatar_moeda(em_aberto))
+        limite_7 = hoje + timedelta(days=7)
+        proximos_7_total = sum(
+            float(c.get("valor", 0)) for c in contas_validas
+            if _status_real(c) == "PENDENTE"
+            and _vencimento(c) is not None
+            and hoje < _vencimento(c) <= limite_7
+        )
 
-        if vencidas_lista:
-            self.card_vencidas.atualizar(
-                _formatar_moeda(vencidas_total),
-                f"{len(vencidas_lista)} conta(s) vencida(s)",
-            )
-        else:
-            self.card_vencidas.atualizar(
-                _formatar_moeda(0), "Tudo em dia"
-            )
+        valor_medio = (
+            previsao_total / len(contas_validas) if contas_validas else 0
+        )
 
-    def _filtrar(self, filtro):
+        self.card_previsao.definir_valor(_formatar_moeda(previsao_total))
+        self.card_pago.definir_valor(_formatar_moeda(total_pago))
+        self.card_aberto.definir_valor(_formatar_moeda(em_aberto))
+        self.card_vencidas.definir_valor(_formatar_moeda(vencidas_total))
+        self.card_vence_hoje.definir_valor(_formatar_moeda(vence_hoje_total))
+        self.card_proximos_7.definir_valor(_formatar_moeda(proximos_7_total))
+        self.card_valor_medio.definir_valor(_formatar_moeda(valor_medio))
 
-        self.filtro_atual = filtro
+    def _filtrar_status(self, filtro):
 
-        for nome, botao in self.botoes_filtro.items():
-            botao.setChecked(nome == filtro)
-
+        self.filtro_status = filtro
+        self._estilizar_pills(self.botoes_status, filtro)
         self._renderizar_lista()
+
+    def _filtrar_periodo(self, filtro):
+
+        self.filtro_periodo = filtro
+        self._estilizar_pills(self.botoes_periodo, filtro)
+        self._renderizar_lista()
+
+    def _dentro_do_periodo(self, conta):
+
+        if self.filtro_periodo == "TODOS":
+            return True
+
+        venc = _vencimento(conta)
+
+        if venc is None:
+            return False
+
+        hoje = date.today()
+
+        if self.filtro_periodo == "HOJE":
+            return venc == hoje
+
+        if self.filtro_periodo == "SEMANA":
+            return hoje <= venc <= hoje + timedelta(days=7)
+
+        if self.filtro_periodo == "MES":
+            return venc.year == hoje.year and venc.month == hoje.month
+
+        if self.filtro_periodo == "ANO":
+            return venc.year == hoje.year
+
+        return True
 
     def _renderizar_lista(self):
 
@@ -532,9 +582,7 @@ class ContasPagar(QWidget):
             if widget:
                 widget.deleteLater()
 
-        filtro = self.filtro_atual
-
-        if filtro == "TODAS":
+        if self.filtro_status == "TODAS":
             contas_filtradas = [
                 c for c in self.contas
                 if c.get("status") != "CANCELADO"
@@ -542,19 +590,38 @@ class ContasPagar(QWidget):
         else:
             contas_filtradas = [
                 c for c in self.contas
-                if _status_real(c) == filtro
+                if _status_real(c) == self.filtro_status
+            ]
+
+        contas_filtradas = [
+            c for c in contas_filtradas if self._dentro_do_periodo(c)
+        ]
+
+        categoria_selecionada = self.combo_categoria.currentText()
+        if categoria_selecionada and categoria_selecionada != "Todas as categorias":
+            contas_filtradas = [
+                c for c in contas_filtradas
+                if c.get("categoria") == categoria_selecionada
+            ]
+
+        texto = self.pesquisa.text().lower().strip()
+        if texto:
+            contas_filtradas = [
+                c for c in contas_filtradas
+                if texto in str(c.get("descricao") or "").lower()
+                or texto in str(c.get("categoria") or "").lower()
             ]
 
         if not contas_filtradas:
 
             lbl_vazio = QLabel(
-                "Nenhuma despesa encontrada nesse filtro."
+                "Nenhuma despesa encontrada com esses filtros."
             )
             lbl_vazio.setAlignment(Qt.AlignCenter)
-            lbl_vazio.setStyleSheet(
-                "color:#9E9E9E; font-size:13px; padding:40px; "
-                "background:transparent;"
-            )
+            lbl_vazio.setStyleSheet(f"""
+                color:{tokens.TEXTO_TERCIARIO}; font-size:{tokens.TAMANHO_BASE}px;
+                padding:40px; background:transparent;
+            """)
             self.lista_layout.addWidget(lbl_vazio)
             return
 
@@ -569,6 +636,7 @@ class ContasPagar(QWidget):
             card.editar_solicitado.connect(self.editar_despesa)
             card.excluir_solicitado.connect(self.excluir_despesa)
             card.pagar_solicitado.connect(self.pagar_despesa)
+            card.duplicar_solicitado.connect(self.duplicar_despesa)
 
             self.lista_layout.addWidget(card)
 
@@ -586,6 +654,13 @@ class ContasPagar(QWidget):
     def editar_despesa(self, conta):
 
         dialogo = CadastroDespesaDialog(conta=conta, parent=self)
+
+        if dialogo.exec() == dialogo.DialogCode.Accepted:
+            self.carregar()
+
+    def duplicar_despesa(self, conta):
+
+        dialogo = CadastroDespesaDialog(duplicar_de=conta, parent=self)
 
         if dialogo.exec() == dialogo.DialogCode.Accepted:
             self.carregar()
@@ -614,13 +689,7 @@ class ContasPagar(QWidget):
 
     def pagar_despesa(self, conta):
 
-        response = pagar_conta_pagar(conta["id"])
+        dialogo = PagamentoDespesaDialog(conta, parent=self)
 
-        if response.status_code == 200:
+        if dialogo.exec() == dialogo.DialogCode.Accepted:
             self.carregar()
-        else:
-            try:
-                erro = response.json()["detail"]
-            except Exception:
-                erro = response.text
-            QMessageBox.critical(self, "Erro", str(erro))

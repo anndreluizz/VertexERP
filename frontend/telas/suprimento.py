@@ -5,10 +5,12 @@ from PySide6.QtWidgets import (
     QLabel,
     QDoubleSpinBox,
     QLineEdit,
-    QPushButton,
     QHBoxLayout,
     QMessageBox,
 )
+
+from design import tokens
+from design.widgets import BotaoSecundario, BotaoSucesso
 
 
 class SuprimentoWindow(QDialog):
@@ -17,69 +19,82 @@ class SuprimentoWindow(QDialog):
         super().__init__()
 
         self.setWindowTitle("Suprimento")
-
-        self.setFixedSize(420, 260)
+        self.setFixedSize(420, 280)
+        self.setStyleSheet(f"background:{tokens.CARD};")
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(4)
 
-        titulo = QLabel("SUPRIMENTO")
-
+        titulo = QLabel("Suprimento")
         titulo.setAlignment(Qt.AlignCenter)
+        titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_XL}px; font-weight:800;
+        """)
 
-        titulo.setStyleSheet("""
-            font-size:22px;
-            font-weight:bold;
+        subtitulo = QLabel("Reforço de dinheiro na gaveta")
+        subtitulo.setAlignment(Qt.AlignCenter)
+        subtitulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px;
         """)
 
         layout.addWidget(titulo)
+        layout.addWidget(subtitulo)
+        layout.addSpacing(18)
 
-        layout.addSpacing(15)
-
-        layout.addWidget(QLabel("Valor"))
+        lbl_valor = QLabel("VALOR")
+        lbl_valor.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+        """)
+        layout.addWidget(lbl_valor)
 
         self.valor = QDoubleSpinBox()
-
         self.valor.setMinimum(0.01)
-
         self.valor.setMaximum(99999999)
-
         self.valor.setDecimals(2)
-
         self.valor.setPrefix("R$ ")
+        self.valor.setMinimumHeight(44)
+        self.valor.setStyleSheet(f"""
+            QDoubleSpinBox {{
+                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                padding: 0 10px; font-size: {tokens.TAMANHO_LG}px; font-weight: 700;
+                color: {tokens.SECUNDARIA}; background: {tokens.CARD};
+            }}
+        """)
 
         layout.addWidget(self.valor)
+        layout.addSpacing(12)
 
-        layout.addSpacing(10)
-
-        layout.addWidget(QLabel("Descrição"))
+        lbl_descricao = QLabel("DESCRIÇÃO")
+        lbl_descricao.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+        """)
+        layout.addWidget(lbl_descricao)
 
         self.descricao = QLineEdit()
-
-        self.descricao.setPlaceholderText(
-            "Motivo do suprimento"
-        )
+        self.descricao.setPlaceholderText("Motivo do suprimento")
+        self.descricao.setMinimumHeight(44)
+        self.descricao.setStyleSheet(f"""
+            QLineEdit {{
+                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
+            }}
+            QLineEdit:focus {{ border: 1.5px solid {tokens.PRIMARIA}; }}
+        """)
 
         layout.addWidget(self.descricao)
 
         layout.addStretch()
 
         botoes = QHBoxLayout()
+        botoes.setSpacing(10)
 
-        self.bt_cancelar = QPushButton("Cancelar")
-
-        self.bt_confirmar = QPushButton("Confirmar")
-
-        self.bt_confirmar.setStyleSheet("""
-            QPushButton{
-                background:#2E7D32;
-                color:white;
-                font-weight:bold;
-            }
-
-            QPushButton:hover{
-                background:#1B5E20;
-            }
-        """)
+        self.bt_cancelar = BotaoSecundario("Cancelar")
+        self.bt_confirmar = BotaoSucesso("Confirmar Suprimento")
 
         botoes.addWidget(self.bt_cancelar)
         botoes.addWidget(self.bt_confirmar)

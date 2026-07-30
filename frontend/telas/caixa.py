@@ -32,42 +32,9 @@ from services.movimento_caixa_service import (
     criar_suprimento,
 )
 
-
-class CardResumo(QFrame):
-
-    def __init__(self, titulo, cor="#202225"):
-
-        super().__init__()
-
-        self.setStyleSheet("""
-            QFrame {
-                background:white;
-                border:1px solid #e0e0e0;
-                border-radius:10px;
-            }
-        """)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 14, 16, 14)
-        layout.setSpacing(4)
-
-        lbl_titulo = QLabel(titulo)
-        lbl_titulo.setStyleSheet(
-            "background:transparent; border:none; font-size:11px; "
-            "font-weight:bold; color:gray;"
-        )
-
-        self.lbl_valor = QLabel("R$ 0,00")
-        self.lbl_valor.setStyleSheet(
-            f"background:transparent; border:none; font-size:20px; "
-            f"font-weight:bold; color:{cor};"
-        )
-
-        layout.addWidget(lbl_titulo)
-        layout.addWidget(self.lbl_valor)
-
-    def atualizar(self, valor_texto):
-        self.lbl_valor.setText(valor_texto)
+from design import tokens
+from design.icons import icone_pixmap
+from design.widgets import BotaoSecundario, CardKPI
 
 
 class Caixa(QWidget):
@@ -75,7 +42,7 @@ class Caixa(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.setStyleSheet("background:#f4f5f7;")
+        self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
@@ -104,20 +71,20 @@ class Caixa(QWidget):
         layout.setAlignment(Qt.AlignCenter)
         layout.setSpacing(16)
 
-        icone = QLabel("🔒")
+        icone = QLabel()
         icone.setAlignment(Qt.AlignCenter)
         icone.setFixedSize(72, 72)
-        icone.setStyleSheet("""
-            background:#eef0f3;
+        icone.setStyleSheet(f"""
+            background:{tokens.PRIMARIA_CLARA};
             border-radius:36px;
-            font-size:30px;
         """)
+        icone.setPixmap(icone_pixmap("lock", cor=tokens.PRIMARIA, tamanho=30))
 
         titulo = QLabel("Nenhum caixa aberto")
         titulo.setAlignment(Qt.AlignCenter)
-        titulo.setStyleSheet(
-            "font-size:18px; font-weight:bold; color:#202225;"
-        )
+        titulo.setStyleSheet(f"""
+            font-size:{tokens.TAMANHO_XL}px; font-weight:800; color:{tokens.TEXTO};
+        """)
 
         subtitulo = QLabel(
             "Abra o caixa para liberar o Frente de Caixa e "
@@ -125,22 +92,21 @@ class Caixa(QWidget):
         )
         subtitulo.setAlignment(Qt.AlignCenter)
         subtitulo.setWordWrap(True)
-        subtitulo.setStyleSheet("font-size:12px; color:gray;")
+        subtitulo.setStyleSheet(f"""
+            font-size:{tokens.TAMANHO_SM}px; color:{tokens.TEXTO_SECUNDARIO};
+        """)
         subtitulo.setFixedWidth(360)
 
         bt_abrir = QPushButton("Abrir Caixa")
+        bt_abrir.setCursor(Qt.PointingHandCursor)
         bt_abrir.setFixedWidth(200)
         bt_abrir.setMinimumHeight(46)
-        bt_abrir.setStyleSheet("""
-            QPushButton {
-                background:#2E7D32;
-                color:white;
-                font-weight:bold;
-                border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#1B5E20;
-            }
+        bt_abrir.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.SECUNDARIA}; color:white;
+                font-weight:700; border-radius:{tokens.RADIUS_SM}px;
+            }}
+            QPushButton:hover {{ background:{tokens.SECUNDARIA_HOVER}; }}
         """)
         bt_abrir.clicked.connect(self.abrir_caixa)
 
@@ -167,31 +133,43 @@ class Caixa(QWidget):
         # ---- cabeçalho de status ----
 
         status_frame = QFrame()
-        status_frame.setStyleSheet("""
-            QFrame {
-                background:#202225;
-                border-radius:12px;
-            }
+        status_frame.setStyleSheet(f"""
+            QFrame {{
+                background:{tokens.SIDEBAR};
+                border-radius:{tokens.RADIUS_MD}px;
+            }}
         """)
 
         status_layout = QHBoxLayout(status_frame)
         status_layout.setContentsMargins(24, 18, 24, 18)
 
         col_status = QVBoxLayout()
-        col_status.setSpacing(2)
+        col_status.setSpacing(4)
 
-        self.lbl_status = QLabel("🟢 CAIXA ABERTO")
-        self.lbl_status.setStyleSheet(
-            "background:transparent; color:white; "
-            "font-size:16px; font-weight:bold;"
-        )
+        linha_status = QHBoxLayout()
+        linha_status.setSpacing(8)
+
+        bolinha = QLabel()
+        bolinha.setFixedSize(10, 10)
+        bolinha.setStyleSheet(f"background:{tokens.SUCESSO}; border-radius:5px;")
+
+        self.lbl_status = QLabel("CAIXA ABERTO")
+        self.lbl_status.setStyleSheet(f"""
+            background:transparent; color:white;
+            font-size:{tokens.TAMANHO_LG}px; font-weight:800;
+        """)
+
+        linha_status.addWidget(bolinha)
+        linha_status.addWidget(self.lbl_status)
+        linha_status.addStretch()
 
         self.lbl_abertura = QLabel("Aberto em --")
-        self.lbl_abertura.setStyleSheet(
-            "background:transparent; color:#aaaaaa; font-size:11px;"
-        )
+        self.lbl_abertura.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SIDEBAR};
+            font-size:{tokens.TAMANHO_XS}px;
+        """)
 
-        col_status.addWidget(self.lbl_status)
+        col_status.addLayout(linha_status)
         col_status.addWidget(self.lbl_abertura)
 
         status_layout.addLayout(col_status)
@@ -202,16 +180,17 @@ class Caixa(QWidget):
 
         lbl_total_titulo = QLabel("TOTAL PREVISTO NA GAVETA")
         lbl_total_titulo.setAlignment(Qt.AlignRight)
-        lbl_total_titulo.setStyleSheet(
-            "background:transparent; color:#aaaaaa; font-size:11px;"
-        )
+        lbl_total_titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SIDEBAR};
+            font-size:{tokens.TAMANHO_XS}px;
+        """)
 
         self.lbl_total_previsto = QLabel("R$ 0,00")
         self.lbl_total_previsto.setAlignment(Qt.AlignRight)
-        self.lbl_total_previsto.setStyleSheet(
-            "background:transparent; color:white; "
-            "font-size:22px; font-weight:bold;"
-        )
+        self.lbl_total_previsto.setStyleSheet(f"""
+            background:transparent; color:white;
+            font-size:{tokens.TAMANHO_XXL}px; font-weight:800;
+        """)
 
         col_total.addWidget(lbl_total_titulo)
         col_total.addWidget(self.lbl_total_previsto)
@@ -223,19 +202,19 @@ class Caixa(QWidget):
         # ---- cards de resumo ----
 
         cards_layout = QGridLayout()
-        cards_layout.setSpacing(12)
+        cards_layout.setSpacing(14)
 
-        self.card_troco = CardResumo("Troco inicial")
-        self.card_dinheiro = CardResumo("Vendas em dinheiro", "#2E7D32")
-        self.card_pix = CardResumo("Vendas PIX", "#1565C0")
-        self.card_cartao = CardResumo("Vendas cartão", "#1565C0")
-        self.card_suprimentos = CardResumo("Suprimentos", "#2E7D32")
-        self.card_sangrias = CardResumo("Sangrias", "#C62828")
-        self.card_prazo = CardResumo("Vendas a prazo", "#757575")
-        self.card_recebimentos_fiado = CardResumo(
-            "Recebimentos fiado", "#2E7D32"
+        self.card_troco = CardKPI("Troco inicial", "wallet", tokens.PRIMARIA)
+        self.card_dinheiro = CardKPI("Vendas em dinheiro", "dollar-sign", tokens.SECUNDARIA)
+        self.card_pix = CardKPI("Vendas PIX", "credit-card", tokens.PRIMARIA)
+        self.card_cartao = CardKPI("Vendas cartão", "credit-card", tokens.PRIMARIA)
+        self.card_suprimentos = CardKPI("Suprimentos", "arrow-up", tokens.SECUNDARIA)
+        self.card_sangrias = CardKPI("Sangrias", "arrow-down", tokens.ERRO)
+        self.card_prazo = CardKPI("Vendas a prazo", "file-text", tokens.TEXTO_SECUNDARIO)
+        self.card_recebimentos_fiado = CardKPI(
+            "Recebimentos fiado", "check", tokens.SECUNDARIA
         )
-        self.card_total_geral = CardResumo("Total geral do turno", "#1565C0")
+        self.card_total_geral = CardKPI("Total geral do turno", "trending-up", tokens.PRIMARIA)
 
         cards_layout.addWidget(self.card_troco, 0, 0)
         cards_layout.addWidget(self.card_dinheiro, 0, 1)
@@ -247,6 +226,9 @@ class Caixa(QWidget):
         cards_layout.addWidget(self.card_recebimentos_fiado, 1, 3)
         cards_layout.addWidget(self.card_total_geral, 2, 0)
 
+        for coluna in range(4):
+            cards_layout.setColumnStretch(coluna, 1)
+
         layout.addLayout(cards_layout)
 
         # ---- ações ----
@@ -255,52 +237,40 @@ class Caixa(QWidget):
         acoes_layout.setSpacing(10)
 
         self.bt_suprimento = QPushButton("+ Suprimento")
+        self.bt_suprimento.setCursor(Qt.PointingHandCursor)
         self.bt_suprimento.setMinimumHeight(46)
-        self.bt_suprimento.setStyleSheet("""
-            QPushButton {
-                background:white;
-                color:#2E7D32;
-                border:1px solid #2E7D32;
-                border-radius:10px;
-                font-weight:bold;
-                padding:0 18px;
-            }
-            QPushButton:hover {
-                background:#e8f5e9;
-            }
+        self.bt_suprimento.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD}; color:{tokens.SECUNDARIA_HOVER};
+                border:1.5px solid {tokens.SECUNDARIA}; border-radius:{tokens.RADIUS_SM}px;
+                font-weight:700; padding:0 18px;
+            }}
+            QPushButton:hover {{ background:{tokens.SUCESSO_CLARO}; }}
         """)
         self.bt_suprimento.clicked.connect(self.suprimento)
 
         self.bt_sangria = QPushButton("- Sangria")
+        self.bt_sangria.setCursor(Qt.PointingHandCursor)
         self.bt_sangria.setMinimumHeight(46)
-        self.bt_sangria.setStyleSheet("""
-            QPushButton {
-                background:white;
-                color:#C62828;
-                border:1px solid #C62828;
-                border-radius:10px;
-                font-weight:bold;
-                padding:0 18px;
-            }
-            QPushButton:hover {
-                background:#ffebee;
-            }
+        self.bt_sangria.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD}; color:{tokens.ERRO};
+                border:1.5px solid {tokens.ERRO}; border-radius:{tokens.RADIUS_SM}px;
+                font-weight:700; padding:0 18px;
+            }}
+            QPushButton:hover {{ background:{tokens.ERRO_CLARO}; }}
         """)
         self.bt_sangria.clicked.connect(self.sangria)
 
         self.bt_encerrar = QPushButton("Encerrar Caixa")
+        self.bt_encerrar.setCursor(Qt.PointingHandCursor)
         self.bt_encerrar.setMinimumHeight(46)
-        self.bt_encerrar.setStyleSheet("""
-            QPushButton {
-                background:#202225;
-                color:white;
-                border-radius:10px;
-                padding:0 22px;
-                font-weight:bold;
-            }
-            QPushButton:hover {
-                background:#3a3d42;
-            }
+        self.bt_encerrar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.SIDEBAR}; color:white;
+                border-radius:{tokens.RADIUS_SM}px; padding:0 22px; font-weight:700;
+            }}
+            QPushButton:hover {{ background:{tokens.SIDEBAR_HOVER}; }}
         """)
         self.bt_encerrar.clicked.connect(self.fechar_caixa)
 
@@ -316,24 +286,12 @@ class Caixa(QWidget):
         historico_cabecalho = QHBoxLayout()
 
         lbl_historico_titulo = QLabel("HISTÓRICO DO CAIXA")
-        lbl_historico_titulo.setStyleSheet(
-            "font-size:11px; font-weight:bold; color:gray;"
-        )
-
-        self.bt_atualizar_historico = QPushButton("Atualizar")
-        self.bt_atualizar_historico.setStyleSheet("""
-            QPushButton {
-                background:#616161;
-                color:white;
-                font-weight:bold;
-                border-radius:8px;
-                padding:6px 14px;
-                font-size:11px;
-            }
-            QPushButton:hover {
-                background:#424242;
-            }
+        lbl_historico_titulo.setStyleSheet(f"""
+            font-size:{tokens.TAMANHO_XS}px; font-weight:700; color:{tokens.TEXTO_TERCIARIO};
         """)
+
+        self.bt_atualizar_historico = BotaoSecundario("Atualizar", icone_nome="refresh-cw")
+        self.bt_atualizar_historico.setMinimumHeight(32)
         self.bt_atualizar_historico.clicked.connect(self.carregar)
 
         historico_cabecalho.addWidget(lbl_historico_titulo)
@@ -359,27 +317,29 @@ class Caixa(QWidget):
             QTableWidget.NoSelection
         )
         self.tabela_movimentos.setFocusPolicy(Qt.NoFocus)
-        self.tabela_movimentos.setStyleSheet("""
-            QTableWidget {
-                background:white;
-                alternate-background-color:#f8f9fb;
-                border:1px solid #e0e0e0;
-                border-radius:10px;
-                gridline-color:#eeeeee;
-                color:#202225;
-            }
-            QTableWidget::item {
-                color:#202225;
+        self.tabela_movimentos.setStyleSheet(f"""
+            QTableWidget {{
+                background:{tokens.CARD};
+                alternate-background-color:{tokens.FUNDO};
+                border:1px solid {tokens.BORDA};
+                border-radius:{tokens.RADIUS_MD}px;
+                gridline-color:{tokens.BORDA};
+                color:{tokens.TEXTO};
+                font-size:{tokens.TAMANHO_BASE}px;
+            }}
+            QTableWidget::item {{
+                color:{tokens.TEXTO};
                 background:transparent;
-            }
-            QHeaderView::section {
-                background:#f4f5f7;
-                color:#555;
-                padding:6px;
+            }}
+            QHeaderView::section {{
+                background:{tokens.FUNDO};
+                color:{tokens.TEXTO_SECUNDARIO};
+                padding:8px;
                 border:none;
-                border-bottom:1px solid #e0e0e0;
-                font-weight:bold;
-            }
+                border-bottom:1px solid {tokens.BORDA};
+                font-weight:700;
+                font-size:{tokens.TAMANHO_XS}px;
+            }}
         """)
 
         layout.addWidget(self.tabela_movimentos, stretch=1)
@@ -408,31 +368,31 @@ class Caixa(QWidget):
         total_previsto = float(resumo.get("total_previsto", 0) or 0)
         self.lbl_total_previsto.setText(f"R$ {total_previsto:.2f}")
 
-        self.card_troco.atualizar(
+        self.card_troco.definir_valor(
             f"R$ {float(resumo.get('saldo_inicial', 0) or 0):.2f}"
         )
-        self.card_dinheiro.atualizar(
+        self.card_dinheiro.definir_valor(
             f"R$ {float(resumo.get('vendas_dinheiro', 0) or 0):.2f}"
         )
-        self.card_pix.atualizar(
+        self.card_pix.definir_valor(
             f"R$ {float(resumo.get('vendas_pix', 0) or 0):.2f}"
         )
-        self.card_cartao.atualizar(
+        self.card_cartao.definir_valor(
             f"R$ {float(resumo.get('vendas_cartao', 0) or 0):.2f}"
         )
-        self.card_suprimentos.atualizar(
+        self.card_suprimentos.definir_valor(
             f"+ R$ {float(resumo.get('suprimentos', 0) or 0):.2f}"
         )
-        self.card_sangrias.atualizar(
+        self.card_sangrias.definir_valor(
             f"- R$ {float(resumo.get('sangrias', 0) or 0):.2f}"
         )
-        self.card_prazo.atualizar(
+        self.card_prazo.definir_valor(
             f"R$ {float(resumo.get('vendas_prazo', 0) or 0):.2f}"
         )
-        self.card_recebimentos_fiado.atualizar(
+        self.card_recebimentos_fiado.definir_valor(
             f"R$ {float(resumo.get('recebimentos_fiado', 0) or 0):.2f}"
         )
-        self.card_total_geral.atualizar(
+        self.card_total_geral.definir_valor(
             f"R$ {float(resumo.get('total_geral', 0) or 0):.2f}"
         )
 

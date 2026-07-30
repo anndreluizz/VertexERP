@@ -6,7 +6,7 @@ class NavCard(QFrame):
 
     clicado = Signal()
 
-    def __init__(self, titulo, subtitulo, cor_inicio, cor_fim):
+    def __init__(self, titulo, subtitulo, cor_inicio, cor_fim, icone_nome=None):
 
         super().__init__()
 
@@ -31,6 +31,18 @@ class NavCard(QFrame):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
+
+        if icone_nome:
+            from design.icons import icone_pixmap
+
+            self.lbl_icone = QLabel()
+            self.lbl_icone.setFixedSize(40, 40)
+            self.lbl_icone.setAlignment(Qt.AlignCenter)
+            self.lbl_icone.setStyleSheet(
+                "background: rgba(255, 255, 255, 0.2); border-radius: 10px;"
+            )
+            self.lbl_icone.setPixmap(icone_pixmap(icone_nome, cor="#FFFFFF", tamanho=20))
+            layout.addWidget(self.lbl_icone)
 
         self.lbl_titulo = QLabel(titulo)
         self.lbl_titulo.setStyleSheet(

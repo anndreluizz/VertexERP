@@ -5,13 +5,15 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
     QFrame,
     QStackedWidget,
     QMessageBox,
 )
 
 from services.caixa_service import resumo_caixa, fechar_caixa
+
+from design import tokens
+from design.widgets import BotaoPerigo, BotaoSecundario, BotaoSucesso
 
 
 class FecharCaixaWindow(QDialog):
@@ -24,14 +26,14 @@ class FecharCaixaWindow(QDialog):
 
         self.setWindowTitle("Fechar Caixa")
         self.setFixedSize(460, 640)
-        self.setStyleSheet("background:white;")
+        self.setStyleSheet(f"background:{tokens.CARD};")
 
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
         raiz.setSpacing(0)
 
         cabecalho = QFrame()
-        cabecalho.setStyleSheet("background:#202225;")
+        cabecalho.setStyleSheet(f"background:{tokens.SIDEBAR};")
         cabecalho.setFixedHeight(70)
 
         cab_layout = QVBoxLayout(cabecalho)
@@ -39,17 +41,18 @@ class FecharCaixaWindow(QDialog):
         cab_layout.setSpacing(2)
 
         self.lbl_titulo = QLabel("CONFERÊNCIA DE CAIXA")
-        self.lbl_titulo.setStyleSheet(
-            "background:transparent; color:white; "
-            "font-size:16px; font-weight:bold;"
-        )
+        self.lbl_titulo.setStyleSheet(f"""
+            background:transparent; color:white;
+            font-size:{tokens.TAMANHO_LG}px; font-weight:800;
+        """)
 
         self.lbl_subtitulo = QLabel(
             "Conte o dinheiro em espécie na gaveta"
         )
-        self.lbl_subtitulo.setStyleSheet(
-            "background:transparent; color:#aaaaaa; font-size:11px;"
-        )
+        self.lbl_subtitulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SIDEBAR};
+            font-size:{tokens.TAMANHO_XS}px;
+        """)
 
         cab_layout.addWidget(self.lbl_titulo)
         cab_layout.addWidget(self.lbl_subtitulo)
@@ -84,34 +87,29 @@ class FecharCaixaWindow(QDialog):
             "com o valor esperado somente depois da contagem."
         )
         aviso.setWordWrap(True)
-        aviso.setStyleSheet("""
-            background:#FFF3E0;
-            color:#E65100;
-            font-size:12px;
-            border-radius:8px;
+        aviso.setStyleSheet(f"""
+            background:{tokens.ALERTA_CLARO}; color:#B45309;
+            font-size:{tokens.TAMANHO_SM}px; border-radius:{tokens.RADIUS_SM}px;
             padding:12px;
         """)
 
         layout.addWidget(aviso)
 
         lbl_valor_titulo = QLabel("VALOR CONTADO EM ESPÉCIE")
-        lbl_valor_titulo.setStyleSheet(
-            "background:transparent; font-size:11px; "
-            "font-weight:bold; color:gray;"
-        )
+        lbl_valor_titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
 
         self.valor_input = QLineEdit()
         self.valor_input.setPlaceholderText("R$ 0,00")
         self.valor_input.setAlignment(Qt.AlignCenter)
-        self.valor_input.setStyleSheet("""
-            QLineEdit {
-                font-size:40px;
-                font-weight:bold;
-                color:#202225;
-                border:none;
-                border-bottom:2px solid #e0e0e0;
-                padding:10px 0;
-            }
+        self.valor_input.setStyleSheet(f"""
+            QLineEdit {{
+                font-size:40px; font-weight:800; color:{tokens.TEXTO};
+                border:none; border-bottom:2px solid {tokens.BORDA};
+                padding:10px 0; background:transparent;
+            }}
         """)
 
         layout.addWidget(lbl_valor_titulo)
@@ -120,35 +118,14 @@ class FecharCaixaWindow(QDialog):
         layout.addStretch()
 
         rodape = QHBoxLayout()
+        rodape.setSpacing(10)
 
-        bt_cancelar = QPushButton("Cancelar")
+        bt_cancelar = BotaoSecundario("Cancelar")
         bt_cancelar.setMinimumHeight(46)
-        bt_cancelar.setStyleSheet("""
-            QPushButton {
-                background:white;
-                color:#202225;
-                border:1px solid #cccccc;
-                border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#f4f5f7;
-            }
-        """)
         bt_cancelar.clicked.connect(self.reject)
 
-        bt_continuar = QPushButton("Continuar")
+        bt_continuar = BotaoSucesso("Continuar")
         bt_continuar.setMinimumHeight(46)
-        bt_continuar.setStyleSheet("""
-            QPushButton {
-                background:#2E7D32;
-                color:white;
-                font-weight:bold;
-                border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#1B5E20;
-            }
-        """)
         bt_continuar.clicked.connect(self.avancar_para_conferencia)
 
         rodape.addWidget(bt_cancelar)
@@ -193,22 +170,24 @@ class FecharCaixaWindow(QDialog):
     # PÁGINA 2 · CONFERÊNCIA
     # ======================================
 
-    def _linha_valor(self, rotulo, cor="#202225"):
+    def _linha_valor(self, rotulo, cor=None):
+
+        cor = cor or tokens.TEXTO
 
         linha = QHBoxLayout()
 
         lbl_rotulo = QLabel(rotulo)
-        lbl_rotulo.setStyleSheet(
-            "background:transparent; border:none; "
-            "font-size:13px; color:#555;"
-        )
+        lbl_rotulo.setStyleSheet(f"""
+            background:transparent; border:none;
+            font-size:{tokens.TAMANHO_SM}px; color:{tokens.TEXTO_SECUNDARIO};
+        """)
 
         lbl_valor = QLabel("R$ 0,00")
         lbl_valor.setAlignment(Qt.AlignRight)
-        lbl_valor.setStyleSheet(
-            f"background:transparent; border:none; font-size:13px; "
-            f"font-weight:bold; color:{cor};"
-        )
+        lbl_valor.setStyleSheet(f"""
+            background:transparent; border:none;
+            font-size:{tokens.TAMANHO_SM}px; font-weight:700; color:{cor};
+        """)
 
         linha.addWidget(lbl_rotulo)
         linha.addWidget(lbl_valor)
@@ -219,7 +198,7 @@ class FecharCaixaWindow(QDialog):
 
         linha = QFrame()
         linha.setFixedHeight(1)
-        linha.setStyleSheet("background:#e0e0e0; border:none;")
+        linha.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
         return linha
 
     def _criar_pagina_conferencia(self):
@@ -231,9 +210,9 @@ class FecharCaixaWindow(QDialog):
         layout.setSpacing(8)
 
         bloco_previsto = QFrame()
-        bloco_previsto.setStyleSheet(
-            "background:#f4f5f7; border-radius:8px;"
-        )
+        bloco_previsto.setStyleSheet(f"""
+            background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px;
+        """)
         bloco_layout = QVBoxLayout(bloco_previsto)
         bloco_layout.setContentsMargins(16, 14, 16, 14)
         bloco_layout.setSpacing(8)
@@ -247,29 +226,29 @@ class FecharCaixaWindow(QDialog):
         bloco_layout.addLayout(linha)
 
         linha, self.lbl_suprimentos = self._linha_valor(
-            "Suprimentos", cor="#2E7D32"
+            "Suprimentos", cor=tokens.SECUNDARIA_HOVER
         )
         bloco_layout.addLayout(linha)
 
         linha, self.lbl_sangrias = self._linha_valor(
-            "Sangrias", cor="#C62828"
+            "Sangrias", cor=tokens.ERRO
         )
         bloco_layout.addLayout(linha)
 
         bloco_layout.addWidget(self._separador())
 
         linha, self.lbl_total_previsto = self._linha_valor(
-            "Total previsto em espécie", cor="#1565C0"
+            "Total previsto em espécie", cor=tokens.PRIMARIA
         )
         bloco_layout.addLayout(linha)
 
         layout.addWidget(bloco_previsto)
 
         bloco_contado = QFrame()
-        bloco_contado.setStyleSheet(
-            "background:white; border:1px solid #e0e0e0; "
-            "border-radius:8px;"
-        )
+        bloco_contado.setStyleSheet(f"""
+            background:{tokens.CARD}; border:1px solid {tokens.BORDA};
+            border-radius:{tokens.RADIUS_SM}px;
+        """)
         contado_layout = QVBoxLayout(bloco_contado)
         contado_layout.setContentsMargins(16, 14, 16, 14)
         contado_layout.setSpacing(8)
@@ -287,9 +266,9 @@ class FecharCaixaWindow(QDialog):
         layout.addWidget(bloco_contado)
 
         bloco_outros = QFrame()
-        bloco_outros.setStyleSheet(
-            "background:#f4f5f7; border-radius:8px;"
-        )
+        bloco_outros.setStyleSheet(f"""
+            background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px;
+        """)
         outros_layout = QVBoxLayout(bloco_outros)
         outros_layout.setContentsMargins(16, 14, 16, 14)
         outros_layout.setSpacing(8)
@@ -303,7 +282,7 @@ class FecharCaixaWindow(QDialog):
         outros_layout.addWidget(self._separador())
 
         linha, self.lbl_total_geral = self._linha_valor(
-            "Total geral do turno", cor="#1565C0"
+            "Total geral do turno", cor=tokens.PRIMARIA
         )
         outros_layout.addLayout(linha)
 
@@ -312,37 +291,16 @@ class FecharCaixaWindow(QDialog):
         layout.addStretch()
 
         rodape = QHBoxLayout()
+        rodape.setSpacing(10)
 
-        bt_voltar = QPushButton("Voltar")
+        bt_voltar = BotaoSecundario("Voltar")
         bt_voltar.setMinimumHeight(46)
-        bt_voltar.setStyleSheet("""
-            QPushButton {
-                background:white;
-                color:#202225;
-                border:1px solid #cccccc;
-                border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#f4f5f7;
-            }
-        """)
         bt_voltar.clicked.connect(
             lambda: self.paginas.setCurrentWidget(self.pagina_contagem)
         )
 
-        bt_confirmar = QPushButton("Confirmar Fechamento")
+        bt_confirmar = BotaoPerigo("Confirmar Fechamento")
         bt_confirmar.setMinimumHeight(46)
-        bt_confirmar.setStyleSheet("""
-            QPushButton {
-                background:#C62828;
-                color:white;
-                font-weight:bold;
-                border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#B71C1C;
-            }
-        """)
         bt_confirmar.clicked.connect(self.confirmar_fechamento)
 
         rodape.addWidget(bt_voltar)
@@ -376,20 +334,20 @@ class FecharCaixaWindow(QDialog):
         diferenca = self.valor_contado - total_previsto
 
         if abs(diferenca) < 0.01:
-            cor = "#2E7D32"
+            cor = tokens.SECUNDARIA_HOVER
             texto = "R$ 0,00 (confere)"
         elif diferenca > 0:
-            cor = "#1565C0"
+            cor = tokens.PRIMARIA
             texto = f"+ R$ {diferenca:.2f} (sobra)"
         else:
-            cor = "#C62828"
+            cor = tokens.ERRO
             texto = f"- R$ {abs(diferenca):.2f} (falta)"
 
         self.lbl_diferenca.setText(texto)
-        self.lbl_diferenca.setStyleSheet(
-            f"background:transparent; border:none; font-size:13px; "
-            f"font-weight:bold; color:{cor};"
-        )
+        self.lbl_diferenca.setStyleSheet(f"""
+            background:transparent; border:none;
+            font-size:{tokens.TAMANHO_SM}px; font-weight:700; color:{cor};
+        """)
 
         self.lbl_vendas_pix.setText(f"R$ {vendas_pix:.2f}")
         self.lbl_vendas_cartao.setText(f"R$ {vendas_cartao:.2f}")

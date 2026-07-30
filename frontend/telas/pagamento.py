@@ -35,7 +35,7 @@ VALORES_RAPIDOS = [1, 2, 5, 10, 20, 50, 100]
 
 class PagamentoWindow(QDialog):
 
-    def __init__(self, total, itens=None):
+    def __init__(self, total, itens=None, cliente_id=None, cliente_nome=None):
 
         super().__init__()
 
@@ -43,8 +43,8 @@ class PagamentoWindow(QDialog):
         self.itens = itens or []
         self.forma_pagamento = "DINHEIRO"
         self.recebido_acumulado = 0.0
-        self.cliente_id = None
-        self.cliente_nome = None
+        self.cliente_id = cliente_id
+        self.cliente_nome = cliente_nome
 
         # pagamento dividido (opcional, no maximo 2 formas)
         self.dividir_pagamento = False
@@ -414,13 +414,13 @@ class PagamentoWindow(QDialog):
         )
 
         self.lbl_cliente_selecionado = QLabel(
-            "Nenhum cliente selecionado"
+            self.cliente_nome or "Nenhum cliente selecionado"
         )
         self.lbl_cliente_selecionado.setWordWrap(True)
-        self.lbl_cliente_selecionado.setStyleSheet(
-            "background:transparent; font-size:16px; "
-            "font-weight:bold; color:#C62828;"
-        )
+        self.lbl_cliente_selecionado.setStyleSheet(f"""
+            background:transparent; font-size:16px; font-weight:bold;
+            color: {"#2E7D32" if self.cliente_nome else "#C62828"};
+        """)
 
         self.bt_selecionar_cliente = QPushButton(
             "Selecionar Cliente"

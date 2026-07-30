@@ -19,7 +19,10 @@ from services.api import configuracoes
 from services.venda_service import listar_vendas
 from services.produto_service import listar_produtos
 from services.caixa_service import historico_caixa
-from widgets.card import Card
+
+from design import tokens
+from design.icons import icone
+from design.widgets import BotaoSecundario, CardKPI, SecaoCard
 
 
 NOMES_FORMA_PAGAMENTO = {
@@ -32,18 +35,20 @@ NOMES_FORMA_PAGAMENTO = {
 }
 
 CORES_FORMA_PAGAMENTO = {
-    "DINHEIRO": "#2E7D32",
-    "PIX": "#1565C0",
-    "DEBITO": "#F9A825",
+    "DINHEIRO": tokens.SECUNDARIA,
+    "PIX": tokens.PRIMARIA,
+    "DEBITO": tokens.ALERTA,
     "CREDITO": "#8E24AA",
-    "BOLETO": "#546E7A",
-    "PRAZO": "#C62828",
+    "BOLETO": tokens.TEXTO_SECUNDARIO,
+    "PRAZO": tokens.ERRO,
 }
 
 
 class LinhaBarra(QFrame):
     """Uma linha de 'Nome / valor' com uma barra de progresso simples,
-    usada tanto no ranking de produtos quanto no mix de pagamentos."""
+    usada tanto no ranking de produtos quanto no mix de pagamentos.
+    Mantém a mesma assinatura de sempre porque telas/visao_geral.py
+    também importa e usa esta classe diretamente."""
 
     def __init__(self, titulo, subtitulo, valor_texto, percentual, cor):
 
@@ -61,28 +66,29 @@ class LinhaBarra(QFrame):
         col_texto.setSpacing(0)
 
         lbl_titulo = QLabel(titulo)
-        lbl_titulo.setStyleSheet(
-            "font-size:13px; font-weight:bold; color:#202225; "
-            "background:transparent;"
-        )
+        lbl_titulo.setStyleSheet(f"""
+            font-size:{tokens.TAMANHO_BASE}px; font-weight:700; color:{tokens.TEXTO};
+            background:transparent;
+        """)
 
         col_texto.addWidget(lbl_titulo)
 
         if subtitulo:
             lbl_sub = QLabel(subtitulo)
-            lbl_sub.setStyleSheet(
-                "font-size:11px; color:#9E9E9E; background:transparent;"
-            )
+            lbl_sub.setStyleSheet(f"""
+                font-size:{tokens.TAMANHO_XS}px; color:{tokens.TEXTO_TERCIARIO};
+                background:transparent;
+            """)
             col_texto.addWidget(lbl_sub)
 
         topo.addLayout(col_texto)
         topo.addStretch()
 
         lbl_valor = QLabel(valor_texto)
-        lbl_valor.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{cor}; "
-            "background:transparent;"
-        )
+        lbl_valor.setStyleSheet(f"""
+            font-size:{tokens.TAMANHO_BASE}px; font-weight:700; color:{cor};
+            background:transparent;
+        """)
 
         topo.addWidget(lbl_valor)
 
@@ -90,9 +96,9 @@ class LinhaBarra(QFrame):
 
         barra_fundo = QFrame()
         barra_fundo.setFixedHeight(6)
-        barra_fundo.setStyleSheet(
-            "background:#eeeeee; border-radius:3px; border:none;"
-        )
+        barra_fundo.setStyleSheet(f"""
+            background:{tokens.FUNDO}; border-radius:3px; border:none;
+        """)
 
         barra_layout = QHBoxLayout(barra_fundo)
         barra_layout.setContentsMargins(0, 0, 0, 0)
@@ -103,26 +109,30 @@ class LinhaBarra(QFrame):
             f"background:{cor}; border-radius:3px; border:none;"
         )
 
-        largura_relativa = max(0, min(100, percentual))
+        largura_relativa = max(0, min(100, round(percentual)))
 
         barra_layout.addWidget(barra_preenchida, largura_relativa)
-        barra_layout.addStretch(100 - largura_relativa)
+        barra_layout.addStretch(max(1, 100 - largura_relativa))
 
         layout.addWidget(barra_fundo)
 
 
 class PainelSecao(QFrame):
+    """Card com cabeçalho (ícone emoji + título) e corpo substituível.
+    Mantém a assinatura PainelSecao(icone, titulo) porque
+    telas/visao_geral.py também importa e instancia esta classe
+    diretamente com essa ordem de parâmetros."""
 
     def __init__(self, icone, titulo):
 
         super().__init__()
 
-        self.setStyleSheet("""
-            QFrame {
-                background:white;
-                border-radius:12px;
-                border:1px solid #eeeeee;
-            }
+        self.setStyleSheet(f"""
+            QFrame {{
+                background:{tokens.CARD};
+                border-radius:{tokens.RADIUS_LG}px;
+                border:1px solid {tokens.BORDA};
+            }}
         """)
 
         self.layout_externo = QVBoxLayout(self)
@@ -138,10 +148,10 @@ class PainelSecao(QFrame):
         )
 
         lbl_titulo = QLabel(titulo)
-        lbl_titulo.setStyleSheet(
-            "font-size:14px; font-weight:bold; color:#202225; "
-            "background:transparent; border:none;"
-        )
+        lbl_titulo.setStyleSheet(f"""
+            font-size:{tokens.TAMANHO_LG}px; font-weight:700; color:{tokens.TEXTO};
+            background:transparent; border:none;
+        """)
 
         cabecalho.addWidget(lbl_icone)
         cabecalho.addWidget(lbl_titulo)
@@ -164,10 +174,11 @@ class PainelSecao(QFrame):
     def adicionar_vazio(self, texto):
         lbl = QLabel(texto)
         lbl.setAlignment(Qt.AlignCenter)
-        lbl.setStyleSheet(
-            "color:#9E9E9E; font-size:12px; background:transparent; "
-            "border:none; padding:12px;"
-        )
+        lbl.setWordWrap(True)
+        lbl.setStyleSheet(f"""
+            color:{tokens.TEXTO_TERCIARIO}; font-size:{tokens.TAMANHO_SM}px;
+            background:transparent; border:none; padding:12px;
+        """)
         self.corpo.addWidget(lbl)
 
 
@@ -191,11 +202,10 @@ class Relatorios(QWidget):
         self.produtos = []
         self.caixas = []
 
-        self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setStyleSheet("background:#f4f5f7;")
+        self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 16, 24, 16)
+        layout.setContentsMargins(28, 20, 28, 20)
         layout.setSpacing(16)
 
         # ======================
@@ -203,18 +213,18 @@ class Relatorios(QWidget):
         # ======================
 
         cabecalho = QHBoxLayout()
+        cabecalho.setSpacing(12)
 
-        self.bt_voltar = QPushButton("← Voltar")
-        self.bt_voltar.setStyleSheet("""
-            QPushButton {
-                background:transparent;
-                color:gray;
-                border:none;
-                font-size:13px;
-            }
-            QPushButton:hover {
-                color:#202225;
-            }
+        self.bt_voltar = QPushButton()
+        self.bt_voltar.setFixedSize(36, 36)
+        self.bt_voltar.setCursor(Qt.PointingHandCursor)
+        self.bt_voltar.setIcon(icone("chevron-left", cor=tokens.TEXTO_SECUNDARIO, tamanho=18))
+        self.bt_voltar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD}; border:1px solid {tokens.BORDA};
+                border-radius:{tokens.RADIUS_SM}px;
+            }}
+            QPushButton:hover {{ background:{tokens.FUNDO}; }}
         """)
         self.bt_voltar.clicked.connect(self.voltar.emit)
 
@@ -222,40 +232,26 @@ class Relatorios(QWidget):
         col_titulo.setSpacing(0)
 
         titulo = QLabel("Relatórios")
-        titulo.setStyleSheet(
-            "background:transparent; font-size:20px; "
-            "font-weight:bold; color:#202225;"
-        )
+        titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XL}px;
+            font-weight:800; color:{tokens.TEXTO};
+        """)
 
         subtitulo = QLabel("GERENCIAMENTO E INTELIGÊNCIA")
-        subtitulo.setStyleSheet(
-            "background:transparent; font-size:11px; "
-            "color:#9E9E9E; font-weight:bold;"
-        )
+        subtitulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            color:{tokens.TEXTO_TERCIARIO}; font-weight:700;
+        """)
 
         col_titulo.addWidget(titulo)
         col_titulo.addWidget(subtitulo)
 
         cabecalho.addWidget(self.bt_voltar)
-        cabecalho.addSpacing(12)
+        cabecalho.addSpacing(4)
         cabecalho.addLayout(col_titulo)
         cabecalho.addStretch()
 
-        self.bt_imprimir = QPushButton("🖨  Imprimir Relatório")
-        self.bt_imprimir.setStyleSheet("""
-            QPushButton {
-                background:white;
-                color:#202225;
-                border:1px solid #dcdcdc;
-                border-radius:8px;
-                padding:10px 16px;
-                font-weight:bold;
-            }
-            QPushButton:hover {
-                border:1px solid #9e9e9e;
-            }
-        """)
-
+        self.bt_imprimir = BotaoSecundario("Imprimir Relatório", icone_nome="printer")
         cabecalho.addWidget(self.bt_imprimir)
 
         layout.addLayout(cabecalho)
@@ -290,7 +286,7 @@ class Relatorios(QWidget):
 
         linha_abas = QFrame()
         linha_abas.setFixedHeight(1)
-        linha_abas.setStyleSheet("background:#e0e0e0; border:none;")
+        linha_abas.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
         layout.addWidget(linha_abas)
 
         self.botoes_aba = [
@@ -318,19 +314,15 @@ class Relatorios(QWidget):
         botao = QPushButton(texto)
         botao.setCheckable(True)
         botao.setCursor(Qt.PointingHandCursor)
-        botao.setStyleSheet("""
-            QPushButton {
-                background:transparent;
-                border:none;
-                color:#9E9E9E;
-                font-size:13px;
-                font-weight:bold;
-                padding-bottom:10px;
-            }
-            QPushButton:checked {
-                color:#2E7D32;
-                border-bottom:2px solid #2E7D32;
-            }
+        botao.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; border:none;
+                color:{tokens.TEXTO_TERCIARIO}; font-size:{tokens.TAMANHO_SM}px;
+                font-weight:700; padding-bottom:10px;
+            }}
+            QPushButton:checked {{
+                color:{tokens.PRIMARIA}; border-bottom:2px solid {tokens.PRIMARIA};
+            }}
         """)
         return botao
 
@@ -364,15 +356,13 @@ class Relatorios(QWidget):
         self.combo_periodo = QComboBox()
         self.combo_periodo.addItems(self.PERIODOS)
         self.combo_periodo.setCurrentText("Este mês")
-        self.combo_periodo.setMinimumHeight(36)
-        self.combo_periodo.setStyleSheet("""
-            QComboBox {
-                border:1px solid #dcdcdc;
-                border-radius:8px;
-                padding:4px 12px;
-                background:white;
-                color:#202225;
-            }
+        self.combo_periodo.setMinimumHeight(38)
+        self.combo_periodo.setCursor(Qt.PointingHandCursor)
+        self.combo_periodo.setStyleSheet(f"""
+            QComboBox {{
+                border:1px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
+                padding:4px 12px; background:{tokens.CARD}; color:{tokens.TEXTO};
+            }}
         """)
         self.combo_periodo.currentTextChanged.connect(
             self._atualizar_financeiro
@@ -384,11 +374,11 @@ class Relatorios(QWidget):
         layout.addLayout(filtro_layout)
 
         cards_layout = QHBoxLayout()
-        cards_layout.setSpacing(12)
+        cards_layout.setSpacing(14)
 
-        self.card_faturamento = Card("Faturamento Bruto", "R$ 0,00")
-        self.card_volume = Card("Volume de Vendas", "0")
-        self.card_ticket = Card("Ticket Médio", "R$ 0,00")
+        self.card_faturamento = CardKPI("Faturamento Bruto", "dollar-sign", tokens.PRIMARIA)
+        self.card_volume = CardKPI("Volume de Vendas", "shopping-cart", tokens.PRIMARIA)
+        self.card_ticket = CardKPI("Ticket Médio", "trending-up", tokens.SECUNDARIA)
 
         cards_layout.addWidget(self.card_faturamento)
         cards_layout.addWidget(self.card_volume)
@@ -472,12 +462,12 @@ class Relatorios(QWidget):
         volume = len(vendas_periodo)
         ticket_medio = faturamento / volume if volume else 0
 
-        self.card_faturamento.atualizar(
+        self.card_faturamento.definir_valor(
             f"R$ {faturamento:,.2f}".replace(",", "X")
             .replace(".", ",").replace("X", ".")
         )
-        self.card_volume.atualizar(str(volume))
-        self.card_ticket.atualizar(
+        self.card_volume.definir_valor(str(volume))
+        self.card_ticket.definir_valor(
             f"R$ {ticket_medio:,.2f}".replace(",", "X")
             .replace(".", ",").replace("X", ".")
         )
@@ -531,7 +521,7 @@ class Relatorios(QWidget):
                 f"R$ {total:,.2f}".replace(",", "X")
                 .replace(".", ",").replace("X", "."),
                 percentual,
-                "#1565C0",
+                tokens.PRIMARIA,
             )
 
             self.painel_ranking.corpo.addWidget(linha)
@@ -586,7 +576,7 @@ class Relatorios(QWidget):
             percentual = (total / total_geral) * 100
 
             nome = NOMES_FORMA_PAGAMENTO.get(forma, forma)
-            cor = CORES_FORMA_PAGAMENTO.get(forma, "#202225")
+            cor = CORES_FORMA_PAGAMENTO.get(forma, tokens.TEXTO)
 
             linha = LinhaBarra(
                 nome,
@@ -611,10 +601,10 @@ class Relatorios(QWidget):
         layout.setSpacing(12)
 
         titulo = QLabel("Histórico de Caixas")
-        titulo.setStyleSheet(
-            "font-size:14px; font-weight:bold; color:#202225; "
-            "background:transparent;"
-        )
+        titulo.setStyleSheet(f"""
+            font-size:{tokens.TAMANHO_LG}px; font-weight:700; color:{tokens.TEXTO};
+            background:transparent;
+        """)
         layout.addWidget(titulo)
 
         self.tabela_caixa = QTableWidget()
@@ -740,21 +730,15 @@ class Relatorios(QWidget):
         botao.setCheckable(True)
         botao.setCursor(Qt.PointingHandCursor)
         botao.setMinimumHeight(34)
-        botao.setStyleSheet("""
-            QPushButton {
-                background:white;
-                color:#616161;
-                border:1px solid #dcdcdc;
-                border-radius:17px;
-                padding:0 16px;
-                font-size:12px;
-                font-weight:bold;
-            }
-            QPushButton:checked {
-                background:#202225;
-                color:white;
-                border:1px solid #202225;
-            }
+        botao.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD}; color:{tokens.TEXTO_SECUNDARIO};
+                border:1px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_PILL}px;
+                padding:0 16px; font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+            }}
+            QPushButton:checked {{
+                background:{tokens.SIDEBAR}; color:white; border:1px solid {tokens.SIDEBAR};
+            }}
         """)
         return botao
 
@@ -808,9 +792,9 @@ class Relatorios(QWidget):
         self.tabela_estoque.setRowCount(0)
 
         cores_status = {
-            "NORMAL": "#2E7D32",
-            "CRITICO": "#F9A825",
-            "ESGOTADO": "#C62828",
+            "NORMAL": tokens.SECUNDARIA_HOVER,
+            "CRITICO": "#B45309",
+            "ESGOTADO": tokens.ERRO,
         }
 
         textos_status = {
@@ -876,26 +860,28 @@ class Relatorios(QWidget):
         tabela.setShowGrid(False)
         tabela.horizontalHeader().setStretchLastSection(True)
 
-        tabela.setStyleSheet("""
-            QTableWidget {
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                color: #202225;
-                background: white;
-                alternate-background-color: #f8f9fb;
-            }
-            QTableWidget::item:selected {
-                background: #1565C0;
+        tabela.setStyleSheet(f"""
+            QTableWidget {{
+                border: 1px solid {tokens.BORDA};
+                border-radius: {tokens.RADIUS_MD}px;
+                color: {tokens.TEXTO};
+                background: {tokens.CARD};
+                alternate-background-color: {tokens.FUNDO};
+                font-size: {tokens.TAMANHO_BASE}px;
+            }}
+            QTableWidget::item:selected {{
+                background: {tokens.PRIMARIA};
                 color: white;
-            }
-            QHeaderView::section {
-                background: #f4f5f7;
-                color: #202225;
-                font-weight: bold;
-                padding: 6px;
+            }}
+            QHeaderView::section {{
+                background: {tokens.FUNDO};
+                color: {tokens.TEXTO_SECUNDARIO};
+                font-weight: 700;
+                font-size: {tokens.TAMANHO_XS}px;
+                padding: 8px;
                 border: none;
-                border-bottom: 1px solid #e0e0e0;
-            }
+                border-bottom: 1px solid {tokens.BORDA};
+            }}
         """)
 
     # ==========================================

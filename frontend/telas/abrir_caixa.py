@@ -13,6 +13,9 @@ from PySide6.QtWidgets import (
 
 from services.caixa_service import historico_caixa
 
+from design import tokens
+from design.widgets import Badge, BotaoSecundario, BotaoSucesso
+
 VALORES_RAPIDOS = [50, 100, 150, 200, 300, 500]
 
 
@@ -23,7 +26,7 @@ class AbrirCaixaWindow(QDialog):
 
         self.setWindowTitle("Abrir Caixa")
         self.setFixedSize(460, 640)
-        self.setStyleSheet("background:white;")
+        self.setStyleSheet(f"background:{tokens.CARD};")
 
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
@@ -34,7 +37,7 @@ class AbrirCaixaWindow(QDialog):
         # ======================
 
         cabecalho = QFrame()
-        cabecalho.setStyleSheet("background:#202225;")
+        cabecalho.setStyleSheet(f"background:{tokens.SIDEBAR};")
         cabecalho.setFixedHeight(70)
 
         cab_layout = QVBoxLayout(cabecalho)
@@ -42,15 +45,16 @@ class AbrirCaixaWindow(QDialog):
         cab_layout.setSpacing(2)
 
         titulo = QLabel("ABRIR CAIXA")
-        titulo.setStyleSheet(
-            "background:transparent; color:white; "
-            "font-size:16px; font-weight:bold;"
-        )
+        titulo.setStyleSheet(f"""
+            background:transparent; color:white;
+            font-size:{tokens.TAMANHO_LG}px; font-weight:800;
+        """)
 
         subtitulo = QLabel("Informe o troco inicial para liberar o caixa")
-        subtitulo.setStyleSheet(
-            "background:transparent; color:#aaaaaa; font-size:11px;"
-        )
+        subtitulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SIDEBAR};
+            font-size:{tokens.TAMANHO_XS}px;
+        """)
 
         cab_layout.addWidget(titulo)
         cab_layout.addWidget(subtitulo)
@@ -66,23 +70,20 @@ class AbrirCaixaWindow(QDialog):
         corpo.setSpacing(14)
 
         lbl_valor_titulo = QLabel("VALOR INICIAL (TROCO)")
-        lbl_valor_titulo.setStyleSheet(
-            "background:transparent; font-size:11px; "
-            "font-weight:bold; color:gray;"
-        )
+        lbl_valor_titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
 
         self.valor = QLineEdit()
         self.valor.setPlaceholderText("R$ 0,00")
         self.valor.setAlignment(Qt.AlignCenter)
-        self.valor.setStyleSheet("""
-            QLineEdit {
-                font-size:38px;
-                font-weight:bold;
-                color:#2E7D32;
-                border:none;
-                border-bottom:2px solid #e0e0e0;
-                padding:6px 0;
-            }
+        self.valor.setStyleSheet(f"""
+            QLineEdit {{
+                font-size:38px; font-weight:800; color:{tokens.SECUNDARIA};
+                border:none; border-bottom:2px solid {tokens.BORDA};
+                padding:6px 0; background:transparent;
+            }}
         """)
 
         corpo.addWidget(lbl_valor_titulo)
@@ -94,17 +95,14 @@ class AbrirCaixaWindow(QDialog):
         for indice, valor in enumerate(VALORES_RAPIDOS):
 
             bt = QPushButton(f"R$ {valor}")
+            bt.setCursor(Qt.PointingHandCursor)
             bt.setMinimumHeight(38)
-            bt.setStyleSheet("""
-                QPushButton {
-                    background:#f4f5f7;
-                    color:#202225;
-                    border-radius:6px;
-                    font-weight:bold;
-                }
-                QPushButton:hover {
-                    background:#e8e8e8;
-                }
+            bt.setStyleSheet(f"""
+                QPushButton {{
+                    background:{tokens.FUNDO}; color:{tokens.TEXTO};
+                    border-radius:{tokens.RADIUS_SM}px; font-weight:700;
+                }}
+                QPushButton:hover {{ background:{tokens.BORDA}; }}
             """)
             bt.clicked.connect(
                 lambda checked, v=valor: self.definir_valor(v)
@@ -119,17 +117,17 @@ class AbrirCaixaWindow(QDialog):
         # ======================
 
         lbl_historico_titulo = QLabel("ÚLTIMAS SESSÕES")
-        lbl_historico_titulo.setStyleSheet(
-            "background:transparent; font-size:11px; "
-            "font-weight:bold; color:gray;"
-        )
+        lbl_historico_titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
 
         corpo.addWidget(lbl_historico_titulo)
 
         historico_frame = QFrame()
-        historico_frame.setStyleSheet(
-            "background:#f4f5f7; border-radius:8px;"
-        )
+        historico_frame.setStyleSheet(f"""
+            background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px;
+        """)
 
         self.historico_layout = QGridLayout(historico_frame)
         self.historico_layout.setContentsMargins(12, 10, 12, 10)
@@ -151,41 +149,19 @@ class AbrirCaixaWindow(QDialog):
         # ======================
 
         rodape = QFrame()
-        rodape.setStyleSheet(
-            "background:#f4f5f7; border-top:1px solid #e0e0e0;"
-        )
+        rodape.setStyleSheet(f"""
+            background:{tokens.FUNDO}; border-top:1px solid {tokens.BORDA};
+        """)
 
         rodape_layout = QHBoxLayout(rodape)
         rodape_layout.setContentsMargins(24, 14, 24, 14)
         rodape_layout.setSpacing(10)
 
-        self.bt_cancelar = QPushButton("Cancelar")
+        self.bt_cancelar = BotaoSecundario("Cancelar")
         self.bt_cancelar.setMinimumHeight(46)
-        self.bt_cancelar.setStyleSheet("""
-            QPushButton {
-                background:white;
-                color:#202225;
-                border:1px solid #cccccc;
-                border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#e8e8e8;
-            }
-        """)
 
-        self.bt_abrir = QPushButton("Abrir Caixa")
+        self.bt_abrir = BotaoSucesso("Abrir Caixa")
         self.bt_abrir.setMinimumHeight(46)
-        self.bt_abrir.setStyleSheet("""
-            QPushButton {
-                background:#2E7D32;
-                color:white;
-                font-weight:bold;
-                border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#1B5E20;
-            }
-        """)
 
         rodape_layout.addWidget(self.bt_cancelar)
         rodape_layout.addWidget(self.bt_abrir)
@@ -212,9 +188,10 @@ class AbrirCaixaWindow(QDialog):
 
         if not sessoes:
             vazio = QLabel("Nenhuma sessão registrada ainda.")
-            vazio.setStyleSheet(
-                "background:transparent; font-size:12px; color:gray;"
-            )
+            vazio.setStyleSheet(f"""
+                background:transparent; font-size:{tokens.TAMANHO_SM}px;
+                color:{tokens.TEXTO_TERCIARIO};
+            """)
             self.historico_layout.addWidget(vazio, 0, 0, 1, 3)
             return
 
@@ -224,29 +201,29 @@ class AbrirCaixaWindow(QDialog):
             data = data.replace("T", " ")
 
             status = sessao.get("status", "")
-            cor_status = "#2E7D32" if status == "ABERTO" else "#757575"
 
             lbl_data = QLabel(data)
-            lbl_data.setStyleSheet(
-                "background:transparent; font-size:12px; color:#202225;"
-            )
+            lbl_data.setStyleSheet(f"""
+                background:transparent; font-size:{tokens.TAMANHO_SM}px;
+                color:{tokens.TEXTO};
+            """)
 
-            lbl_status = QLabel(status)
-            lbl_status.setAlignment(Qt.AlignCenter)
-            lbl_status.setStyleSheet(
-                f"background:transparent; font-size:11px; "
-                f"font-weight:bold; color:{cor_status};"
+            badge_status = Badge(
+                status, "sucesso" if status == "ABERTO" else "neutro"
             )
 
             saldo = float(sessao.get("saldo_final", 0) or 0)
             lbl_saldo = QLabel(f"R$ {saldo:.2f}")
             lbl_saldo.setAlignment(Qt.AlignRight)
-            lbl_saldo.setStyleSheet(
-                "background:transparent; font-size:12px; color:#202225;"
-            )
+            lbl_saldo.setStyleSheet(f"""
+                background:transparent; font-size:{tokens.TAMANHO_SM}px;
+                color:{tokens.TEXTO};
+            """)
 
             self.historico_layout.addWidget(lbl_data, linha_indice, 0)
-            self.historico_layout.addWidget(lbl_status, linha_indice, 1)
+            self.historico_layout.addWidget(
+                badge_status, linha_indice, 1, Qt.AlignCenter
+            )
             self.historico_layout.addWidget(lbl_saldo, linha_indice, 2)
 
     def confirmar(self):

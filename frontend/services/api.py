@@ -37,6 +37,13 @@ def login(usuario: str, senha: str):
     return False
 
 
+def logout():
+
+    global TOKEN
+
+    TOKEN = None
+
+
 def existe_usuario():
 
     response = requests.get(f"{URL}/users/existe")

@@ -6,7 +6,7 @@ class Banner(QFrame):
 
     clicado = Signal()
 
-    def __init__(self, categoria, titulo, icone, cor):
+    def __init__(self, categoria, titulo, icone, cor, icone_nome=None):
 
         super().__init__()
 
@@ -45,7 +45,7 @@ class Banner(QFrame):
         col_texto.addWidget(lbl_categoria)
         col_texto.addWidget(lbl_titulo)
 
-        lbl_icone = QLabel(icone)
+        lbl_icone = QLabel()
         lbl_icone.setFixedSize(36, 36)
         lbl_icone.setAlignment(Qt.AlignCenter)
         lbl_icone.setStyleSheet("""
@@ -53,6 +53,12 @@ class Banner(QFrame):
             border-radius: 18px;
             font-size: 16px;
         """)
+
+        if icone_nome:
+            from design.icons import icone_pixmap
+            lbl_icone.setPixmap(icone_pixmap(icone_nome, cor="#FFFFFF", tamanho=18))
+        else:
+            lbl_icone.setText(icone)
 
         layout.addLayout(col_texto)
         layout.addStretch()

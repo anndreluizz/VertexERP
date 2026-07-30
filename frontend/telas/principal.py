@@ -10,22 +10,37 @@ from telas.configuracoes import Configuracoes
 from telas.caixa_bloqueado import CaixaBloqueadoDialog
 from telas.abrir_caixa import AbrirCaixaWindow
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QShortcut, QKeySequence
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
     QHBoxLayout,
     QVBoxLayout,
-    QPushButton,
-    QLabel,
-    QFrame,
     QStackedWidget,
     QDialog,
     QMessageBox,
 )
 
+from design import tokens
+from design.sidebar import Sidebar
+from design.header import Header
+from services import api
 from services.caixa_service import caixa_aberto, abrir_caixa
+
+
+# (chave, ícone lucide, rótulo) — única fonte de verdade pra montar tanto
+# os itens da sidebar quanto o título mostrado no header.
+ITENS_MENU = [
+    ("dashboard", "home", "Início"),
+    ("pdv", "shopping-cart", "PDV"),
+    ("produtos", "package", "Produtos"),
+    ("clientes", "users", "Clientes"),
+    ("caixa", "wallet", "Caixa"),
+    ("contas_pagar", "file-text", "Contas a Pagar"),
+    ("visao_geral", "trending-up", "Visão Geral"),
+    ("relatorios", "bar-chart-2", "Relatórios"),
+    ("config", "settings", "Configurações"),
+]
 
 
 class PrincipalWindow(QMainWindow):
@@ -35,6 +50,14 @@ class PrincipalWindow(QMainWindow):
 
         self.setWindowTitle("Vertex ERP")
         self.resize(1400, 800)
+        self.setStyleSheet(f"QMainWindow {{ background: {tokens.FUNDO}; }}")
+
+        info_usuario = api.me()
+        nome_usuario = info_usuario.get("nome") or "Usuário"
+        cargo = "Administrador" if info_usuario.get("admin") else "Operador"
+
+        config = api.configuracoes()
+        nome_loja = config.get("nome_loja") or "Vertex ERP"
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -47,71 +70,32 @@ class PrincipalWindow(QMainWindow):
         # MENU LATERAL
         # ======================
 
-        menu = QFrame()
-        menu.setFixedWidth(230)
-        menu.setStyleSheet("""
-            QFrame{
-                background:#202225;
-            }
+        self.sidebar = Sidebar(nome_loja, nome_usuario, cargo)
 
-            QPushButton{
-                color:white;
-                background:transparent;
-                border:none;
-                text-align:left;
-                padding:15px;
-                font-size:14px;
-            }
+        self._titulos = {chave: titulo for chave, _, titulo in ITENS_MENU}
 
-            QPushButton:hover{
-                background:#2d3136;
-            }
+        for chave, icone_nome, titulo in ITENS_MENU:
+            self.sidebar.adicionar_item(chave, icone_nome, titulo)
 
-            QLabel{
-                color:white;
-                font-size:20px;
-                font-weight:bold;
-                padding:20px;
-            }
-        """)
+        self.sidebar.item_clicado.connect(self._navegar)
 
-        menu_layout = QVBoxLayout(menu)
-
-        titulo = QLabel("VERTEX ERP")
-        titulo.setAlignment(Qt.AlignCenter)
-
-        menu_layout.addWidget(titulo)
-
-        self.bt_dashboard = QPushButton("🏠 Início")
-        self.bt_produtos = QPushButton("📦 Produtos")
-        self.bt_clientes = QPushButton("👥 Clientes")
-        self.bt_caixa = QPushButton("💰 Caixa")
-        self.bt_contas_pagar = QPushButton("📉 Contas a Pagar")
-        self.bt_visao_geral = QPushButton("📈 Visão Geral")
-        self.bt_relatorios = QPushButton("📊 Relatórios")
-        self.bt_config = QPushButton("⚙ Configurações")
-
-        botoes = [
-            self.bt_dashboard,
-            self.bt_produtos,
-            self.bt_clientes,
-            self.bt_caixa,
-            self.bt_contas_pagar,
-            self.bt_visao_geral,
-            self.bt_relatorios,
-            self.bt_config,
-        ]
-
-        for botao in botoes:
-            menu_layout.addWidget(botao)
-
-        menu_layout.addStretch()
+        layout.addWidget(self.sidebar)
 
         # ======================
-        # ÁREA CENTRAL
+        # ÁREA CENTRAL (header + páginas)
         # ======================
+
+        area_central = QWidget()
+        layout_central = QVBoxLayout(area_central)
+        layout_central.setContentsMargins(0, 0, 0, 0)
+        layout_central.setSpacing(0)
+
+        self.header = Header(nome_loja, nome_usuario, cargo)
+        self.header.solicitou_logout.connect(self._fazer_logout)
+        layout_central.addWidget(self.header)
 
         self.paginas = QStackedWidget()
+        layout_central.addWidget(self.paginas, stretch=1)
 
         self.dashboard = Dashboard()
         self.pdv = PDV()
@@ -139,80 +123,51 @@ class PrincipalWindow(QMainWindow):
         self.paginas.addWidget(self.relatorios)
         self.paginas.addWidget(self.config)
 
-        layout.addWidget(menu)
-        layout.addWidget(self.paginas)
+        layout.addWidget(area_central, stretch=1)
 
         # ======================
         # EVENTOS
         # ======================
 
-        self.bt_dashboard.clicked.connect(
-            lambda: self.paginas.setCurrentWidget(self.dashboard)
-        )
-
-        self.bt_produtos.clicked.connect(
-            lambda: self.paginas.setCurrentWidget(self.produtos)
-        )
-
-        self.bt_clientes.clicked.connect(
-            lambda: self.paginas.setCurrentWidget(self.clientes)
-        )
-
-        self.bt_caixa.clicked.connect(
-            lambda: self.paginas.setCurrentWidget(self.caixa)
-        )
-
-        self.bt_contas_pagar.clicked.connect(
-            self.ir_para_contas_pagar
-        )
-
-        self.bt_visao_geral.clicked.connect(self.ir_para_visao_geral)
-
-        self.bt_relatorios.clicked.connect(self.ir_para_relatorios)
-
-        self.bt_config.clicked.connect(
-            lambda: self.paginas.setCurrentWidget(self.config)
-        )
-
         self.dashboard.navegar_pdv.connect(self.ir_para_pdv)
 
         self.dashboard.navegar_estoque.connect(
-            lambda: self.paginas.setCurrentWidget(self.produtos)
+            lambda: self._exibir_pagina("produtos", self.produtos)
         )
 
         self.dashboard.navegar_caixa.connect(
-            lambda: self.paginas.setCurrentWidget(self.caixa)
+            lambda: self._exibir_pagina("caixa", self.caixa)
         )
 
         self.pdv.voltar.connect(
-            lambda: self.paginas.setCurrentWidget(self.dashboard)
+            lambda: self._exibir_pagina("dashboard", self.dashboard)
         )
 
         self.produtos.voltar.connect(
-            lambda: self.paginas.setCurrentWidget(self.dashboard)
+            lambda: self._exibir_pagina("dashboard", self.dashboard)
         )
 
         self.clientes.voltar.connect(
-            lambda: self.paginas.setCurrentWidget(self.dashboard)
+            lambda: self._exibir_pagina("dashboard", self.dashboard)
         )
 
         self.config.voltar.connect(
-            lambda: self.paginas.setCurrentWidget(self.dashboard)
+            lambda: self._exibir_pagina("dashboard", self.dashboard)
         )
 
         self.relatorios.voltar.connect(
-            lambda: self.paginas.setCurrentWidget(self.dashboard)
+            lambda: self._exibir_pagina("dashboard", self.dashboard)
         )
 
         self.contas_pagar.voltar.connect(
-            lambda: self.paginas.setCurrentWidget(self.dashboard)
+            lambda: self._exibir_pagina("dashboard", self.dashboard)
         )
 
         self.visao_geral.voltar.connect(
-            lambda: self.paginas.setCurrentWidget(self.dashboard)
+            lambda: self._exibir_pagina("dashboard", self.dashboard)
         )
 
-        self.paginas.setCurrentWidget(self.dashboard)
+        self._exibir_pagina("dashboard", self.dashboard)
 
         # ======================
         # ATALHOS
@@ -220,6 +175,58 @@ class PrincipalWindow(QMainWindow):
 
         self.atalho_pdv = QShortcut(QKeySequence("F3"), self)
         self.atalho_pdv.activated.connect(self.atalho_f3)
+
+    def _exibir_pagina(self, chave, pagina):
+
+        if chave == "dashboard":
+            self.dashboard.carregar()
+
+        self.paginas.setCurrentWidget(pagina)
+        self.header.definir_titulo(self._titulos.get(chave, ""))
+        self.sidebar.selecionar(chave)
+
+    def _navegar(self, chave):
+
+        despachantes = {
+            "pdv": self.ir_para_pdv,
+            "contas_pagar": self.ir_para_contas_pagar,
+            "visao_geral": self.ir_para_visao_geral,
+            "relatorios": self.ir_para_relatorios,
+        }
+
+        if chave in despachantes:
+            despachantes[chave]()
+            return
+
+        paginas = {
+            "dashboard": self.dashboard,
+            "produtos": self.produtos,
+            "clientes": self.clientes,
+            "caixa": self.caixa,
+            "config": self.config,
+        }
+
+        self._exibir_pagina(chave, paginas[chave])
+
+    def _fazer_logout(self):
+
+        resposta = QMessageBox.question(
+            self,
+            "Sair",
+            "Deseja realmente encerrar a sessão?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+
+        if resposta != QMessageBox.Yes:
+            return
+
+        api.logout()
+
+        from telas.login import LoginWindow
+
+        self.login_window = LoginWindow()
+        self.login_window.show()
+        self.close()
 
     def atalho_f3(self):
 
@@ -231,7 +238,7 @@ class PrincipalWindow(QMainWindow):
     def ir_para_pdv(self):
 
         if caixa_aberto() is not None:
-            self.paginas.setCurrentWidget(self.pdv)
+            self._exibir_pagina("pdv", self.pdv)
             return
 
         bloqueado = CaixaBloqueadoDialog(self)
@@ -259,19 +266,19 @@ class PrincipalWindow(QMainWindow):
             return
 
         self.caixa.carregar()
-        self.paginas.setCurrentWidget(self.pdv)
+        self._exibir_pagina("pdv", self.pdv)
 
     def ir_para_relatorios(self):
 
         self.relatorios.carregar()
-        self.paginas.setCurrentWidget(self.relatorios)
+        self._exibir_pagina("relatorios", self.relatorios)
 
     def ir_para_contas_pagar(self):
 
         self.contas_pagar.carregar()
-        self.paginas.setCurrentWidget(self.contas_pagar)
+        self._exibir_pagina("contas_pagar", self.contas_pagar)
 
     def ir_para_visao_geral(self):
 
         self.visao_geral.carregar()
-        self.paginas.setCurrentWidget(self.visao_geral)
+        self._exibir_pagina("visao_geral", self.visao_geral)

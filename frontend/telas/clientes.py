@@ -18,92 +18,14 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QLabel,
     QPushButton,
-    QLineEdit,
     QFrame,
     QScrollArea,
     QDialog,
 )
 
-
-class StatCard(QFrame):
-
-    def __init__(self, icone, cor, titulo, subtitulo, valor="0"):
-
-        super().__init__()
-
-        self.setStyleSheet("""
-            QFrame {
-                background:white;
-                border-radius:12px;
-                border:1px solid #eeeeee;
-            }
-        """)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(2)
-
-        topo = QHBoxLayout()
-
-        # Qt espera cor em formato #AARRGGBB (alpha primeiro), entao
-        # o alpha eh montado como prefixo, nao sufixo, do hex base
-        cor_hex = cor.lstrip("#")
-
-        lbl_icone = QLabel(icone)
-        lbl_icone.setFixedSize(38, 38)
-        lbl_icone.setAlignment(Qt.AlignCenter)
-        lbl_icone.setStyleSheet(f"""
-            background:#22{cor_hex};
-            color:{cor};
-            border-radius:19px;
-            font-size:16px;
-            border:none;
-        """)
-
-        traco = QLabel()
-        traco.setFixedSize(28, 4)
-        traco.setStyleSheet(f"""
-            background:#55{cor_hex};
-            border-radius:2px;
-            border:none;
-        """)
-
-        topo.addWidget(lbl_icone)
-        topo.addStretch()
-        topo.addWidget(traco)
-
-        layout.addLayout(topo)
-        layout.addSpacing(10)
-
-        self.lbl_valor = QLabel(str(valor))
-        self.lbl_valor.setStyleSheet(
-            "background:transparent; border:none; font-size:26px; "
-            "font-weight:bold; color:#202225;"
-        )
-
-        lbl_titulo = QLabel(titulo)
-        lbl_titulo.setStyleSheet(
-            "background:transparent; border:none; font-size:11px; "
-            "font-weight:bold; color:#202225;"
-        )
-
-        lbl_subtitulo = QLabel(subtitulo)
-        lbl_subtitulo.setStyleSheet(
-            "background:transparent; border:none; font-size:10px; "
-            "color:#9E9E9E;"
-        )
-
-        rodape = QHBoxLayout()
-        rodape.setSpacing(6)
-        rodape.addWidget(lbl_titulo)
-        rodape.addWidget(lbl_subtitulo)
-        rodape.addStretch()
-
-        layout.addWidget(self.lbl_valor)
-        layout.addLayout(rodape)
-
-    def atualizar(self, valor):
-        self.lbl_valor.setText(str(valor))
+from design import tokens
+from design.icons import icone, icone_pixmap
+from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
 
 
 class ClienteCard(QFrame):
@@ -117,15 +39,15 @@ class ClienteCard(QFrame):
         self.cliente = cliente
 
         self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet("""
-            QFrame {
-                background:white;
-                border-radius:12px;
-                border:1px solid #eeeeee;
-            }
-            QFrame:hover {
-                border:1px solid #90caf9;
-            }
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {tokens.CARD};
+                border-radius: {tokens.RADIUS_LG}px;
+                border: 1px solid {tokens.BORDA};
+            }}
+            QFrame:hover {{
+                border: 1px solid {tokens.PRIMARIA};
+            }}
         """)
 
         layout = QVBoxLayout(self)
@@ -135,17 +57,7 @@ class ClienteCard(QFrame):
         topo = QHBoxLayout()
         topo.setSpacing(12)
 
-        avatar = QLabel(self._iniciais(cliente.get("nome", "")))
-        avatar.setFixedSize(44, 44)
-        avatar.setAlignment(Qt.AlignCenter)
-        avatar.setStyleSheet("""
-            background:#E3F2FD;
-            color:#1565C0;
-            border-radius:22px;
-            font-weight:bold;
-            font-size:14px;
-            border:none;
-        """)
+        avatar = Avatar(cliente.get("nome", ""), tamanho=44)
 
         col_nome = QVBoxLayout()
         col_nome.setSpacing(2)
@@ -153,24 +65,14 @@ class ClienteCard(QFrame):
         linha_nome = QHBoxLayout()
 
         nome = QLabel(cliente.get("nome") or "")
-        nome.setStyleSheet(
-            "background:transparent; border:none; font-size:14px; "
-            "font-weight:bold; color:#202225;"
-        )
+        nome.setStyleSheet(f"""
+            background:transparent; border:none;
+            font-size:{tokens.TAMANHO_MD}px; font-weight:700; color:{tokens.TEXTO};
+        """)
 
         ativo = cliente.get("ativo", True)
 
-        badge = QLabel("Ativo" if ativo else "Inativo")
-        badge.setAlignment(Qt.AlignCenter)
-        badge.setStyleSheet(f"""
-            background:{"#E8F5E9" if ativo else "#FFEBEE"};
-            color:{"#2E7D32" if ativo else "#C62828"};
-            border-radius:9px;
-            font-size:10px;
-            font-weight:bold;
-            padding:2px 10px;
-            border:none;
-        """)
+        badge = Badge("Ativo" if ativo else "Inativo", "sucesso" if ativo else "erro")
 
         linha_nome.addWidget(nome)
         linha_nome.addStretch()
@@ -180,11 +82,11 @@ class ClienteCard(QFrame):
             filter(None, [cliente.get("telefone")])
         ) or "Sem telefone"
 
-        lbl_contato = QLabel(f"📞 {contato}")
-        lbl_contato.setStyleSheet(
-            "background:transparent; border:none; font-size:11px; "
-            "color:#757575;"
-        )
+        lbl_contato = QLabel(contato)
+        lbl_contato.setStyleSheet(f"""
+            background:transparent; border:none;
+            font-size:{tokens.TAMANHO_SM}px; color:{tokens.TEXTO_SECUNDARIO};
+        """)
 
         local = cliente.get("cidade") or cliente.get("endereco") or ""
 
@@ -192,11 +94,11 @@ class ClienteCard(QFrame):
         col_nome.addWidget(lbl_contato)
 
         if local:
-            lbl_local = QLabel(f"📍 {local}")
-            lbl_local.setStyleSheet(
-                "background:transparent; border:none; font-size:11px; "
-                "color:#757575;"
-            )
+            lbl_local = QLabel(local)
+            lbl_local.setStyleSheet(f"""
+                background:transparent; border:none;
+                font-size:{tokens.TAMANHO_SM}px; color:{tokens.TEXTO_SECUNDARIO};
+            """)
             col_nome.addWidget(lbl_local)
 
         topo.addWidget(avatar)
@@ -206,7 +108,7 @@ class ClienteCard(QFrame):
 
         linha = QFrame()
         linha.setFixedHeight(1)
-        linha.setStyleSheet("background:#f0f0f0; border:none;")
+        linha.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
 
         layout.addWidget(linha)
 
@@ -214,10 +116,10 @@ class ClienteCard(QFrame):
 
         if saldo_fiado > 0:
             lbl_fiado = QLabel(f"Fiado: R$ {saldo_fiado:.2f}")
-            lbl_fiado.setStyleSheet(
-                "background:transparent; border:none; font-size:11px; "
-                "font-weight:bold; color:#C62828;"
-            )
+            lbl_fiado.setStyleSheet(f"""
+                background:transparent; border:none;
+                font-size:{tokens.TAMANHO_SM}px; font-weight:700; color:{tokens.ERRO};
+            """)
             rodape.addWidget(lbl_fiado)
 
         rodape.addStretch()
@@ -227,17 +129,17 @@ class ClienteCard(QFrame):
 
         lbl_compras_titulo = QLabel("TOTAL COMPRAS")
         lbl_compras_titulo.setAlignment(Qt.AlignRight)
-        lbl_compras_titulo.setStyleSheet(
-            "background:transparent; border:none; font-size:9px; "
-            "font-weight:bold; color:#9E9E9E;"
-        )
+        lbl_compras_titulo.setStyleSheet(f"""
+            background:transparent; border:none;
+            font-size:{tokens.TAMANHO_XS}px; font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
 
         lbl_compras_valor = QLabel(f"R$ {total_compras:.2f}")
         lbl_compras_valor.setAlignment(Qt.AlignRight)
-        lbl_compras_valor.setStyleSheet(
-            "background:transparent; border:none; font-size:13px; "
-            "font-weight:bold; color:#2E7D32;"
-        )
+        lbl_compras_valor.setStyleSheet(f"""
+            background:transparent; border:none;
+            font-size:{tokens.TAMANHO_BASE}px; font-weight:700; color:{tokens.SECUNDARIA};
+        """)
 
         col_compras.addWidget(lbl_compras_titulo)
         col_compras.addWidget(lbl_compras_valor)
@@ -245,19 +147,6 @@ class ClienteCard(QFrame):
         rodape.addLayout(col_compras)
 
         layout.addLayout(rodape)
-
-    @staticmethod
-    def _iniciais(nome):
-
-        partes = nome.strip().split()
-
-        if not partes:
-            return "?"
-
-        if len(partes) == 1:
-            return partes[0][:2].upper()
-
-        return (partes[0][0] + partes[-1][0]).upper()
 
     def mousePressEvent(self, event):
         self.clicado.emit(self.cliente)
@@ -275,11 +164,10 @@ class Clientes(QWidget):
         self.vendas_por_cliente = {}
         self.filtro_status = "TODOS"
 
-        self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setStyleSheet("background:#f4f5f7;")
+        self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 16, 24, 16)
+        layout.setContentsMargins(28, 20, 28, 20)
         layout.setSpacing(16)
 
         # ======================
@@ -289,29 +177,26 @@ class Clientes(QWidget):
         cabecalho = QHBoxLayout()
         cabecalho.setSpacing(12)
 
-        self.bt_voltar = QPushButton("‹ Voltar")
-        self.bt_voltar.setStyleSheet("""
-            QPushButton {
-                background:transparent;
-                color:gray;
-                border:none;
-                font-size:13px;
-                font-weight:bold;
-            }
-            QPushButton:hover {
-                color:#202225;
-            }
+        self.bt_voltar = QPushButton()
+        self.bt_voltar.setFixedSize(36, 36)
+        self.bt_voltar.setCursor(Qt.PointingHandCursor)
+        self.bt_voltar.setIcon(icone("chevron-left", cor=tokens.TEXTO_SECUNDARIO, tamanho=18))
+        self.bt_voltar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD}; border:1px solid {tokens.BORDA};
+                border-radius:{tokens.RADIUS_SM}px;
+            }}
+            QPushButton:hover {{ background:{tokens.FUNDO}; }}
         """)
         self.bt_voltar.clicked.connect(self.voltar.emit)
 
-        icone_titulo = QLabel("👥")
+        icone_titulo = QLabel()
         icone_titulo.setFixedSize(36, 36)
         icone_titulo.setAlignment(Qt.AlignCenter)
-        icone_titulo.setStyleSheet("""
-            background:#eef0f3;
-            border-radius:8px;
-            font-size:16px;
+        icone_titulo.setStyleSheet(f"""
+            background:{tokens.PRIMARIA_CLARA}; border-radius:{tokens.RADIUS_SM}px;
         """)
+        icone_titulo.setPixmap(icone_pixmap("users", cor=tokens.PRIMARIA, tamanho=18))
 
         col_titulo = QVBoxLayout()
         col_titulo.setSpacing(0)
@@ -320,73 +205,30 @@ class Clientes(QWidget):
         nome_loja = config.get("nome_loja") or "Vertex ERP"
 
         titulo = QLabel(nome_loja)
-        titulo.setStyleSheet(
-            "background:transparent; font-size:16px; "
-            "font-weight:bold; color:#202225;"
-        )
+        titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_LG}px;
+            font-weight:800; color:{tokens.TEXTO};
+        """)
 
         subtitulo = QLabel("LOJA OPERACIONAL")
-        subtitulo.setStyleSheet(
-            "background:transparent; font-size:10px; "
-            "color:#2E7D32; font-weight:bold;"
-        )
+        subtitulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            color:{tokens.SECUNDARIA_HOVER}; font-weight:700;
+        """)
 
         col_titulo.addWidget(titulo)
         col_titulo.addWidget(subtitulo)
 
-        self.bt_tema = QPushButton("🌙")
-        self.bt_tema.setFixedSize(38, 38)
-        self.bt_tema.setStyleSheet("""
-            QPushButton {
-                background:#f4f5f7;
-                border-radius:19px;
-                font-size:14px;
-            }
-            QPushButton:hover {
-                background:#e8e8e8;
-            }
-        """)
-        self.bt_tema.clicked.connect(self.tema_em_breve)
-
-        self.bt_exportar = QPushButton("⬇  Exportar Planilha")
-        self.bt_exportar.setMinimumHeight(38)
-        self.bt_exportar.setStyleSheet("""
-            QPushButton {
-                background:#f4f5f7;
-                color:#202225;
-                border-radius:10px;
-                padding:0 16px;
-                font-weight:bold;
-                font-size:12px;
-            }
-            QPushButton:hover {
-                background:#e8e8e8;
-            }
-        """)
+        self.bt_exportar = BotaoSecundario("Exportar Planilha", icone_nome="download")
         self.bt_exportar.clicked.connect(self.exportar_em_breve)
 
-        self.bt_novo = QPushButton("+  Novo Cliente")
-        self.bt_novo.setMinimumHeight(38)
-        self.bt_novo.setStyleSheet("""
-            QPushButton {
-                background:#1565C0;
-                color:white;
-                border-radius:10px;
-                padding:0 18px;
-                font-weight:bold;
-                font-size:12px;
-            }
-            QPushButton:hover {
-                background:#0D47A1;
-            }
-        """)
+        self.bt_novo = BotaoPrimario("Novo Cliente", icone_nome="plus")
         self.bt_novo.clicked.connect(self.novo_cliente)
 
         cabecalho.addWidget(self.bt_voltar)
         cabecalho.addWidget(icone_titulo)
         cabecalho.addLayout(col_titulo)
         cabecalho.addStretch()
-        cabecalho.addWidget(self.bt_tema)
         cabecalho.addWidget(self.bt_exportar)
         cabecalho.addWidget(self.bt_novo)
 
@@ -397,29 +239,22 @@ class Clientes(QWidget):
         # ======================
 
         resumo_layout = QGridLayout()
-        resumo_layout.setSpacing(12)
+        resumo_layout.setSpacing(14)
 
-        self.card_total = StatCard(
-            "👥", "#1565C0", "CADASTROS", "Total"
-        )
-        self.card_ativos = StatCard(
-            "✓", "#2E7D32", "ATIVOS", "Frequentes"
-        )
-        self.card_inativos = StatCard(
-            "⚠", "#F9A825", "INATIVOS", "Ausentes"
-        )
-        self.card_faturamento = StatCard(
-            "📈", "#7B1FA2", "FATURAMENTO", "Histórico", "R$ 0,00"
-        )
-        self.card_a_receber = StatCard(
-            "💳", "#C62828", "A RECEBER", "Fiado em aberto", "R$ 0,00"
-        )
+        self.card_total = CardKPI("Cadastros (Total)", "users", tokens.PRIMARIA)
+        self.card_ativos = CardKPI("Ativos (Frequentes)", "check", tokens.SECUNDARIA)
+        self.card_inativos = CardKPI("Inativos (Ausentes)", "alert-triangle", tokens.ALERTA)
+        self.card_faturamento = CardKPI("Faturamento (Histórico)", "trending-up", tokens.PRIMARIA)
+        self.card_a_receber = CardKPI("A Receber (Fiado em aberto)", "credit-card", tokens.ERRO)
 
         resumo_layout.addWidget(self.card_total, 0, 0)
         resumo_layout.addWidget(self.card_ativos, 0, 1)
         resumo_layout.addWidget(self.card_inativos, 0, 2)
         resumo_layout.addWidget(self.card_faturamento, 0, 3)
         resumo_layout.addWidget(self.card_a_receber, 0, 4)
+
+        for coluna in range(5):
+            resumo_layout.setColumnStretch(coluna, 1)
 
         layout.addLayout(resumo_layout)
 
@@ -430,35 +265,10 @@ class Clientes(QWidget):
         barra = QHBoxLayout()
         barra.setSpacing(10)
 
-        barra_frame = QFrame()
-        barra_frame.setStyleSheet("""
-            QFrame {
-                background:white;
-                border-radius:22px;
-                border:1px solid #e0e0e0;
-            }
-        """)
-        barra_frame_layout = QHBoxLayout(barra_frame)
-        barra_frame_layout.setContentsMargins(16, 0, 16, 0)
-
-        self.pesquisa = QLineEdit()
-        self.pesquisa.setPlaceholderText(
-            "Buscar por nome, telefone ou CPF/CNPJ..."
-        )
-        self.pesquisa.setMinimumHeight(44)
-        self.pesquisa.setStyleSheet("""
-            QLineEdit {
-                border: none;
-                font-size: 13px;
-                color: #202225;
-                background: transparent;
-            }
-        """)
+        self.pesquisa = CampoTexto("Buscar por nome, telefone ou CPF/CNPJ...")
         self.pesquisa.textChanged.connect(self.filtrar_clientes)
 
-        barra_frame_layout.addWidget(self.pesquisa)
-
-        barra.addWidget(barra_frame, stretch=1)
+        barra.addWidget(self.pesquisa, stretch=1)
 
         self.botoes_status = {}
 
@@ -466,6 +276,7 @@ class Clientes(QWidget):
 
             bt = QPushButton(rotulo)
             bt.setCheckable(True)
+            bt.setCursor(Qt.PointingHandCursor)
             bt.setMinimumHeight(44)
             bt.setMinimumWidth(80)
             bt.clicked.connect(
@@ -499,12 +310,13 @@ class Clientes(QWidget):
 
         self.lbl_vazio = QLabel(
             "Nenhum cliente cadastrado ainda.\n"
-            "Clique em \"+ Novo Cliente\" pra começar o caderninho."
+            "Clique em \"Novo Cliente\" pra começar o caderninho."
         )
         self.lbl_vazio.setAlignment(Qt.AlignCenter)
-        self.lbl_vazio.setStyleSheet(
-            "background:transparent; color:gray; font-size:13px;"
-        )
+        self.lbl_vazio.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_BASE}px;
+        """)
         self.lbl_vazio.setVisible(False)
 
         layout.addWidget(self.lbl_vazio)
@@ -571,15 +383,11 @@ class Clientes(QWidget):
             float(c.get("saldo_fiado", 0) or 0) for c in self.clientes
         )
 
-        self.card_total.atualizar(str(total))
-        self.card_ativos.atualizar(str(ativos))
-        self.card_inativos.atualizar(str(inativos))
-        self.card_faturamento.atualizar(
-            f"R$ {faturamento_total:.2f}"
-        )
-        self.card_a_receber.atualizar(
-            f"R$ {total_a_receber:.2f}"
-        )
+        self.card_total.definir_valor(str(total))
+        self.card_ativos.definir_valor(str(ativos))
+        self.card_inativos.definir_valor(str(inativos))
+        self.card_faturamento.definir_valor(f"R$ {faturamento_total:.2f}")
+        self.card_a_receber.definir_valor(f"R$ {total_a_receber:.2f}")
 
     # ==========================================
     # FILTRO DE STATUS
@@ -597,15 +405,15 @@ class Clientes(QWidget):
 
             botao.setStyleSheet(f"""
                 QPushButton {{
-                    background: {"#1565C0" if selecionado else "white"};
-                    color: {"white" if selecionado else "#202225"};
-                    border-radius: 10px;
-                    border: 1px solid {"#1565C0" if selecionado else "#e0e0e0"};
-                    font-weight: bold;
-                    font-size: 11px;
+                    background: {tokens.PRIMARIA if selecionado else tokens.CARD};
+                    color: {"white" if selecionado else tokens.TEXTO};
+                    border-radius: {tokens.RADIUS_SM}px;
+                    border: 1px solid {tokens.PRIMARIA if selecionado else tokens.BORDA};
+                    font-weight: 700;
+                    font-size: {tokens.TAMANHO_SM}px;
                 }}
                 QPushButton:hover {{
-                    background: {"#0D47A1" if selecionado else "#f4f5f7"};
+                    background: {tokens.PRIMARIA_HOVER if selecionado else tokens.FUNDO};
                 }}
             """)
 
@@ -698,13 +506,6 @@ class Clientes(QWidget):
         tela.exec()
 
         self.carregar()
-
-    def tema_em_breve(self):
-        QMessageBox.information(
-            self,
-            "Em breve",
-            "O modo escuro ainda está em desenvolvimento.",
-        )
 
     def exportar_em_breve(self):
         QMessageBox.information(

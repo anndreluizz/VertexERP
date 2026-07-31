@@ -19,6 +19,13 @@ class Venda(Base):
         nullable=True
     )
 
+    # quem vendeu — nullable pra nao quebrar vendas ja existentes (nunca
+    # tiveram esse dado) e pra registros futuros sem usuario disponivel
+    usuario_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=True
+    )
+
     data: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow

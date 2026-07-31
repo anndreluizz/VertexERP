@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import String, Boolean, DateTime
+from sqlalchemy import String, Boolean, DateTime, Date, Float, LargeBinary
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -53,6 +53,26 @@ class Cliente(Base):
         DateTime,
         default=datetime.utcnow
     )
+
+    data_nascimento: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True
+    )
+
+    limite_credito: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True
+    )
+
+    foto: Mapped[bytes | None] = mapped_column(
+        LargeBinary,
+        nullable=True
+    )
+
+    @property
+    def tem_foto(self) -> bool:
+        return self.foto is not None
+
     vendas = relationship(
         "Venda",
         back_populates="cliente"
@@ -61,4 +81,11 @@ class Cliente(Base):
     movimentos_fiado = relationship(
         "MovimentoFiado",
         back_populates="cliente"
+    )
+
+    observacoes = relationship(
+        "ClienteObservacao",
+        back_populates="cliente",
+        cascade="all, delete-orphan",
+        order_by="ClienteObservacao.criado_em.desc()",
     )

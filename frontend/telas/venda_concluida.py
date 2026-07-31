@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QTextDocument, QFont, QPageSize
+from PySide6.QtGui import QTextDocument, QPageSize
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
@@ -153,62 +153,86 @@ class VendaConcluidaDialog(QDialog):
         layout.addWidget(self.bt_comprovante)
         layout.addWidget(self.bt_nova_venda)
 
-    def texto_comprovante(self):
+    def html_comprovante(self):
+        """Comprovante moderno em HTML — mesmo padrão de
+        QTextDocument+QPrinter já usado em ficha_cliente.py, no lugar
+        do texto monoespaçado antigo."""
 
         config = configuracoes()
         nome_loja = config.get("nome_loja") or "Vertex ERP"
 
-        linhas = [
-            nome_loja.center(40),
-            "-" * 40,
-            datetime.now().strftime("%d/%m/%Y %H:%M"),
-            "-" * 40,
-        ]
-
-        for item in self.itens:
-
-            subtotal = item["preco"] * item["quantidade"]
-
-            linhas.append(
-                f"{item['quantidade']}x {item['nome']}"
-            )
-            linhas.append(
-                f"  R$ {item['preco']:.2f}".rjust(20)
-                + f"= R$ {subtotal:.2f}".rjust(20)
-            )
-
-        linhas.append("-" * 40)
-        linhas.append(f"TOTAL: R$ {self.total:.2f}".rjust(40))
+        linhas_itens = "".join(
+            "<tr>"
+            f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB;'>"
+            f"{item['nome']}</td>"
+            f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB; "
+            f"text-align:center;'>{item['quantidade']}</td>"
+            f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB; "
+            f"text-align:right;'>R$ {item['preco']:.2f}</td>"
+            f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB; "
+            f"text-align:right;'>R$ {item['preco'] * item['quantidade']:.2f}</td>"
+            "</tr>"
+            for item in self.itens
+        )
 
         if self.forma_pagamento_2:
             valor_principal = self.total - self.valor_forma_2
-            linhas.append(
-                f"Pagamento: R$ {valor_principal:.2f} "
-                f"({self.forma_pagamento}) + "
-                f"R$ {self.valor_forma_2:.2f} "
-                f"({self.forma_pagamento_2})"
+            linha_pagamento = (
+                f"<p style='margin:4px 0;'>Pagamento: "
+                f"R$ {valor_principal:.2f} ({self.forma_pagamento}) + "
+                f"R$ {self.valor_forma_2:.2f} ({self.forma_pagamento_2})</p>"
             )
         else:
-            linhas.append(
-                f"Forma de pagamento: {self.forma_pagamento}"
+            linha_pagamento = (
+                f"<p style='margin:4px 0;'>Forma de pagamento: "
+                f"{self.forma_pagamento}</p>"
             )
 
-        linhas.append("-" * 40)
-        linhas.append("Este comprovante não tem valor fiscal.")
+        cliente_linha = (
+            f"<p style='margin:4px 0;'>Cliente: {self.cliente_nome}</p>"
+            if self.cliente_nome else ""
+        )
 
-        return "\n".join(linhas)
+        return f"""
+        <html>
+        <body style="font-family: Arial; font-size: 13px; color:#1E293B;">
+            <h2 style="margin-bottom:0; text-align:center;">{nome_loja}</h2>
+            <p style="color:#64748B; margin-top:2px; text-align:center;">
+                {datetime.now().strftime('%d/%m/%Y %H:%M')}
+            </p>
+            <hr style="border:none; border-top:1px solid #E5E7EB;">
+            {cliente_linha}
+            <table style="width:100%; border-collapse:collapse; margin-top:8px;">
+                <tr style="background:#F1F5F9;">
+                    <th style="padding:6px 8px; text-align:left;">Produto</th>
+                    <th style="padding:6px 8px;">Qtd</th>
+                    <th style="padding:6px 8px; text-align:right;">Unitário</th>
+                    <th style="padding:6px 8px; text-align:right;">Subtotal</th>
+                </tr>
+                {linhas_itens}
+            </table>
+            <h3 style="text-align:right; margin-top:12px;">
+                Total: R$ {self.total:.2f}
+            </h3>
+            {linha_pagamento}
+            <hr style="border:none; border-top:1px solid #E5E7EB;">
+            <p style="color:#94A3B8; font-size:11px; text-align:center;">
+                Este comprovante não tem valor fiscal.
+            </p>
+        </body>
+        </html>
+        """
 
-    def montar_documento(self, texto):
+    def montar_documento(self, html):
 
         documento = QTextDocument()
-        documento.setDefaultFont(QFont("Consolas", 10))
-        documento.setPlainText(texto)
+        documento.setHtml(html)
 
         return documento
 
     def emitir_comprovante(self):
 
-        texto = self.texto_comprovante()
+        html = self.html_comprovante()
 
         janela = QDialog(self)
         janela.setWindowTitle("Comprovante (não fiscal)")
@@ -218,19 +242,18 @@ class VendaConcluidaDialog(QDialog):
 
         area = QTextEdit()
         area.setReadOnly(True)
-        area.setStyleSheet("font-family: Consolas, monospace;")
-        area.setText(texto)
+        area.setHtml(html)
 
         botoes = QHBoxLayout()
 
         bt_pdf = QPushButton("Salvar PDF")
         bt_pdf.clicked.connect(
-            lambda: self.salvar_pdf(texto)
+            lambda: self.salvar_pdf(html)
         )
 
         bt_imprimir = QPushButton("Imprimir")
         bt_imprimir.clicked.connect(
-            lambda: self.imprimir(texto, janela)
+            lambda: self.imprimir(html, janela)
         )
 
         bt_fechar = QPushButton("Fechar")
@@ -245,7 +268,7 @@ class VendaConcluidaDialog(QDialog):
 
         janela.exec()
 
-    def salvar_pdf(self, texto):
+    def salvar_pdf(self, html):
 
         caminho, _ = QFileDialog.getSaveFileName(
             self,
@@ -265,7 +288,7 @@ class VendaConcluidaDialog(QDialog):
         printer.setOutputFileName(caminho)
         printer.setPageSize(QPageSize(QPageSize.A5))
 
-        self.montar_documento(texto).print_(printer)
+        self.montar_documento(html).print_(printer)
 
         QMessageBox.information(
             self,
@@ -273,7 +296,7 @@ class VendaConcluidaDialog(QDialog):
             "Comprovante salvo em PDF com sucesso.",
         )
 
-    def imprimir(self, texto, parent):
+    def imprimir(self, html, parent):
 
         printer = QPrinter(QPrinter.HighResolution)
 
@@ -282,4 +305,4 @@ class VendaConcluidaDialog(QDialog):
         if dialogo.exec() != QPrintDialog.Accepted:
             return
 
-        self.montar_documento(texto).print_(printer)
+        self.montar_documento(html).print_(printer)

@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QSpinBox,
     QPushButton,
+    QCheckBox,
     QVBoxLayout,
     QHBoxLayout,
     QInputDialog,
@@ -91,10 +92,23 @@ class CadastroProdutoWindow(QDialog):
         """)
         self.bt_cancelar_topo.clicked.connect(self.reject)
 
+        self.favorito = QCheckBox("★ Favorito")
+        self.favorito.setToolTip(
+            "Produtos favoritos ficam em destaque na busca do PDV"
+        )
+        self.favorito.setStyleSheet("""
+            QCheckBox {
+                background:transparent; font-size:12px;
+                font-weight:bold; color:#B45309;
+            }
+        """)
+
         cabecalho.addWidget(icone)
         cabecalho.addSpacing(12)
         cabecalho.addLayout(col_titulo)
         cabecalho.addStretch()
+        cabecalho.addWidget(self.favorito)
+        cabecalho.addSpacing(12)
         cabecalho.addWidget(self.bt_cancelar_topo)
 
         layout.addLayout(cabecalho)
@@ -672,6 +686,8 @@ class CadastroProdutoWindow(QDialog):
             self.produto.get("estoque_minimo", 0)
         )
 
+        self.favorito.setChecked(self.produto.get("favorito", False))
+
         if self.produto.get("tem_foto"):
 
             foto_bytes = obter_foto_produto(self.produto["id"])
@@ -767,4 +783,6 @@ class CadastroProdutoWindow(QDialog):
             "estoque": self.estoque.value(),
 
             "estoque_minimo": self.estoque_minimo.value(),
+
+            "favorito": self.favorito.isChecked(),
         }

@@ -1,17 +1,22 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from telas.pagamento import PagamentoWindow
 from telas.buscar_produto import BuscarProdutoDialog
 from telas.venda_concluida import VendaConcluidaDialog
 from telas.cadastro_rapido import CadastroRapidoDialog
 from telas.selecionar_cliente import SelecionarClienteDialog
-from services.venda_service import finalizar_venda as enviar_venda
+from services.venda_service import finalizar_venda as enviar_venda, listar_vendas
+from services.produto_service import listar_produtos
 from services.pdv_service import buscar_produto
 from services.caixa_service import caixa_aberto
-from services.api import configuracoes
+from services.api import configuracoes, me
+from services import preferencias_service
+
+ATALHOS_PADRAO = {"busca": "F1", "cadastro_rapido": "F4", "cancelar": "Esc"}
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QShortcut, QKeySequence, QFont
+from PySide6.QtGui import QShortcut, QKeySequence, QFont, QTextDocument
+from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (
     QWidget,
     QDialog,
@@ -25,6 +30,7 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QMessageBox,
+    QFileDialog,
 )
 
 from design import tokens
@@ -61,6 +67,107 @@ def _parse_valor(texto):
         return 0.0
 
 
+class VendasSuspensasDialog(QDialog):
+    """Lista as vendas suspensas do carrinho atual (só em memória — não
+    sobrevivem a fechar o app, apenas a navegar entre telas, já que o
+    PDV nunca é recriado enquanto o app está aberto). Permite retomar
+    ou excluir uma venda suspensa."""
+
+    def __init__(self, vendas_suspensas, parent=None):
+
+        super().__init__(parent)
+
+        self.indice_selecionado = None
+        self.acao = None
+
+        self.setWindowTitle("Vendas Suspensas")
+        self.resize(480, 420)
+        self.setStyleSheet(f"background:{tokens.FUNDO};")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        titulo = QLabel("Vendas Suspensas")
+        titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_XL}px; font-weight:800;
+        """)
+        layout.addWidget(titulo)
+
+        self.lista = QTableWidget()
+        self.lista.setColumnCount(1)
+        self.lista.horizontalHeader().setVisible(False)
+        self.lista.verticalHeader().setVisible(False)
+        self.lista.setSelectionBehavior(QTableWidget.SelectRows)
+        self.lista.setSelectionMode(QTableWidget.SingleSelection)
+        self.lista.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.lista.horizontalHeader().setStretchLastSection(True)
+        self.lista.setStyleSheet(f"""
+            QTableWidget {{
+                border:1px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
+                background:{tokens.CARD};
+            }}
+        """)
+
+        self.lista.setRowCount(len(vendas_suspensas))
+
+        for linha, venda in enumerate(vendas_suspensas):
+
+            total = sum(
+                item["preco"] * item["quantidade"] for item in venda["itens"]
+            )
+            hora_texto = venda["hora"].strftime("%H:%M")
+            texto = (
+                f"{venda['rotulo']}   ·   {len(venda['itens'])} item(ns)   ·   "
+                f"{_formatar_moeda(total)}   ·   {hora_texto}"
+            )
+
+            self.lista.setItem(linha, 0, QTableWidgetItem(texto))
+
+        self.lista.verticalHeader().setDefaultSectionSize(40)
+
+        if self.lista.rowCount() > 0:
+            self.lista.selectRow(0)
+
+        layout.addWidget(self.lista, stretch=1)
+
+        rodape = QHBoxLayout()
+        rodape.setSpacing(10)
+
+        bt_excluir = BotaoPerigo("Excluir")
+        bt_excluir.clicked.connect(self._excluir)
+
+        bt_retomar = BotaoPrimario("Retomar")
+        bt_retomar.clicked.connect(self._retomar)
+
+        rodape.addWidget(bt_excluir)
+        rodape.addStretch()
+        rodape.addWidget(bt_retomar)
+
+        layout.addLayout(rodape)
+
+    def _linha_atual(self):
+        linhas = self.lista.selectionModel().selectedRows()
+        return linhas[0].row() if linhas else -1
+
+    def _retomar(self):
+        linha = self._linha_atual()
+        if linha < 0:
+            return
+        self.indice_selecionado = linha
+        self.acao = "retomar"
+        self.accept()
+
+    def _excluir(self):
+        linha = self._linha_atual()
+        if linha < 0:
+            return
+        self.indice_selecionado = linha
+        self.acao = "excluir"
+        self.accept()
+
+
 class PDV(QWidget):
 
     voltar = Signal()
@@ -73,6 +180,10 @@ class PDV(QWidget):
         self.cliente_nome = None
         self.desconto_valor = 0.0
         self.acrescimo_valor = 0.0
+        self.vendas_suspensas = []
+
+        self._usuario_id = (me() or {}).get("id")
+        self.atalhos = self._carregar_atalhos()
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
@@ -84,6 +195,7 @@ class PDV(QWidget):
         layout.addWidget(self._construir_campo_codigo())
         layout.addWidget(self.lbl_status_busca)
         layout.addWidget(self._construir_linha_cliente())
+        layout.addWidget(self._construir_mais_vendidos())
         layout.addWidget(self._construir_tabela(), stretch=1)
         layout.addWidget(self._construir_bloco_ajuste())
         layout.addLayout(self._construir_resumo())
@@ -95,15 +207,15 @@ class PDV(QWidget):
 
         contexto = Qt.WidgetWithChildrenShortcut
 
-        self.atalho_f1 = QShortcut(QKeySequence("F1"), self)
+        self.atalho_f1 = QShortcut(QKeySequence(self.atalhos["busca"]), self)
         self.atalho_f1.setContext(contexto)
         self.atalho_f1.activated.connect(self.abrir_busca)
 
-        self.atalho_f4 = QShortcut(QKeySequence("F4"), self)
+        self.atalho_f4 = QShortcut(QKeySequence(self.atalhos["cadastro_rapido"]), self)
         self.atalho_f4.setContext(contexto)
         self.atalho_f4.activated.connect(self.abrir_cadastro_rapido)
 
-        self.atalho_esc = QShortcut(QKeySequence("Esc"), self)
+        self.atalho_esc = QShortcut(QKeySequence(self.atalhos["cancelar"]), self)
         self.atalho_esc.setContext(contexto)
         self.atalho_esc.activated.connect(self.cancelar_venda)
 
@@ -112,7 +224,27 @@ class PDV(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         self.atualizar_indicador_caixa()
+        self.atualizar_mais_vendidos()
+        self.recarregar_atalhos()
         self.campo_codigo.setFocus()
+
+    def _carregar_atalhos(self):
+        salvo = preferencias_service.carregar(self._usuario_id, "pdv_atalhos", {})
+        return {**ATALHOS_PADRAO, **(salvo or {})}
+
+    def recarregar_atalhos(self):
+        """Reflete na hora qualquer remapeamento feito em Configurações
+        — chamado toda vez que a tela do PDV é reaberta, já que o
+        widget nunca é recriado enquanto o app está de pé."""
+
+        self.atalhos = self._carregar_atalhos()
+
+        self.atalho_f1.setKey(QKeySequence(self.atalhos["busca"]))
+        self.atalho_f4.setKey(QKeySequence(self.atalhos["cadastro_rapido"]))
+        self.atalho_esc.setKey(QKeySequence(self.atalhos["cancelar"]))
+
+        self.bt_buscar.setText(f"Buscar ({self.atalhos['busca']})")
+        self.bt_adicionar.setText(f"Adicionar ({self.atalhos['cadastro_rapido']})")
 
     # ==================================================
     # CONSTRUÇÃO DA INTERFACE
@@ -160,6 +292,16 @@ class PDV(QWidget):
 
         self.badge_caixa = Badge("Caixa aberto", "sucesso")
 
+        self.bt_retomar = BotaoSecundario("Vendas Suspensas")
+        self.bt_retomar.setEnabled(False)
+        self.bt_retomar.clicked.connect(self.abrir_vendas_suspensas)
+
+        self.bt_suspender = BotaoSecundario("Suspender")
+        self.bt_suspender.clicked.connect(self.suspender_venda)
+
+        self.bt_orcamento = BotaoSecundario("Orçamento", icone_nome="printer")
+        self.bt_orcamento.clicked.connect(self.imprimir_orcamento)
+
         self.bt_cancelar = BotaoPerigo("Cancelar Venda", icone_nome="x")
         self.bt_cancelar.clicked.connect(self.cancelar_venda)
 
@@ -168,6 +310,9 @@ class PDV(QWidget):
         cabecalho.addSpacing(4)
         cabecalho.addWidget(self.badge_caixa, alignment=Qt.AlignVCenter)
         cabecalho.addStretch()
+        cabecalho.addWidget(self.bt_retomar)
+        cabecalho.addWidget(self.bt_suspender)
+        cabecalho.addWidget(self.bt_orcamento)
         cabecalho.addWidget(self.bt_cancelar)
 
         return cabecalho
@@ -262,6 +407,101 @@ class PDV(QWidget):
         layout.addWidget(self.bt_selecionar_cliente)
 
         return linha
+
+    def _construir_mais_vendidos(self):
+
+        self.linha_mais_vendidos = QFrame()
+        self.linha_mais_vendidos.setStyleSheet("background:transparent; border:none;")
+        self.linha_mais_vendidos.setVisible(False)
+
+        layout = QHBoxLayout(self.linha_mais_vendidos)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        lbl_icone = QLabel()
+        lbl_icone.setStyleSheet("background:transparent;")
+        lbl_icone.setPixmap(icone_pixmap("trending-up", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        layout.addWidget(lbl_icone)
+
+        lbl_titulo = QLabel("Mais vendidos:")
+        lbl_titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
+        layout.addWidget(lbl_titulo)
+
+        self.layout_chips_mais_vendidos = QHBoxLayout()
+        self.layout_chips_mais_vendidos.setSpacing(6)
+        layout.addLayout(self.layout_chips_mais_vendidos)
+
+        layout.addStretch()
+
+        return self.linha_mais_vendidos
+
+    def atualizar_mais_vendidos(self):
+        """Painel de acesso rápido pros produtos mais vendidos nos
+        últimos 30 dias — mesma agregação client-side já usada em
+        relatorios.py (sem endpoint novo no backend)."""
+
+        while self.layout_chips_mais_vendidos.count():
+            item = self.layout_chips_mais_vendidos.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        try:
+            vendas = listar_vendas()
+            produtos = listar_produtos()
+        except Exception:
+            self.linha_mais_vendidos.setVisible(False)
+            return
+
+        produtos_por_id = {p["id"]: p for p in produtos}
+        limite = datetime.now() - timedelta(days=30)
+
+        qtd_por_produto = {}
+
+        for venda in vendas:
+
+            if venda.get("status") != "FINALIZADA":
+                continue
+
+            data_venda = _parse_data(venda.get("data"))
+
+            if data_venda is None or data_venda < limite:
+                continue
+
+            for item in venda.get("itens", []):
+                pid = item.get("produto_id")
+                qtd_por_produto[pid] = qtd_por_produto.get(pid, 0) + item.get("quantidade", 0)
+
+        top = sorted(qtd_por_produto.items(), key=lambda item: -item[1])[:5]
+        exibidos = 0
+
+        for pid, _qtd in top:
+
+            produto = produtos_por_id.get(pid)
+
+            if not produto or not produto.get("ativo", True):
+                continue
+
+            chip = BotaoSecundario(produto["nome"][:18])
+            chip.setMinimumHeight(30)
+            chip.clicked.connect(
+                lambda _checked, p=produto: self.adicionar_produto_ao_carrinho(
+                    {
+                        "id": p["id"],
+                        "codigo": p["codigo"],
+                        "nome": p["nome"],
+                        "preco": float(p["preco_venda"]),
+                    },
+                    1,
+                )
+            )
+            self.layout_chips_mais_vendidos.addWidget(chip)
+            exibidos += 1
+
+        self.linha_mais_vendidos.setVisible(exibidos > 0)
 
     def _construir_tabela(self):
 
@@ -436,10 +676,14 @@ class PDV(QWidget):
         barra = QHBoxLayout()
         barra.setSpacing(14)
 
-        self.bt_buscar = BotaoSecundario("Buscar (F1)", icone_nome="search")
+        self.bt_buscar = BotaoSecundario(
+            f"Buscar ({self.atalhos['busca']})", icone_nome="search"
+        )
         self.bt_buscar.setMinimumHeight(56)
 
-        self.bt_adicionar = BotaoPrimario("Adicionar (F4)", icone_nome="plus")
+        self.bt_adicionar = BotaoPrimario(
+            f"Adicionar ({self.atalhos['cadastro_rapido']})", icone_nome="plus"
+        )
         self.bt_adicionar.setMinimumHeight(56)
 
         self.bt_pagar = BotaoSucesso("Pagar (F3)", icone_nome="credit-card")
@@ -845,6 +1089,237 @@ class PDV(QWidget):
         self.campo_codigo.setFocus()
 
     # ==================================================
+    # VENDA SUSPENSA (pré-venda) — só em memória, some se o app
+    # for fechado; sobrevive a navegar pra outra tela porque o
+    # widget PDV nunca é recriado enquanto o app está aberto.
+    # ==================================================
+
+    def suspender_venda(self):
+
+        if not self.itens:
+            QMessageBox.warning(
+                self, "Aviso", "Não há itens no carrinho pra suspender."
+            )
+            return
+
+        rotulo = f"Venda {len(self.vendas_suspensas) + 1}"
+
+        if self.cliente_nome:
+            rotulo += f" — {self.cliente_nome}"
+
+        self.vendas_suspensas.append({
+            "rotulo": rotulo,
+            "itens": [dict(item) for item in self.itens],
+            "cliente_id": self.cliente_id,
+            "cliente_nome": self.cliente_nome,
+            "desconto_texto": self.campo_desconto.text(),
+            "acrescimo_texto": self.campo_acrescimo.text(),
+            "hora": datetime.now(),
+        })
+
+        self.limpar_venda()
+        self._atualizar_botao_retomar()
+
+        QMessageBox.information(
+            self,
+            "Venda suspensa",
+            f'"{rotulo}" foi suspensa. Use "Vendas Suspensas" pra '
+            "retomar de onde parou.",
+        )
+
+    def abrir_vendas_suspensas(self):
+
+        dialogo = VendasSuspensasDialog(self.vendas_suspensas, parent=self)
+
+        if dialogo.exec() != QDialog.Accepted or dialogo.indice_selecionado is None:
+            return
+
+        if dialogo.acao == "excluir":
+            del self.vendas_suspensas[dialogo.indice_selecionado]
+            self._atualizar_botao_retomar()
+            return
+
+        if self.itens:
+            QMessageBox.warning(
+                self,
+                "Aviso",
+                "Finalize, cancele ou suspenda a venda atual antes de "
+                "retomar outra.",
+            )
+            return
+
+        venda = self.vendas_suspensas.pop(dialogo.indice_selecionado)
+
+        self.itens = venda["itens"]
+        self.atualizar_tabela()
+
+        if venda["cliente_id"]:
+            self.definir_cliente({
+                "id": venda["cliente_id"],
+                "nome": venda["cliente_nome"],
+            })
+        else:
+            self.limpar_cliente()
+
+        self.campo_desconto.setText(venda["desconto_texto"])
+        self.campo_acrescimo.setText(venda["acrescimo_texto"])
+        self.bloco_ajuste.setVisible(
+            bool(venda["desconto_texto"] or venda["acrescimo_texto"])
+        )
+
+        self._atualizar_botao_retomar()
+
+    def _atualizar_botao_retomar(self):
+
+        total = len(self.vendas_suspensas)
+
+        self.bt_retomar.setText(
+            f"Vendas Suspensas ({total})" if total else "Vendas Suspensas"
+        )
+        self.bt_retomar.setEnabled(total > 0)
+
+    # ==================================================
+    # ORÇAMENTO — imprime/exporta o carrinho atual sem finalizar a
+    # venda. Não fica salvo nem listável em nenhum lugar: se virar
+    # venda de verdade, é só continuar normalmente e ir em "Pagar".
+    # ==================================================
+
+    def imprimir_orcamento(self):
+
+        if not self.itens:
+            QMessageBox.warning(
+                self, "Aviso", "Não há itens no carrinho pra gerar um orçamento."
+            )
+            return
+
+        documento = self._montar_documento_orcamento()
+
+        janela = QDialog(self)
+        janela.setWindowTitle("Orçamento")
+        janela.setFixedSize(360, 230)
+        janela.setStyleSheet(f"background:{tokens.FUNDO};")
+
+        layout = QVBoxLayout(janela)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(12)
+
+        lbl = QLabel(
+            "O orçamento não gera nenhuma venda — é só um documento "
+            "pra levar ou enviar ao cliente."
+        )
+        lbl.setWordWrap(True)
+        lbl.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
+        layout.addWidget(lbl)
+
+        bt_imprimir = BotaoPrimario("Imprimir", icone_nome="printer")
+        bt_imprimir.clicked.connect(
+            lambda: self._imprimir_documento(documento, janela)
+        )
+
+        bt_pdf = BotaoSecundario("Salvar PDF")
+        bt_pdf.clicked.connect(lambda: self._salvar_pdf_documento(documento))
+
+        bt_fechar = BotaoSecundario("Fechar")
+        bt_fechar.clicked.connect(janela.accept)
+
+        layout.addWidget(bt_imprimir)
+        layout.addWidget(bt_pdf)
+        layout.addWidget(bt_fechar)
+
+        janela.exec()
+
+    def _montar_documento_orcamento(self):
+
+        config = configuracoes()
+        nome_loja = config.get("nome_loja") or "Loja"
+
+        subtotal = sum(item["preco"] * item["quantidade"] for item in self.itens)
+        total = max(0.0, subtotal - self.desconto_valor + self.acrescimo_valor)
+
+        linhas_itens = "".join(
+            "<tr>"
+            f"<td style='padding:4px 8px;'>{item['nome']}</td>"
+            f"<td style='padding:4px 8px; text-align:center;'>{item['quantidade']}</td>"
+            f"<td style='padding:4px 8px; text-align:right;'>{_formatar_moeda(item['preco'])}</td>"
+            f"<td style='padding:4px 8px; text-align:right;'>"
+            f"{_formatar_moeda(item['preco'] * item['quantidade'])}</td>"
+            "</tr>"
+            for item in self.itens
+        )
+
+        cliente_linha = (
+            f"<p>Cliente: {self.cliente_nome}</p>" if self.cliente_nome else ""
+        )
+
+        html = f"""
+        <html>
+        <body style="font-family: Arial; font-size: 13px; color:#1E293B;">
+            <h2 style="margin-bottom:0;">{nome_loja}</h2>
+            <p style="color:#64748B; margin-top:2px;">
+                Orçamento — {datetime.now().strftime('%d/%m/%Y %H:%M')}
+            </p>
+            {cliente_linha}
+            <table style="width:100%; border-collapse:collapse; margin-top:12px;">
+                <tr style="background:#F1F5F9;">
+                    <th style="padding:4px 8px; text-align:left;">Produto</th>
+                    <th style="padding:4px 8px;">Qtd</th>
+                    <th style="padding:4px 8px; text-align:right;">Unitário</th>
+                    <th style="padding:4px 8px; text-align:right;">Subtotal</th>
+                </tr>
+                {linhas_itens}
+            </table>
+            <h3 style="text-align:right; margin-top:16px;">
+                Total: {_formatar_moeda(total)}
+            </h3>
+            <p style="color:#94A3B8; font-size:11px; margin-top:24px;">
+                Este orçamento não tem valor fiscal e não gera nenhuma venda.
+                Os valores podem mudar até a confirmação da compra.
+            </p>
+        </body>
+        </html>
+        """
+
+        documento = QTextDocument()
+        documento.setHtml(html)
+
+        return documento
+
+    def _imprimir_documento(self, documento, parent):
+
+        printer = QPrinter(QPrinter.HighResolution)
+        dialogo = QPrintDialog(printer, parent)
+
+        if dialogo.exec() != QPrintDialog.Accepted:
+            return
+
+        documento.print_(printer)
+
+    def _salvar_pdf_documento(self, documento):
+
+        caminho, _ = QFileDialog.getSaveFileName(
+            self, "Salvar Orçamento", "orcamento.pdf", "Arquivo PDF (*.pdf)",
+        )
+
+        if not caminho:
+            return
+
+        if not caminho.lower().endswith(".pdf"):
+            caminho += ".pdf"
+
+        printer = QPrinter(QPrinter.HighResolution)
+        printer.setOutputFormat(QPrinter.PdfFormat)
+        printer.setOutputFileName(caminho)
+
+        documento.print_(printer)
+
+        QMessageBox.information(
+            self, "Sucesso", "Orçamento salvo em PDF com sucesso."
+        )
+
+    # ==================================================
     # FINALIZAR VENDA (PAGAR - F3)
     # ==================================================
 
@@ -880,7 +1355,7 @@ class PDV(QWidget):
                 forma_pagamento=tela.forma_pagamento,
                 cliente_id=tela.cliente_id,
                 desconto=desconto_liquido,
-                observacao=None,
+                observacao=tela.observacao.text().strip() or None,
                 data_vencimento=None,
                 forma_pagamento_2=tela.forma_pagamento_2,
                 valor_forma_2=(

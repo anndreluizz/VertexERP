@@ -1,3 +1,5 @@
+import base64
+
 from sqlalchemy.orm import Session
 
 from app.schemas.cliente import ClienteUpdate
@@ -29,9 +31,14 @@ class ClienteService:
             endereco=dados.endereco,
             cidade=dados.cidade,
             estado=dados.estado,
+            data_nascimento=dados.data_nascimento,
+            limite_credito=dados.limite_credito,
             ativo=True
 
         )
+
+        if dados.foto_base64:
+            novo_cliente.foto = base64.b64decode(dados.foto_base64)
 
         return ClienteRepository.criar(db, novo_cliente)
 
@@ -58,8 +65,13 @@ class ClienteService:
         if not cliente:
             raise Exception("Cliente não encontrado.")
 
-        for campo, valor in dados.dict(exclude_unset=True).items():
+        campos = dados.dict(exclude_unset=True, exclude={"foto_base64"})
+
+        for campo, valor in campos.items():
             setattr(cliente, campo, valor)
+
+        if dados.foto_base64:
+            cliente.foto = base64.b64decode(dados.foto_base64)
 
         return ClienteRepository.atualizar(db, cliente)
 

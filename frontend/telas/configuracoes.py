@@ -1,4 +1,5 @@
 from PySide6.QtCore import Qt, QSize, Signal
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -9,9 +10,11 @@ from PySide6.QtWidgets import (
     QFrame,
     QStackedWidget,
     QMessageBox,
+    QKeySequenceEdit,
 )
 
-from services.api import configuracoes, atualizar_configuracoes
+from services.api import configuracoes, atualizar_configuracoes, me
+from services import preferencias_service
 from telas.gerenciar_usuarios import GerenciarUsuariosDialog
 
 from design import tokens
@@ -131,6 +134,7 @@ class Configuracoes(QWidget):
 
         self.bt_gerais = ItemMenuConfig("store", "Configurações Gerais")
         self.bt_pix = ItemMenuConfig("credit-card", "Pagamentos / PIX")
+        self.bt_atalhos = ItemMenuConfig("shopping-cart", "Atalhos do PDV")
 
         itens_futuros = [
             ItemMenuConfig("truck", "Lojas e Filiais", habilitado=False),
@@ -143,6 +147,7 @@ class Configuracoes(QWidget):
 
         submenu_layout.addWidget(self.bt_gerais)
         submenu_layout.addWidget(self.bt_pix)
+        submenu_layout.addWidget(self.bt_atalhos)
 
         for item in itens_futuros:
             submenu_layout.addWidget(item)
@@ -153,6 +158,7 @@ class Configuracoes(QWidget):
             lambda: self._selecionar_aba(0)
         )
         self.bt_pix.clicked.connect(lambda: self._selecionar_aba(1))
+        self.bt_atalhos.clicked.connect(lambda: self._selecionar_aba(2))
 
         corpo.addWidget(submenu_frame)
 
@@ -162,6 +168,7 @@ class Configuracoes(QWidget):
 
         self.paginas.addWidget(self._criar_pagina_gerais())
         self.paginas.addWidget(self._criar_pagina_pix())
+        self.paginas.addWidget(self._criar_pagina_atalhos())
 
         corpo.addWidget(self.paginas, stretch=1)
 
@@ -192,6 +199,7 @@ class Configuracoes(QWidget):
 
         self.bt_gerais.setChecked(indice == 0)
         self.bt_pix.setChecked(indice == 1)
+        self.bt_atalhos.setChecked(indice == 2)
 
         self.paginas.setCurrentIndex(indice)
 
@@ -264,6 +272,106 @@ class Configuracoes(QWidget):
         layout.addStretch()
 
         return pagina
+
+    def _criar_pagina_atalhos(self):
+
+        pagina = QWidget()
+        layout = QVBoxLayout(pagina)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(14)
+
+        lbl_secao = QLabel("ATALHOS DE TECLADO DO PDV")
+        lbl_secao.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.PRIMARIA};
+        """)
+        layout.addWidget(lbl_secao)
+
+        self.atalho_busca = self._campo_atalho(layout, "PESQUISAR PRODUTO (padrão: F1)")
+        self.atalho_cadastro = self._campo_atalho(layout, "CADASTRO RÁPIDO (padrão: F4)")
+        self.atalho_cancelar = self._campo_atalho(layout, "CANCELAR VENDA (padrão: Esc)")
+
+        dica = QLabel(
+            '"Pagar" continua fixo em F3 nesta versão. As mudanças '
+            "valem só pra o usuário logado, e aparecem na próxima vez "
+            "que o PDV for aberto."
+        )
+        dica.setWordWrap(True)
+        dica.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
+        layout.addWidget(dica)
+
+        bt_salvar_atalhos = BotaoSucesso("Salvar Atalhos")
+        bt_salvar_atalhos.setMinimumHeight(42)
+        bt_salvar_atalhos.clicked.connect(self.salvar_atalhos)
+        layout.addWidget(bt_salvar_atalhos)
+
+        layout.addStretch()
+
+        self._carregar_atalhos_ui()
+
+        return pagina
+
+    def _campo_atalho(self, layout, rotulo):
+
+        lbl = QLabel(rotulo)
+        lbl.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
+
+        campo = QKeySequenceEdit()
+        campo.setMinimumHeight(42)
+        campo.setStyleSheet(f"""
+            QKeySequenceEdit {{
+                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
+                background: {tokens.CARD};
+            }}
+        """)
+
+        layout.addWidget(lbl)
+        layout.addWidget(campo)
+
+        return campo
+
+    def _carregar_atalhos_ui(self):
+
+        usuario_id = (me() or {}).get("id")
+        salvo = preferencias_service.carregar(usuario_id, "pdv_atalhos", {}) or {}
+
+        self.atalho_busca.setKeySequence(QKeySequence(salvo.get("busca", "F1")))
+        self.atalho_cadastro.setKeySequence(
+            QKeySequence(salvo.get("cadastro_rapido", "F4"))
+        )
+        self.atalho_cancelar.setKeySequence(
+            QKeySequence(salvo.get("cancelar", "Esc"))
+        )
+
+    def salvar_atalhos(self):
+
+        teclas = {
+            "busca": self.atalho_busca.keySequence().toString() or "F1",
+            "cadastro_rapido": self.atalho_cadastro.keySequence().toString() or "F4",
+            "cancelar": self.atalho_cancelar.keySequence().toString() or "Esc",
+        }
+
+        if len(set(teclas.values())) < len(teclas):
+            QMessageBox.warning(
+                self, "Atenção", "Cada atalho precisa usar uma tecla diferente."
+            )
+            return
+
+        usuario_id = (me() or {}).get("id")
+        preferencias_service.salvar(usuario_id, "pdv_atalhos", teclas)
+
+        QMessageBox.information(
+            self,
+            "Salvo",
+            "Atalhos salvos. Vão valer na próxima vez que você abrir o PDV.",
+        )
 
     def _campo(self, layout, rotulo, placeholder):
 

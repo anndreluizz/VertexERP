@@ -26,6 +26,11 @@ from telas.cadastro_inicial import CadastroInicialWindow
 
 app = QApplication(sys.argv)
 
+# Nome de organização/aplicação usado pelo QSettings (preferencias_service)
+# pra resolver onde gravar o .ini de preferências locais.
+app.setOrganizationName("VertexERP")
+app.setApplicationName("VertexERP")
+
 # aplicar_tema cobre o que o setup manual antigo fazia (Fusion + paleta
 # clara, pra nao herdar o tema escuro do Windows) e adiciona a fonte
 # Inter e o QSS global do design system por cima.

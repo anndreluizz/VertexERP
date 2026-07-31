@@ -86,6 +86,12 @@ class Produto(Base):
         nullable=True
     )
 
+    favorito: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+    )
+
     @property
     def tem_foto(self) -> bool:
         return self.foto is not None

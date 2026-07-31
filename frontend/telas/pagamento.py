@@ -448,6 +448,32 @@ class PagamentoWindow(QDialog):
 
         dir_layout.addWidget(self.bloco_prazo)
 
+        # ---- observação (opcional) ----
+
+        lbl_obs_titulo = QLabel("OBSERVAÇÃO (OPCIONAL)")
+        lbl_obs_titulo.setStyleSheet(
+            "background:transparent; font-size:11px; "
+            "font-weight:bold; color:gray;"
+        )
+
+        self.observacao = QLineEdit()
+        self.observacao.setPlaceholderText(
+            "Ex.: cliente pediu embalagem pra presente"
+        )
+        self.observacao.setStyleSheet("""
+            QLineEdit {
+                background:white;
+                font-size:13px;
+                color:#202225;
+                border:1px solid #cccccc;
+                border-radius:8px;
+                padding:8px 10px;
+            }
+        """)
+
+        dir_layout.addWidget(lbl_obs_titulo)
+        dir_layout.addWidget(self.observacao)
+
         dir_layout.addStretch()
 
         self.bt_confirmar = QPushButton("CONFIRMAR VENDA")

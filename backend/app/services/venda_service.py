@@ -113,6 +113,7 @@ class VendaService:
 
             venda = Venda(
                 cliente_id=dados.cliente_id,
+                usuario_id=usuario_id,
                 observacao=dados.observacao,
                 desconto=float(dados.desconto),
                 forma_pagamento=forma_pagamento,

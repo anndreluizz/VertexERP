@@ -163,6 +163,7 @@ class Clientes(QWidget):
         self.clientes = []
         self.vendas_por_cliente = {}
         self.filtro_status = "TODOS"
+        self.ordenacao = "NOME"
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
@@ -289,6 +290,39 @@ class Clientes(QWidget):
         layout.addLayout(barra)
 
         # ======================
+        # ORDENAÇÃO (RANKING)
+        # ======================
+
+        barra_ordenacao = QHBoxLayout()
+        barra_ordenacao.setSpacing(10)
+
+        lbl_ordenar = QLabel("Ordenar por:")
+        lbl_ordenar.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+        """)
+        barra_ordenacao.addWidget(lbl_ordenar)
+
+        self.botoes_ordenacao = {}
+
+        for chave, rotulo in [("NOME", "Nome"), ("RANKING", "Maior Compra")]:
+
+            bt = QPushButton(rotulo)
+            bt.setCheckable(True)
+            bt.setCursor(Qt.PointingHandCursor)
+            bt.setMinimumHeight(34)
+            bt.clicked.connect(
+                lambda checked, c=chave: self.selecionar_ordenacao(c)
+            )
+
+            self.botoes_ordenacao[chave] = bt
+            barra_ordenacao.addWidget(bt)
+
+        barra_ordenacao.addStretch()
+
+        layout.addLayout(barra_ordenacao)
+
+        # ======================
         # GRID DE CLIENTES
         # ======================
 
@@ -329,6 +363,7 @@ class Clientes(QWidget):
         QShortcut(QKeySequence("Ctrl+N"), self, self.novo_cliente)
 
         self.selecionar_status("TODOS")
+        self.selecionar_ordenacao("NOME")
 
         self.carregar()
 
@@ -420,6 +455,41 @@ class Clientes(QWidget):
         self.filtrar_clientes()
 
     # ==========================================
+    # ORDENAÇÃO (RANKING DE CLIENTES)
+    # ==========================================
+
+    def selecionar_ordenacao(self, chave):
+        """'Maior Compra' reaproveita o mesmo dado já calculado em
+        vendas_por_cliente (usado no rodapé de cada ClienteCard) — é o
+        mesmo padrão client-side já usado no ranking de produtos, sem
+        endpoint novo."""
+
+        self.ordenacao = chave
+
+        for k, botao in self.botoes_ordenacao.items():
+
+            selecionado = k == chave
+
+            botao.setChecked(selecionado)
+
+            botao.setStyleSheet(f"""
+                QPushButton {{
+                    background: {tokens.PRIMARIA if selecionado else tokens.CARD};
+                    color: {"white" if selecionado else tokens.TEXTO};
+                    border-radius: {tokens.RADIUS_SM}px;
+                    border: 1px solid {tokens.PRIMARIA if selecionado else tokens.BORDA};
+                    font-weight: 700;
+                    font-size: {tokens.TAMANHO_SM}px;
+                    padding: 0 14px;
+                }}
+                QPushButton:hover {{
+                    background: {tokens.PRIMARIA_HOVER if selecionado else tokens.FUNDO};
+                }}
+            """)
+
+        self.filtrar_clientes()
+
+    # ==========================================
     # FILTRAR CLIENTES
     # ==========================================
 
@@ -454,6 +524,17 @@ class Clientes(QWidget):
                     filtrados.append(cliente)
 
             clientes = filtrados
+
+        if self.ordenacao == "RANKING":
+            clientes = sorted(
+                clientes,
+                key=lambda c: self.vendas_por_cliente.get(c["id"], 0),
+                reverse=True,
+            )
+        else:
+            clientes = sorted(
+                clientes, key=lambda c: (c.get("nome") or "").lower()
+            )
 
         self.preencher_grid(clientes)
 

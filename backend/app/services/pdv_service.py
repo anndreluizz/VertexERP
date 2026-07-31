@@ -12,6 +12,8 @@ def _para_dict(produto: Produto):
         "nome": produto.nome,
         "preco": produto.preco_venda,
         "estoque": produto.estoque,
+        "tem_foto": produto.tem_foto,
+        "favorito": produto.favorito,
     }
 
 

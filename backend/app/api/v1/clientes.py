@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.database.session import SessionLocal
 from app.schemas.cliente import (
     ClienteCreate,
     ClienteUpdate,
-    ClienteResponse
+    ClienteResponse,
+    ClienteObservacaoCreate,
+    ClienteObservacaoResponse,
 )
 from app.services.cliente_service import ClienteService
+from app.services.cliente_observacao_service import ClienteObservacaoService
 from app.auth.dependencies import get_current_user
 
 router = APIRouter(
@@ -59,6 +62,66 @@ def buscar_cliente(
         )
 
     return cliente
+
+
+@router.get("/{cliente_id}/foto")
+def obter_foto_cliente(
+    cliente_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    cliente = ClienteService.buscar_por_id(db, cliente_id)
+
+    if not cliente or not cliente.foto:
+        raise HTTPException(
+            status_code=404,
+            detail="Cliente sem foto cadastrada."
+        )
+
+    return Response(content=cliente.foto, media_type="image/jpeg")
+
+
+@router.get(
+    "/{cliente_id}/observacoes",
+    response_model=list[ClienteObservacaoResponse],
+)
+def listar_observacoes(
+    cliente_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return ClienteObservacaoService.listar(db, cliente_id)
+
+
+@router.post(
+    "/{cliente_id}/observacoes",
+    response_model=ClienteObservacaoResponse,
+)
+def criar_observacao(
+    cliente_id: int,
+    dados: ClienteObservacaoCreate,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        return ClienteObservacaoService.criar(
+            db, cliente_id, dados, usuario.id
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{cliente_id}/observacoes/{observacao_id}")
+def excluir_observacao(
+    cliente_id: int,
+    observacao_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        return ClienteObservacaoService.excluir(db, observacao_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.put("/{cliente_id}", response_model=ClienteResponse)

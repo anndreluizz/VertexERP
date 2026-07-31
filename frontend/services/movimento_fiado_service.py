@@ -21,6 +21,16 @@ def listar_movimentos_cliente(cliente_id):
     return response.json()
 
 
+def listar_movimentos():
+
+    response = get("/fiado/movimentos")
+
+    if response.status_code != 200:
+        return []
+
+    return response.json()
+
+
 def registrar_pagamento(
     cliente_id,
     valor,

@@ -1,8 +1,11 @@
 import csv
 from datetime import date, datetime
 
-from PySide6.QtCore import Qt, QDate
-from PySide6.QtGui import QColor, QFont, QPageSize, QTextDocument
+from PySide6.QtCore import Qt, QDate, QUrl
+from PySide6.QtGui import (
+    QColor, QDesktopServices, QFont, QPageSize, QPainter, QPainterPath,
+    QPixmap, QTextDocument,
+)
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (
     QDialog,
@@ -15,6 +18,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QFrame,
     QFileDialog,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
@@ -30,9 +34,15 @@ from services.movimento_fiado_service import (
     registrar_pagamento,
     lancar_fiado_manual,
 )
+from services.cliente_service import (
+    obter_foto_cliente,
+    listar_observacoes_cliente,
+    criar_observacao_cliente,
+    excluir_observacao_cliente,
+)
 
 from design import tokens
-from design.icons import icone
+from design.icons import icone, icone_pixmap
 from design.widgets import (
     Avatar,
     Badge,
@@ -44,6 +54,34 @@ from design.widgets import (
     Card,
     SecaoCard,
 )
+
+
+def _pixmap_circular(pixmap, tamanho):
+    """Recorta um QPixmap qualquer num círculo — usado pra mostrar a foto
+    do cliente no lugar das iniciais do Avatar, sem perder o formato
+    redondo padrão do design system (setStyleSheet com border-radius não
+    recorta o conteúdo de um pixmap, só o fundo do widget)."""
+
+    escalado = pixmap.scaled(
+        tamanho, tamanho, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+    )
+
+    resultado = QPixmap(tamanho, tamanho)
+    resultado.fill(Qt.transparent)
+
+    pintor = QPainter(resultado)
+    pintor.setRenderHint(QPainter.Antialiasing)
+
+    caminho = QPainterPath()
+    caminho.addEllipse(0, 0, tamanho, tamanho)
+    pintor.setClipPath(caminho)
+
+    x = (tamanho - escalado.width()) // 2
+    y = (tamanho - escalado.height()) // 2
+    pintor.drawPixmap(x, y, escalado)
+    pintor.end()
+
+    return resultado
 
 
 FORMAS_PAGAMENTO = [
@@ -202,6 +240,29 @@ class LancarFiadoDialog(QDialog):
                 self, "Atenção", "Informe um valor maior que zero."
             )
             return
+
+        limite = self.cliente.get("limite_credito")
+
+        if limite is not None:
+
+            saldo_atual = saldo_cliente(self.cliente["id"])
+            saldo_projetado = saldo_atual + valor
+
+            if saldo_projetado > limite:
+
+                resposta = QMessageBox.warning(
+                    self,
+                    "Limite de crédito",
+                    f"Esse lançamento deixa o saldo devedor em "
+                    f"{_formatar_moeda(saldo_projetado)}, acima do limite "
+                    f"de crédito cadastrado ({_formatar_moeda(limite)}).\n\n"
+                    "Deseja lançar mesmo assim?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No,
+                )
+
+                if resposta != QMessageBox.Yes:
+                    return
 
         itens = self.itens.text().strip() or None
 
@@ -516,11 +577,107 @@ class FichaClienteDialog(QDialog):
         col_texto.addLayout(linha_nome)
         col_texto.addWidget(self.lbl_subtitulo)
 
+        linha_contato = QHBoxLayout()
+        linha_contato.setSpacing(8)
+
+        self.bt_whatsapp = self._botao_contato("WhatsApp", self.abrir_whatsapp)
+        self.bt_ligar = self._botao_contato("Ligar", self.abrir_ligacao)
+        self.bt_email = self._botao_contato("E-mail", self.abrir_email)
+        self.bt_mapa = self._botao_contato("Mapa", self.abrir_mapa)
+
+        linha_contato.addWidget(self.bt_whatsapp)
+        linha_contato.addWidget(self.bt_ligar)
+        linha_contato.addWidget(self.bt_email)
+        linha_contato.addWidget(self.bt_mapa)
+        linha_contato.addStretch()
+
+        col_texto.addSpacing(6)
+        col_texto.addLayout(linha_contato)
+
         layout.addLayout(col_texto, stretch=1)
 
         self._atualizar_cabecalho(self.cliente)
+        self._atualizar_avatar(self.cliente)
 
         return cabecalho
+
+    def _botao_contato(self, texto, callback):
+        """Botão de contato rápido só com texto (sem ícone) — os ícones
+        'phone'/'map-pin' não existem no pacote Lucide já baixado, e a
+        decisão foi não baixar novos ícones pra isso. Estilo "vidro"
+        sobre o fundo escuro do cabeçalho, já que o BotaoSecundario
+        padrão foi desenhado pra fundo claro."""
+
+        botao = QPushButton(texto)
+        botao.setCursor(Qt.PointingHandCursor)
+        botao.setFixedHeight(28)
+        botao.clicked.connect(callback)
+        botao.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(255,255,255,0.08);
+                color: {tokens.TEXTO_SIDEBAR};
+                border: 1px solid rgba(255,255,255,0.18);
+                border-radius: {tokens.RADIUS_SM}px;
+                font-size: {tokens.TAMANHO_XS}px;
+                font-weight: 600;
+                padding: 0 12px;
+            }}
+            QPushButton:hover {{
+                background: rgba(255,255,255,0.16);
+            }}
+            QPushButton:disabled {{
+                color: {tokens.TEXTO_SIDEBAR_APAGADO};
+                border-color: rgba(255,255,255,0.08);
+            }}
+        """)
+        return botao
+
+    def _telefone_digitos(self):
+        return "".join(c for c in (self.cliente.get("telefone") or "") if c.isdigit())
+
+    def abrir_whatsapp(self):
+
+        digitos = self._telefone_digitos()
+
+        if not digitos:
+            return
+
+        if len(digitos) <= 11:
+            digitos = "55" + digitos
+
+        QDesktopServices.openUrl(QUrl(f"https://wa.me/{digitos}"))
+
+    def abrir_ligacao(self):
+
+        digitos = self._telefone_digitos()
+
+        if digitos:
+            QDesktopServices.openUrl(QUrl(f"tel:{digitos}"))
+
+    def abrir_email(self):
+
+        email = self.cliente.get("email")
+
+        if email:
+            QDesktopServices.openUrl(QUrl(f"mailto:{email}"))
+
+    def abrir_mapa(self):
+
+        from urllib.parse import quote
+
+        partes = [
+            self.cliente.get("endereco"),
+            self.cliente.get("cidade"),
+            self.cliente.get("estado"),
+        ]
+        endereco = ", ".join(p for p in partes if p)
+
+        if not endereco:
+            return
+
+        QDesktopServices.openUrl(
+            QUrl(f"https://www.google.com/maps/search/?api=1&query={quote(endereco)}")
+        )
 
     def _construir_card_financeiro(self):
 
@@ -579,7 +736,10 @@ class FichaClienteDialog(QDialog):
             grid_stats, 1, 0, "ÚLTIMO PAGAMENTO"
         )
         self.lbl_cliente_desde = self._stat_pequena(
-            grid_stats, 1, 1, "CLIENTE DESDE*"
+            grid_stats, 1, 1, "CLIENTE DESDE"
+        )
+        self.lbl_score = self._stat_pequena(
+            grid_stats, 1, 2, "PERFIL"
         )
 
         layout.addLayout(grid_stats, stretch=1)
@@ -686,13 +846,13 @@ class FichaClienteDialog(QDialog):
 
         layout.addSpacing(12)
 
-        self.tabela_historico = self._construir_tabela()
+        self.pagina_historico = self._construir_timeline()
         self.tabela_compras = self._construir_tabela()
         self.tabela_pagamentos = self._construir_tabela()
         self.pagina_observacoes = self._construir_pagina_observacoes()
 
         self.paginas_aba = [
-            self.tabela_historico,
+            self.pagina_historico,
             self.tabela_compras,
             self.tabela_pagamentos,
             self.pagina_observacoes,
@@ -736,21 +896,160 @@ class FichaClienteDialog(QDialog):
         pagina.setStyleSheet("background:transparent;")
 
         layout = QVBoxLayout(pagina)
-        layout.setAlignment(Qt.AlignCenter)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
 
-        lbl = QLabel(
-            "Observações por cliente ainda estão em desenvolvimento."
+        linha_nova = QHBoxLayout()
+        linha_nova.setSpacing(8)
+
+        self.campo_nova_observacao = CampoTexto(
+            "Escreva uma observação sobre o cliente..."
         )
-        lbl.setAlignment(Qt.AlignCenter)
-        lbl.setWordWrap(True)
-        lbl.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_BASE}px;
-        """)
 
-        layout.addWidget(lbl)
+        bt_adicionar = BotaoPrimario("Adicionar")
+        bt_adicionar.setFixedHeight(44)
+        bt_adicionar.setAutoDefault(False)
+        bt_adicionar.clicked.connect(self.adicionar_observacao)
+
+        linha_nova.addWidget(self.campo_nova_observacao, stretch=1)
+        linha_nova.addWidget(bt_adicionar)
+
+        layout.addLayout(linha_nova)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
+
+        conteudo = QFrame()
+        conteudo.setStyleSheet("background:transparent;")
+
+        self.layout_observacoes = QVBoxLayout(conteudo)
+        self.layout_observacoes.setContentsMargins(0, 0, 6, 0)
+        self.layout_observacoes.setSpacing(8)
+        self.layout_observacoes.addStretch()
+
+        scroll.setWidget(conteudo)
+        layout.addWidget(scroll, stretch=1)
 
         return pagina
+
+    def _preencher_observacoes(self, observacoes):
+
+        while self.layout_observacoes.count():
+            item = self.layout_observacoes.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        if not observacoes:
+            vazio = QLabel("Nenhuma observação registrada ainda.")
+            vazio.setAlignment(Qt.AlignCenter)
+            vazio.setStyleSheet(f"""
+                background:transparent; color:{tokens.TEXTO_TERCIARIO};
+                font-size:{tokens.TAMANHO_BASE}px; padding:20px;
+            """)
+            self.layout_observacoes.addWidget(vazio)
+            self.layout_observacoes.addStretch()
+            return
+
+        for obs in observacoes:
+            self.layout_observacoes.addWidget(self._linha_observacao(obs))
+
+        self.layout_observacoes.addStretch()
+
+    def _linha_observacao(self, obs):
+
+        linha = Card()
+
+        layout = QVBoxLayout(linha)
+        layout.setContentsMargins(14, 10, 14, 10)
+        layout.setSpacing(6)
+
+        cabecalho = QHBoxLayout()
+
+        data = _parse_data(obs.get("criado_em"))
+        texto_data = data.strftime("%d/%m/%Y %H:%M") if data else "—"
+
+        lbl_data = QLabel(texto_data)
+        lbl_data.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+        """)
+
+        bt_excluir = QPushButton("Excluir")
+        bt_excluir.setCursor(Qt.PointingHandCursor)
+        bt_excluir.setAutoDefault(False)
+        bt_excluir.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; border:none; color:{tokens.ERRO};
+                font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+            }}
+            QPushButton:hover {{ text-decoration: underline; }}
+        """)
+        bt_excluir.clicked.connect(
+            lambda _, oid=obs["id"]: self.excluir_observacao(oid)
+        )
+
+        cabecalho.addWidget(lbl_data)
+        cabecalho.addStretch()
+        cabecalho.addWidget(bt_excluir)
+
+        lbl_texto = QLabel(obs.get("texto", ""))
+        lbl_texto.setWordWrap(True)
+        lbl_texto.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_MD}px;
+        """)
+
+        layout.addLayout(cabecalho)
+        layout.addWidget(lbl_texto)
+
+        return linha
+
+    def _carregar_observacoes(self):
+        observacoes = listar_observacoes_cliente(self.cliente["id"])
+        self._preencher_observacoes(observacoes)
+
+    def adicionar_observacao(self):
+
+        texto = self.campo_nova_observacao.text().strip()
+
+        if not texto:
+            return
+
+        response = criar_observacao_cliente(self.cliente["id"], texto)
+
+        if response.status_code in (200, 201):
+            self.campo_nova_observacao.clear()
+            self._carregar_observacoes()
+        else:
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+
+            QMessageBox.critical(self, "Erro", str(erro))
+
+    def excluir_observacao(self, observacao_id):
+
+        resposta = QMessageBox.question(
+            self, "Excluir Observação", "Deseja excluir esta observação?"
+        )
+
+        if resposta != QMessageBox.Yes:
+            return
+
+        response = excluir_observacao_cliente(self.cliente["id"], observacao_id)
+
+        if response.status_code == 200:
+            self._carregar_observacoes()
+        else:
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+
+            QMessageBox.critical(self, "Erro", str(erro))
 
     def _construir_tabela(self):
 
@@ -796,6 +1095,145 @@ class FichaClienteDialog(QDialog):
         """)
 
         return tabela
+
+    def _construir_timeline(self):
+        """Aba 'Histórico Financeiro' como linha do tempo vertical, em
+        vez de tabela — os dados já vêm calculados cronologicamente
+        (ver carregar()), isso só troca a forma de exibir."""
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
+
+        conteudo = QFrame()
+        conteudo.setStyleSheet("background:transparent;")
+
+        self.layout_timeline = QVBoxLayout(conteudo)
+        self.layout_timeline.setContentsMargins(0, 0, 6, 0)
+        self.layout_timeline.setSpacing(8)
+        self.layout_timeline.addStretch()
+
+        scroll.setWidget(conteudo)
+
+        return scroll
+
+    def _preencher_timeline(self, historico):
+
+        while self.layout_timeline.count():
+            item = self.layout_timeline.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        if not historico:
+            vazio = QLabel("Nenhuma movimentação registrada ainda.")
+            vazio.setAlignment(Qt.AlignCenter)
+            vazio.setStyleSheet(f"""
+                background:transparent; color:{tokens.TEXTO_TERCIARIO};
+                font-size:{tokens.TAMANHO_BASE}px; padding:20px;
+            """)
+            self.layout_timeline.addWidget(vazio)
+            self.layout_timeline.addStretch()
+            return
+
+        for mov, saldo_apos in historico:
+            self.layout_timeline.addWidget(self._linha_timeline(mov, saldo_apos))
+
+        self.layout_timeline.addStretch()
+
+    def _linha_timeline(self, mov, saldo_apos):
+
+        tipo = mov.get("tipo", "")
+        estorno = self._e_estorno(mov)
+
+        if estorno:
+            cor = tokens.ERRO
+            icone_nome = "refresh-cw"
+        elif tipo == "COMPRA":
+            cor = tokens.PRIMARIA
+            icone_nome = "shopping-cart"
+        else:
+            cor = tokens.SECUNDARIA
+            icone_nome = "check"
+
+        linha = QFrame()
+        linha.setStyleSheet(f"""
+            background: {tokens.CARD};
+            border: 1px solid {tokens.BORDA};
+            border-left: 3px solid {cor};
+            border-radius: {tokens.RADIUS_SM}px;
+        """)
+
+        layout = QHBoxLayout(linha)
+        layout.setContentsMargins(14, 10, 14, 10)
+        layout.setSpacing(12)
+
+        lbl_icone = QLabel()
+        lbl_icone.setPixmap(icone_pixmap(icone_nome, cor=cor, tamanho=18))
+        lbl_icone.setStyleSheet("background:transparent; border:none;")
+        layout.addWidget(lbl_icone, 0, Qt.AlignTop)
+
+        col_texto = QVBoxLayout()
+        col_texto.setSpacing(2)
+
+        data = str(mov.get("data", ""))
+        if "T" in data:
+            data = data.replace("T", " ")[:16]
+
+        lbl_data = QLabel(data)
+        lbl_data.setStyleSheet(f"""
+            background:transparent; border:none; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+        """)
+
+        lbl_descricao = QLabel(self._descricao_com_itens(mov))
+        lbl_descricao.setWordWrap(True)
+        lbl_descricao.setStyleSheet(f"""
+            background:transparent; border:none; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_MD}px; font-weight:600;
+        """)
+
+        col_texto.addWidget(lbl_data)
+        col_texto.addWidget(lbl_descricao)
+
+        layout.addLayout(col_texto, stretch=1)
+
+        forma = mov.get("forma_pagamento")
+
+        if forma:
+            texto_forma = NOMES_FORMA_FIADO.get(forma, forma)
+            layout.addWidget(Badge(texto_forma, "neutro"), 0, Qt.AlignTop)
+
+        col_valor = QVBoxLayout()
+        col_valor.setSpacing(2)
+
+        valor = float(mov.get("valor", 0) or 0)
+        texto_valor = (
+            f"+ {_formatar_moeda(valor)}"
+            if tipo == "COMPRA"
+            else f"- {_formatar_moeda(valor)}"
+        )
+
+        lbl_valor = QLabel(texto_valor)
+        lbl_valor.setAlignment(Qt.AlignRight)
+        lbl_valor.setStyleSheet(f"""
+            background:transparent; border:none; color:{cor};
+            font-size:{tokens.TAMANHO_MD}px; font-weight:800;
+        """)
+
+        lbl_saldo = QLabel(f"Saldo: {_formatar_moeda(saldo_apos)}")
+        lbl_saldo.setAlignment(Qt.AlignRight)
+        lbl_saldo.setStyleSheet(f"""
+            background:transparent; border:none; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px;
+        """)
+
+        col_valor.addWidget(lbl_valor)
+        col_valor.addWidget(lbl_saldo)
+
+        layout.addLayout(col_valor)
+
+        return linha
 
     def _construir_painel_lateral(self):
 
@@ -916,6 +1354,27 @@ class FichaClienteDialog(QDialog):
 
         self.lbl_subtitulo.setText(detalhes)
 
+        self.bt_whatsapp.setEnabled(bool(cliente.get("telefone")))
+        self.bt_ligar.setEnabled(bool(cliente.get("telefone")))
+        self.bt_email.setEnabled(bool(cliente.get("email")))
+        self.bt_mapa.setEnabled(bool(cliente.get("endereco")))
+
+    def _atualizar_avatar(self, cliente):
+
+        if not cliente.get("tem_foto"):
+            return
+
+        foto_bytes = obter_foto_cliente(cliente["id"])
+
+        if not foto_bytes:
+            return
+
+        pixmap = QPixmap()
+        pixmap.loadFromData(foto_bytes)
+
+        self.avatar.setStyleSheet("background:transparent;")
+        self.avatar.setPixmap(_pixmap_circular(pixmap, self.avatar.width()))
+
     def editar_cliente(self):
 
         from telas.cadastro_cliente import CadastroClienteDialog
@@ -928,6 +1387,7 @@ class FichaClienteDialog(QDialog):
         if dialogo.cliente_salvo:
             self.cliente = dialogo.cliente_salvo
             self._atualizar_cabecalho(self.cliente)
+            self._atualizar_avatar(self.cliente)
 
     def excluir_cliente_atual(self):
 
@@ -1033,7 +1493,7 @@ class FichaClienteDialog(QDialog):
 
         self._movimentos = historico_calculado
 
-        self._preencher_tabela(self.tabela_historico, historico_calculado)
+        self._preencher_timeline(historico_calculado)
         self._preencher_tabela(
             self.tabela_compras,
             [h for h in historico_calculado if h[0].get("tipo") == "COMPRA"],
@@ -1044,6 +1504,7 @@ class FichaClienteDialog(QDialog):
         )
 
         self._atualizar_stats(movimentos_cron, saldo)
+        self._carregar_observacoes()
 
     def _preencher_tabela(self, tabela, historico):
 
@@ -1100,6 +1561,29 @@ class FichaClienteDialog(QDialog):
             item_saldo.setForeground(QColor(tokens.TEXTO))
             tabela.setItem(linha, 5, item_saldo)
 
+    def _perfil_cliente(self, qtd_compras, saldo_atual, movimentos_cron):
+        """Heurística simples e transparente — não um score numérico
+        inventado, já que não existe formula nenhuma de crédito
+        combinada hoje. Baseada em frequência de compras, saldo atual e
+        há quanto tempo o saldo está parado (pontualidade), sempre
+        recalculada na hora a partir do histórico real — o mesmo
+        espírito do Ticket Médio, que já é calculado assim."""
+
+        if qtd_compras == 0:
+            return "Cliente novo"
+
+        if saldo_atual <= 0.009:
+            return "Ótimo pagador" if qtd_compras >= 3 else "Bom pagador"
+
+        ultimo = movimentos_cron[-1] if movimentos_cron else None
+        data_ultimo = _parse_data(ultimo.get("data")) if ultimo else None
+        dias_parado = (datetime.now() - data_ultimo).days if data_ultimo else None
+
+        if dias_parado is not None and dias_parado > 60:
+            return "Atenção"
+
+        return "Em aberto"
+
     def _atualizar_stats(self, movimentos_cron, saldo_atual):
 
         compras = [m for m in movimentos_cron if m.get("tipo") == "COMPRA"]
@@ -1115,7 +1599,6 @@ class FichaClienteDialog(QDialog):
 
         ultima_compra = compras[-1] if compras else None
         ultimo_pagamento = pagamentos[-1] if pagamentos else None
-        primeiro_movimento = movimentos_cron[0] if movimentos_cron else None
 
         def _data_curta(mov):
             if not mov:
@@ -1123,12 +1606,19 @@ class FichaClienteDialog(QDialog):
             data = _parse_data(mov.get("data"))
             return data.strftime("%d/%m/%Y") if data else "—"
 
+        cliente_desde = _parse_data(self.cliente.get("criado_em"))
+
         # card financeiro
         self.lbl_total_comprado.setText(_formatar_moeda(total_comprado))
         self.lbl_qtd_compras.setText(str(qtd_compras))
         self.lbl_ultima_compra.setText(_data_curta(ultima_compra))
         self.lbl_ultimo_pagamento.setText(_data_curta(ultimo_pagamento))
-        self.lbl_cliente_desde.setText(_data_curta(primeiro_movimento))
+        self.lbl_cliente_desde.setText(
+            cliente_desde.strftime("%d/%m/%Y") if cliente_desde else "—"
+        )
+        self.lbl_score.setText(
+            self._perfil_cliente(qtd_compras, saldo_atual, movimentos_cron)
+        )
 
         if saldo_atual > 0 and movimentos_cron:
             ultimo = movimentos_cron[-1]
@@ -1231,6 +1721,21 @@ class FichaClienteDialog(QDialog):
             "Nenhuma movimentação registrada.</td></tr>"
         )
 
+        observacoes = listar_observacoes_cliente(self.cliente["id"])
+
+        linhas_observacoes = "".join(
+            f"<p style='margin:4px 0;'>"
+            f"<b>{(_parse_data(obs.get('criado_em')) or datetime.now()).strftime('%d/%m/%Y')}:</b> "
+            f"{obs.get('texto', '')}</p>"
+            for obs in observacoes
+        )
+
+        bloco_observacoes = (
+            f"<h3>Observações</h3>{linhas_observacoes}"
+            if linhas_observacoes
+            else ""
+        )
+
         return f"""
         <div style="text-align:center;">
             <h2 style="margin-bottom:0;">{nome_loja}</h2>
@@ -1251,6 +1756,7 @@ class FichaClienteDialog(QDialog):
             </tr>
             {linhas_html}
         </table>
+        {bloco_observacoes}
         <hr>
         <table width="100%">
             <tr>

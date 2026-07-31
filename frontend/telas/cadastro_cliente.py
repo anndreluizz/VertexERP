@@ -1,16 +1,41 @@
-from PySide6.QtCore import Qt
+import base64
+
+from PySide6.QtCore import Qt, QDate
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
-    QPushButton,
+    QDateEdit,
+    QCheckBox,
     QFrame,
+    QScrollArea,
+    QWidget,
+    QFileDialog,
     QMessageBox,
 )
 
-from services.cliente_service import cadastrar_cliente, atualizar_cliente
+from design import tokens
+from design.widgets import CampoTexto, BotaoPrimario, BotaoSecundario
+from services.cliente_service import (
+    cadastrar_cliente,
+    atualizar_cliente,
+    obter_foto_cliente,
+)
+
+
+def _parse_valor_opcional(texto):
+
+    texto = (texto or "").strip()
+
+    if not texto:
+        return None
+
+    try:
+        return max(0.0, float(texto.replace(".", "").replace(",", ".")))
+    except ValueError:
+        return None
 
 
 class CadastroClienteDialog(QDialog):
@@ -21,14 +46,14 @@ class CadastroClienteDialog(QDialog):
 
         self.cliente = cliente
         self.cliente_salvo = None
+        self.foto_bytes = None
 
         editando = cliente is not None
 
-        self.setWindowTitle(
-            "Editar Cliente" if editando else "+ Novo Cliente"
-        )
-        self.setFixedSize(420, 480)
-        self.setStyleSheet("background:white;")
+        self.setWindowTitle("Editar Cliente" if editando else "Novo Cliente")
+        self.setFixedWidth(460)
+        self.resize(460, 740)
+        self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
@@ -39,29 +64,27 @@ class CadastroClienteDialog(QDialog):
         # ======================
 
         cabecalho = QFrame()
-        cabecalho.setStyleSheet("background:#202225;")
-        cabecalho.setFixedHeight(70)
+        cabecalho.setStyleSheet(f"background:{tokens.SIDEBAR};")
 
         cab_layout = QVBoxLayout(cabecalho)
-        cab_layout.setContentsMargins(24, 12, 24, 12)
+        cab_layout.setContentsMargins(24, 20, 24, 20)
         cab_layout.setSpacing(2)
 
-        titulo = QLabel(
-            "EDITAR CLIENTE" if editando else "+ NOVO CLIENTE"
-        )
-        titulo.setStyleSheet(
-            "background:transparent; color:white; "
-            "font-size:16px; font-weight:bold;"
-        )
+        titulo = QLabel("EDITAR CLIENTE" if editando else "+ NOVO CLIENTE")
+        titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_CLARO};
+            font-size:{tokens.TAMANHO_LG}px; font-weight:800;
+        """)
 
         subtitulo = QLabel(
             "Atualize os dados do cliente"
             if editando
             else "Cadastre o cliente pra liberar o fiado dele"
         )
-        subtitulo.setStyleSheet(
-            "background:transparent; color:#aaaaaa; font-size:11px;"
-        )
+        subtitulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SIDEBAR_APAGADO};
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
 
         cab_layout.addWidget(titulo)
         cab_layout.addWidget(subtitulo)
@@ -69,71 +92,129 @@ class CadastroClienteDialog(QDialog):
         raiz.addWidget(cabecalho)
 
         # ======================
-        # CORPO
+        # CORPO (rolável)
         # ======================
 
-        corpo = QVBoxLayout()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
+
+        corpo_widget = QWidget()
+        corpo_widget.setStyleSheet("background:transparent;")
+
+        corpo = QVBoxLayout(corpo_widget)
         corpo.setContentsMargins(24, 20, 24, 20)
         corpo.setSpacing(14)
 
+        # ---- foto ----
+
+        linha_foto = QHBoxLayout()
+        linha_foto.setSpacing(14)
+
+        self.lbl_avatar = QLabel()
+        self.lbl_avatar.setFixedSize(64, 64)
+        self.lbl_avatar.setAlignment(Qt.AlignCenter)
+        self._exibir_avatar_padrao()
+
+        bt_foto = BotaoSecundario("Alterar Foto")
+        bt_foto.clicked.connect(self.escolher_foto)
+
+        linha_foto.addWidget(self.lbl_avatar)
+        linha_foto.addWidget(bt_foto)
+        linha_foto.addStretch()
+
+        corpo.addLayout(linha_foto)
+
         self.nome = self._campo(corpo, "NOME", "Nome completo")
-        self.whatsapp = self._campo(
-            corpo, "WHATSAPP", "(00) 00000-0000"
+        self.whatsapp = self._campo(corpo, "WHATSAPP", "(00) 00000-0000")
+        self.cpf = self._campo(corpo, "CPF/CNPJ", "000.000.000-00")
+        self.email = self._campo(corpo, "E-MAIL", "email@exemplo.com")
+        self.endereco = self._campo(corpo, "ENDEREÇO", "Rua, número, bairro")
+        self.cidade = self._campo(corpo, "CIDADE", "Cidade")
+        self.estado = self._campo(corpo, "ESTADO (UF)", "Ex.: SP")
+
+        # ---- data de nascimento (opcional) ----
+
+        linha_nascimento = QHBoxLayout()
+        linha_nascimento.setSpacing(10)
+
+        col_nascimento = QVBoxLayout()
+        col_nascimento.setSpacing(4)
+
+        lbl_nascimento = QLabel("DATA DE NASCIMENTO")
+        lbl_nascimento.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
+
+        self.data_nascimento = QDateEdit()
+        self.data_nascimento.setCalendarPopup(True)
+        self.data_nascimento.setDisplayFormat("dd/MM/yyyy")
+        self.data_nascimento.setDate(QDate(2000, 1, 1))
+        self.data_nascimento.setMinimumHeight(44)
+        self.data_nascimento.setEnabled(False)
+        self.data_nascimento.setStyleSheet(f"""
+            QDateEdit {{
+                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
+                background: {tokens.CARD};
+            }}
+            QDateEdit:disabled {{ background: {tokens.FUNDO}; color: {tokens.TEXTO_TERCIARIO}; }}
+        """)
+
+        col_nascimento.addWidget(lbl_nascimento)
+        col_nascimento.addWidget(self.data_nascimento)
+
+        self.chk_sem_nascimento = QCheckBox("Não informar")
+        self.chk_sem_nascimento.setChecked(True)
+        self.chk_sem_nascimento.toggled.connect(
+            lambda marcado: self.data_nascimento.setEnabled(not marcado)
         )
-        self.cpf = self._campo(corpo, "CPF", "000.000.000-00")
-        self.endereco = self._campo(
-            corpo, "ENDEREÇO", "Rua, número, bairro"
+
+        linha_nascimento.addLayout(col_nascimento, stretch=1)
+        linha_nascimento.addWidget(self.chk_sem_nascimento, 0, Qt.AlignBottom)
+
+        corpo.addLayout(linha_nascimento)
+
+        self.limite_credito = self._campo(
+            corpo, "LIMITE DE CRÉDITO NO FIADO (opcional)", "Ex.: 200,00"
         )
+
+        dica_limite = QLabel(
+            "Deixe em branco pra não definir limite. Ao ultrapassar, o "
+            "sistema só avisa — não bloqueia a venda."
+        )
+        dica_limite.setWordWrap(True)
+        dica_limite.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
+        corpo.addWidget(dica_limite)
 
         corpo.addStretch()
 
-        raiz.addLayout(corpo)
+        scroll.setWidget(corpo_widget)
+        raiz.addWidget(scroll, stretch=1)
 
         # ======================
         # RODAPÉ
         # ======================
 
         rodape = QFrame()
-        rodape.setStyleSheet(
-            "background:#f4f5f7; border-top:1px solid #e0e0e0;"
-        )
+        rodape.setStyleSheet(f"""
+            background:{tokens.CARD}; border-top:1px solid {tokens.BORDA};
+        """)
 
         rodape_layout = QHBoxLayout(rodape)
         rodape_layout.setContentsMargins(24, 14, 24, 14)
         rodape_layout.setSpacing(10)
 
-        bt_cancelar = QPushButton("Cancelar")
-        bt_cancelar.setMinimumHeight(46)
-        bt_cancelar.setAutoDefault(False)
-        bt_cancelar.setStyleSheet("""
-            QPushButton {
-                background:white;
-                color:#202225;
-                border:1px solid #cccccc;
-                border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#e8e8e8;
-            }
-        """)
+        bt_cancelar = BotaoSecundario("Cancelar")
         bt_cancelar.clicked.connect(self.reject)
 
-        self.bt_salvar = QPushButton(
+        self.bt_salvar = BotaoPrimario(
             "Salvar Alterações" if editando else "Cadastrar Cliente"
         )
-        self.bt_salvar.setMinimumHeight(46)
-        self.bt_salvar.setAutoDefault(False)
-        self.bt_salvar.setStyleSheet("""
-            QPushButton {
-                background:#2E7D32;
-                color:white;
-                font-weight:bold;
-                border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#1B5E20;
-            }
-        """)
         self.bt_salvar.clicked.connect(self.salvar)
 
         rodape_layout.addWidget(bt_cancelar)
@@ -151,38 +232,91 @@ class CadastroClienteDialog(QDialog):
     def _campo(self, layout, rotulo, placeholder):
 
         lbl = QLabel(rotulo)
-        lbl.setStyleSheet(
-            "background:transparent; font-size:11px; "
-            "font-weight:bold; color:gray;"
-        )
-
-        campo = QLineEdit()
-        campo.setPlaceholderText(placeholder)
-        campo.setMinimumHeight(44)
-        campo.setStyleSheet("""
-            QLineEdit {
-                border: 1px solid #cccccc;
-                border-radius: 8px;
-                padding: 0 12px;
-                font-size: 14px;
-                color: #202225;
-            }
-            QLineEdit:focus {
-                border: 1px solid #2E7D32;
-            }
+        lbl.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
         """)
+
+        campo = CampoTexto(placeholder)
+        campo.setMinimumHeight(44)
 
         layout.addWidget(lbl)
         layout.addWidget(campo)
 
         return campo
 
+    def _exibir_avatar_padrao(self):
+
+        nome = (self.cliente or {}).get("nome") if self.cliente else ""
+        iniciais = "".join(p[0] for p in (nome or "?").split()[:2]).upper() or "?"
+
+        self.lbl_avatar.setPixmap(QPixmap())
+        self.lbl_avatar.setText(iniciais)
+        self.lbl_avatar.setStyleSheet(f"""
+            background:{tokens.PRIMARIA_CLARA}; color:{tokens.PRIMARIA};
+            border-radius:32px; font-size:20px; font-weight:800;
+        """)
+
+    def escolher_foto(self):
+
+        caminho, _ = QFileDialog.getOpenFileName(
+            self, "Escolher Foto", "", "Imagens (*.jpg *.jpeg *.png)"
+        )
+
+        if not caminho:
+            return
+
+        with open(caminho, "rb") as arquivo:
+            self.foto_bytes = arquivo.read()
+
+        pixmap = QPixmap()
+        pixmap.loadFromData(self.foto_bytes)
+
+        self.lbl_avatar.setStyleSheet("background:transparent; border-radius:32px;")
+        self.lbl_avatar.setPixmap(
+            pixmap.scaled(
+                64, 64, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+            )
+        )
+
     def _preencher(self, cliente):
 
         self.nome.setText(cliente.get("nome") or "")
         self.whatsapp.setText(cliente.get("telefone") or "")
         self.cpf.setText(cliente.get("cpf_cnpj") or "")
+        self.email.setText(cliente.get("email") or "")
         self.endereco.setText(cliente.get("endereco") or "")
+        self.cidade.setText(cliente.get("cidade") or "")
+        self.estado.setText(cliente.get("estado") or "")
+
+        if cliente.get("limite_credito") is not None:
+            self.limite_credito.setText(
+                f"{cliente['limite_credito']:.2f}".replace(".", ",")
+            )
+
+        data_nascimento = cliente.get("data_nascimento")
+
+        if data_nascimento:
+            self.chk_sem_nascimento.setChecked(False)
+            self.data_nascimento.setDate(
+                QDate.fromString(data_nascimento[:10], "yyyy-MM-dd")
+            )
+
+        if cliente.get("tem_foto"):
+
+            foto_bytes = obter_foto_cliente(cliente["id"])
+
+            if foto_bytes:
+                pixmap = QPixmap()
+                pixmap.loadFromData(foto_bytes)
+                self.lbl_avatar.setStyleSheet(
+                    "background:transparent; border-radius:32px;"
+                )
+                self.lbl_avatar.setPixmap(
+                    pixmap.scaled(
+                        64, 64, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+                    )
+                )
 
     # ======================================
 
@@ -191,28 +325,34 @@ class CadastroClienteDialog(QDialog):
         nome = self.nome.text().strip()
 
         if not nome:
-            QMessageBox.warning(
-                self,
-                "Atenção",
-                "Informe o nome do cliente.",
-            )
+            QMessageBox.warning(self, "Atenção", "Informe o nome do cliente.")
             return
 
         dados = {
             "nome": nome,
             "telefone": self.whatsapp.text().strip() or None,
             "cpf_cnpj": self.cpf.text().strip() or None,
+            "email": self.email.text().strip() or None,
             "endereco": self.endereco.text().strip() or None,
+            "cidade": self.cidade.text().strip() or None,
+            "estado": self.estado.text().strip() or None,
+            "limite_credito": _parse_valor_opcional(self.limite_credito.text()),
         }
+
+        dados["data_nascimento"] = (
+            None
+            if self.chk_sem_nascimento.isChecked()
+            else self.data_nascimento.date().toString("yyyy-MM-dd")
+        )
+
+        if self.foto_bytes:
+            dados["foto_base64"] = base64.b64encode(self.foto_bytes).decode("ascii")
 
         if self.cliente:
 
             dados["ativo"] = self.cliente.get("ativo", True)
 
-            response = atualizar_cliente(
-                self.cliente["id"],
-                dados,
-            )
+            response = atualizar_cliente(self.cliente["id"], dados)
 
         else:
 

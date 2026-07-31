@@ -1,4 +1,5 @@
 from PySide6.QtCore import Qt, QTimer, Signal, QEvent
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -7,10 +8,12 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QPushButton,
     QWidget,
 )
 
 from services.pdv_service import pesquisar_produtos
+from services.produto_service import obter_foto_produto
 
 
 class ItemResultado(QWidget):
@@ -23,7 +26,7 @@ class ItemResultado(QWidget):
         layout.setContentsMargins(10, 6, 10, 6)
         layout.setSpacing(12)
 
-        icone = QLabel("📦")
+        icone = QLabel()
         icone.setFixedSize(38, 38)
         icone.setAlignment(Qt.AlignCenter)
         icone.setStyleSheet("""
@@ -32,10 +35,21 @@ class ItemResultado(QWidget):
             font-size:18px;
         """)
 
+        pixmap_foto = self._carregar_foto(produto) if produto.get("tem_foto") else None
+
+        if pixmap_foto:
+            icone.setPixmap(pixmap_foto)
+        else:
+            icone.setText("📦")
+
         col_texto = QVBoxLayout()
         col_texto.setSpacing(0)
 
-        nome = QLabel(produto["nome"].upper())
+        nome_texto = produto["nome"].upper()
+        if produto.get("favorito"):
+            nome_texto = f"★ {nome_texto}"
+
+        nome = QLabel(nome_texto)
         nome.setStyleSheet(
             "font-weight:bold; font-size:13px; background:transparent;"
         )
@@ -62,6 +76,22 @@ class ItemResultado(QWidget):
         layout.addLayout(col_texto)
         layout.addStretch()
         layout.addWidget(preco)
+
+    def _carregar_foto(self, produto):
+
+        bruto = obter_foto_produto(produto["id"])
+
+        if not bruto:
+            return None
+
+        pixmap = QPixmap()
+
+        if not pixmap.loadFromData(bruto):
+            return None
+
+        return pixmap.scaled(
+            38, 38, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+        )
 
 
 class BuscarProdutoDialog(QDialog):
@@ -106,7 +136,28 @@ class BuscarProdutoDialog(QDialog):
         self.busca.installEventFilter(self)
         self.busca.textChanged.connect(self.agendar_busca)
 
-        layout.addWidget(self.busca)
+        linha_busca = QHBoxLayout()
+        linha_busca.setSpacing(8)
+        linha_busca.addWidget(self.busca, stretch=1)
+
+        self.bt_favoritos = QPushButton("★ Favoritos")
+        self.bt_favoritos.setCheckable(True)
+        self.bt_favoritos.setMinimumHeight(40)
+        self.bt_favoritos.setCursor(Qt.PointingHandCursor)
+        self.bt_favoritos.setStyleSheet("""
+            QPushButton {
+                background:white; color:#B45309;
+                border:1px solid #cccccc; border-radius:8px;
+                padding:0 14px; font-size:13px; font-weight:bold;
+            }
+            QPushButton:checked {
+                background:#FFFBEB; border:1px solid #B45309;
+            }
+        """)
+        self.bt_favoritos.toggled.connect(lambda _checked: self.executar_busca())
+        linha_busca.addWidget(self.bt_favoritos)
+
+        layout.addLayout(linha_busca)
 
         self.lista = QListWidget()
         self.lista.setStyleSheet("""
@@ -189,6 +240,9 @@ class BuscarProdutoDialog(QDialog):
         # sem precisar digitar nada pra ver algo na tela
         produtos = pesquisar_produtos(termo)
 
+        if self.bt_favoritos.isChecked():
+            produtos = [p for p in produtos if p.get("favorito")]
+
         for produto in produtos:
 
             item = QListWidgetItem()
@@ -205,7 +259,12 @@ class BuscarProdutoDialog(QDialog):
         self.lbl_vazio.setVisible(self.lista.count() == 0)
 
         if self.lista.count() == 0:
-            if termo:
+            if self.bt_favoritos.isChecked():
+                self.lbl_vazio.setText(
+                    "Nenhum produto favorito encontrado.\n"
+                    "Marque produtos como favoritos na tela de Estoque."
+                )
+            elif termo:
                 self.lbl_vazio.setText(
                     f"Nenhum produto encontrado para \"{termo}\"."
                 )

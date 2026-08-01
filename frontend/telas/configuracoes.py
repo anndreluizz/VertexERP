@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QFrame,
+    QScrollArea,
     QStackedWidget,
     QMessageBox,
     QKeySequenceEdit,
@@ -232,7 +233,21 @@ class Configuracoes(QWidget):
 
         layout.addStretch()
 
-        return pagina
+        return self._envolver_com_rolagem(pagina)
+
+    def _envolver_com_rolagem(self, pagina):
+        """Em telas mais baixas, o conteúdo de uma aba (campos +
+        eventual botão próprio, como o 'Salvar Atalhos') pode não caber
+        na altura disponível — sem isso, a parte de baixo simplesmente
+        ficava fora da área visível, sem nenhuma forma de rolar até
+        ela."""
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
+        scroll.setWidget(pagina)
+
+        return scroll
 
     def _criar_pagina_pix(self):
 
@@ -271,7 +286,7 @@ class Configuracoes(QWidget):
 
         layout.addStretch()
 
-        return pagina
+        return self._envolver_com_rolagem(pagina)
 
     def _criar_pagina_atalhos(self):
 
@@ -312,7 +327,7 @@ class Configuracoes(QWidget):
 
         self._carregar_atalhos_ui()
 
-        return pagina
+        return self._envolver_com_rolagem(pagina)
 
     def _campo_atalho(self, layout, rotulo):
 

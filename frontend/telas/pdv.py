@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QMessageBox,
@@ -188,18 +189,46 @@ class PDV(QWidget):
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(14)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        layout.addLayout(self._construir_cabecalho())
-        layout.addWidget(self._construir_campo_codigo())
-        layout.addWidget(self.lbl_status_busca)
-        layout.addWidget(self._construir_linha_cliente())
-        layout.addWidget(self._construir_mais_vendidos())
-        layout.addWidget(self._construir_tabela(), stretch=1)
-        layout.addWidget(self._construir_bloco_ajuste())
-        layout.addLayout(self._construir_resumo())
-        layout.addLayout(self._construir_barra_atalhos())
+        # Em telas mais baixas (notebooks, resoluções menores), a soma de
+        # cabeçalho + código de barras + tabela + ajuste + resumo pode não
+        # caber na janela — sem rolagem, o conteúdo de baixo (inclusive os
+        # botões Buscar/Adicionar/Pagar) simplesmente ficava cortado fora
+        # da área visível. A barra de atalhos fica FORA da área rolável,
+        # de propósito: ela precisa estar sempre visível e alcançável,
+        # nunca escondida atrás de uma rolagem.
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
+
+        conteudo = QWidget()
+        conteudo.setStyleSheet("background:transparent;")
+
+        layout_conteudo = QVBoxLayout(conteudo)
+        layout_conteudo.setContentsMargins(24, 20, 24, 0)
+        layout_conteudo.setSpacing(14)
+
+        layout_conteudo.addLayout(self._construir_cabecalho())
+        layout_conteudo.addWidget(self._construir_campo_codigo())
+        layout_conteudo.addWidget(self.lbl_status_busca)
+        layout_conteudo.addWidget(self._construir_linha_cliente())
+        layout_conteudo.addWidget(self._construir_mais_vendidos())
+        layout_conteudo.addWidget(self._construir_tabela(), stretch=1)
+        layout_conteudo.addWidget(self._construir_bloco_ajuste())
+        layout_conteudo.addLayout(self._construir_resumo())
+
+        self.tabela.setMinimumHeight(160)
+
+        scroll.setWidget(conteudo)
+        layout.addWidget(scroll, stretch=1)
+
+        rodape = QVBoxLayout()
+        rodape.setContentsMargins(24, 14, 24, 20)
+        rodape.addLayout(self._construir_barra_atalhos())
+
+        layout.addLayout(rodape)
 
         # ======================
         # ATALHOS DE TECLADO

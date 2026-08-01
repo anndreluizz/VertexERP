@@ -77,7 +77,7 @@ class VendaService:
         usuario_id: int,
     ):
 
-        caixa = CaixaRepository.buscar_aberto(db)
+        caixa = CaixaRepository.buscar_aberto(db, usuario_id)
 
         if not caixa:
             raise Exception(
@@ -307,7 +307,7 @@ class VendaService:
             # em dinheiro (pix/cartao/prazo nao afetam a gaveta fisica)
             if forma_parcela == "DINHEIRO":
 
-                caixa = CaixaRepository.buscar_aberto(db)
+                caixa = CaixaRepository.buscar_aberto(db, usuario_id)
 
                 if caixa:
 

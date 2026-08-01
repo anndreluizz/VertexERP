@@ -16,6 +16,30 @@ URL = f"http://127.0.0.1:{os.getenv('VERTEXERP_PORT', _PORTA_PADRAO)}"
 TOKEN = None
 
 
+def definir_url(endereco):
+    """Aponta pra um backend em outra máquina (modo Terminal) — chamado
+    uma vez no início do app.py, a partir do endereço salvo em
+    preferencias_service. Sem isso, URL continua o padrão localhost de
+    sempre (instalação de um PC só, sem mudança nenhuma de comportamento)."""
+
+    global URL
+
+    endereco = (endereco or "").strip()
+
+    if not endereco:
+        return
+
+    if not endereco.startswith("http://") and not endereco.startswith("https://"):
+        endereco = f"http://{endereco}"
+
+    resto = endereco.split("://", 1)[1]
+
+    if ":" not in resto:
+        endereco = f"{endereco}:{_PORTA_PADRAO}"
+
+    URL = endereco
+
+
 def login(usuario: str, senha: str):
 
     global TOKEN

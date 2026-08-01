@@ -32,4 +32,10 @@ if __name__ == "__main__":
     # launcher só confere se ALGUÉM responde na porta, não se é o NOSSO
     # processo.
     porta = int(os.getenv("VERTEXERP_PORT", "58734"))
-    uvicorn.run(app, host="127.0.0.1", port=porta, log_level="info")
+
+    # Só aceita conexão de outras máquinas na rede (modo servidor,
+    # atendendo caixas em outros PCs) se VERTEXERP_HOST=0.0.0.0 estiver
+    # no .env — por padrão continua só-localhost, igual sempre foi.
+    host = os.getenv("VERTEXERP_HOST", "127.0.0.1")
+
+    uvicorn.run(app, host=host, port=porta, log_level="info")

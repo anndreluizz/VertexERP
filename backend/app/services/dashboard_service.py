@@ -50,11 +50,14 @@ class DashboardService:
             .scalar()
         )
 
+        # soma o saldo de TODOS os caixas abertos no momento — desde
+        # que caixa passou a ser por usuario (nao mais um unico por
+        # loja), pode haver varias sessoes abertas ao mesmo tempo
         saldo_caixa = (
-            db.query(Caixa.saldo_final)
+            db.query(func.coalesce(func.sum(Caixa.saldo_final), 0))
             .filter(Caixa.status == "ABERTO")
             .scalar()
-        ) or 0
+        )
 
         contas_receber = (
             db.query(func.coalesce(func.sum(ContaReceber.valor), 0))

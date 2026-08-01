@@ -17,7 +17,7 @@ class MovimentoCaixaService:
         usuario_id: int,
     ):
 
-        caixa = CaixaRepository.buscar_aberto(db)
+        caixa = CaixaRepository.buscar_aberto(db, usuario_id)
 
         if not caixa:
             raise Exception("Não existe caixa aberto.")

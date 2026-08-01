@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy.orm import relationship
-from sqlalchemy import DateTime, Float, String
+from sqlalchemy import DateTime, Float, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.base import Base
@@ -47,6 +47,11 @@ class Caixa(Base):
 
     observacoes: Mapped[str | None] = mapped_column(
         String(255),
+        nullable=True
+    )
+
+    usuario_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"),
         nullable=True
     )
 

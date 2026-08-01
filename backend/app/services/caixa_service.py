@@ -12,17 +12,18 @@ from app.schemas.caixa import CaixaCreate
 class CaixaService:
 
     @staticmethod
-    def abrir(db: Session, dados: CaixaCreate):
+    def abrir(db: Session, dados: CaixaCreate, usuario_id: int):
 
-        caixa = CaixaRepository.buscar_aberto(db)
+        caixa = CaixaRepository.buscar_aberto(db, usuario_id)
 
         if caixa:
-            raise Exception("Já existe um caixa aberto.")
+            raise Exception("Você já tem um caixa aberto.")
 
         novo = Caixa(
             saldo_inicial=dados.saldo_inicial,
             saldo_final=dados.saldo_inicial,
-            status="ABERTO"
+            status="ABERTO",
+            usuario_id=usuario_id,
         )
 
         return CaixaRepository.criar(db, novo)
@@ -30,11 +31,12 @@ class CaixaService:
     @staticmethod
     def fechar(
         db: Session,
+        usuario_id: int,
         valor_contado: float | None = None,
         observacoes: str | None = None,
     ):
 
-        caixa = CaixaRepository.buscar_aberto(db)
+        caixa = CaixaRepository.buscar_aberto(db, usuario_id)
 
         if not caixa:
             raise Exception("Nenhum caixa aberto.")
@@ -47,8 +49,8 @@ class CaixaService:
         return CaixaRepository.atualizar(db, caixa)
 
     @staticmethod
-    def caixa_aberto(db: Session):
-        return CaixaRepository.buscar_aberto(db)
+    def caixa_aberto(db: Session, usuario_id: int):
+        return CaixaRepository.buscar_aberto(db, usuario_id)
 
     @staticmethod
     def historico(db: Session, limite: int = 20):
@@ -128,9 +130,9 @@ class CaixaService:
         }
 
     @staticmethod
-    def resumo_aberto(db: Session):
+    def resumo_aberto(db: Session, usuario_id: int):
 
-        caixa = CaixaRepository.buscar_aberto(db)
+        caixa = CaixaRepository.buscar_aberto(db, usuario_id)
 
         if not caixa:
             return None

@@ -1,5 +1,6 @@
 import ctypes
 import os
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -270,15 +271,44 @@ def garantir_banco_vertexerp():
     )
 
 
+def _perguntar_sim_nao(titulo, mensagem):
+    # MB_YESNO (0x4) | MB_ICONQUESTION (0x20); IDYES == 6
+    resposta = ctypes.windll.user32.MessageBoxW(
+        None, mensagem, titulo, 0x4 | 0x20
+    )
+    return resposta == 6
+
+
 def garantir_env():
     """Gera o backend/.env (na raiz da instalação) apontando pro Postgres
     portátil, se ainda não existir — não sobrescreve um .env que o usuário
-    já tenha configurado manualmente."""
+    já tenha configurado manualmente.
+
+    Só roda uma vez por instalação (a próxima abertura já encontra o
+    .env pronto), então é o momento certo pra perguntar se esse PC vai
+    servir de "servidor" pros outros caixas da loja."""
 
     caminho_env = os.path.join(BASE_DIR, ".env")
 
     if os.path.exists(caminho_env):
         return
+
+    modo_servidor = _perguntar_sim_nao(
+        "Modo Servidor",
+        "Este PC vai funcionar como Servidor pros outros caixas da loja?\n\n"
+        "Escolha Sim se outros computadores vão se conectar a este aqui "
+        "pra dividir o mesmo estoque, clientes e vendas.\n\n"
+        "Escolha Não se este vai ser o único PC (ou um caixa que se conecta "
+        "a outro servidor) — pode mudar isso depois editando o arquivo "
+        ".env, se precisar.",
+    )
+
+    host = "0.0.0.0" if modo_servidor else "127.0.0.1"
+
+    # Chave só desse install, gerada na hora — nunca a mesma em duas
+    # instalações diferentes (ver auth/jwt.py: sem isso, qualquer
+    # instalação aceitaria token assinado por qualquer outra).
+    chave_secreta = secrets.token_hex(32)
 
     with open(caminho_env, "w", encoding="utf-8") as arquivo:
         arquivo.write(
@@ -289,7 +319,8 @@ def garantir_env():
             f"DB_NAME={PG_BANCO}\n"
             f"DB_USER={PG_SUPERUSER}\n"
             f"DB_PASSWORD={PG_SUPERSENHA}\n\n"
-            "SECRET_KEY=VertexERP2026SuperSecretKey\n"
+            f"VERTEXERP_HOST={host}\n\n"
+            f"SECRET_KEY={chave_secreta}\n"
             "JWT_ALGORITHM=HS256\n"
             "ACCESS_TOKEN_EXPIRE_MINUTES=60\n"
         )

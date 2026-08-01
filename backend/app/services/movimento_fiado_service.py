@@ -56,7 +56,7 @@ class MovimentoFiadoService:
         # estorno de venda fiado) nao informam forma_pagamento
         if tipo == "PAGAMENTO" and forma_pagamento:
 
-            caixa = CaixaRepository.buscar_aberto(db)
+            caixa = CaixaRepository.buscar_aberto(db, usuario_id)
 
             if not caixa:
                 raise Exception(

@@ -280,6 +280,21 @@ class LoginWindow(QWidget):
         rodape.addWidget(bt_cadastrar)
 
         layout.addLayout(rodape)
+        layout.addSpacing(6)
+
+        bt_config_servidor = QPushButton("Configurar servidor")
+        bt_config_servidor.setCursor(Qt.PointingHandCursor)
+        bt_config_servidor.setAutoDefault(False)
+        bt_config_servidor.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; border:none;
+                color:{tokens.TEXTO_TERCIARIO}; font-size:{tokens.TAMANHO_XS}px;
+            }}
+            QPushButton:hover {{ color:{tokens.TEXTO_SECUNDARIO}; }}
+        """)
+        bt_config_servidor.clicked.connect(self.configurar_servidor)
+
+        layout.addWidget(bt_config_servidor, alignment=Qt.AlignCenter)
 
         externo.addWidget(miolo)
 
@@ -377,6 +392,13 @@ class LoginWindow(QWidget):
             "Esqueceu a senha?",
             "Entre em contato com o suporte pra redefinir sua senha.",
         )
+
+    def configurar_servidor(self):
+
+        from telas.conectar_servidor import ConectarServidorDialog
+
+        dialogo = ConectarServidorDialog(parent=self)
+        dialogo.exec()
 
     def entrar(self):
 

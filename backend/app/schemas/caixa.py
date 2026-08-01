@@ -25,6 +25,7 @@ class CaixaResponse(BaseModel):
     status: str
     valor_contado: float | None = None
     observacoes: str | None = None
+    usuario_id: int | None = None
 
     class Config:
         orm_mode = True

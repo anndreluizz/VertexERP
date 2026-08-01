@@ -39,3 +39,16 @@ def carregar(usuario_id, nome, padrao=None):
         return json.loads(bruto)
     except (TypeError, ValueError):
         return padrao
+
+
+# ==========================================
+# CONFIGURAÇÃO DA MÁQUINA (não é por usuário — precisa existir antes de
+# qualquer login, ex.: endereço do servidor num PC-terminal)
+# ==========================================
+
+def salvar_servidor(host):
+    _settings().setValue("conexao/servidor_host", host)
+
+
+def carregar_servidor():
+    return _settings().value("conexao/servidor_host")

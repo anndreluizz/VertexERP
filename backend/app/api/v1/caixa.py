@@ -38,6 +38,7 @@ def caixa_to_response(caixa):
         status=caixa.status,
         valor_contado=caixa.valor_contado,
         observacoes=caixa.observacoes,
+        usuario_id=caixa.usuario_id,
     )
 
 
@@ -48,7 +49,7 @@ def abrir_caixa(
     usuario=Depends(get_current_user),
 ):
     try:
-        caixa = CaixaService.abrir(db, dados)
+        caixa = CaixaService.abrir(db, dados, usuario.id)
         return caixa_to_response(caixa)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -63,6 +64,7 @@ def fechar_caixa(
     try:
         caixa = CaixaService.fechar(
             db,
+            usuario.id,
             dados.valor_contado,
             dados.observacoes,
         )
@@ -76,7 +78,7 @@ def caixa_aberto(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    caixa = CaixaService.caixa_aberto(db)
+    caixa = CaixaService.caixa_aberto(db, usuario.id)
 
     if caixa is None:
         return None
@@ -89,7 +91,7 @@ def resumo_caixa(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    resumo = CaixaService.resumo_aberto(db)
+    resumo = CaixaService.resumo_aberto(db, usuario.id)
 
     if resumo is None:
         raise HTTPException(

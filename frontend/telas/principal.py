@@ -155,6 +155,8 @@ class PrincipalWindow(QMainWindow):
             lambda: self._exibir_pagina("dashboard", self.dashboard)
         )
 
+        self.config.loja_atualizada.connect(self.sidebar.definir_nome_loja)
+
         self.relatorios.voltar.connect(
             lambda: self._exibir_pagina("dashboard", self.dashboard)
         )
@@ -180,6 +182,8 @@ class PrincipalWindow(QMainWindow):
 
         if chave == "dashboard":
             self.dashboard.carregar()
+        elif chave == "clientes":
+            self.clientes.carregar()
 
         self.paginas.setCurrentWidget(pagina)
         self.header.definir_titulo(self._titulos.get(chave, ""))

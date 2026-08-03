@@ -75,5 +75,10 @@ class ProdutoService:
         if not produto:
             return False
 
-        ProdutoRepository.excluir(db, produto)
+        # Nao apaga de vez: um produto ja vendido tem itens_venda
+        # apontando pra ele (produto_id NOT NULL), entao um delete de
+        # verdade quebra com erro de integridade do banco. Mesmo padrao
+        # ja usado em Cliente.
+        produto.ativo = False
+        ProdutoRepository.atualizar(db, produto)
         return True

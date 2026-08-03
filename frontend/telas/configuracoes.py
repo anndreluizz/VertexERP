@@ -66,6 +66,7 @@ class ItemMenuConfig(QPushButton):
 class Configuracoes(QWidget):
 
     voltar = Signal()
+    loja_atualizada = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -449,6 +450,8 @@ class Configuracoes(QWidget):
         response = atualizar_configuracoes(dados)
 
         if response.status_code == 200:
+
+            self.loja_atualizada.emit(dados["nome_loja"] or "Vertex ERP")
 
             QMessageBox.information(
                 self,

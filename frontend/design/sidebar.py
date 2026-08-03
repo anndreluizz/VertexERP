@@ -300,6 +300,9 @@ class Sidebar(QFrame):
         self._anim_largura_max.setDuration(200)
         self._anim_largura_max.setEasingCurve(QEasingCurve.OutCubic)
 
+    def definir_nome_loja(self, nome_loja):
+        self.lbl_loja.setText(nome_loja)
+
     def adicionar_item(self, chave, icone_nome, texto):
 
         item = ItemMenuLateral(icone_nome, texto)

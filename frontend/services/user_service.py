@@ -1,4 +1,4 @@
-from services.api import get, put, cadastrar_usuario
+from services.api import get, post, put
 
 
 def listar_usuarios():
@@ -18,4 +18,11 @@ def atualizar_usuario(user_id, dados):
 
 def criar_usuario(nome, email, senha):
 
-    return cadastrar_usuario(nome, email, senha)
+    return post(
+        "/users/",
+        {
+            "nome": nome,
+            "email": email,
+            "senha": senha,
+        },
+    )

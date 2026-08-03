@@ -1,5 +1,6 @@
 import ctypes
 import os
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -280,6 +281,11 @@ def garantir_env():
     if os.path.exists(caminho_env):
         return
 
+    # Chave só desse install, gerada na hora — uma chave igual em toda
+    # instalação deixaria qualquer uma forjar token válido pra qualquer
+    # usuário de qualquer outra (ver auth/jwt.py).
+    chave_secreta = secrets.token_hex(32)
+
     with open(caminho_env, "w", encoding="utf-8") as arquivo:
         arquivo.write(
             "APP_NAME=Vertex ERP\n"
@@ -289,7 +295,7 @@ def garantir_env():
             f"DB_NAME={PG_BANCO}\n"
             f"DB_USER={PG_SUPERUSER}\n"
             f"DB_PASSWORD={PG_SUPERSENHA}\n\n"
-            "SECRET_KEY=VertexERP2026SuperSecretKey\n"
+            f"SECRET_KEY={chave_secreta}\n"
             "JWT_ALGORITHM=HS256\n"
             "ACCESS_TOKEN_EXPIRE_MINUTES=60\n"
         )

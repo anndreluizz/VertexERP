@@ -1,7 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, get_current_admin
+from app.auth.dependencies import (
+    get_current_user,
+    get_current_admin,
+    exigir_admin_apos_primeiro_usuario,
+)
 from app.core.responses import ApiResponse
 from app.database.session import SessionLocal
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
@@ -35,6 +39,7 @@ def existe_usuario(
 def criar_usuario(
     dados: UserCreate,
     db: Session = Depends(get_db),
+    _autorizacao=Depends(exigir_admin_apos_primeiro_usuario),
 ):
     try:
         usuario = UserService.criar_usuario(db, dados)

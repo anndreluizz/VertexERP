@@ -139,13 +139,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onChanged: (valor) =>
                           setState(() => _lembrar = valor ?? true),
                     ),
-                    const Text('Manter conectado'),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: _esqueceuSenha,
-                      child: const Text('Esqueceu a senha?'),
-                    ),
+                    const Expanded(child: Text('Manter conectado')),
                   ],
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: _esqueceuSenha,
+                    child: const Text('Esqueceu a senha?'),
+                  ),
                 ),
                 if (_erro != null) ...[
                   const SizedBox(height: 4),

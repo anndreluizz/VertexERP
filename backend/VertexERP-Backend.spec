@@ -1,12 +1,27 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_all
+
+# firebase-admin (e o grpc/google-auth por baixo dele) usa import
+# dinamico em varios submodulos -- o PyInstaller nao acha isso sozinho
+# so olhando o codigo, precisa do collect_all pra nao faltar nada e o
+# .exe empacotado quebrar so na hora de mandar notificacao de verdade.
+datas_extra = []
+binaries_extra = []
+hidden_extra = []
+
+for pacote in ('firebase_admin', 'grpc', 'google.auth', 'google.cloud.firestore'):
+    d, b, h = collect_all(pacote)
+    datas_extra += d
+    binaries_extra += b
+    hidden_extra += h
 
 a = Analysis(
     ['backend_entry.py'],
     pathex=[],
-    binaries=[],
-    datas=[('alembic.ini', '.'), ('migrations', 'migrations')],
-    hiddenimports=['uvicorn.loops.auto', 'uvicorn.protocols.http.auto', 'uvicorn.protocols.websockets.auto', 'uvicorn.lifespan.on', 'uvicorn.logging', 'psycopg', 'passlib.handlers.bcrypt', 'email_validator'],
+    binaries=binaries_extra,
+    datas=[('alembic.ini', '.'), ('migrations', 'migrations')] + datas_extra,
+    hiddenimports=['uvicorn.loops.auto', 'uvicorn.protocols.http.auto', 'uvicorn.protocols.websockets.auto', 'uvicorn.lifespan.on', 'uvicorn.logging', 'psycopg', 'passlib.handlers.bcrypt', 'email_validator'] + hidden_extra,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

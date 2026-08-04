@@ -5,8 +5,8 @@ import 'core/providers.dart';
 import 'core/sessao_controller.dart';
 import 'features/auth/lock_screen.dart';
 import 'features/auth/login_screen.dart';
-import 'features/dashboard/dashboard_screen.dart';
 import 'features/server/server_setup_screen.dart';
+import 'home_shell.dart';
 
 /// Decide qual tela mostrar de acordo com o estado da sessao — troca
 /// automaticamente assim que o SessaoController muda de status
@@ -25,7 +25,7 @@ class AppGate extends ConsumerWidget {
       StatusSessao.semServidor => const ServerSetupScreen(),
       StatusSessao.deslogado => const LoginScreen(),
       StatusSessao.bloqueado => const LockScreen(),
-      StatusSessao.logado => const DashboardScreen(),
+      StatusSessao.logado => const HomeShell(),
     };
   }
 }

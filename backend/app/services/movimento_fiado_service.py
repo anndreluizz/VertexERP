@@ -10,6 +10,28 @@ from app.repositories.movimento_fiado_repository import (
     MovimentoFiadoRepository,
 )
 from app.schemas.movimento_fiado import MovimentoFiadoCreate
+from app.services.notificacao_service import NotificacaoService
+
+
+def _verificar_limite_credito(db: Session, cliente_id: int):
+    """Depois de uma compra a prazo, confere se o cliente passou do
+    limite de credito cadastrado — se sim, avisa os administradores.
+    Cliente sem limite definido (None) nunca dispara isso."""
+
+    cliente = ClienteRepository.buscar_por_id(db, cliente_id)
+
+    if not cliente or cliente.limite_credito is None:
+        return
+
+    saldo = MovimentoFiadoRepository.saldo_por_cliente(db, cliente_id)
+
+    if saldo > cliente.limite_credito:
+        NotificacaoService.enviar_para_admins(
+            db,
+            "Cliente inadimplente",
+            f"{cliente.nome} passou do limite de crédito "
+            f"(R$ {saldo:.2f} de R$ {cliente.limite_credito:.2f}).",
+        )
 
 
 class MovimentoFiadoService:
@@ -90,7 +112,12 @@ class MovimentoFiadoService:
             data=dados.data or datetime.utcnow(),
         )
 
-        return MovimentoFiadoRepository.criar(db, movimento)
+        movimento = MovimentoFiadoRepository.criar(db, movimento)
+
+        if tipo == "COMPRA":
+            _verificar_limite_credito(db, dados.cliente_id)
+
+        return movimento
 
     @staticmethod
     def criar_compra_da_venda(

@@ -5,17 +5,20 @@ import '../../core/providers.dart';
 import '../../theme/vertex_colors.dart';
 import '../caixas/caixas_screen.dart';
 import '../estoque/estoque_screen.dart';
+import '../notificacoes/notificacoes_provider.dart';
+import '../notificacoes/notificacoes_screen.dart';
 import '../relatorios/relatorios_screen.dart';
 
 /// Modulos usados com menos frequencia que os 4 da barra inferior —
 /// evita lotar a barra conforme o app cresce (o roteiro completo tem
-/// bem mais telas planejadas: Notificacoes, Perfil, Configuracoes...).
+/// mais telas planejadas: Perfil, Configuracoes...).
 class MaisScreen extends ConsumerWidget {
   const MaisScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sessao = ref.watch(sessaoControllerProvider);
+    final qtdNotificacoes = ref.watch(notificacoesProvider).length;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Mais')),
@@ -84,6 +87,15 @@ class MaisScreen extends ConsumerWidget {
             titulo: 'Relatórios',
             subtitulo: 'Resumo gerencial e exportação em PDF',
             aoTocar: () => _abrir(context, const RelatoriosScreen()),
+          ),
+          _itemMenu(
+            context,
+            icone: Icons.notifications_outlined,
+            titulo: 'Notificações',
+            subtitulo: qtdNotificacoes == 0
+                ? 'Nenhuma por enquanto'
+                : '$qtdNotificacoes recebida(s) nesta sessão',
+            aoTocar: () => _abrir(context, const NotificacoesScreen()),
           ),
           const SizedBox(height: 18),
           _itemMenu(

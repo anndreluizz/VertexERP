@@ -5,8 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.models.caixa import Caixa
 from app.models.movimento_caixa import MovimentoCaixa
+from app.models.user import User
 from app.repositories.caixa_repository import CaixaRepository
 from app.schemas.caixa import CaixaCreate
+from app.services.notificacao_service import NotificacaoService
 
 
 class CaixaService:
@@ -26,7 +28,19 @@ class CaixaService:
             usuario_id=usuario_id,
         )
 
-        return CaixaRepository.criar(db, novo)
+        novo = CaixaRepository.criar(db, novo)
+
+        operador = db.query(User).filter(User.id == usuario_id).first()
+
+        NotificacaoService.enviar_para_admins(
+            db,
+            "Caixa aberto",
+            f"{operador.nome if operador else 'Um operador'} abriu um "
+            f"caixa com R$ {dados.saldo_inicial:.2f} de troco inicial.",
+            excluir_usuario_id=usuario_id,
+        )
+
+        return novo
 
     @staticmethod
     def fechar(
@@ -46,7 +60,19 @@ class CaixaService:
         caixa.valor_contado = valor_contado
         caixa.observacoes = observacoes
 
-        return CaixaRepository.atualizar(db, caixa)
+        caixa = CaixaRepository.atualizar(db, caixa)
+
+        operador = db.query(User).filter(User.id == usuario_id).first()
+
+        NotificacaoService.enviar_para_admins(
+            db,
+            "Caixa fechado",
+            f"{operador.nome if operador else 'Um operador'} fechou o "
+            f"caixa com R$ {caixa.saldo_final:.2f} em caixa.",
+            excluir_usuario_id=usuario_id,
+        )
+
+        return caixa
 
     @staticmethod
     def caixa_aberto(db: Session, usuario_id: int):

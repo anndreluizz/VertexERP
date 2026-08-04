@@ -18,7 +18,9 @@ from app.repositories.movimento_fiado_repository import (
 
 from app.services.movimento_fiado_service import (
     MovimentoFiadoService,
+    _verificar_limite_credito,
 )
+from app.services.notificacao_service import NotificacaoService
 
 
 def _parcelas_pagamento(venda_ou_dados, valor_total):
@@ -133,6 +135,7 @@ class VendaService:
             )
 
             valor_total = 0
+            produtos_com_estoque_baixo = []
 
             for item in dados.itens:
 
@@ -176,6 +179,9 @@ class VendaService:
 
                 # Baixa do estoque (automatica, registrada no historico)
                 produto.estoque -= item.quantidade
+
+                if produto.estoque <= produto.estoque_minimo:
+                    produtos_com_estoque_baixo.append(produto)
 
                 db.add(produto)
 
@@ -246,6 +252,22 @@ class VendaService:
             db.commit()
 
             db.refresh(venda)
+
+            for produto in produtos_com_estoque_baixo:
+
+                db.refresh(produto)
+
+                NotificacaoService.enviar_para_admins(
+                    db,
+                    "Produto acabando",
+                    f"{produto.nome} está com estoque baixo "
+                    f"({produto.estoque} un.).",
+                )
+
+            if venda.cliente_id and "PRAZO" in (
+                venda.forma_pagamento, venda.forma_pagamento_2
+            ):
+                _verificar_limite_credito(db, venda.cliente_id)
 
             return venda
 

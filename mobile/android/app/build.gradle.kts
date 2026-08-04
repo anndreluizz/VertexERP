@@ -4,6 +4,15 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Push notifications (Firebase Cloud Messaging): so ativa de verdade
+// quando existir um google-services.json real nesta pasta (baixado no
+// Firebase Console) — sem ele, o app builda normalmente e o proprio
+// codigo Dart (core/notificacao_service.dart) so pula o registro de
+// notificacao silenciosamente, sem quebrar nada.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.vertexerp.mobile"
     compileSdk = flutter.compileSdkVersion

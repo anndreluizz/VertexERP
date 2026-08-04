@@ -1,12 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'api_client.dart';
+import 'notificacao_service.dart';
 import 'sessao_controller.dart';
 import 'vertex_storage.dart';
 
 final storageProvider = Provider<VertexStorage>((ref) => VertexStorage());
 
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
+
+final notificacaoServiceProvider = Provider<NotificacaoService>(
+  (ref) => NotificacaoService(ref.watch(apiClientProvider)),
+);
 
 final sessaoControllerProvider =
     StateNotifierProvider<SessaoController, SessaoState>((ref) {

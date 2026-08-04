@@ -26,6 +26,7 @@ from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.estoque import router as estoque_router
 from app.api.v1.financeiro import router as fiado_router
 from app.api.v1.configuracoes import router as configuracoes_router
+from app.api.v1.notificacoes import router as notificacoes_router
 
 app = FastAPI(
     title="Vertex ERP",
@@ -68,6 +69,7 @@ app.include_router(pdv_router)
 app.include_router(estoque_router)
 app.include_router(fiado_router)
 app.include_router(configuracoes_router)
+app.include_router(notificacoes_router)
 
 # Quando empacotado com PyInstaller (--onefile), __file__ aponta pra dentro
 # da pasta temporária de extração (sys._MEIPASS) — certo pra achar arquivos

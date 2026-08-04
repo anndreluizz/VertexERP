@@ -1,0 +1,142 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/providers.dart';
+import '../../theme/vertex_colors.dart';
+import '../caixas/caixas_screen.dart';
+import '../estoque/estoque_screen.dart';
+import '../relatorios/relatorios_screen.dart';
+
+/// Modulos usados com menos frequencia que os 4 da barra inferior —
+/// evita lotar a barra conforme o app cresce (o roteiro completo tem
+/// bem mais telas planejadas: Notificacoes, Perfil, Configuracoes...).
+class MaisScreen extends ConsumerWidget {
+  const MaisScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sessao = ref.watch(sessaoControllerProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Mais')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: VertexColors.primariaClara,
+                    child: Text(
+                      (sessao.usuario?.nome.isNotEmpty ?? false)
+                          ? sessao.usuario!.nome[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        color: VertexColors.primaria,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          sessao.usuario?.nome ?? '',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        Text(
+                          sessao.usuario?.cargo ?? '',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: VertexColors.textoSecundario,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          _itemMenu(
+            context,
+            icone: Icons.inventory_2_outlined,
+            titulo: 'Estoque',
+            subtitulo: 'Produtos críticos e sem estoque',
+            aoTocar: () => _abrir(context, const EstoqueScreen()),
+          ),
+          _itemMenu(
+            context,
+            icone: Icons.point_of_sale_outlined,
+            titulo: 'Caixas',
+            subtitulo: 'Status de todos os caixas da loja',
+            aoTocar: () => _abrir(context, const CaixasScreen()),
+          ),
+          _itemMenu(
+            context,
+            icone: Icons.bar_chart_outlined,
+            titulo: 'Relatórios',
+            subtitulo: 'Resumo gerencial e exportação em PDF',
+            aoTocar: () => _abrir(context, const RelatoriosScreen()),
+          ),
+          const SizedBox(height: 18),
+          _itemMenu(
+            context,
+            icone: Icons.logout,
+            titulo: 'Sair',
+            subtitulo: 'Encerrar sessão neste aparelho',
+            perigo: true,
+            aoTocar: () =>
+                ref.read(sessaoControllerProvider.notifier).logout(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _abrir(BuildContext context, Widget tela) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => tela));
+  }
+
+  Widget _itemMenu(
+    BuildContext context, {
+    required IconData icone,
+    required String titulo,
+    required String subtitulo,
+    required VoidCallback aoTocar,
+    bool perigo = false,
+  }) {
+    final cor = perigo ? VertexColors.erro : VertexColors.primaria;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        onTap: aoTocar,
+        leading: Container(
+          width: 38,
+          height: 38,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: cor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Icon(icone, size: 18, color: cor),
+        ),
+        title: Text(titulo),
+        subtitle: Text(subtitulo),
+        trailing: const Icon(
+          Icons.chevron_right,
+          color: VertexColors.textoTerciario,
+        ),
+      ),
+    );
+  }
+}

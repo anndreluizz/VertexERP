@@ -1,0 +1,39 @@
+/// Espelha backend/app/schemas/caixa.py::CaixaResponse.
+class Caixa {
+  const Caixa({
+    required this.id,
+    required this.dataAbertura,
+    required this.dataFechamento,
+    required this.saldoInicial,
+    required this.saldoFinal,
+    required this.status,
+    required this.usuarioId,
+  });
+
+  factory Caixa.fromJson(Map<String, dynamic> json) {
+    return Caixa(
+      id: json['id'] as int,
+      dataAbertura: DateTime.parse(json['data_abertura'] as String),
+      dataFechamento: json['data_fechamento'] != null
+          ? DateTime.parse(json['data_fechamento'] as String)
+          : null,
+      saldoInicial: (json['saldo_inicial'] as num).toDouble(),
+      saldoFinal: (json['saldo_final'] as num).toDouble(),
+      status: json['status'] as String,
+      usuarioId: json['usuario_id'] as int?,
+    );
+  }
+
+  final int id;
+  final DateTime dataAbertura;
+  final DateTime? dataFechamento;
+  final double saldoInicial;
+  final double saldoFinal;
+  final String status;
+  final int? usuarioId;
+
+  bool get aberto => status == 'ABERTO';
+
+  Duration get tempoAberto =>
+      (dataFechamento ?? DateTime.now()).difference(dataAbertura);
+}

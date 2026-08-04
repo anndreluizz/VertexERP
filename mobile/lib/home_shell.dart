@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 import 'features/clientes/clientes_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'features/financeiro/financeiro_screen.dart';
+import 'features/mais/mais_screen.dart';
 import 'features/vendas/vendas_screen.dart';
 
 /// Casca do app depois do login: navegacao entre os modulos por baixo,
 /// cada aba mantem seu proprio estado (IndexedStack), igual o
-/// QStackedWidget do Desktop.
+/// QStackedWidget do Desktop. "Mais" concentra os modulos usados com
+/// menos frequencia (Estoque, Caixas, Relatorios) pra barra nao lotar
+/// conforme o roteiro completo for saindo (Notificacoes, Perfil,
+/// Configuracoes ainda vem por ai).
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -23,6 +27,7 @@ class _HomeShellState extends State<HomeShell> {
     VendasScreen(),
     ClientesScreen(),
     FinanceiroScreen(),
+    MaisScreen(),
   ];
 
   @override
@@ -52,6 +57,11 @@ class _HomeShellState extends State<HomeShell> {
             icon: Icon(Icons.account_balance_wallet_outlined),
             selectedIcon: Icon(Icons.account_balance_wallet),
             label: 'Financeiro',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.more_horiz),
+            selectedIcon: Icon(Icons.more_horiz),
+            label: 'Mais',
           ),
         ],
       ),

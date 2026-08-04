@@ -164,10 +164,21 @@ class DespesaCard(Card):
             if vencimento_formatado else conta.get("data_vencimento", "")
         )
 
+        # Pendente com vencimento hoje ou amanha esquenta pra vermelho
+        # antes mesmo de virar "Vencida" — aviso com um dia de antecedencia
+        # (vencido de verdade ja vira status VENCIDA, tratado acima).
+        vence_em_breve = (
+            status == "PENDENTE"
+            and vencimento_formatado is not None
+            and (vencimento_formatado - date.today()).days <= 1
+        )
+
+        cor_vencimento = tokens.ERRO if vence_em_breve else tokens.TEXTO
+
         lbl_vencimento = QLabel(f"Vencimento: {texto_vencimento}")
         lbl_vencimento.setStyleSheet(f"""
-            background:transparent; border:none; font-size:{tokens.TAMANHO_SM}px;
-            color:{tokens.TEXTO_TERCIARIO};
+            background:transparent; border:none; font-size:{tokens.TAMANHO_MD}px;
+            font-weight:700; color:{cor_vencimento};
         """)
         col_texto.addWidget(lbl_vencimento)
 
@@ -323,7 +334,8 @@ class ContasPagar(QWidget):
         for coluna in range(4):
             kpis_layout.setColumnStretch(coluna, 1)
 
-        layout.addLayout(kpis_layout)
+        # kpis_layout entra dentro da area de rolagem mais abaixo, nao
+        # aqui direto — ver secao LISTA.
 
         # ======================
         # FILTROS
@@ -403,8 +415,14 @@ class ContasPagar(QWidget):
         self._estilizar_pills(self.botoes_periodo, self.filtro_periodo)
 
         # ======================
-        # LISTA
+        # KPIS + LISTA (rolam juntos)
         # ======================
+
+        # Os KPIs entram dentro da mesma area de rolagem que a lista —
+        # antes ficavam fixos no topo e tomavam boa parte da tela,
+        # sobrando pouco espaco pra ver os boletos. Rolando pra baixo
+        # agora o dashboard sai da tela e a lista ganha o espaco todo;
+        # cabecalho, busca e filtros continuam fixos.
 
         self.area_rolagem = QScrollArea()
         self.area_rolagem.setWidgetResizable(True)
@@ -412,14 +430,22 @@ class ContasPagar(QWidget):
             "QScrollArea { border:none; background:transparent; }"
         )
 
-        self.lista_widget = QWidget()
-        self.lista_widget.setStyleSheet("background:transparent;")
+        conteudo_rolavel = QWidget()
+        conteudo_rolavel.setStyleSheet("background:transparent;")
 
-        self.lista_layout = QVBoxLayout(self.lista_widget)
+        conteudo_layout = QVBoxLayout(conteudo_rolavel)
+        conteudo_layout.setContentsMargins(0, 0, 0, 0)
+        conteudo_layout.setSpacing(16)
+
+        conteudo_layout.addLayout(kpis_layout)
+
+        self.lista_layout = QVBoxLayout()
         self.lista_layout.setSpacing(10)
         self.lista_layout.setAlignment(Qt.AlignTop)
 
-        self.area_rolagem.setWidget(self.lista_widget)
+        conteudo_layout.addLayout(self.lista_layout)
+
+        self.area_rolagem.setWidget(conteudo_rolavel)
 
         layout.addWidget(self.area_rolagem, stretch=1)
 

@@ -11,6 +11,7 @@ from app.schemas.cliente import (
 )
 from app.services.cliente_service import ClienteService
 from app.services.cliente_observacao_service import ClienteObservacaoService
+from app.services.aprovacao_service import AprovacaoService
 from app.auth.dependencies import get_current_user
 
 router = APIRouter(
@@ -148,9 +149,34 @@ def excluir_cliente(
     usuario=Depends(get_current_user)
 ):
     try:
-        return ClienteService.excluir(
+        # Admin exclui direto, igual sempre foi. Quem nao e admin so
+        # consegue pedir — um administrador precisa aprovar pelo
+        # celular antes do cliente ser desativado de verdade.
+        if usuario.admin:
+            return ClienteService.excluir(db, cliente_id)
+
+        cliente = ClienteService.buscar_por_id(db, cliente_id)
+
+        if not cliente:
+            raise Exception("Cliente não encontrado.")
+
+        AprovacaoService.solicitar(
             db,
-            cliente_id
+            tipo="EXCLUIR_CLIENTE",
+            referencia_id=cliente_id,
+            descricao=(
+                f"{usuario.nome} pediu pra excluir o cliente "
+                f"\"{cliente.nome}\"."
+            ),
+            solicitante_id=usuario.id,
         )
+
+        return {
+            "aprovacao_pendente": True,
+            "mensagem": (
+                "Pedido enviado — aguardando aprovação de um "
+                "administrador."
+            ),
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

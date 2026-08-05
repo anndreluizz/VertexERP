@@ -17,3 +17,4 @@ from app.models.movimento_fiado import MovimentoFiado
 from app.models.configuracao import Configuracao
 from app.models.cliente_observacao import ClienteObservacao
 from app.models.device_token import DeviceToken
+from app.models.solicitacao_aprovacao import SolicitacaoAprovacao

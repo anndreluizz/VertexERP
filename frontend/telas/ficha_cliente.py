@@ -1405,6 +1405,21 @@ class FichaClienteDialog(QDialog):
         response = excluir_cliente(self.cliente["id"])
 
         if response.status_code == 200:
+
+            dados = response.json()
+
+            if dados.get("aprovacao_pendente"):
+                QMessageBox.information(
+                    self,
+                    "Aguardando aprovação",
+                    dados.get("mensagem")
+                    or "Pedido enviado — aguardando aprovação de um "
+                    "administrador.",
+                )
+                # nao fecha a ficha: o cliente continua existindo ate
+                # alguem aprovar
+                return
+
             self.accept()
         else:
             try:

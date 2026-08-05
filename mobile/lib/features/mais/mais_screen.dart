@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../../theme/vertex_colors.dart';
+import '../aprovacoes/aprovacoes_provider.dart';
+import '../aprovacoes/aprovacoes_screen.dart';
 import '../caixas/caixas_screen.dart';
 import '../estoque/estoque_screen.dart';
 import '../notificacoes/notificacoes_provider.dart';
@@ -19,6 +21,13 @@ class MaisScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sessao = ref.watch(sessaoControllerProvider);
     final qtdNotificacoes = ref.watch(notificacoesProvider).length;
+    final ehAdmin = sessao.usuario?.admin ?? false;
+
+    // Endpoint de aprovacoes e restrito a admin -- pedir a lista pra
+    // quem nao e so ia devolver 403 sem necessidade.
+    final qtdAprovacoes = ehAdmin
+        ? ref.watch(aprovacoesPendentesProvider).valueOrNull?.length
+        : null;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Mais')),
@@ -81,6 +90,18 @@ class MaisScreen extends ConsumerWidget {
             subtitulo: 'Status de todos os caixas da loja',
             aoTocar: () => _abrir(context, const CaixasScreen()),
           ),
+          if (ehAdmin)
+            _itemMenu(
+              context,
+              icone: Icons.rule_outlined,
+              titulo: 'Aprovações',
+              subtitulo: qtdAprovacoes == null
+                  ? 'Pedidos que precisam da sua autorização'
+                  : qtdAprovacoes == 0
+                  ? 'Nenhum pedido pendente'
+                  : '$qtdAprovacoes pedido(s) pendente(s)',
+              aoTocar: () => _abrir(context, const AprovacoesScreen()),
+            ),
           _itemMenu(
             context,
             icone: Icons.bar_chart_outlined,

@@ -10,6 +10,10 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     senha: str
+    # opcional -- so o app mobile envia (ex.: "Android - Pixel 7"), pra
+    # aparecer identificavel na tela de Sessoes. Desktop nao manda nada
+    # e continua funcionando igual (fica None).
+    dispositivo: str | None = None
 
 
 class UserUpdate(BaseModel):
@@ -24,6 +28,7 @@ class UserResponse(BaseModel):
     email: EmailStr
     ativo: bool
     admin: bool
+    dois_fatores_ativo: bool = False
 
     class Config:
         orm_mode = True

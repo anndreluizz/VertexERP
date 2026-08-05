@@ -23,6 +23,7 @@ final sessaoControllerProvider =
       // Ligado depois de criado — evita o ApiClient precisar conhecer
       // o SessaoController na hora de construir os dois.
       api.aoReceber401 = controller.logout;
+      api.aoRenovarToken = controller.renovarToken;
 
       return controller;
     });

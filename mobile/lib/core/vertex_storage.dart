@@ -10,6 +10,7 @@ class VertexStorage {
 
   static const _chaveServidor = 'endereco_servidor';
   static const _chaveToken = 'access_token';
+  static const _chaveRefreshToken = 'refresh_token';
 
   Future<String?> lerServidor() => _storage.read(key: _chaveServidor);
 
@@ -21,5 +22,16 @@ class VertexStorage {
   Future<void> salvarToken(String token) =>
       _storage.write(key: _chaveToken, value: token);
 
-  Future<void> removerToken() => _storage.delete(key: _chaveToken);
+  Future<String?> lerRefreshToken() => _storage.read(key: _chaveRefreshToken);
+
+  Future<void> salvarRefreshToken(String token) =>
+      _storage.write(key: _chaveRefreshToken, value: token);
+
+  /// Remove os dois juntos -- em todo lugar que a sessao acaba
+  /// (logout, token invalido, troca de servidor) as duas pontas da
+  /// sessao lembrada precisam sumir, nunca so uma.
+  Future<void> removerToken() => Future.wait([
+    _storage.delete(key: _chaveToken),
+    _storage.delete(key: _chaveRefreshToken),
+  ]);
 }

@@ -7,6 +7,41 @@ import '../../theme/vertex_colors.dart';
 import 'dashboard_provider.dart';
 import 'widgets/kpi_card.dart';
 
+class _AvisoOffline extends StatelessWidget {
+  const _AvisoOffline({required this.atualizadoEm});
+
+  final DateTime atualizadoEm;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: VertexColors.alertaClaro,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.cloud_off_outlined,
+            size: 16,
+            color: VertexColors.alerta,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Sem conexão — mostrando dados de '
+              '${formatarDataHora(atualizadoEm)}',
+              style: const TextStyle(fontSize: 12, color: VertexColors.alerta),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -53,10 +88,9 @@ class DashboardScreen extends ConsumerWidget {
                                 const SizedBox(width: 6),
                                 Text(
                                   sessao.nomeLoja ?? 'Vertex ERP',
-                                  style:
-                                      Theme.of(
-                                        context,
-                                      ).textTheme.titleMedium,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
                                 ),
                               ],
                             ),
@@ -80,6 +114,12 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+              if (resumoAsync.valueOrNull?.deCache == true)
+                SliverToBoxAdapter(
+                  child: _AvisoOffline(
+                    atualizadoEm: resumoAsync.value!.atualizadoEm,
+                  ),
+                ),
               SliverPadding(
                 padding: const EdgeInsets.all(20),
                 sliver: resumoAsync.when(
@@ -105,9 +145,8 @@ class DashboardScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 14),
                             OutlinedButton(
-                              onPressed: () => ref.invalidate(
-                                dashboardProvider,
-                              ),
+                              onPressed: () =>
+                                  ref.invalidate(dashboardProvider),
                               child: const Text('Tentar de novo'),
                             ),
                           ],
@@ -115,68 +154,71 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  data: (resumo) => SliverGrid(
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: 1.35,
+                  data: (carregado) {
+                    final resumo = carregado.resumo;
+                    return SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 1.35,
+                          ),
+                      delegate: SliverChildListDelegate([
+                        KpiCard(
+                          rotulo: 'Vendas hoje',
+                          valor: formatarMoeda(resumo.vendasHoje),
+                          icone: Icons.point_of_sale_outlined,
+                          cor: VertexColors.primaria,
                         ),
-                    delegate: SliverChildListDelegate([
-                      KpiCard(
-                        rotulo: 'Vendas hoje',
-                        valor: formatarMoeda(resumo.vendasHoje),
-                        icone: Icons.point_of_sale_outlined,
-                        cor: VertexColors.primaria,
-                      ),
-                      KpiCard(
-                        rotulo: 'Pedidos hoje',
-                        valor: '${resumo.vendasHojeQtd}',
-                        icone: Icons.receipt_long_outlined,
-                        cor: VertexColors.primaria,
-                      ),
-                      KpiCard(
-                        rotulo: 'Ticket médio',
-                        valor: formatarMoeda(resumo.ticketMedio),
-                        icone: Icons.trending_up,
-                        cor: VertexColors.secundaria,
-                      ),
-                      KpiCard(
-                        rotulo: 'Vendas do mês',
-                        valor: formatarMoeda(resumo.vendasMes),
-                        icone: Icons.calendar_month_outlined,
-                        cor: VertexColors.secundaria,
-                      ),
-                      KpiCard(
-                        rotulo: 'Saldo em caixa',
-                        valor: formatarMoeda(resumo.saldoCaixa),
-                        icone: Icons.account_balance_wallet_outlined,
-                        cor: VertexColors.primaria,
-                      ),
-                      KpiCard(
-                        rotulo: 'Contas a receber',
-                        valor: formatarMoeda(resumo.contasReceber),
-                        icone: Icons.call_received,
-                        cor: VertexColors.alerta,
-                      ),
-                      KpiCard(
-                        rotulo: 'Contas a pagar',
-                        valor: formatarMoeda(resumo.contasPagar),
-                        icone: Icons.call_made,
-                        cor: VertexColors.erro,
-                      ),
-                      KpiCard(
-                        rotulo: 'Produtos',
-                        valor: '${resumo.produtos}',
-                        icone: Icons.inventory_2_outlined,
-                        cor: VertexColors.textoSecundario,
-                        selo: resumo.estoqueBaixo > 0
-                            ? '${resumo.estoqueBaixo} em alerta'
-                            : null,
-                      ),
-                    ]),
-                  ),
+                        KpiCard(
+                          rotulo: 'Pedidos hoje',
+                          valor: '${resumo.vendasHojeQtd}',
+                          icone: Icons.receipt_long_outlined,
+                          cor: VertexColors.primaria,
+                        ),
+                        KpiCard(
+                          rotulo: 'Ticket médio',
+                          valor: formatarMoeda(resumo.ticketMedio),
+                          icone: Icons.trending_up,
+                          cor: VertexColors.secundaria,
+                        ),
+                        KpiCard(
+                          rotulo: 'Vendas do mês',
+                          valor: formatarMoeda(resumo.vendasMes),
+                          icone: Icons.calendar_month_outlined,
+                          cor: VertexColors.secundaria,
+                        ),
+                        KpiCard(
+                          rotulo: 'Saldo em caixa',
+                          valor: formatarMoeda(resumo.saldoCaixa),
+                          icone: Icons.account_balance_wallet_outlined,
+                          cor: VertexColors.primaria,
+                        ),
+                        KpiCard(
+                          rotulo: 'Contas a receber',
+                          valor: formatarMoeda(resumo.contasReceber),
+                          icone: Icons.call_received,
+                          cor: VertexColors.alerta,
+                        ),
+                        KpiCard(
+                          rotulo: 'Contas a pagar',
+                          valor: formatarMoeda(resumo.contasPagar),
+                          icone: Icons.call_made,
+                          cor: VertexColors.erro,
+                        ),
+                        KpiCard(
+                          rotulo: 'Produtos',
+                          valor: '${resumo.produtos}',
+                          icone: Icons.inventory_2_outlined,
+                          cor: VertexColors.textoSecundario,
+                          selo: resumo.estoqueBaixo > 0
+                              ? '${resumo.estoqueBaixo} em alerta'
+                              : null,
+                        ),
+                      ]),
+                    );
+                  },
                 ),
               ),
             ],

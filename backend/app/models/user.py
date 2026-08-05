@@ -29,3 +29,11 @@ class User(Base):
         Boolean,
         default=False
     )
+
+    # Coluna preparada pra 2FA (ainda sem fluxo de verificacao completo
+    # no app) -- guarda espaco no schema pra nao precisar de outra
+    # migration quando o segundo fator entrar de verdade.
+    dois_fatores_ativo: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False
+    )

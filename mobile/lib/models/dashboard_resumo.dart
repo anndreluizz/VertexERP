@@ -43,6 +43,22 @@ class DashboardResumo {
   final int produtos;
   final int estoqueBaixo;
 
-  double get ticketMedio =>
-      vendasHojeQtd == 0 ? 0 : vendasHoje / vendasHojeQtd;
+  double get ticketMedio => vendasHojeQtd == 0 ? 0 : vendasHoje / vendasHojeQtd;
+
+  /// Espelha os mesmos nomes de campo do backend -- usado so pra
+  /// guardar no cache local (ver CacheLocal), fromJson ja le esse
+  /// mesmo formato de volta.
+  Map<String, dynamic> toJson() => {
+    'vendas_hoje': vendasHoje,
+    'vendas_hoje_qtd': vendasHojeQtd,
+    'vendas_mes': vendasMes,
+    'compras_hoje': comprasHoje,
+    'saldo_caixa': saldoCaixa,
+    'contas_receber': contasReceber,
+    'contas_pagar': contasPagar,
+    'clientes': clientes,
+    'fornecedores': fornecedores,
+    'produtos': produtos,
+    'estoque_baixo': estoqueBaixo,
+  };
 }

@@ -33,7 +33,7 @@ class VertexManagerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Vertex Manager',
+      title: 'Vertex ERP',
       debugShowCheckedModeBanner: false,
       theme: VertexTheme.claro,
       darkTheme: VertexTheme.escuro,

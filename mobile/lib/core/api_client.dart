@@ -6,19 +6,54 @@ import 'package:dio/dio.dart';
 /// "Terminal" apontando pro mesmo Servidor da loja.
 const _portaPadrao = '58734';
 
-/// Callback chamado quando uma resposta 401 chega — o app usa isso
-/// pra derrubar a sessao e voltar pro login, sem o ApiClient precisar
-/// saber nada sobre navegacao ou estado de autenticacao.
+/// Callback chamado quando uma resposta 401 chega e a renovacao (ver
+/// abaixo) tambem falhou — o app usa isso pra derrubar a sessao e
+/// voltar pro login, sem o ApiClient precisar saber nada sobre
+/// navegacao ou estado de autenticacao.
 typedef AoDeslogar = void Function();
+
+/// Tenta renovar o access_token usando o refresh_token guardado.
+/// Retorna o novo access_token, ou null se nao tinha refresh_token
+/// guardado ou ele ja nao vale mais (expirado/revogado).
+typedef AoRenovarToken = Future<String?> Function();
 
 class ApiClient {
   ApiClient() : _dio = Dio() {
     _dio.interceptors.add(
       InterceptorsWrapper(
-        onError: (erro, handler) {
-          if (erro.response?.statusCode == 401) {
+        onError: (erro, handler) async {
+          final foiNaoAutorizado = erro.response?.statusCode == 401;
+
+          // extra['renovacaoTentada'] evita ficar tentando de novo pra
+          // sempre se o token renovado tambem vier a dar 401 por algum
+          // motivo -- so tenta renovar UMA vez por requisicao original.
+          final jaTentouRenovar =
+              erro.requestOptions.extra['renovacaoTentada'] == true;
+
+          if (foiNaoAutorizado && !jaTentouRenovar && aoRenovarToken != null) {
+            final novoToken = await aoRenovarToken!.call();
+
+            if (novoToken != null) {
+              definirToken(novoToken);
+
+              final requisicaoOriginal = erro.requestOptions
+                ..extra['renovacaoTentada'] = true
+                ..headers['Authorization'] = 'Bearer $novoToken';
+
+              try {
+                final resposta = await _dio.fetch(requisicaoOriginal);
+                handler.resolve(resposta);
+                return;
+              } catch (_) {
+                // nem com o token novo funcionou -- segue pro deslogar
+              }
+            }
+          }
+
+          if (foiNaoAutorizado) {
             aoReceber401?.call();
           }
+
           handler.next(erro);
         },
       ),
@@ -27,10 +62,11 @@ class ApiClient {
 
   final Dio _dio;
 
-  /// Preenchido de fora (ver core/providers.dart) — o ApiClient nao
+  /// Preenchidos de fora (ver core/providers.dart) — o ApiClient nao
   /// conhece o SessaoController pra evitar dependencia circular na
   /// construcao dos providers.
   AoDeslogar? aoReceber401;
+  AoRenovarToken? aoRenovarToken;
 
   Dio get dio => _dio;
 

@@ -10,6 +10,7 @@ import '../estoque/estoque_screen.dart';
 import '../notificacoes/notificacoes_provider.dart';
 import '../notificacoes/notificacoes_screen.dart';
 import '../relatorios/relatorios_screen.dart';
+import '../sessoes/sessoes_screen.dart';
 
 /// Modulos usados com menos frequencia que os 4 da barra inferior —
 /// evita lotar a barra conforme o app cresce (o roteiro completo tem
@@ -118,6 +119,13 @@ class MaisScreen extends ConsumerWidget {
                 : '$qtdNotificacoes recebida(s) nesta sessão',
             aoTocar: () => _abrir(context, const NotificacoesScreen()),
           ),
+          _itemMenu(
+            context,
+            icone: Icons.devices_outlined,
+            titulo: 'Sessões',
+            subtitulo: 'Aparelhos conectados à sua conta',
+            aoTocar: () => _abrir(context, const SessoesScreen()),
+          ),
           const SizedBox(height: 18),
           _itemMenu(
             context,
@@ -125,8 +133,7 @@ class MaisScreen extends ConsumerWidget {
             titulo: 'Sair',
             subtitulo: 'Encerrar sessão neste aparelho',
             perigo: true,
-            aoTocar: () =>
-                ref.read(sessaoControllerProvider.notifier).logout(),
+            aoTocar: () => ref.read(sessaoControllerProvider.notifier).logout(),
           ),
         ],
       ),
@@ -134,9 +141,7 @@ class MaisScreen extends ConsumerWidget {
   }
 
   void _abrir(BuildContext context, Widget tela) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (context) => tela));
+    Navigator.of(context).push(MaterialPageRoute(builder: (context) => tela));
   }
 
   Widget _itemMenu(

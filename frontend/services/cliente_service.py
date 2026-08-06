@@ -11,16 +11,6 @@ def listar_clientes():
     return response.json()
 
 
-def buscar_cliente(cliente_id):
-
-    response = get(f"/clientes/{cliente_id}")
-
-    if response.status_code != 200:
-        return None
-
-    return response.json()
-
-
 def cadastrar_cliente(dados):
 
     return post("/clientes/", dados)
@@ -34,6 +24,11 @@ def atualizar_cliente(cliente_id, dados):
 def excluir_cliente(cliente_id):
 
     return delete(f"/clientes/{cliente_id}")
+
+
+def reativar_cliente(cliente_id):
+
+    return post(f"/clientes/{cliente_id}/reativar", {})
 
 
 def obter_foto_cliente(cliente_id):

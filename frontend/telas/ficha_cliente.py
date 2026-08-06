@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QMessageBox,
+    QInputDialog,
 )
 
 from services import api
@@ -33,6 +34,8 @@ from services.movimento_fiado_service import (
     listar_movimentos_cliente,
     registrar_pagamento,
     lancar_fiado_manual,
+    editar_movimento,
+    excluir_movimento,
 )
 from services.cliente_service import (
     obter_foto_cliente,
@@ -1054,9 +1057,9 @@ class FichaClienteDialog(QDialog):
     def _construir_tabela(self):
 
         tabela = QTableWidget()
-        tabela.setColumnCount(6)
+        tabela.setColumnCount(7)
         tabela.setHorizontalHeaderLabels(
-            ["", "Data", "Descrição", "Forma Pagamento", "Valor", "Saldo Após"]
+            ["", "Data", "Descrição", "Forma Pagamento", "Valor", "Saldo Após", ""]
         )
         tabela.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         tabela.setColumnWidth(0, 36)
@@ -1064,6 +1067,7 @@ class FichaClienteDialog(QDialog):
         tabela.setColumnWidth(3, 140)
         tabela.setColumnWidth(4, 110)
         tabela.setColumnWidth(5, 110)
+        tabela.setColumnWidth(6, 70)
         tabela.verticalHeader().setVisible(False)
         tabela.verticalHeader().setDefaultSectionSize(38)
         tabela.setAlternatingRowColors(True)
@@ -1095,6 +1099,123 @@ class FichaClienteDialog(QDialog):
         """)
 
         return tabela
+
+    def _acoes_movimento(self, mov):
+        """Botões de editar/excluir um lançamento errado -- direto na
+        tabela, pra corrigir sem precisar apagar e recriar o cliente
+        inteiro."""
+
+        container = QFrame()
+        container.setStyleSheet("background:transparent;")
+
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+
+        bt_editar = QPushButton()
+        bt_editar.setIcon(icone("edit-2", cor=tokens.TEXTO_SECUNDARIO, tamanho=14))
+        bt_editar.setFixedSize(26, 26)
+        bt_editar.setCursor(Qt.PointingHandCursor)
+        bt_editar.setToolTip("Corrigir lançamento")
+        bt_editar.setStyleSheet(
+            "QPushButton { background:transparent; border:none; }"
+            f"QPushButton:hover {{ background:{tokens.FUNDO}; border-radius:6px; }}"
+        )
+        bt_editar.clicked.connect(
+            lambda _, m=mov: self._editar_movimento_fiado(m)
+        )
+
+        bt_excluir = QPushButton()
+        bt_excluir.setIcon(icone("trash-2", cor=tokens.ERRO, tamanho=14))
+        bt_excluir.setFixedSize(26, 26)
+        bt_excluir.setCursor(Qt.PointingHandCursor)
+        bt_excluir.setToolTip("Excluir lançamento")
+        bt_excluir.setStyleSheet(
+            "QPushButton { background:transparent; border:none; }"
+            f"QPushButton:hover {{ background:{tokens.ERRO_CLARO}; border-radius:6px; }}"
+        )
+        bt_excluir.clicked.connect(
+            lambda _, m=mov: self._excluir_movimento_fiado(m)
+        )
+
+        layout.addWidget(bt_editar)
+        layout.addWidget(bt_excluir)
+
+        return container
+
+    def _editar_movimento_fiado(self, mov):
+
+        valor_atual = float(mov.get("valor", 0) or 0)
+
+        novo_valor, ok = QInputDialog.getDouble(
+            self,
+            "Corrigir Lançamento",
+            "Valor correto:",
+            valor_atual,
+            0.0,
+            999999.0,
+            2,
+        )
+
+        if not ok:
+            return
+
+        response = editar_movimento(mov["id"], valor=novo_valor)
+
+        if response.status_code != 200:
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+            QMessageBox.critical(self, "Erro", str(erro))
+            return
+
+        dados = response.json()
+
+        if dados.get("caixa_ajustado") is False:
+            QMessageBox.warning(
+                self,
+                "Caixa não ajustado",
+                "O lançamento foi corrigido, mas não havia caixa aberto "
+                "pra ajustar automaticamente a diferença — confira o "
+                "caixa manualmente se precisar.",
+            )
+
+        self.carregar()
+
+    def _excluir_movimento_fiado(self, mov):
+
+        resposta = QMessageBox.question(
+            self,
+            "Excluir Lançamento",
+            "Excluir este lançamento do fiado? Essa ação não pode ser desfeita.",
+        )
+
+        if resposta != QMessageBox.Yes:
+            return
+
+        response = excluir_movimento(mov["id"])
+
+        if response.status_code != 200:
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+            QMessageBox.critical(self, "Erro", str(erro))
+            return
+
+        dados = response.json()
+
+        if dados.get("caixa_ajustado") is False:
+            QMessageBox.warning(
+                self,
+                "Caixa não ajustado",
+                "O lançamento foi excluído, mas não havia caixa aberto "
+                "pra estornar automaticamente o valor — confira o "
+                "caixa manualmente se precisar.",
+            )
+
+        self.carregar()
 
     def _construir_timeline(self):
         """Aba 'Histórico Financeiro' como linha do tempo vertical, em
@@ -1575,6 +1696,8 @@ class FichaClienteDialog(QDialog):
             item_saldo = QTableWidgetItem(_formatar_moeda(saldo_apos))
             item_saldo.setForeground(QColor(tokens.TEXTO))
             tabela.setItem(linha, 5, item_saldo)
+
+            tabela.setCellWidget(linha, 6, self._acoes_movimento(mov))
 
     def _perfil_cliente(self, qtd_compras, saldo_atual, movimentos_cron):
         """Heurística simples e transparente — não um score numérico

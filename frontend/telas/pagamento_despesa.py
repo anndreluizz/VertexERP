@@ -1,3 +1,5 @@
+import base64
+import mimetypes
 from datetime import datetime
 
 from PySide6.QtCore import Qt
@@ -57,6 +59,9 @@ class PagamentoDespesaDialog(QDialog):
         self.conta = conta
         self.forma_pagamento = "DINHEIRO"
         self._pagamento_confirmado = False
+        self.comprovante_bytes = None
+        self.comprovante_nome_arquivo = None
+        self.comprovante_tipo_arquivo = None
 
         self.setWindowTitle("Pagamento de Despesa")
         self.setFixedSize(480, 560)
@@ -167,6 +172,42 @@ class PagamentoDespesaDialog(QDialog):
         layout.addWidget(lbl_obs_titulo)
         layout.addWidget(self.observacao)
 
+        lbl_comprovante_titulo = QLabel("COMPROVANTE (OPCIONAL)")
+        lbl_comprovante_titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
+        layout.addWidget(lbl_comprovante_titulo)
+
+        linha_comprovante = QHBoxLayout()
+        linha_comprovante.setSpacing(8)
+
+        bt_anexar_comprovante = QPushButton("Anexar Comprovante")
+        bt_anexar_comprovante.setCursor(Qt.PointingHandCursor)
+        bt_anexar_comprovante.setAutoDefault(False)
+        bt_anexar_comprovante.setMinimumHeight(38)
+        bt_anexar_comprovante.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.FUNDO}; border:1.5px solid {tokens.BORDA};
+                border-radius:{tokens.RADIUS_SM}px; padding:0 14px;
+                font-size:{tokens.TAMANHO_SM}px; font-weight:600; color:{tokens.TEXTO};
+            }}
+            QPushButton:hover {{ background:{tokens.BORDA}; }}
+        """)
+        bt_anexar_comprovante.clicked.connect(self.escolher_comprovante)
+
+        self.lbl_comprovante_anexado = QLabel("Nenhum arquivo anexado")
+        self.lbl_comprovante_anexado.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
+        self.lbl_comprovante_anexado.setWordWrap(True)
+
+        linha_comprovante.addWidget(bt_anexar_comprovante)
+        linha_comprovante.addWidget(self.lbl_comprovante_anexado, stretch=1)
+
+        layout.addLayout(linha_comprovante)
+
         layout.addStretch()
 
         botoes = QHBoxLayout()
@@ -255,6 +296,31 @@ class PagamentoDespesaDialog(QDialog):
                 }}
             """)
 
+    def escolher_comprovante(self):
+
+        caminho, _ = QFileDialog.getOpenFileName(
+            self, "Anexar Comprovante", "",
+            "Documentos (*.pdf *.jpg *.jpeg *.png)",
+        )
+
+        if not caminho:
+            return
+
+        with open(caminho, "rb") as arquivo:
+            self.comprovante_bytes = arquivo.read()
+
+        nome_arquivo = caminho.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+        self.comprovante_nome_arquivo = nome_arquivo
+        self.comprovante_tipo_arquivo = (
+            mimetypes.guess_type(caminho)[0] or "application/octet-stream"
+        )
+
+        self.lbl_comprovante_anexado.setText(nome_arquivo)
+        self.lbl_comprovante_anexado.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO};
+        """)
+
     def confirmar(self):
 
         observacao_atual = (self.conta.get("observacao") or "").strip()
@@ -281,7 +347,17 @@ class PagamentoDespesaDialog(QDialog):
             QMessageBox.critical(self, "Erro", str(erro))
             return
 
-        response = pagar_conta_pagar(self.conta["id"])
+        comprovante_base64 = (
+            base64.b64encode(self.comprovante_bytes).decode("ascii")
+            if self.comprovante_bytes else None
+        )
+
+        response = pagar_conta_pagar(
+            self.conta["id"],
+            comprovante_base64=comprovante_base64,
+            comprovante_nome=self.comprovante_nome_arquivo,
+            comprovante_tipo=self.comprovante_tipo_arquivo,
+        )
 
         if response.status_code != 200:
             try:

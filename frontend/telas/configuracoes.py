@@ -304,7 +304,7 @@ class Configuracoes(QWidget):
         layout.addWidget(lbl_secao)
 
         self.atalho_busca = self._campo_atalho(layout, "PESQUISAR PRODUTO (padrão: F1)")
-        self.atalho_cadastro = self._campo_atalho(layout, "CADASTRO RÁPIDO (padrão: F4)")
+        self.atalho_cadastro = self._campo_atalho(layout, "NOVO PRODUTO (padrão: F4)")
         self.atalho_cancelar = self._campo_atalho(layout, "CANCELAR VENDA (padrão: Esc)")
 
         dica = QLabel(

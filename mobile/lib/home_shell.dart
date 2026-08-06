@@ -23,8 +23,6 @@ class HomeShell extends ConsumerStatefulWidget {
 }
 
 class _HomeShellState extends ConsumerState<HomeShell> {
-  int _indice = 0;
-
   static const _paginas = [
     DashboardScreen(),
     VendasScreen(),
@@ -58,11 +56,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    final indice = ref.watch(abaSelecionadaProvider);
+
     return Scaffold(
-      body: IndexedStack(index: _indice, children: _paginas),
+      body: IndexedStack(index: indice, children: _paginas),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _indice,
-        onDestinationSelected: (indice) => setState(() => _indice = indice),
+        selectedIndex: indice,
+        onDestinationSelected: (novoIndice) =>
+            ref.read(abaSelecionadaProvider.notifier).state = novoIndice,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),

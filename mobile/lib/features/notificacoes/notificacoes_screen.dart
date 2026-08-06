@@ -34,8 +34,8 @@ class NotificacoesScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Avisos de caixa, estoque baixo e clientes '
-                      'aparecem aqui em tempo real.',
+                      'Boletos novos, pagamentos, comprovantes e '
+                      'aprovações aparecem aqui em tempo real.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12.5,

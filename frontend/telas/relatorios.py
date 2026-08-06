@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QComboBox,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
@@ -309,6 +310,37 @@ class Relatorios(QWidget):
 
         self._selecionar_aba(0)
 
+    @staticmethod
+    def _pagina_rolavel(margens=(0, 12, 0, 0), espacamento=16):
+        """Monta o esqueleto comum das 3 abas: um QWidget com
+        QScrollArea ocupando 100% do espaco, pra nenhuma delas cortar
+        conteudo quando a janela for menor que o conteudo. Devolve
+        (pagina, conteudo_layout) -- o chamador so usa conteudo_layout
+        pra tudo que ja adicionava direto em 'layout' antes."""
+
+        pagina = QWidget()
+        layout_pagina = QVBoxLayout(pagina)
+        layout_pagina.setContentsMargins(0, 0, 0, 0)
+        layout_pagina.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+        )
+
+        conteudo = QWidget()
+        conteudo.setStyleSheet("background:transparent;")
+
+        conteudo_layout = QVBoxLayout(conteudo)
+        conteudo_layout.setContentsMargins(*margens)
+        conteudo_layout.setSpacing(espacamento)
+
+        scroll.setWidget(conteudo)
+        layout_pagina.addWidget(scroll)
+
+        return pagina, conteudo_layout
+
     def _botao_aba(self, texto):
 
         botao = QPushButton(texto)
@@ -346,10 +378,7 @@ class Relatorios(QWidget):
 
     def _criar_pagina_financeiro(self):
 
-        pagina = QWidget()
-        layout = QVBoxLayout(pagina)
-        layout.setContentsMargins(0, 12, 0, 0)
-        layout.setSpacing(16)
+        pagina, layout = self._pagina_rolavel()
 
         filtro_layout = QHBoxLayout()
 
@@ -595,10 +624,7 @@ class Relatorios(QWidget):
 
     def _criar_pagina_caixa(self):
 
-        pagina = QWidget()
-        layout = QVBoxLayout(pagina)
-        layout.setContentsMargins(0, 12, 0, 0)
-        layout.setSpacing(12)
+        pagina, layout = self._pagina_rolavel(espacamento=12)
 
         titulo = QLabel("Histórico de Caixas")
         titulo.setStyleSheet(f"""
@@ -617,7 +643,9 @@ class Relatorios(QWidget):
         ])
         self._estilizar_tabela(self.tabela_caixa)
 
-        layout.addWidget(self.tabela_caixa, stretch=1)
+        self.tabela_caixa.setMinimumHeight(360)
+        layout.addWidget(self.tabela_caixa)
+        layout.addStretch()
 
         return pagina
 
@@ -676,10 +704,7 @@ class Relatorios(QWidget):
 
     def _criar_pagina_estoque(self):
 
-        pagina = QWidget()
-        layout = QVBoxLayout(pagina)
-        layout.setContentsMargins(0, 12, 0, 0)
-        layout.setSpacing(12)
+        pagina, layout = self._pagina_rolavel(espacamento=12)
 
         filtro_layout = QHBoxLayout()
         filtro_layout.setSpacing(8)
@@ -720,7 +745,9 @@ class Relatorios(QWidget):
         ])
         self._estilizar_tabela(self.tabela_estoque)
 
-        layout.addWidget(self.tabela_estoque, stretch=1)
+        self.tabela_estoque.setMinimumHeight(360)
+        layout.addWidget(self.tabela_estoque)
+        layout.addStretch()
 
         return pagina
 

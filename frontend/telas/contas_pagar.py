@@ -1,6 +1,9 @@
+import os
+import tempfile
 from datetime import date, datetime, timedelta
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -18,6 +21,8 @@ from services.categoria_despesa_service import listar_categorias_despesa
 from services.conta_pagar_service import (
     listar_contas_pagar,
     excluir_conta_pagar,
+    obter_documento_conta_pagar,
+    obter_comprovante_pagamento_conta_pagar,
 )
 from telas.cadastro_despesa import CadastroDespesaDialog
 from telas.pagamento_despesa import PagamentoDespesaDialog
@@ -72,6 +77,8 @@ class DespesaCard(Card):
     excluir_solicitado = Signal(dict)
     pagar_solicitado = Signal(dict)
     duplicar_solicitado = Signal(dict)
+    ver_documento_solicitado = Signal(dict)
+    ver_comprovante_solicitado = Signal(dict)
 
     VARIANTE_STATUS = {
         "PAGO": "sucesso",
@@ -98,6 +105,18 @@ class DespesaCard(Card):
         layout.setSpacing(14)
 
         status = _status_real(conta)
+
+        # despesa paga ganha destaque no card inteiro, nao so no badge
+        # pequeno -- fica facil bater o olho e separar do que ainda
+        # esta pendente/vencido na mesma lista.
+        if status == "PAGO":
+            self.setStyleSheet(f"""
+                Card {{
+                    background: {tokens.SUCESSO_CLARO};
+                    border-radius: {tokens.RADIUS_LG}px;
+                    border: 1.5px solid {tokens.SECUNDARIA};
+                }}
+            """)
 
         icone_cor = {
             "PAGO": tokens.SECUNDARIA,
@@ -201,6 +220,16 @@ class DespesaCard(Card):
                 lambda: self.pagar_solicitado.emit(self.conta)
             )
             acoes.addWidget(bt_pagar)
+
+        if conta.get("tem_documento"):
+            acoes.addWidget(
+                self._botao_icone("eye", self.ver_documento_solicitado)
+            )
+
+        if conta.get("tem_comprovante_pagamento"):
+            acoes.addWidget(
+                self._botao_icone("check", self.ver_comprovante_solicitado)
+            )
 
         acoes.addWidget(self._botao_icone("edit-2", self.editar_solicitado))
         acoes.addWidget(self._botao_icone("file-text", self.duplicar_solicitado))
@@ -449,6 +478,22 @@ class ContasPagar(QWidget):
 
         layout.addWidget(self.area_rolagem, stretch=1)
 
+        # Recorte simples de "tempo real": sem servidor empurrando
+        # nada, so recarrega sozinho enquanto a tela estiver visivel
+        # -- suficiente pra um pagamento feito no celular aparecer
+        # aqui sem precisar sair e voltar da tela.
+        self._timer_auto_atualizacao = QTimer(self)
+        self._timer_auto_atualizacao.setInterval(20_000)
+        self._timer_auto_atualizacao.timeout.connect(self.carregar)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._timer_auto_atualizacao.start()
+
+    def hideEvent(self, event):
+        self._timer_auto_atualizacao.stop()
+        super().hideEvent(event)
+
     def _separador_vertical(self):
 
         linha = QLabel()
@@ -663,6 +708,8 @@ class ContasPagar(QWidget):
             card.excluir_solicitado.connect(self.excluir_despesa)
             card.pagar_solicitado.connect(self.pagar_despesa)
             card.duplicar_solicitado.connect(self.duplicar_despesa)
+            card.ver_documento_solicitado.connect(self.ver_documento)
+            card.ver_comprovante_solicitado.connect(self.ver_comprovante)
 
             self.lista_layout.addWidget(card)
 
@@ -719,3 +766,47 @@ class ContasPagar(QWidget):
 
         if dialogo.exec() == dialogo.DialogCode.Accepted:
             self.carregar()
+
+    def ver_documento(self, conta):
+
+        response = obter_documento_conta_pagar(conta["id"])
+
+        if response.status_code != 200:
+            QMessageBox.warning(
+                self, "Atenção", "Não foi possível abrir o documento."
+            )
+            return
+
+        nome_original = conta.get("documento_nome") or "documento"
+        extensao = os.path.splitext(nome_original)[1] or ".pdf"
+
+        arquivo_temp = tempfile.NamedTemporaryFile(
+            delete=False, suffix=extensao
+        )
+        arquivo_temp.write(response.content)
+        arquivo_temp.close()
+
+        QDesktopServices.openUrl(QUrl.fromLocalFile(arquivo_temp.name))
+
+    def ver_comprovante(self, conta):
+
+        response = obter_comprovante_pagamento_conta_pagar(conta["id"])
+
+        if response.status_code != 200:
+            QMessageBox.warning(
+                self, "Atenção", "Não foi possível abrir o comprovante."
+            )
+            return
+
+        nome_original = (
+            conta.get("comprovante_pagamento_nome") or "comprovante"
+        )
+        extensao = os.path.splitext(nome_original)[1] or ".pdf"
+
+        arquivo_temp = tempfile.NamedTemporaryFile(
+            delete=False, suffix=extensao
+        )
+        arquivo_temp.write(response.content)
+        arquivo_temp.close()
+
+        QDesktopServices.openUrl(QUrl.fromLocalFile(arquivo_temp.name))

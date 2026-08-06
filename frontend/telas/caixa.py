@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QDialog,
     QMessageBox,
+    QScrollArea,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -199,6 +200,25 @@ class Caixa(QWidget):
 
         layout.addWidget(status_frame)
 
+        # ---- area rolavel (cards, acoes e historico) -- so o status
+        # acima fica fixo, o resto rola quando nao couber na tela ----
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+        )
+
+        conteudo = QWidget()
+        conteudo.setStyleSheet("background:transparent;")
+
+        conteudo_layout = QVBoxLayout(conteudo)
+        conteudo_layout.setContentsMargins(0, 0, 0, 0)
+        conteudo_layout.setSpacing(18)
+
+        scroll.setWidget(conteudo)
+        layout.addWidget(scroll, stretch=1)
+
         # ---- cards de resumo ----
 
         cards_layout = QGridLayout()
@@ -229,7 +249,7 @@ class Caixa(QWidget):
         for coluna in range(4):
             cards_layout.setColumnStretch(coluna, 1)
 
-        layout.addLayout(cards_layout)
+        conteudo_layout.addLayout(cards_layout)
 
         # ---- ações ----
 
@@ -279,7 +299,7 @@ class Caixa(QWidget):
         acoes_layout.addStretch()
         acoes_layout.addWidget(self.bt_encerrar)
 
-        layout.addLayout(acoes_layout)
+        conteudo_layout.addLayout(acoes_layout)
 
         # ---- histórico de movimentações ----
 
@@ -298,7 +318,7 @@ class Caixa(QWidget):
         historico_cabecalho.addStretch()
         historico_cabecalho.addWidget(self.bt_atualizar_historico)
 
-        layout.addLayout(historico_cabecalho)
+        conteudo_layout.addLayout(historico_cabecalho)
 
         self.tabela_movimentos = QTableWidget()
         self.tabela_movimentos.setColumnCount(4)
@@ -342,7 +362,10 @@ class Caixa(QWidget):
             }}
         """)
 
-        layout.addWidget(self.tabela_movimentos, stretch=1)
+        self.tabela_movimentos.setMinimumHeight(300)
+        conteudo_layout.addWidget(self.tabela_movimentos)
+
+        conteudo_layout.addStretch()
 
         return pagina
 

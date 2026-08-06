@@ -1,7 +1,6 @@
 from PySide6.QtWidgets import QMessageBox
 
 from telas.cadastro_produto import CadastroProdutoWindow
-from telas.cadastro_rapido import CadastroRapidoDialog
 from telas.produto_criado import ProdutoCriadoDialog
 
 from services.api import configuracoes
@@ -30,6 +29,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
@@ -110,6 +110,27 @@ class Produtos(QWidget):
         layout.addLayout(cabecalho)
 
         # ======================
+        # AREA ROLAVEL (todo o resto da pagina) -- so o cabecalho acima
+        # fica fixo, o resto rola quando nao couber na tela.
+        # ======================
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+        )
+
+        conteudo = QWidget()
+        conteudo.setStyleSheet("background:transparent;")
+
+        conteudo_layout = QVBoxLayout(conteudo)
+        conteudo_layout.setContentsMargins(0, 0, 0, 0)
+        conteudo_layout.setSpacing(16)
+
+        self.scroll.setWidget(conteudo)
+        layout.addWidget(self.scroll, stretch=1)
+
+        # ======================
         # CARDS DE RESUMO
         # ======================
 
@@ -129,7 +150,7 @@ class Produtos(QWidget):
         for coluna in range(4):
             resumo_layout.setColumnStretch(coluna, 1)
 
-        layout.addLayout(resumo_layout)
+        conteudo_layout.addLayout(resumo_layout)
 
         # ======================
         # BANNERS DE AÇÃO
@@ -138,23 +159,16 @@ class Produtos(QWidget):
         banners_layout = QHBoxLayout()
         banners_layout.setSpacing(12)
 
-        self.banner_rapido = Banner(
-            "ALTA VELOCIDADE", "Cadastro Rápido", "", tokens.SECUNDARIA,
-            icone_nome="refresh-cw",
-        )
-
         self.banner_novo = Banner(
             "PERSONALIZADO", "Novo Produto", "", tokens.SIDEBAR,
             icone_nome="plus",
         )
 
-        self.banner_rapido.clicado.connect(self.abrir_cadastro_rapido)
         self.banner_novo.clicado.connect(self.novo_produto)
 
-        banners_layout.addWidget(self.banner_rapido)
-        banners_layout.addWidget(self.banner_novo)
+        banners_layout.addWidget(self.banner_novo, stretch=1)
 
-        layout.addLayout(banners_layout)
+        conteudo_layout.addLayout(banners_layout)
 
         # ======================
         # BUSCA
@@ -167,7 +181,7 @@ class Produtos(QWidget):
 
         barra.addWidget(self.pesquisa)
 
-        layout.addLayout(barra)
+        conteudo_layout.addLayout(barra)
 
         # ======================
         # FILTRO DE CATEGORIAS
@@ -177,7 +191,7 @@ class Produtos(QWidget):
         self.categorias_layout.setSpacing(8)
         self.categorias_layout.addStretch()
 
-        layout.addLayout(self.categorias_layout)
+        conteudo_layout.addLayout(self.categorias_layout)
 
         self.tabela = QTableWidget()
 
@@ -247,7 +261,8 @@ class Produtos(QWidget):
             }}
         """)
 
-        layout.addWidget(self.tabela, stretch=1)
+        self.tabela.setMinimumHeight(360)
+        conteudo_layout.addWidget(self.tabela)
 
         rodape = QHBoxLayout()
 
@@ -260,7 +275,7 @@ class Produtos(QWidget):
         rodape.addStretch()
         rodape.addWidget(self.bt_atualizar)
 
-        layout.addLayout(rodape)
+        conteudo_layout.addLayout(rodape)
 
         # ==========================================
         # DICAS DE ATALHOS
@@ -280,7 +295,9 @@ class Produtos(QWidget):
             font-size:{tokens.TAMANHO_SM}px; padding:6px;
         """)
 
-        layout.addWidget(dicas)
+        conteudo_layout.addWidget(dicas)
+
+        conteudo_layout.addStretch()
 
         # ==========================================
         # EVENTOS
@@ -641,17 +658,6 @@ class Produtos(QWidget):
         self._cache_fotos[produto_id] = pixmap
 
         return pixmap
-
-    # ==========================================
-    # CADASTRO RÁPIDO (via código de barras)
-    # ==========================================
-
-    def abrir_cadastro_rapido(self):
-
-        tela = CadastroRapidoDialog(self)
-
-        if tela.exec() == QDialog.Accepted:
-            self.carregar()
 
     # ==========================================
     # NOVO PRODUTO

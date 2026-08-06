@@ -6,6 +6,7 @@ from app.database.session import SessionLocal
 from app.schemas.movimento_fiado import (
     MovimentoFiadoCreate,
     MovimentoFiadoResponse,
+    MovimentoFiadoUpdate,
     SaldoFiadoResponse,
 )
 from app.services.movimento_fiado_service import MovimentoFiadoService
@@ -74,6 +75,47 @@ def listar_por_cliente(
         MovimentoFiadoResponse.from_orm(m)
         for m in movimentos
     ]
+
+
+@router.put("/movimentos/{movimento_id}")
+def atualizar_movimento(
+    movimento_id: int,
+    dados: MovimentoFiadoUpdate,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        movimento, caixa_ajustado = MovimentoFiadoService.atualizar(
+            db, movimento_id, dados, usuario.id,
+        )
+
+        resposta = MovimentoFiadoResponse.from_orm(movimento).dict()
+        resposta["caixa_ajustado"] = caixa_ajustado
+        return resposta
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/movimentos/{movimento_id}")
+def excluir_movimento(
+    movimento_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        caixa_ajustado = MovimentoFiadoService.excluir(
+            db, movimento_id, usuario.id,
+        )
+
+        return {
+            "success": True,
+            "message": "Lançamento excluído com sucesso.",
+            "caixa_ajustado": caixa_ajustado,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get(

@@ -49,6 +49,10 @@ class VendaResponse(BaseModel):
 
     usuario_id: int | None = None
 
+    usuario_nome: str | None = None
+
+    lucro: Decimal | None = None
+
     data: datetime
 
     valor_total: Decimal

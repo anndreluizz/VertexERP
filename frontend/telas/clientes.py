@@ -4,8 +4,8 @@ from telas.cadastro_cliente import CadastroClienteDialog
 from telas.ficha_cliente import FichaClienteDialog
 
 from services.api import configuracoes
-from services.cliente_service import listar_clientes
-from services.movimento_fiado_service import saldo_cliente
+from services.cliente_service import listar_clientes, reativar_cliente
+from services.movimento_fiado_service import saldo_cliente, listar_movimentos
 from services.venda_service import listar_vendas
 
 from PySide6.QtCore import Qt, Signal
@@ -31,8 +31,9 @@ from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoT
 class ClienteCard(QFrame):
 
     clicado = Signal(dict)
+    reativar_solicitado = Signal(dict)
 
-    def __init__(self, cliente, saldo_fiado, total_compras):
+    def __init__(self, cliente, saldo_fiado):
 
         super().__init__()
 
@@ -124,27 +125,22 @@ class ClienteCard(QFrame):
 
         rodape.addStretch()
 
-        col_compras = QVBoxLayout()
-        col_compras.setSpacing(0)
-
-        lbl_compras_titulo = QLabel("TOTAL COMPRAS")
-        lbl_compras_titulo.setAlignment(Qt.AlignRight)
-        lbl_compras_titulo.setStyleSheet(f"""
-            background:transparent; border:none;
-            font-size:{tokens.TAMANHO_XS}px; font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
-
-        lbl_compras_valor = QLabel(f"R$ {total_compras:.2f}")
-        lbl_compras_valor.setAlignment(Qt.AlignRight)
-        lbl_compras_valor.setStyleSheet(f"""
-            background:transparent; border:none;
-            font-size:{tokens.TAMANHO_BASE}px; font-weight:700; color:{tokens.SECUNDARIA};
-        """)
-
-        col_compras.addWidget(lbl_compras_titulo)
-        col_compras.addWidget(lbl_compras_valor)
-
-        rodape.addLayout(col_compras)
+        if not ativo:
+            bt_reativar = QPushButton("Reativar")
+            bt_reativar.setCursor(Qt.PointingHandCursor)
+            bt_reativar.setStyleSheet(f"""
+                QPushButton {{
+                    background:{tokens.SECUNDARIA}; color:white;
+                    border:none; border-radius:{tokens.RADIUS_SM}px;
+                    padding:4px 12px; font-size:{tokens.TAMANHO_SM}px;
+                    font-weight:700;
+                }}
+                QPushButton:hover {{ background:{tokens.SECUNDARIA_HOVER}; }}
+            """)
+            bt_reativar.clicked.connect(
+                lambda: self.reativar_solicitado.emit(self.cliente)
+            )
+            rodape.addWidget(bt_reativar)
 
         layout.addLayout(rodape)
 
@@ -245,13 +241,13 @@ class Clientes(QWidget):
         self.card_total = CardKPI("Cadastros (Total)", "users", tokens.PRIMARIA)
         self.card_ativos = CardKPI("Ativos (Frequentes)", "check", tokens.SECUNDARIA)
         self.card_inativos = CardKPI("Inativos (Ausentes)", "alert-triangle", tokens.ALERTA)
-        self.card_faturamento = CardKPI("Faturamento (Histórico)", "trending-up", tokens.PRIMARIA)
+        self.card_recebido_fiado = CardKPI("Recebido de Fiado", "wallet", tokens.SECUNDARIA)
         self.card_a_receber = CardKPI("A Receber (Fiado em aberto)", "credit-card", tokens.ERRO)
 
         resumo_layout.addWidget(self.card_total, 0, 0)
         resumo_layout.addWidget(self.card_ativos, 0, 1)
         resumo_layout.addWidget(self.card_inativos, 0, 2)
-        resumo_layout.addWidget(self.card_faturamento, 0, 3)
+        resumo_layout.addWidget(self.card_recebido_fiado, 0, 3)
         resumo_layout.addWidget(self.card_a_receber, 0, 4)
 
         for coluna in range(5):
@@ -394,6 +390,18 @@ class Clientes(QWidget):
                 + float(venda.get("valor_total", 0) or 0)
             )
 
+        # "Faturamento" somando venda.valor_total so contava vendas
+        # com cliente vinculado (a maioria do PDV nao vincula) e ficava
+        # sempre R$0,00 na pratica -- recebido de fiado e um numero
+        # real que ja existe (MovimentoFiado tipo PAGAMENTO).
+        movimentos_fiado = listar_movimentos()
+
+        self.recebido_fiado_total = sum(
+            float(m.get("valor", 0) or 0)
+            for m in movimentos_fiado
+            if m.get("tipo") == "PAGAMENTO"
+        )
+
         self.atualizar_cards_resumo()
 
         self.filtrar_clientes()
@@ -412,8 +420,6 @@ class Clientes(QWidget):
 
         inativos = total - ativos
 
-        faturamento_total = sum(self.vendas_por_cliente.values())
-
         total_a_receber = sum(
             float(c.get("saldo_fiado", 0) or 0) for c in self.clientes
         )
@@ -421,7 +427,9 @@ class Clientes(QWidget):
         self.card_total.definir_valor(str(total))
         self.card_ativos.definir_valor(str(ativos))
         self.card_inativos.definir_valor(str(inativos))
-        self.card_faturamento.definir_valor(f"R$ {faturamento_total:.2f}")
+        self.card_recebido_fiado.definir_valor(
+            f"R$ {self.recebido_fiado_total:.2f}"
+        )
         self.card_a_receber.definir_valor(f"R$ {total_a_receber:.2f}")
 
     # ==========================================
@@ -557,9 +565,9 @@ class Clientes(QWidget):
             card = ClienteCard(
                 cliente,
                 cliente.get("saldo_fiado", 0),
-                self.vendas_por_cliente.get(cliente["id"], 0),
             )
             card.clicado.connect(self.ver_ficha)
+            card.reativar_solicitado.connect(self.reativar_cliente)
 
             self.grid_layout.addWidget(
                 card, indice // colunas, indice % colunas
@@ -585,6 +593,29 @@ class Clientes(QWidget):
 
         tela = FichaClienteDialog(cliente, parent=self)
         tela.exec()
+
+        self.carregar()
+
+    def reativar_cliente(self, cliente):
+
+        resposta = QMessageBox.question(
+            self,
+            "Reativar Cliente",
+            f"Reativar \"{cliente.get('nome')}\"?",
+        )
+
+        if resposta != QMessageBox.Yes:
+            return
+
+        response = reativar_cliente(cliente["id"])
+
+        if response.status_code != 200:
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+            QMessageBox.critical(self, "Erro", str(erro))
+            return
 
         self.carregar()
 

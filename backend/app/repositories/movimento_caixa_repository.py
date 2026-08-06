@@ -37,11 +37,3 @@ class MovimentoCaixaRepository:
             .all()
         )
 
-    @staticmethod
-    def listar_por_tipo(db: Session, tipo: str):
-        return (
-            db.query(MovimentoCaixa)
-            .filter(MovimentoCaixa.tipo == tipo)
-            .order_by(MovimentoCaixa.data.desc())
-            .all()
-        )

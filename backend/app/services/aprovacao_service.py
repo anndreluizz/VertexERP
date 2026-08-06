@@ -14,14 +14,25 @@ from app.services.notificacao_service import NotificacaoService
 # do fluxo (pedir, notificar, aprovar/rejeitar) ja e generico.
 
 
-def _executar_excluir_cliente(db: Session, referencia_id: int):
+def _executar_excluir_cliente(
+    db: Session, referencia_id: int, aprovador_id: int | None = None,
+):
     from app.services.cliente_service import ClienteService
 
     ClienteService.excluir(db, referencia_id)
 
 
+def _executar_cancelar_conta_pagar(
+    db: Session, referencia_id: int, aprovador_id: int | None = None,
+):
+    from app.services.conta_pagar_service import ContaPagarService
+
+    ContaPagarService.cancelar(db, referencia_id, usuario_id=aprovador_id)
+
+
 _EXECUTORES = {
     "EXCLUIR_CLIENTE": _executar_excluir_cliente,
+    "CANCELAR_CONTA_PAGAR": _executar_cancelar_conta_pagar,
 }
 
 
@@ -81,13 +92,24 @@ class AprovacaoService:
         # roda a acao de verdade so depois de confirmar que a
         # solicitacao ainda era valida — se isso falhar, a solicitacao
         # continua PENDENTE (nao marca como aprovada por engano)
-        executor(db, solicitacao.referencia_id)
+        executor(db, solicitacao.referencia_id, aprovador_id)
 
         solicitacao.status = "APROVADA"
         solicitacao.aprovador_id = aprovador_id
         solicitacao.resolvido_em = datetime.utcnow()
 
-        return SolicitacaoAprovacaoRepository.atualizar(db, solicitacao)
+        solicitacao = SolicitacaoAprovacaoRepository.atualizar(
+            db, solicitacao
+        )
+
+        NotificacaoService.enviar_para_usuario(
+            db,
+            solicitacao.solicitante_id,
+            "Solicitação aprovada",
+            solicitacao.descricao,
+        )
+
+        return solicitacao
 
     @staticmethod
     def rejeitar(db: Session, solicitacao_id: int, aprovador_id: int):
@@ -105,4 +127,15 @@ class AprovacaoService:
         solicitacao.aprovador_id = aprovador_id
         solicitacao.resolvido_em = datetime.utcnow()
 
-        return SolicitacaoAprovacaoRepository.atualizar(db, solicitacao)
+        solicitacao = SolicitacaoAprovacaoRepository.atualizar(
+            db, solicitacao
+        )
+
+        NotificacaoService.enviar_para_usuario(
+            db,
+            solicitacao.solicitante_id,
+            "Solicitação rejeitada",
+            solicitacao.descricao,
+        )
+
+        return solicitacao

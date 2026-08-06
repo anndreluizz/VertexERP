@@ -1,4 +1,4 @@
-from services.api import get, post
+from services.api import get, post, put, delete
 
 
 def saldo_cliente(cliente_id):
@@ -64,3 +64,25 @@ def lancar_fiado_manual(cliente_id, valor, descricao, data=None):
             "data": data,
         },
     )
+
+
+def editar_movimento(movimento_id, valor=None, descricao=None):
+    """Corrige um lançamento de fiado errado (valor e/ou descrição).
+    Se era um PAGAMENTO que tinha entrado no caixa, o backend já ajusta
+    a diferença automaticamente no caixa aberto de quem está editando."""
+
+    return put(
+        f"/fiado/movimentos/{movimento_id}",
+        {
+            "valor": valor,
+            "descricao": descricao,
+        },
+    )
+
+
+def excluir_movimento(movimento_id):
+    """Exclui um lançamento de fiado errado. Se era um PAGAMENTO que
+    tinha entrado no caixa, o backend já estorna automaticamente no
+    caixa aberto de quem está excluindo."""
+
+    return delete(f"/fiado/movimentos/{movimento_id}")

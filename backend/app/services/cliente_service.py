@@ -96,3 +96,25 @@ class ClienteService:
         return {
             "mensagem": "Cliente desativado com sucesso."
         }
+
+    @staticmethod
+    def reativar(
+            db: Session,
+            cliente_id: int
+    ):
+
+        cliente = ClienteRepository.buscar_por_id(
+            db,
+            cliente_id
+        )
+
+        if not cliente:
+            raise Exception("Cliente não encontrado.")
+
+        cliente.ativo = True
+
+        ClienteRepository.atualizar(db, cliente)
+
+        return {
+            "mensagem": "Cliente reativado com sucesso."
+        }

@@ -50,17 +50,6 @@ RADIUS_SM = 8
 RADIUS_PILL = 999
 
 # ==========================================
-# ESPAÇAMENTO (múltiplos de 4px)
-# ==========================================
-
-ESPACO_XS = 4
-ESPACO_SM = 8
-ESPACO_MD = 16
-ESPACO_LG = 24
-ESPACO_XL = 32
-ESPACO_XXL = 48
-
-# ==========================================
 # TIPOGRAFIA
 # ==========================================
 
@@ -73,7 +62,6 @@ TAMANHO_MD = 14
 TAMANHO_LG = 16
 TAMANHO_XL = 20
 TAMANHO_XXL = 28
-TAMANHO_TITULO = 34
 
 # ==========================================
 # SOMBRA (usado com QGraphicsDropShadowEffect)

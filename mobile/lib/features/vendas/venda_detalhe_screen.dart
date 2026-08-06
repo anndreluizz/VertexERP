@@ -36,6 +36,8 @@ class VendaDetalheScreen extends ConsumerWidget {
                     style: TextStyle(color: VertexColors.textoSecundario),
                   ),
                   const Divider(height: 28),
+                  if (venda.usuarioNome != null)
+                    _linha(context, 'Vendedor', venda.usuarioNome!),
                   _linha(
                     context,
                     'Forma de pagamento',
@@ -56,6 +58,12 @@ class VendaDetalheScreen extends ConsumerWidget {
                     ),
                   if (venda.observacao != null && venda.observacao!.isNotEmpty)
                     _linha(context, 'Observação', venda.observacao!),
+                  if (venda.lucro != null)
+                    _linha(
+                      context,
+                      'Lucro estimado',
+                      formatarMoeda(venda.lucro!),
+                    ),
                 ],
               ),
             ),

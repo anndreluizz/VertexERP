@@ -9,8 +9,56 @@ from app.repositories.caixa_repository import CaixaRepository
 from app.repositories.movimento_fiado_repository import (
     MovimentoFiadoRepository,
 )
-from app.schemas.movimento_fiado import MovimentoFiadoCreate
+from app.schemas.movimento_fiado import (
+    MovimentoFiadoCreate,
+    MovimentoFiadoUpdate,
+)
 from app.services.notificacao_service import NotificacaoService
+
+
+def _ajustar_caixa_por_correcao(
+    db: Session,
+    usuario_id: int,
+    cliente_nome: str,
+    diferenca: float,
+    forma_pagamento: str,
+    motivo: str,
+) -> bool:
+    """Reflete a correcao/exclusao de um PAGAMENTO de fiado no caixa --
+    mesmo 'tipo' (RECEBIMENTO_FIADO) do lancamento original, so que com
+    o valor da diferenca (negativo reduz, positivo aumenta), pra toda
+    soma existente (CaixaService.resumo) continuar batendo sozinha,
+    sem precisar conhecer um tipo novo 'estorno'.
+
+    Devolve False (e nao mexe em nada) se nao houver caixa aberto pro
+    usuario que esta corrigindo -- a correcao do fiado em si acontece
+    de qualquer forma, so o ajuste automatico do caixa fica pendente
+    (o chamador avisa o usuario disso)."""
+
+    if diferenca == 0:
+        return True
+
+    caixa = CaixaRepository.buscar_aberto(db, usuario_id)
+
+    if not caixa:
+        return False
+
+    if forma_pagamento == "DINHEIRO":
+        caixa.saldo_final += diferenca
+        db.add(caixa)
+
+    db.add(
+        MovimentoCaixa(
+            caixa_id=caixa.id,
+            usuario_id=usuario_id,
+            tipo="RECEBIMENTO_FIADO",
+            valor=diferenca,
+            forma_pagamento=forma_pagamento,
+            descricao=f"{motivo} - {cliente_nome}",
+        )
+    )
+
+    return True
 
 
 def _verificar_limite_credito(db: Session, cliente_id: int):
@@ -141,6 +189,87 @@ class MovimentoFiadoService:
         return movimento
 
     @staticmethod
+    def atualizar(
+        db: Session,
+        movimento_id: int,
+        dados: MovimentoFiadoUpdate,
+        usuario_id: int,
+    ) -> tuple:
+        """Corrige um lancamento errado (valor e/ou descricao). Se for
+        um PAGAMENTO que tinha impactado o caixa, a diferenca de valor
+        e refletida no caixa aberto de quem esta corrigindo -- devolve
+        (movimento, caixa_ajustado) pra API poder avisar quando nao
+        havia caixa aberto pra ajustar automaticamente."""
+
+        movimento = MovimentoFiadoRepository.buscar_por_id(db, movimento_id)
+
+        if not movimento:
+            raise Exception("Lançamento não encontrado.")
+
+        valor_antigo = movimento.valor
+        caixa_ajustado = True
+
+        if dados.valor is not None:
+            movimento.valor = dados.valor
+
+        if dados.descricao is not None:
+            movimento.descricao = dados.descricao
+
+        if (
+            movimento.tipo == "PAGAMENTO"
+            and movimento.forma_pagamento
+            and dados.valor is not None
+            and dados.valor != valor_antigo
+        ):
+            cliente = ClienteRepository.buscar_por_id(
+                db, movimento.cliente_id
+            )
+            caixa_ajustado = _ajustar_caixa_por_correcao(
+                db,
+                usuario_id,
+                cliente.nome if cliente else "cliente",
+                dados.valor - valor_antigo,
+                movimento.forma_pagamento,
+                "Ajuste de fiado",
+            )
+
+        movimento = MovimentoFiadoRepository.atualizar(db, movimento)
+
+        return movimento, caixa_ajustado
+
+    @staticmethod
+    def excluir(db: Session, movimento_id: int, usuario_id: int) -> bool:
+        """Exclui um lancamento errado. Se era um PAGAMENTO que tinha
+        impactado o caixa, estorna no caixa aberto de quem esta
+        excluindo -- devolve False se nao havia caixa aberto (o
+        lancamento e excluido de qualquer forma, so o estorno
+        automatico do caixa fica pendente)."""
+
+        movimento = MovimentoFiadoRepository.buscar_por_id(db, movimento_id)
+
+        if not movimento:
+            raise Exception("Lançamento não encontrado.")
+
+        caixa_ajustado = True
+
+        if movimento.tipo == "PAGAMENTO" and movimento.forma_pagamento:
+            cliente = ClienteRepository.buscar_por_id(
+                db, movimento.cliente_id
+            )
+            caixa_ajustado = _ajustar_caixa_por_correcao(
+                db,
+                usuario_id,
+                cliente.nome if cliente else "cliente",
+                -movimento.valor,
+                movimento.forma_pagamento,
+                "Exclusão de fiado",
+            )
+
+        MovimentoFiadoRepository.excluir(db, movimento)
+
+        return caixa_ajustado
+
+    @staticmethod
     def listar(db: Session):
         return MovimentoFiadoRepository.listar(db)
 
@@ -157,3 +286,7 @@ class MovimentoFiadoService:
             db,
             cliente_id,
         )
+
+    @staticmethod
+    def saldo_total(db: Session):
+        return MovimentoFiadoRepository.saldo_total(db)

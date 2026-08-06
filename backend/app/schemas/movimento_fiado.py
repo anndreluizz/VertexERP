@@ -17,6 +17,13 @@ class MovimentoFiadoCreate(MovimentoFiadoBase):
     pass
 
 
+class MovimentoFiadoUpdate(BaseModel):
+    # correcao de um lancamento errado -- so valor/descricao, o resto
+    # (tipo, cliente, forma de pagamento) nao muda depois de criado.
+    valor: float | None = None
+    descricao: str | None = None
+
+
 class MovimentoFiadoResponse(MovimentoFiadoBase):
     id: int
     usuario_id: int

@@ -30,6 +30,8 @@ class Venda {
     required this.id,
     required this.clienteId,
     required this.usuarioId,
+    required this.usuarioNome,
+    required this.lucro,
     required this.data,
     required this.valorTotal,
     required this.desconto,
@@ -46,6 +48,8 @@ class Venda {
       id: json['id'] as int,
       clienteId: json['cliente_id'] as int?,
       usuarioId: json['usuario_id'] as int?,
+      usuarioNome: json['usuario_nome'] as String?,
+      lucro: (json['lucro'] as num?)?.toDouble(),
       data: DateTime.parse(json['data'] as String),
       valorTotal: (json['valor_total'] as num).toDouble(),
       desconto: (json['desconto'] as num).toDouble(),
@@ -63,6 +67,8 @@ class Venda {
   final int id;
   final int? clienteId;
   final int? usuarioId;
+  final String? usuarioNome;
+  final double? lucro;
   final DateTime data;
   final double valorTotal;
   final double desconto;

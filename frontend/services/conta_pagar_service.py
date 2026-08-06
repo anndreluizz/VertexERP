@@ -26,11 +26,33 @@ def excluir_conta_pagar(conta_id):
     return delete(f"/contas-pagar/{conta_id}")
 
 
-def pagar_conta_pagar(conta_id):
+def pagar_conta_pagar(
+    conta_id,
+    comprovante_base64=None,
+    comprovante_nome=None,
+    comprovante_tipo=None,
+):
 
-    return post(f"/contas-pagar/{conta_id}/pagar", {})
+    dados = {}
+
+    if comprovante_base64:
+        dados["comprovante_base64"] = comprovante_base64
+        dados["comprovante_nome"] = comprovante_nome
+        dados["comprovante_tipo"] = comprovante_tipo
+
+    return post(f"/contas-pagar/{conta_id}/pagar", dados)
 
 
-def cancelar_conta_pagar(conta_id):
+def obter_documento_conta_pagar(conta_id):
 
-    return post(f"/contas-pagar/{conta_id}/cancelar", {})
+    return get(f"/contas-pagar/{conta_id}/documento")
+
+
+def remover_documento_conta_pagar(conta_id):
+
+    return delete(f"/contas-pagar/{conta_id}/documento")
+
+
+def obter_comprovante_pagamento_conta_pagar(conta_id):
+
+    return get(f"/contas-pagar/{conta_id}/comprovante-pagamento")

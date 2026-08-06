@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers.dart';
 import '../../models/cliente.dart';
 import '../../models/movimento_fiado.dart';
+import '../vendas/vendas_provider.dart';
 
 final buscaClientesProvider = StateProvider<String>((ref) => '');
 
@@ -55,3 +56,78 @@ final historicoFiadoProvider = FutureProvider.autoDispose
       movimentos.sort((a, b) => b.data.compareTo(a.data));
       return movimentos;
     });
+
+/// Última compra / total comprado / qtd de compras -- calculado por
+/// cima da mesma lista de vendas que a aba Vendas já carrega (mesma
+/// abordagem do Desktop: sem endpoint dedicado, só filtra por
+/// cliente_id no que já veio).
+class EstatisticasCompraCliente {
+  const EstatisticasCompraCliente({
+    required this.qtdCompras,
+    required this.totalComprado,
+    required this.ultimaCompra,
+  });
+
+  final int qtdCompras;
+  final double totalComprado;
+  final DateTime? ultimaCompra;
+}
+
+final estatisticasClienteProvider = FutureProvider.autoDispose
+    .family<EstatisticasCompraCliente, int>((ref, clienteId) async {
+      final vendas = await ref.watch(vendasProvider.future);
+      final doCliente = vendas
+          .where((venda) => venda.clienteId == clienteId)
+          .toList();
+
+      if (doCliente.isEmpty) {
+        return const EstatisticasCompraCliente(
+          qtdCompras: 0,
+          totalComprado: 0,
+          ultimaCompra: null,
+        );
+      }
+
+      doCliente.sort((a, b) => b.data.compareTo(a.data));
+
+      return EstatisticasCompraCliente(
+        qtdCompras: doCliente.length,
+        totalComprado: doCliente.fold(0.0, (soma, v) => soma + v.valorTotal),
+        ultimaCompra: doCliente.first.data,
+      );
+    });
+
+class ClientesActions {
+  ClientesActions(this._ref);
+
+  final Ref _ref;
+
+  /// Registra um recebimento de fiado pra esse cliente (mesmo
+  /// endpoint que o extrato/ledger usa pra pagamentos, ver backend
+  /// POST /fiado/movimentos).
+  Future<String?> receberPagamento(
+    int clienteId,
+    double valor, {
+    String? descricao,
+  }) async {
+    try {
+      final api = _ref.read(apiClientProvider);
+      await api.dio.post(
+        '/fiado/movimentos',
+        data: {
+          'cliente_id': clienteId,
+          'tipo': 'PAGAMENTO',
+          'valor': valor,
+          'descricao': descricao,
+        },
+      );
+      _ref.invalidate(saldoFiadoProvider(clienteId));
+      _ref.invalidate(historicoFiadoProvider(clienteId));
+      return null;
+    } catch (_) {
+      return 'Não foi possível registrar o recebimento.';
+    }
+  }
+}
+
+final clientesActionsProvider = Provider((ref) => ClientesActions(ref));

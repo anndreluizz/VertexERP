@@ -62,35 +62,3 @@ def listar_movimentos():
         return []
 
     return response.json()
-
-
-# ==========================================
-# Listar por caixa
-# ==========================================
-
-def listar_por_caixa(caixa_id):
-
-    response = get(
-        f"/movimentos-caixa/caixa/{caixa_id}"
-    )
-
-    if response.status_code != 200:
-        return []
-
-    return response.json()
-
-
-# ==========================================
-# Listar por tipo
-# ==========================================
-
-def listar_por_tipo(tipo):
-
-    response = get(
-        f"/movimentos-caixa/tipo/{tipo}"
-    )
-
-    if response.status_code != 200:
-        return []
-
-    return response.json()

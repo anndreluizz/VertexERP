@@ -10,11 +10,3 @@ class ApiResponse:
             "message": message,
             "data": data
         }
-
-    @staticmethod
-    def error(message: str):
-        return {
-            "success": False,
-            "message": message,
-            "data": None
-        }

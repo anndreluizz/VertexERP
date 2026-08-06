@@ -180,3 +180,17 @@ def excluir_cliente(
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{cliente_id}/reativar")
+def reativar_cliente(
+    cliente_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user)
+):
+    # reativar e' de baixo risco (o oposto de excluir) -- nao precisa
+    # do fluxo de aprovacao, qualquer usuario autenticado resolve.
+    try:
+        return ClienteService.reativar(db, cliente_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

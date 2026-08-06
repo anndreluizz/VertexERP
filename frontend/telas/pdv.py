@@ -3,10 +3,10 @@ from datetime import datetime, timedelta
 from telas.pagamento import PagamentoWindow
 from telas.buscar_produto import BuscarProdutoDialog
 from telas.venda_concluida import VendaConcluidaDialog
-from telas.cadastro_rapido import CadastroRapidoDialog
+from telas.cadastro_produto import CadastroProdutoWindow
 from telas.selecionar_cliente import SelecionarClienteDialog
 from services.venda_service import finalizar_venda as enviar_venda, listar_vendas
-from services.produto_service import listar_produtos
+from services.produto_service import listar_produtos, cadastrar_produto
 from services.pdv_service import buscar_produto
 from services.caixa_service import caixa_aberto
 from services.api import configuracoes, me
@@ -242,7 +242,7 @@ class PDV(QWidget):
 
         self.atalho_f4 = QShortcut(QKeySequence(self.atalhos["cadastro_rapido"]), self)
         self.atalho_f4.setContext(contexto)
-        self.atalho_f4.activated.connect(self.abrir_cadastro_rapido)
+        self.atalho_f4.activated.connect(self.abrir_novo_produto)
 
         self.atalho_esc = QShortcut(QKeySequence(self.atalhos["cancelar"]), self)
         self.atalho_esc.setContext(contexto)
@@ -273,7 +273,7 @@ class PDV(QWidget):
         self.atalho_esc.setKey(QKeySequence(self.atalhos["cancelar"]))
 
         self.bt_buscar.setText(f"Buscar ({self.atalhos['busca']})")
-        self.bt_adicionar.setText(f"Adicionar ({self.atalhos['cadastro_rapido']})")
+        self.bt_adicionar.setText(f"Novo Produto ({self.atalhos['cadastro_rapido']})")
 
     # ==================================================
     # CONSTRUÇÃO DA INTERFACE
@@ -711,7 +711,7 @@ class PDV(QWidget):
         self.bt_buscar.setMinimumHeight(56)
 
         self.bt_adicionar = BotaoPrimario(
-            f"Adicionar ({self.atalhos['cadastro_rapido']})", icone_nome="plus"
+            f"Novo Produto ({self.atalhos['cadastro_rapido']})", icone_nome="plus"
         )
         self.bt_adicionar.setMinimumHeight(56)
 
@@ -720,7 +720,7 @@ class PDV(QWidget):
 
         self.bt_buscar.clicked.connect(self.abrir_busca)
         self.bt_pagar.clicked.connect(self.finalizar_venda)
-        self.bt_adicionar.clicked.connect(self.abrir_cadastro_rapido)
+        self.bt_adicionar.clicked.connect(self.abrir_novo_produto)
 
         barra.addWidget(self.bt_buscar, stretch=1)
         barra.addWidget(self.bt_adicionar, stretch=1)
@@ -835,22 +835,34 @@ class PDV(QWidget):
         self.atualizar_tabela()
 
     # ==================================================
-    # ADICIONAR PRODUTO (F4) - cadastro rápido sem sair do PDV
+    # NOVO PRODUTO (F4) - cadastro completo sem sair do PDV
     # ==================================================
 
-    def abrir_cadastro_rapido(self):
+    def abrir_novo_produto(self):
 
-        dialog = CadastroRapidoDialog(self)
+        dialog = CadastroProdutoWindow()
 
         if dialog.exec() != QDialog.Accepted:
             return
 
-        if not dialog.produto_criado:
+        response = cadastrar_produto(dialog.dados)
+
+        if response.status_code != 201:
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+            QMessageBox.critical(self, "Erro", str(erro))
             return
 
+        produto_criado = response.json()
+
+        # a resposta do cadastro vem no formato "cru" (preco_venda) --
+        # o carrinho espera o formato do PDV (preco), entao rebusca
+        # pelo codigo pra pegar exatamente o mesmo shape que o F1/scanner usa
         codigo = (
-            dialog.produto_criado.get("codigo_barras")
-            or dialog.produto_criado.get("codigo")
+            produto_criado.get("codigo_barras")
+            or produto_criado.get("codigo")
         )
 
         produto = buscar_produto(codigo)
@@ -859,6 +871,10 @@ class PDV(QWidget):
             return
 
         self.adicionar_produto_ao_carrinho(produto, 1)
+        self._mostrar_status_busca(
+            f"Produto cadastrado e adicionado: {produto['nome']}",
+            erro=False,
+        )
 
     # ==================================================
     # CLIENTE (opcional, vale pra qualquer forma de pagamento)

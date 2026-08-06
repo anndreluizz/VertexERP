@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/formatadores.dart';
+import '../../core/providers.dart';
 import '../../models/cliente.dart';
 import '../../models/movimento_fiado.dart';
 import '../../theme/vertex_colors.dart';
@@ -37,6 +39,7 @@ class _Ficha extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final saldoAsync = ref.watch(saldoFiadoProvider(cliente.id));
     final historicoAsync = ref.watch(historicoFiadoProvider(cliente.id));
+    final estatisticasAsync = ref.watch(estatisticasClienteProvider(cliente.id));
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -105,6 +108,73 @@ class _Ficha extends ConsumerWidget {
                     ),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    ref.read(abaSelecionadaProvider.notifier).state = 1;
+                    Navigator.of(context).pop();
+                  },
+                  icon: const Icon(Icons.point_of_sale_outlined, size: 17),
+                  label: const Text('Nova venda'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _abrirReceber(context, ref),
+                  icon: const Icon(Icons.call_received, size: 17),
+                  label: const Text('Receber'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: cliente.telefone == null
+                      ? null
+                      : () => _abrirWhatsApp(context, cliente.telefone!),
+                  icon: const Icon(Icons.chat_outlined, size: 17),
+                  label: const Text('WhatsApp'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          estatisticasAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (erro, _) => const SizedBox.shrink(),
+            data: (estatisticas) => Row(
+              children: [
+                Expanded(
+                  child: _CartaoValor(
+                    rotulo: 'Última compra',
+                    valor: estatisticas.ultimaCompra != null
+                        ? formatarData(estatisticas.ultimaCompra!)
+                        : '—',
+                    cor: VertexColors.texto,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _CartaoValor(
+                    rotulo: 'Total comprado',
+                    valor: formatarMoeda(estatisticas.totalComprado),
+                    cor: VertexColors.texto,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _CartaoValor(
+                    rotulo: 'Qtd. compras',
+                    valor: '${estatisticas.qtdCompras}',
+                    cor: VertexColors.texto,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 16),
@@ -180,6 +250,68 @@ class _Ficha extends ConsumerWidget {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _abrirWhatsApp(BuildContext context, String telefone) async {
+    final numero = telefone.replaceAll(RegExp(r'[^0-9]'), '');
+    final uri = Uri.parse('https://wa.me/55$numero');
+
+    final abriu = await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+    if (!abriu && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível abrir o WhatsApp.')),
+      );
+    }
+  }
+
+  Future<void> _abrirReceber(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController();
+
+    final valor = await showDialog<double>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Receber de ${cliente.nome}'),
+        content: TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Valor recebido',
+            prefixText: 'R\$ ',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final digitado = double.tryParse(
+                controller.text.replaceAll(',', '.'),
+              );
+              Navigator.of(context).pop(digitado);
+            },
+            child: const Text('Registrar'),
+          ),
+        ],
+      ),
+    );
+
+    if (valor == null || valor <= 0 || !context.mounted) return;
+
+    final erro = await ref
+        .read(clientesActionsProvider)
+        .receberPagamento(cliente.id, valor);
+
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(erro ?? 'Recebimento registrado com sucesso.'),
       ),
     );
   }

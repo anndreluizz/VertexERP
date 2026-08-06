@@ -92,3 +92,25 @@ class Venda(Base):
         back_populates="venda",
         cascade="all, delete-orphan"
     )
+
+    usuario = relationship("User")
+
+    @property
+    def usuario_nome(self) -> str | None:
+        return self.usuario.nome if self.usuario else None
+
+    @property
+    def lucro(self) -> float | None:
+        """Valor total (ja com desconto aplicado) menos o custo dos
+        produtos vendidos -- so pra dar visibilidade de margem no
+        detalhe da venda; None se algum item nao tiver produto/custo
+        disponivel (produto removido, por exemplo)."""
+
+        try:
+            custo_total = sum(
+                (item.produto.preco_custo or 0) * item.quantidade
+                for item in self.itens
+            )
+            return self.valor_total - custo_total
+        except Exception:
+            return None

@@ -65,13 +65,3 @@ class MovimentoCaixaService:
             db,
             caixa_id
         )
-
-    @staticmethod
-    def listar_por_tipo(
-        db: Session,
-        tipo: str,
-    ):
-        return MovimentoCaixaRepository.listar_por_tipo(
-            db,
-            tipo.upper()
-        )

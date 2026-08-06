@@ -28,6 +28,7 @@ from app.api.v1.financeiro import router as fiado_router
 from app.api.v1.configuracoes import router as configuracoes_router
 from app.api.v1.notificacoes import router as notificacoes_router
 from app.api.v1.aprovacoes import router as aprovacoes_router
+from app.services.aviso_vencimento_service import iniciar_verificacao_diaria
 
 app = FastAPI(
     title="Vertex ERP",
@@ -95,6 +96,11 @@ def preparar_banco():
         return
 
     _rodar_migracoes()
+
+    # aviso diario de "contas vencidas/vencendo amanha" (ver
+    # app/services/aviso_vencimento_service.py) -- so faz sentido numa
+    # instalacao de verdade rodando continuamente, nao em teste.
+    iniciar_verificacao_diaria()
 
 
 def _rodar_migracoes():

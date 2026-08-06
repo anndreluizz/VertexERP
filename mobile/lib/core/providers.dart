@@ -7,6 +7,12 @@ import 'vertex_storage.dart';
 
 final storageProvider = Provider<VertexStorage>((ref) => VertexStorage());
 
+/// Indice da aba ativa no HomeShell (Inicio/Vendas/Clientes/Financeiro/
+/// Mais) -- elevado aqui (em vez de estado local da tela) pra outras
+/// telas poderem trocar de aba sozinhas, ex.: o banner de "contas
+/// vencendo hoje" do dashboard levando direto pro Financeiro.
+final abaSelecionadaProvider = StateProvider<int>((ref) => 0);
+
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 
 final notificacaoServiceProvider = Provider<NotificacaoService>(

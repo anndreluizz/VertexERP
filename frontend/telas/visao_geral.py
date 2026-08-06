@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QFrame,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
@@ -327,6 +328,27 @@ class VisaoGeral(QWidget):
         layout.addLayout(cabecalho)
 
         # ======================
+        # AREA ROLAVEL (todo o resto da pagina) -- so o cabecalho acima
+        # fica fixo.
+        # ======================
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+        )
+
+        conteudo = QWidget()
+        conteudo.setStyleSheet("background:transparent;")
+
+        conteudo_layout = QVBoxLayout(conteudo)
+        conteudo_layout.setContentsMargins(0, 0, 0, 0)
+        conteudo_layout.setSpacing(16)
+
+        scroll.setWidget(conteudo)
+        layout.addWidget(scroll, stretch=1)
+
+        # ======================
         # FILTRO DE PERÍODO
         # ======================
 
@@ -366,7 +388,7 @@ class VisaoGeral(QWidget):
 
         filtro_layout.addStretch()
 
-        layout.addLayout(filtro_layout)
+        conteudo_layout.addLayout(filtro_layout)
 
         self.botoes_periodo["Hoje"].setChecked(True)
 
@@ -397,7 +419,7 @@ class VisaoGeral(QWidget):
         metricas_layout.addWidget(self.card_ticket)
         metricas_layout.addStretch()
 
-        layout.addWidget(barra_metricas)
+        conteudo_layout.addWidget(barra_metricas)
 
         # ======================
         # GRÁFICO DE DESEMPENHO
@@ -409,7 +431,7 @@ class VisaoGeral(QWidget):
         self.grafico = GraficoDesempenho()
         self.painel_grafico.corpo.addWidget(self.grafico)
 
-        layout.addWidget(self.painel_grafico)
+        conteudo_layout.addWidget(self.painel_grafico)
 
         # ======================
         # ÚLTIMAS TRANSAÇÕES
@@ -467,7 +489,7 @@ class VisaoGeral(QWidget):
         self.lbl_transacoes_vazio.setVisible(False)
         self.painel_transacoes.corpo.addWidget(self.lbl_transacoes_vazio)
 
-        layout.addWidget(self.painel_transacoes)
+        conteudo_layout.addWidget(self.painel_transacoes)
 
         # ======================
         # TOP PRODUTOS + MAPA DE HORÁRIOS
@@ -486,8 +508,8 @@ class VisaoGeral(QWidget):
         linha_inferior.addWidget(self.painel_top_produtos, stretch=1)
         linha_inferior.addWidget(self.painel_mapa_horarios, stretch=1)
 
-        layout.addLayout(linha_inferior)
-        layout.addStretch()
+        conteudo_layout.addLayout(linha_inferior)
+        conteudo_layout.addStretch()
 
     # ==========================================
     # PERÍODO

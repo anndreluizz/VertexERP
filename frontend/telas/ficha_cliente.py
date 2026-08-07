@@ -198,6 +198,10 @@ class LancarFiadoDialog(QDialog):
         self.data.setCalendarPopup(True)
         self.data.setDisplayFormat("dd/MM/yyyy")
         self.data.setDate(QDate.currentDate())
+        # uma compra fiada não pode ser datada no futuro -- sem isso,
+        # um clique errado no calendário (ex.: mês seguinte) gera uma
+        # "Última Compra" no futuro e "Dias sem comprar" negativo na ficha
+        self.data.setMaximumDate(QDate.currentDate())
         self.data.setMinimumHeight(44)
         self.data.setStyleSheet(f"""
             QDateEdit {{
@@ -402,6 +406,9 @@ class RegistrarPagamentoDialog(QDialog):
         self.data.setCalendarPopup(True)
         self.data.setDisplayFormat("dd/MM/yyyy")
         self.data.setDate(QDate.currentDate())
+        # mesmo motivo do LancarFiadoDialog: pagamento no futuro não
+        # existe, e gerava "Dias sem comprar" negativo na ficha
+        self.data.setMaximumDate(QDate.currentDate())
         self.data.setMinimumHeight(44)
         self.data.setStyleSheet(f"""
             QDateEdit {{

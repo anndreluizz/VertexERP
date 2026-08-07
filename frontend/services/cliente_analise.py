@@ -70,7 +70,15 @@ def calcular_agregados(cliente, movimentos_do_cliente):
     agora = datetime.now()
 
     def _dias_ate_agora(data):
-        return (agora - data).days if data else None
+        """Nunca negativo -- uma compra/pagamento/cadastro datado no
+        futuro (ex.: engano no seletor de data) não pode virar "-28
+        dias" na tela; o mais próximo que existe de sentido nesse caso
+        é tratar como "hoje" (0 dias)."""
+
+        if not data:
+            return None
+
+        return max((agora - data).days, 0)
 
     criado_em = _parse_data(cliente.get("criado_em"))
 

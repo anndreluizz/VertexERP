@@ -9,6 +9,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
     QVBoxLayout,
     QHBoxLayout,
@@ -648,11 +649,7 @@ class FichaClienteDialog(QDialog):
         self._timeline_qtd_exibida = self._TIMELINE_PAGINA
 
         self.setWindowTitle(f"Ficha - {cliente['nome']}")
-        # largura inicial pensada pra já abrir mostrando as 2 linhas de
-        # 5 mini-cards lado a lado (ver _LARGURA_MINI_CARD) -- em telas
-        # mais estreitas o FlowLayout quebra sozinho pra mais linhas,
-        # sem nunca forçar rolagem horizontal.
-        self.resize(1180, 760)
+        self._dimensionar_e_centralizar()
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         raiz = QVBoxLayout(self)
@@ -680,6 +677,24 @@ class FichaClienteDialog(QDialog):
         raiz.addWidget(self._construir_rodape())
 
         self.carregar()
+
+    def _dimensionar_e_centralizar(self):
+        """Tamanho da janela calculado a partir da tela de verdade (90%
+        da área útil, sem contar a barra de tarefas), nunca um valor
+        fixo no código -- funciona igual em qualquer resolução (de
+        1366x768 até 4K), sempre dentro da área disponível do Windows,
+        e já abre centralizada."""
+
+        tela = QApplication.primaryScreen().availableGeometry()
+
+        largura = int(tela.width() * 0.9)
+        altura = int(tela.height() * 0.9)
+
+        self.resize(largura, altura)
+        self.move(
+            tela.x() + (tela.width() - largura) // 2,
+            tela.y() + (tela.height() - altura) // 2,
+        )
 
     # ======================================
     # CONSTRUÇÃO DA INTERFACE
@@ -1257,7 +1272,10 @@ class FichaClienteDialog(QDialog):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setMinimumHeight(160)
+        # sem altura minima -- essa lista tem rolagem própria, não pode
+        # ser o que impede o painel (e o diálogo inteiro) de encolher
+        # numa tela menor (ver _dimensionar_e_centralizar)
+        scroll.setMinimumHeight(0)
         scroll.setMaximumHeight(260)
         scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
 
@@ -1905,7 +1923,21 @@ class FichaClienteDialog(QDialog):
         self.painel_lateral.corpo.addWidget(lbl_obs_titulo)
         self.painel_lateral.corpo.addWidget(self._construir_pagina_observacoes())
 
-        layout_wrapper.addWidget(self.painel_lateral, stretch=1)
+        # o painel inteiro (Resumo + Observações) fica dentro da sua
+        # própria rolagem vertical -- em telas mais baixas (ex.:
+        # 1366x768) o conteúdo dele sozinho já passaria dos 90% de
+        # altura da tela; sem isso, ele forçaria o diálogo inteiro a
+        # crescer além da área útil do Windows pra caber tudo sem
+        # cortar nada. Só rolagem vertical: a largura já é fixa.
+        self.scroll_painel_lateral = QScrollArea()
+        self.scroll_painel_lateral.setWidgetResizable(True)
+        self.scroll_painel_lateral.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_painel_lateral.setStyleSheet(
+            "QScrollArea { background:transparent; border:none; }"
+        )
+        self.scroll_painel_lateral.setWidget(self.painel_lateral)
+
+        layout_wrapper.addWidget(self.scroll_painel_lateral, stretch=1)
 
         self._painel_lateral_wrapper = wrapper
 
@@ -1915,7 +1947,7 @@ class FichaClienteDialog(QDialog):
 
         self.painel_lateral_expandido = not self.painel_lateral_expandido
 
-        self.painel_lateral.setVisible(self.painel_lateral_expandido)
+        self.scroll_painel_lateral.setVisible(self.painel_lateral_expandido)
 
         if self.painel_lateral_expandido:
             self._painel_lateral_wrapper.setFixedWidth(

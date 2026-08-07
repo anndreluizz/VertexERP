@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
@@ -63,6 +65,39 @@ class MovimentoFiadoRepository:
         )
 
         return saldo or 0.0
+
+    @staticmethod
+    def listar_parados(db: Session, dias_limite: int):
+        """Um cliente por linha (cliente_id, saldo, ultima_movimentacao)
+        pra quem tem saldo devedor > 0 e nao mexe no fiado ha pelo
+        menos `dias_limite` dias -- usado pelo lembrete automatico de
+        WhatsApp (ver whatsapp_lembrete_service.py). Feito com HAVING
+        em vez de trazer tudo pra memoria e filtrar em Python, porque
+        essa lista pode crescer bastante numa loja com muitos
+        clientes fiado."""
+
+        valor_assinado = case(
+            (MovimentoFiado.tipo == "COMPRA", MovimentoFiado.valor),
+            else_=-MovimentoFiado.valor,
+        )
+
+        # comparado em Python (naive UTC), mesmo padrao de
+        # datetime.utcnow() usado no resto do projeto -- evita
+        # depender de conversao implicita de timezone do Postgres
+        # entre timestamp naive e now() (timestamptz).
+        limite = datetime.utcnow() - timedelta(days=dias_limite)
+
+        return (
+            db.query(
+                MovimentoFiado.cliente_id,
+                func.sum(valor_assinado).label("saldo"),
+                func.max(MovimentoFiado.data).label("ultima_movimentacao"),
+            )
+            .group_by(MovimentoFiado.cliente_id)
+            .having(func.sum(valor_assinado) > 0)
+            .having(func.max(MovimentoFiado.data) <= limite)
+            .all()
+        )
 
     @staticmethod
     def saldo_total(db: Session) -> float:

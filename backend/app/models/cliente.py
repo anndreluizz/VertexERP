@@ -69,6 +69,14 @@ class Cliente(Base):
         nullable=True
     )
 
+    # Quando foi mandado o ultimo lembrete de fiado parado via
+    # WhatsApp -- evita mandar o mesmo aviso todo dia enquanto o
+    # cliente nao paga (ver whatsapp_lembrete_service.py).
+    whatsapp_fiado_avisado_em: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True
+    )
+
     @property
     def tem_foto(self) -> bool:
         return self.foto is not None

@@ -43,6 +43,8 @@ from services.cliente_service import (
     criar_observacao_cliente,
     excluir_observacao_cliente,
 )
+from telas import comprovante_acoes
+from services import cliente_analise
 
 from design import tokens
 from design.icons import icone, icone_pixmap
@@ -686,9 +688,12 @@ class FichaClienteDialog(QDialog):
 
         self.card_financeiro = Card()
 
-        layout = QHBoxLayout(self.card_financeiro)
-        layout.setContentsMargins(22, 18, 22, 18)
-        layout.setSpacing(28)
+        layout_externo = QVBoxLayout(self.card_financeiro)
+        layout_externo.setContentsMargins(22, 18, 22, 18)
+        layout_externo.setSpacing(14)
+
+        linha_principal = QHBoxLayout()
+        linha_principal.setSpacing(28)
 
         col_saldo = QVBoxLayout()
         col_saldo.setSpacing(2)
@@ -715,12 +720,12 @@ class FichaClienteDialog(QDialog):
         col_saldo.addWidget(self.lbl_saldo_valor)
         col_saldo.addWidget(self.lbl_saldo_info)
 
-        layout.addLayout(col_saldo)
+        linha_principal.addLayout(col_saldo)
 
         linha = QFrame()
         linha.setFixedWidth(1)
         linha.setStyleSheet(f"background:{tokens.BORDA};")
-        layout.addWidget(linha)
+        linha_principal.addWidget(linha)
 
         grid_stats = QGridLayout()
         grid_stats.setHorizontalSpacing(28)
@@ -738,14 +743,39 @@ class FichaClienteDialog(QDialog):
         self.lbl_ultimo_pagamento = self._stat_pequena(
             grid_stats, 1, 0, "ÚLTIMO PAGAMENTO"
         )
+        self.lbl_ultimo_movimento = self._stat_pequena(
+            grid_stats, 1, 1, "ÚLTIMO MOVIMENTO"
+        )
+        self.lbl_dias_sem_movimentacao = self._stat_pequena(
+            grid_stats, 1, 2, "DIAS SEM MOVIMENTAÇÃO"
+        )
+        self.lbl_dias_desde_ultima_compra = self._stat_pequena(
+            grid_stats, 2, 0, "DIAS DESDE ÚLTIMA COMPRA"
+        )
+        self.lbl_dias_desde_ultimo_pagamento = self._stat_pequena(
+            grid_stats, 2, 1, "DIAS DESDE ÚLTIMO PAGAMENTO"
+        )
         self.lbl_cliente_desde = self._stat_pequena(
-            grid_stats, 1, 1, "CLIENTE DESDE"
+            grid_stats, 2, 2, "CLIENTE DESDE"
+        )
+        self.lbl_status_financeiro = self._stat_pequena(
+            grid_stats, 3, 0, "STATUS FINANCEIRO"
+        )
+        self.lbl_status_relacionamento = self._stat_pequena(
+            grid_stats, 3, 1, "STATUS DE RELACIONAMENTO"
         )
         self.lbl_score = self._stat_pequena(
-            grid_stats, 1, 2, "PERFIL"
+            grid_stats, 3, 2, "PONTUAÇÃO"
         )
 
-        layout.addLayout(grid_stats, stretch=1)
+        linha_principal.addLayout(grid_stats, stretch=1)
+
+        layout_externo.addLayout(linha_principal)
+
+        self.lbl_aviso_status = QLabel("")
+        self.lbl_aviso_status.setAlignment(Qt.AlignCenter)
+        self.lbl_aviso_status.setWordWrap(True)
+        layout_externo.addWidget(self.lbl_aviso_status)
 
         return self.card_financeiro
 
@@ -798,13 +828,54 @@ class FichaClienteDialog(QDialog):
         self.bt_csv.setAutoDefault(False)
         self.bt_csv.clicked.connect(self.exportar_csv)
 
+        self.bt_ultimo_comprovante = BotaoSecundario(
+            "Enviar Último Comprovante", icone_nome="message-circle"
+        )
+        self.bt_ultimo_comprovante.setMinimumHeight(46)
+        self.bt_ultimo_comprovante.setAutoDefault(False)
+        self.bt_ultimo_comprovante.clicked.connect(
+            self.enviar_ultimo_comprovante
+        )
+
         layout.addWidget(self.bt_lancar_fiado)
         layout.addWidget(self.bt_pagar)
         layout.addStretch()
+        layout.addWidget(self.bt_ultimo_comprovante)
         layout.addWidget(self.bt_extrato)
         layout.addWidget(self.bt_csv)
 
         return layout
+
+    def enviar_ultimo_comprovante(self):
+
+        vendas_cliente = [
+            v for v in listar_vendas()
+            if v.get("cliente_id") == self.cliente["id"]
+        ]
+
+        if not vendas_cliente:
+            QMessageBox.information(
+                self,
+                "Sem compras",
+                "Este cliente ainda não tem nenhuma compra registrada.",
+            )
+            return
+
+        ultima_venda = max(vendas_cliente, key=lambda v: v["data"])
+
+        data = str(ultima_venda["data"]).replace("T", " ")[:16]
+
+        resposta = QMessageBox.question(
+            self,
+            "Enviar Último Comprovante",
+            f"Enviar pelo WhatsApp o comprovante da venda #{ultima_venda['id']}"
+            f" ({data}, R$ {float(ultima_venda['valor_total']):.2f})?",
+        )
+
+        if resposta != QMessageBox.Yes:
+            return
+
+        comprovante_acoes.enviar_whatsapp(ultima_venda["id"], self)
 
     def _construir_abas(self):
 
@@ -1699,76 +1770,73 @@ class FichaClienteDialog(QDialog):
 
             tabela.setCellWidget(linha, 6, self._acoes_movimento(mov))
 
-    def _perfil_cliente(self, qtd_compras, saldo_atual, movimentos_cron):
-        """Heurística simples e transparente — não um score numérico
-        inventado, já que não existe formula nenhuma de crédito
-        combinada hoje. Baseada em frequência de compras, saldo atual e
-        há quanto tempo o saldo está parado (pontualidade), sempre
-        recalculada na hora a partir do histórico real — o mesmo
-        espírito do Ticket Médio, que já é calculado assim."""
-
-        if qtd_compras == 0:
-            return "Cliente novo"
-
-        if saldo_atual <= 0.009:
-            return "Ótimo pagador" if qtd_compras >= 3 else "Bom pagador"
-
-        ultimo = movimentos_cron[-1] if movimentos_cron else None
-        data_ultimo = _parse_data(ultimo.get("data")) if ultimo else None
-        dias_parado = (datetime.now() - data_ultimo).days if data_ultimo else None
-
-        if dias_parado is not None and dias_parado > 60:
-            return "Atenção"
-
-        return "Em aberto"
-
     def _atualizar_stats(self, movimentos_cron, saldo_atual):
 
-        compras = [m for m in movimentos_cron if m.get("tipo") == "COMPRA"]
-        pagamentos = [m for m in movimentos_cron if m.get("tipo") == "PAGAMENTO"]
+        agr = cliente_analise.calcular_agregados(self.cliente, movimentos_cron)
 
-        total_comprado = sum(float(m.get("valor", 0) or 0) for m in compras)
-        total_pago = sum(float(m.get("valor", 0) or 0) for m in pagamentos)
-        qtd_compras = len(compras)
-        maior_compra = max(
-            (float(m.get("valor", 0) or 0) for m in compras), default=0
+        total_comprado = agr["total_comprado"]
+        total_pago = sum(
+            float(m.get("valor", 0) or 0)
+            for m in movimentos_cron
+            if m.get("tipo") == "PAGAMENTO"
         )
+        qtd_compras = agr["qtd_compras"]
+        maior_compra = agr["maior_compra"]
         ticket_medio = total_comprado / qtd_compras if qtd_compras else 0
 
-        ultima_compra = compras[-1] if compras else None
-        ultimo_pagamento = pagamentos[-1] if pagamentos else None
-
-        def _data_curta(mov):
-            if not mov:
-                return "—"
-            data = _parse_data(mov.get("data"))
+        def _data_curta(data):
             return data.strftime("%d/%m/%Y") if data else "—"
 
-        cliente_desde = _parse_data(self.cliente.get("criado_em"))
+        def _dias_texto(dias):
+            if dias is None:
+                return "—"
+            return "Hoje" if dias == 0 else f"{dias} dia(s)"
 
         # card financeiro
         self.lbl_total_comprado.setText(_formatar_moeda(total_comprado))
         self.lbl_qtd_compras.setText(str(qtd_compras))
-        self.lbl_ultima_compra.setText(_data_curta(ultima_compra))
-        self.lbl_ultimo_pagamento.setText(_data_curta(ultimo_pagamento))
-        self.lbl_cliente_desde.setText(
-            cliente_desde.strftime("%d/%m/%Y") if cliente_desde else "—"
+        self.lbl_ultima_compra.setText(_data_curta(agr["ultima_compra"]))
+        self.lbl_ultimo_pagamento.setText(_data_curta(agr["ultimo_pagamento"]))
+        self.lbl_ultimo_movimento.setText(_data_curta(agr["ultima_movimentacao"]))
+        self.lbl_dias_sem_movimentacao.setText(
+            _dias_texto(agr["dias_sem_movimentacao"])
         )
-        self.lbl_score.setText(
-            self._perfil_cliente(qtd_compras, saldo_atual, movimentos_cron)
+        self.lbl_dias_desde_ultima_compra.setText(
+            _dias_texto(agr["dias_desde_ultima_compra"])
         )
+        self.lbl_dias_desde_ultimo_pagamento.setText(
+            _dias_texto(agr["dias_desde_ultimo_pagamento"])
+        )
+        self.lbl_cliente_desde.setText(_data_curta(agr["criado_em"]))
 
-        if saldo_atual > 0 and movimentos_cron:
-            ultimo = movimentos_cron[-1]
-            data_ultimo = _parse_data(ultimo.get("data"))
-            if data_ultimo:
-                dias = (datetime.now() - data_ultimo).days
-                self.lbl_saldo_info.setText(
-                    f"Última movimentação há {dias} dia(s)"
-                    if dias > 0 else "Movimentação de hoje"
-                )
-            else:
-                self.lbl_saldo_info.setText("")
+        self.lbl_status_financeiro.setText(
+            cliente_analise.status_financeiro(agr)
+        )
+        self.lbl_status_relacionamento.setText(
+            cliente_analise.status_relacionamento(agr)
+        )
+        self.lbl_score.setText(cliente_analise.calcular_pontuacao(agr))
+
+        aviso = cliente_analise.calcular_aviso(agr)
+        cor_fundo, cor_texto = {
+            "🔴": (tokens.ERRO_CLARO, tokens.ERRO),
+            "🟡": (tokens.ALERTA_CLARO, tokens.ALERTA),
+            "🟢": (tokens.SUCESSO_CLARO, tokens.SECUNDARIA_HOVER),
+        }.get(aviso[:1], (tokens.FUNDO, tokens.TEXTO_SECUNDARIO))
+
+        self.lbl_aviso_status.setText(aviso)
+        self.lbl_aviso_status.setStyleSheet(f"""
+            background:{cor_fundo}; color:{cor_texto}; border:none;
+            font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+            border-radius:{tokens.RADIUS_SM}px; padding:6px 10px;
+        """)
+
+        if saldo_atual > 0 and agr["dias_sem_movimentacao"] is not None:
+            dias = agr["dias_sem_movimentacao"]
+            self.lbl_saldo_info.setText(
+                f"Última movimentação há {dias} dia(s)"
+                if dias > 0 else "Movimentação de hoje"
+            )
         else:
             self.lbl_saldo_info.setText("")
 
@@ -1777,7 +1845,7 @@ class FichaClienteDialog(QDialog):
         self.lbl_resumo_total_pago.setText(_formatar_moeda(total_pago))
         self.lbl_resumo_saldo_atual.setText(_formatar_moeda(saldo_atual))
         self.lbl_resumo_maior_compra.setText(_formatar_moeda(maior_compra))
-        self.lbl_resumo_ultima_compra.setText(_data_curta(ultima_compra))
+        self.lbl_resumo_ultima_compra.setText(_data_curta(agr["ultima_compra"]))
         self.lbl_resumo_ticket_medio.setText(_formatar_moeda(ticket_medio))
         self.lbl_resumo_total_compras.setText(str(qtd_compras))
 

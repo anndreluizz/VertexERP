@@ -1,26 +1,23 @@
-from datetime import datetime
-
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QTextDocument, QPageSize
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
-    QPushButton,
     QVBoxLayout,
     QHBoxLayout,
-    QTextEdit,
-    QFileDialog,
-    QMessageBox,
 )
-from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 
-from services.api import configuracoes
+from design import tokens
+from design.animations import fade_in
+from design.widgets import BotaoPrimario, BotaoSecundario, BotaoSucesso
+from telas import comprovante_acoes
+from telas.comprovante_dialog import ComprovanteDialog
 
 
 class VendaConcluidaDialog(QDialog):
 
     def __init__(
         self,
+        venda_id,
         total,
         itens,
         forma_pagamento,
@@ -32,6 +29,7 @@ class VendaConcluidaDialog(QDialog):
 
         super().__init__(parent)
 
+        self.venda_id = venda_id
         self.total = total
         self.itens = itens
         self.forma_pagamento = forma_pagamento
@@ -40,33 +38,33 @@ class VendaConcluidaDialog(QDialog):
         self.valor_forma_2 = valor_forma_2 or 0.0
 
         self.setWindowTitle("Venda Finalizada")
-        self.setFixedSize(420, 520)
+        self.setFixedSize(440, 640)
         self.setStyleSheet("background:white;")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 40, 40, 40)
-        layout.setSpacing(14)
+        layout.setContentsMargins(40, 32, 40, 32)
+        layout.setSpacing(12)
         layout.setAlignment(Qt.AlignHCenter)
 
         selo = QLabel("✓")
-        selo.setFixedSize(90, 90)
+        selo.setFixedSize(80, 80)
         selo.setAlignment(Qt.AlignCenter)
         selo.setStyleSheet("""
             background:#2E7D32;
             color:white;
-            font-size:44px;
+            font-size:40px;
             font-weight:bold;
-            border-radius:45px;
+            border-radius:40px;
         """)
 
         titulo = QLabel("Pago!")
         titulo.setAlignment(Qt.AlignCenter)
         titulo.setStyleSheet(
-            "background:transparent; font-size:26px; font-weight:bold; "
+            "background:transparent; font-size:24px; font-weight:bold; "
             "color:#202225;"
         )
 
-        subtitulo = QLabel("VENDA FINALIZADA")
+        subtitulo = QLabel(f"VENDA #{venda_id} FINALIZADA")
         subtitulo.setAlignment(Qt.AlignCenter)
         subtitulo.setStyleSheet(
             "background:transparent; font-size:11px; color:gray; "
@@ -76,15 +74,15 @@ class VendaConcluidaDialog(QDialog):
         valor = QLabel(f"R$ {total:.2f}")
         valor.setAlignment(Qt.AlignCenter)
         valor.setStyleSheet(
-            "background:transparent; font-size:34px; font-weight:bold; "
+            "background:transparent; font-size:30px; font-weight:bold; "
             "color:#2E7D32;"
         )
 
         layout.addWidget(selo, alignment=Qt.AlignHCenter)
-        layout.addSpacing(6)
+        layout.addSpacing(4)
         layout.addWidget(titulo)
         layout.addWidget(subtitulo)
-        layout.addSpacing(10)
+        layout.addSpacing(8)
         layout.addWidget(valor)
 
         tem_fiado = (
@@ -115,194 +113,78 @@ class VendaConcluidaDialog(QDialog):
                 padding:8px 14px;
             """)
 
-            layout.addSpacing(10)
+            layout.addSpacing(8)
             layout.addWidget(lbl_fiado)
 
-        layout.addSpacing(20)
+        layout.addSpacing(16)
 
-        self.bt_comprovante = QPushButton("🧾  Emitir Comprovante")
-        self.bt_comprovante.setMinimumHeight(48)
-        self.bt_comprovante.setStyleSheet("""
-            QPushButton {
-                background:#202225;
-                color:white;
-                border-radius:8px;
-                font-weight:bold;
-            }
-            QPushButton:hover {
-                background:#33363b;
-            }
-        """)
-        self.bt_comprovante.clicked.connect(self.emitir_comprovante)
+        # ======================
+        # AÇÕES DO COMPROVANTE
+        # ======================
 
-        self.bt_nova_venda = QPushButton("Abrir Nova Venda")
+        self.bt_visualizar = BotaoPrimario(
+            "Visualizar Comprovante", icone_nome="file-text"
+        )
+        self.bt_visualizar.setMinimumHeight(48)
+        self.bt_visualizar.clicked.connect(self.visualizar_comprovante)
+        layout.addWidget(self.bt_visualizar)
+
+        linha_acoes = QHBoxLayout()
+        linha_acoes.setSpacing(8)
+
+        self.bt_imprimir = BotaoSecundario("Imprimir", icone_nome="printer")
+        self.bt_imprimir.setMinimumHeight(44)
+        self.bt_imprimir.clicked.connect(self.imprimir)
+
+        self.bt_baixar = BotaoSecundario("Baixar PDF", icone_nome="download")
+        self.bt_baixar.setMinimumHeight(44)
+        self.bt_baixar.clicked.connect(self.baixar_pdf)
+
+        linha_acoes.addWidget(self.bt_imprimir)
+        linha_acoes.addWidget(self.bt_baixar)
+        layout.addLayout(linha_acoes)
+
+        linha_envio = QHBoxLayout()
+        linha_envio.setSpacing(8)
+
+        self.bt_whatsapp = BotaoSecundario(
+            "WhatsApp", icone_nome="message-circle"
+        )
+        self.bt_whatsapp.setMinimumHeight(44)
+        self.bt_whatsapp.clicked.connect(self.enviar_whatsapp)
+
+        self.bt_email = BotaoSecundario("E-mail", icone_nome="mail")
+        self.bt_email.setMinimumHeight(44)
+        self.bt_email.clicked.connect(self.enviar_email)
+
+        linha_envio.addWidget(self.bt_whatsapp)
+        linha_envio.addWidget(self.bt_email)
+        layout.addLayout(linha_envio)
+
+        layout.addSpacing(8)
+
+        self.bt_nova_venda = BotaoSucesso("Abrir Nova Venda")
         self.bt_nova_venda.setMinimumHeight(48)
-        self.bt_nova_venda.setStyleSheet("""
-            QPushButton {
-                background:#2E7D32;
-                color:white;
-                border-radius:8px;
-                font-weight:bold;
-            }
-            QPushButton:hover {
-                background:#1B5E20;
-            }
-        """)
         self.bt_nova_venda.clicked.connect(self.accept)
-
-        layout.addWidget(self.bt_comprovante)
         layout.addWidget(self.bt_nova_venda)
 
-    def html_comprovante(self):
-        """Comprovante moderno em HTML — mesmo padrão de
-        QTextDocument+QPrinter já usado em ficha_cliente.py, no lugar
-        do texto monoespaçado antigo."""
+        fade_in(self, duracao=220)
 
-        config = configuracoes()
-        nome_loja = config.get("nome_loja") or "Vertex ERP"
+    # ======================
+    # AÇÕES
+    # ======================
 
-        linhas_itens = "".join(
-            "<tr>"
-            f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB;'>"
-            f"{item['nome']}</td>"
-            f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB; "
-            f"text-align:center;'>{item['quantidade']}</td>"
-            f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB; "
-            f"text-align:right;'>R$ {item['preco']:.2f}</td>"
-            f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB; "
-            f"text-align:right;'>R$ {item['preco'] * item['quantidade']:.2f}</td>"
-            "</tr>"
-            for item in self.itens
-        )
+    def visualizar_comprovante(self):
+        ComprovanteDialog(self.venda_id, parent=self).exec()
 
-        if self.forma_pagamento_2:
-            valor_principal = self.total - self.valor_forma_2
-            linha_pagamento = (
-                f"<p style='margin:4px 0;'>Pagamento: "
-                f"R$ {valor_principal:.2f} ({self.forma_pagamento}) + "
-                f"R$ {self.valor_forma_2:.2f} ({self.forma_pagamento_2})</p>"
-            )
-        else:
-            linha_pagamento = (
-                f"<p style='margin:4px 0;'>Forma de pagamento: "
-                f"{self.forma_pagamento}</p>"
-            )
+    def imprimir(self):
+        comprovante_acoes.imprimir(self.venda_id, self)
 
-        cliente_linha = (
-            f"<p style='margin:4px 0;'>Cliente: {self.cliente_nome}</p>"
-            if self.cliente_nome else ""
-        )
+    def baixar_pdf(self):
+        comprovante_acoes.baixar_pdf(self.venda_id, self)
 
-        return f"""
-        <html>
-        <body style="font-family: Arial; font-size: 13px; color:#1E293B;">
-            <h2 style="margin-bottom:0; text-align:center;">{nome_loja}</h2>
-            <p style="color:#64748B; margin-top:2px; text-align:center;">
-                {datetime.now().strftime('%d/%m/%Y %H:%M')}
-            </p>
-            <hr style="border:none; border-top:1px solid #E5E7EB;">
-            {cliente_linha}
-            <table style="width:100%; border-collapse:collapse; margin-top:8px;">
-                <tr style="background:#F1F5F9;">
-                    <th style="padding:6px 8px; text-align:left;">Produto</th>
-                    <th style="padding:6px 8px;">Qtd</th>
-                    <th style="padding:6px 8px; text-align:right;">Unitário</th>
-                    <th style="padding:6px 8px; text-align:right;">Subtotal</th>
-                </tr>
-                {linhas_itens}
-            </table>
-            <h3 style="text-align:right; margin-top:12px;">
-                Total: R$ {self.total:.2f}
-            </h3>
-            {linha_pagamento}
-            <hr style="border:none; border-top:1px solid #E5E7EB;">
-            <p style="color:#94A3B8; font-size:11px; text-align:center;">
-                Este comprovante não tem valor fiscal.
-            </p>
-        </body>
-        </html>
-        """
+    def enviar_whatsapp(self):
+        comprovante_acoes.enviar_whatsapp(self.venda_id, self)
 
-    def montar_documento(self, html):
-
-        documento = QTextDocument()
-        documento.setHtml(html)
-
-        return documento
-
-    def emitir_comprovante(self):
-
-        html = self.html_comprovante()
-
-        janela = QDialog(self)
-        janela.setWindowTitle("Comprovante (não fiscal)")
-        janela.setFixedSize(380, 500)
-
-        v = QVBoxLayout(janela)
-
-        area = QTextEdit()
-        area.setReadOnly(True)
-        area.setHtml(html)
-
-        botoes = QHBoxLayout()
-
-        bt_pdf = QPushButton("Salvar PDF")
-        bt_pdf.clicked.connect(
-            lambda: self.salvar_pdf(html)
-        )
-
-        bt_imprimir = QPushButton("Imprimir")
-        bt_imprimir.clicked.connect(
-            lambda: self.imprimir(html, janela)
-        )
-
-        bt_fechar = QPushButton("Fechar")
-        bt_fechar.clicked.connect(janela.accept)
-
-        botoes.addWidget(bt_pdf)
-        botoes.addWidget(bt_imprimir)
-        botoes.addWidget(bt_fechar)
-
-        v.addWidget(area)
-        v.addLayout(botoes)
-
-        janela.exec()
-
-    def salvar_pdf(self, html):
-
-        caminho, _ = QFileDialog.getSaveFileName(
-            self,
-            "Salvar Comprovante",
-            "comprovante.pdf",
-            "Arquivo PDF (*.pdf)",
-        )
-
-        if not caminho:
-            return
-
-        if not caminho.lower().endswith(".pdf"):
-            caminho += ".pdf"
-
-        printer = QPrinter(QPrinter.HighResolution)
-        printer.setOutputFormat(QPrinter.PdfFormat)
-        printer.setOutputFileName(caminho)
-        printer.setPageSize(QPageSize(QPageSize.A5))
-
-        self.montar_documento(html).print_(printer)
-
-        QMessageBox.information(
-            self,
-            "Sucesso",
-            "Comprovante salvo em PDF com sucesso.",
-        )
-
-    def imprimir(self, html, parent):
-
-        printer = QPrinter(QPrinter.HighResolution)
-
-        dialogo = QPrintDialog(printer, parent)
-
-        if dialogo.exec() != QPrintDialog.Accepted:
-            return
-
-        self.montar_documento(html).print_(printer)
+    def enviar_email(self):
+        comprovante_acoes.enviar_email(self.venda_id, self)

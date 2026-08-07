@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.models.venda import Venda
 from app.models.item_venda import ItemVenda
 from app.models.produto import Produto
+from app.models.cliente import Cliente
 from app.models.movimento_estoque import MovimentoEstoque
 from app.models.movimento_caixa import MovimentoCaixa
 from app.models.movimento_fiado import MovimentoFiado
@@ -21,6 +22,60 @@ from app.services.movimento_fiado_service import (
     _verificar_limite_credito,
 )
 from app.services.notificacao_service import NotificacaoService
+from app.services.configuracao_service import ConfiguracaoService
+from app.services.whatsapp_service import WhatsappService
+
+
+def _moeda(valor: float) -> str:
+    return f"R$ {valor:,.2f}".replace(",", "_").replace(".", ",").replace(
+        "_", "."
+    )
+
+
+def _enviar_comprovante_whatsapp(db: Session, venda: Venda) -> None:
+    """Manda um resumo em texto da venda pro WhatsApp do cliente,
+    assim que a venda e finalizada -- so quando a integracao e essa
+    automacao especifica estao ligadas em Configuracoes, e o cliente
+    tem telefone cadastrado. Nunca levanta excecao: uma falha aqui
+    nao pode desfazer nem atrasar a venda, que ja foi commitada."""
+
+    config = ConfiguracaoService.buscar(db)
+
+    if not config.whatsapp_ativo or not config.whatsapp_comprovante_venda_ativo:
+        return
+
+    cliente = (
+        db.query(Cliente)
+        .filter(Cliente.id == venda.cliente_id)
+        .first()
+    )
+
+    if not cliente or not cliente.telefone:
+        return
+
+    itens = (
+        db.query(ItemVenda, Produto.nome)
+        .join(Produto, Produto.id == ItemVenda.produto_id)
+        .filter(ItemVenda.venda_id == venda.id)
+        .all()
+    )
+
+    linhas_itens = "\n".join(
+        f"• {item.quantidade}x {nome} — {_moeda(item.subtotal)}"
+        for item, nome in itens
+    )
+
+    nome_loja = config.nome_loja or "Vertex ERP"
+
+    texto = (
+        f"*{nome_loja}* — comprovante da sua compra\n\n"
+        f"{linhas_itens}\n\n"
+        f"*Total: {_moeda(venda.valor_total)}*\n"
+        f"Forma de pagamento: {venda.forma_pagamento}\n\n"
+        f"Obrigado pela preferência! 🙂"
+    )
+
+    WhatsappService.enviar_mensagem(db, cliente.telefone, texto)
 
 
 def _parcelas_pagamento(venda_ou_dados, valor_total):
@@ -71,6 +126,66 @@ class VendaService:
             db,
             venda_id,
         )
+
+    @staticmethod
+    def montar_comprovante(db: Session, venda_id: int):
+        """Junta tudo que o comprovante de uma venda precisa (cliente,
+        saldo devedor atualizado, nome dos produtos) numa unica
+        estrutura -- evita o frontend ter que combinar varias
+        chamadas so pra montar o PDF."""
+
+        venda = VendaRepository.buscar_por_id(db, venda_id)
+
+        if not venda:
+            raise Exception("Venda não encontrada.")
+
+        cliente = None
+        saldo_devedor = None
+
+        if venda.cliente_id:
+            cliente = (
+                db.query(Cliente)
+                .filter(Cliente.id == venda.cliente_id)
+                .first()
+            )
+            saldo_devedor = MovimentoFiadoRepository.saldo_por_cliente(
+                db, venda.cliente_id
+            )
+
+        tem_fiado = "PRAZO" in (
+            venda.forma_pagamento, venda.forma_pagamento_2
+        )
+
+        itens = [
+            {
+                "produto_id": item.produto_id,
+                "nome": item.produto.nome if item.produto else "Produto removido",
+                "quantidade": item.quantidade,
+                "valor_unitario": item.valor_unitario,
+                "subtotal": item.subtotal,
+            }
+            for item in venda.itens
+        ]
+
+        return {
+            "venda_id": venda.id,
+            "data": venda.data,
+            "usuario_nome": venda.usuario_nome,
+            "cliente_id": venda.cliente_id,
+            "cliente_nome": cliente.nome if cliente else None,
+            "cliente_cpf_cnpj": cliente.cpf_cnpj if cliente else None,
+            "cliente_telefone": cliente.telefone if cliente else None,
+            "cliente_email": cliente.email if cliente else None,
+            "itens": itens,
+            "desconto": venda.desconto,
+            "valor_total": venda.valor_total,
+            "forma_pagamento": venda.forma_pagamento,
+            "forma_pagamento_2": venda.forma_pagamento_2,
+            "valor_forma_2": venda.valor_forma_2,
+            "observacao": venda.observacao,
+            "situacao": "FIADO" if tem_fiado else "PAGO",
+            "saldo_devedor_cliente": saldo_devedor,
+        }
 
     @staticmethod
     def criar(
@@ -268,6 +383,12 @@ class VendaService:
                 venda.forma_pagamento, venda.forma_pagamento_2
             ):
                 _verificar_limite_credito(db, venda.cliente_id)
+
+            if venda.cliente_id:
+                try:
+                    _enviar_comprovante_whatsapp(db, venda)
+                except Exception:
+                    pass
 
             return venda
 

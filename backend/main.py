@@ -29,6 +29,9 @@ from app.api.v1.configuracoes import router as configuracoes_router
 from app.api.v1.notificacoes import router as notificacoes_router
 from app.api.v1.aprovacoes import router as aprovacoes_router
 from app.services.aviso_vencimento_service import iniciar_verificacao_diaria
+from app.services.whatsapp_lembrete_service import (
+    iniciar_verificacao_diaria as iniciar_lembrete_whatsapp,
+)
 
 app = FastAPI(
     title="Vertex ERP",
@@ -101,6 +104,11 @@ def preparar_banco():
     # app/services/aviso_vencimento_service.py) -- so faz sentido numa
     # instalacao de verdade rodando continuamente, nao em teste.
     iniciar_verificacao_diaria()
+
+    # lembrete diario de fiado parado via WhatsApp (ver
+    # app/services/whatsapp_lembrete_service.py) -- so manda de
+    # verdade se a integracao estiver configurada e ligada.
+    iniciar_lembrete_whatsapp()
 
 
 def _rodar_migracoes():

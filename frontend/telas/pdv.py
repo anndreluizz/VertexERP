@@ -1410,7 +1410,10 @@ class PDV(QWidget):
 
             if response.status_code == 201:
 
+                venda_criada = response.json()
+
                 concluida = VendaConcluidaDialog(
+                    venda_criada["id"],
                     total,
                     self.itens,
                     tela.forma_pagamento,

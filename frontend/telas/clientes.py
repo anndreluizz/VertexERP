@@ -5,8 +5,9 @@ from telas.ficha_cliente import FichaClienteDialog
 
 from services.api import configuracoes
 from services.cliente_service import listar_clientes, reativar_cliente
-from services.movimento_fiado_service import saldo_cliente, listar_movimentos
+from services.movimento_fiado_service import listar_movimentos
 from services.venda_service import listar_vendas
+from services import cliente_analise
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QShortcut, QKeySequence
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QScrollArea,
     QDialog,
+    QComboBox,
 )
 
 from design import tokens
@@ -28,12 +30,44 @@ from design.icons import icone, icone_pixmap
 from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
 
 
+# rótulo exibido -> chave interna do filtro
+FILTROS = [
+    ("Todos", "TODOS"),
+    ("Clientes Ativos", "ATIVOS"),
+    ("Sem Movimento", "SEM_MOVIMENTO"),
+    ("Inadimplentes", "INADIMPLENTES"),
+    ("Em Dia", "EM_DIA"),
+    ("Novos Clientes", "NOVOS"),
+]
+
+# rótulo exibido -> chave interna da ordenação, na ordem que aparece no combo
+ORDENACOES = [
+    ("Último Movimento (mais recente primeiro)", "MOVIMENTO_RECENTE"),
+    ("Último Movimento (mais antigo primeiro)", "MOVIMENTO_ANTIGO"),
+    ("Última Compra", "ULTIMA_COMPRA"),
+    ("Maior Compra", "MAIOR_COMPRA"),
+    ("Maior Saldo Devedor", "MAIOR_SALDO"),
+    ("Nome (A-Z)", "NOME_AZ"),
+    ("Nome (Z-A)", "NOME_ZA"),
+    ("Cliente Mais Antigo", "CADASTRO_ANTIGO"),
+    ("Cliente Mais Novo", "CADASTRO_NOVO"),
+]
+
+_CORES_PONTUACAO = {
+    "🔴": tokens.ERRO,
+    "🟠": tokens.ALERTA,
+    "🟡": tokens.ALERTA,
+    "🔵": tokens.PRIMARIA,
+    "🟢": tokens.SECUNDARIA,
+}
+
+
 class ClienteCard(QFrame):
 
     clicado = Signal(dict)
     reativar_solicitado = Signal(dict)
 
-    def __init__(self, cliente, saldo_fiado):
+    def __init__(self, cliente, saldo_fiado, pontuacao=""):
 
         super().__init__()
 
@@ -107,6 +141,18 @@ class ClienteCard(QFrame):
 
         layout.addLayout(topo)
 
+        if pontuacao:
+
+            emoji = pontuacao.split(" ")[0]
+            cor = _CORES_PONTUACAO.get(emoji, tokens.TEXTO_SECUNDARIO)
+
+            lbl_pontuacao = QLabel(pontuacao)
+            lbl_pontuacao.setStyleSheet(f"""
+                background:transparent; border:none;
+                font-size:{tokens.TAMANHO_XS}px; font-weight:700; color:{cor};
+            """)
+            layout.addWidget(lbl_pontuacao)
+
         linha = QFrame()
         linha.setFixedHeight(1)
         linha.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
@@ -158,8 +204,10 @@ class Clientes(QWidget):
 
         self.clientes = []
         self.vendas_por_cliente = {}
+        self.agregados_por_cliente = {}
         self.filtro_status = "TODOS"
-        self.ordenacao = "NOME"
+        self.ordenacao = "MOVIMENTO_RECENTE"
+        self.prazo_inadimplencia = cliente_analise.PRAZO_INADIMPLENCIA_PADRAO
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
@@ -239,18 +287,20 @@ class Clientes(QWidget):
         resumo_layout.setSpacing(14)
 
         self.card_total = CardKPI("Cadastros (Total)", "users", tokens.PRIMARIA)
-        self.card_ativos = CardKPI("Ativos (Frequentes)", "check", tokens.SECUNDARIA)
-        self.card_inativos = CardKPI("Inativos (Ausentes)", "alert-triangle", tokens.ALERTA)
+        self.card_ativos = CardKPI("Clientes Ativos", "check", tokens.SECUNDARIA)
+        self.card_sem_movimento = CardKPI("Sem Movimento", "alert-triangle", tokens.ALERTA)
+        self.card_inadimplentes = CardKPI("Inadimplentes", "alert-triangle", tokens.ERRO)
         self.card_recebido_fiado = CardKPI("Recebido de Fiado", "wallet", tokens.SECUNDARIA)
         self.card_a_receber = CardKPI("A Receber (Fiado em aberto)", "credit-card", tokens.ERRO)
 
         resumo_layout.addWidget(self.card_total, 0, 0)
         resumo_layout.addWidget(self.card_ativos, 0, 1)
-        resumo_layout.addWidget(self.card_inativos, 0, 2)
-        resumo_layout.addWidget(self.card_recebido_fiado, 0, 3)
-        resumo_layout.addWidget(self.card_a_receber, 0, 4)
+        resumo_layout.addWidget(self.card_sem_movimento, 0, 2)
+        resumo_layout.addWidget(self.card_inadimplentes, 0, 3)
+        resumo_layout.addWidget(self.card_recebido_fiado, 0, 4)
+        resumo_layout.addWidget(self.card_a_receber, 0, 5)
 
-        for coluna in range(5):
+        for coluna in range(6):
             resumo_layout.setColumnStretch(coluna, 1)
 
         layout.addLayout(resumo_layout)
@@ -269,28 +319,49 @@ class Clientes(QWidget):
 
         self.botoes_status = {}
 
-        for rotulo in ["TODOS", "ATIVO", "INATIVO"]:
+        for rotulo, chave in FILTROS:
 
             bt = QPushButton(rotulo)
             bt.setCheckable(True)
             bt.setCursor(Qt.PointingHandCursor)
             bt.setMinimumHeight(44)
-            bt.setMinimumWidth(80)
             bt.clicked.connect(
-                lambda checked, r=rotulo: self.selecionar_status(r)
+                lambda checked, c=chave: self.selecionar_status(c)
             )
 
-            self.botoes_status[rotulo] = bt
+            self.botoes_status[chave] = bt
             barra.addWidget(bt)
 
         layout.addLayout(barra)
 
         # ======================
-        # ORDENAÇÃO (RANKING)
+        # PRAZO DE INADIMPLÊNCIA + ORDENAÇÃO
         # ======================
 
         barra_ordenacao = QHBoxLayout()
         barra_ordenacao.setSpacing(10)
+
+        lbl_prazo = QLabel("Prazo de inadimplência:")
+        lbl_prazo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+        """)
+
+        self.combo_prazo = QComboBox()
+        for dias in cliente_analise.PRAZOS_INADIMPLENCIA:
+            self.combo_prazo.addItem(f"{dias} dias", dias)
+        self.combo_prazo.setCurrentIndex(
+            cliente_analise.PRAZOS_INADIMPLENCIA.index(
+                cliente_analise.PRAZO_INADIMPLENCIA_PADRAO
+            )
+        )
+        self.combo_prazo.setMinimumHeight(34)
+        self.combo_prazo.currentIndexChanged.connect(self.alterar_prazo_inadimplencia)
+
+        barra_ordenacao.addWidget(lbl_prazo)
+        barra_ordenacao.addWidget(self.combo_prazo)
+
+        barra_ordenacao.addSpacing(20)
 
         lbl_ordenar = QLabel("Ordenar por:")
         lbl_ordenar.setStyleSheet(f"""
@@ -299,20 +370,14 @@ class Clientes(QWidget):
         """)
         barra_ordenacao.addWidget(lbl_ordenar)
 
-        self.botoes_ordenacao = {}
+        self.combo_ordenacao = QComboBox()
+        for rotulo, chave in ORDENACOES:
+            self.combo_ordenacao.addItem(rotulo, chave)
+        self.combo_ordenacao.setMinimumHeight(34)
+        self.combo_ordenacao.setMinimumWidth(260)
+        self.combo_ordenacao.currentIndexChanged.connect(self.alterar_ordenacao)
 
-        for chave, rotulo in [("NOME", "Nome"), ("RANKING", "Maior Compra")]:
-
-            bt = QPushButton(rotulo)
-            bt.setCheckable(True)
-            bt.setCursor(Qt.PointingHandCursor)
-            bt.setMinimumHeight(34)
-            bt.clicked.connect(
-                lambda checked, c=chave: self.selecionar_ordenacao(c)
-            )
-
-            self.botoes_ordenacao[chave] = bt
-            barra_ordenacao.addWidget(bt)
+        barra_ordenacao.addWidget(self.combo_ordenacao)
 
         barra_ordenacao.addStretch()
 
@@ -359,7 +424,6 @@ class Clientes(QWidget):
         QShortcut(QKeySequence("Ctrl+N"), self, self.novo_cliente)
 
         self.selecionar_status("TODOS")
-        self.selecionar_ordenacao("NOME")
 
         self.carregar()
 
@@ -371,8 +435,29 @@ class Clientes(QWidget):
 
         self.clientes = listar_clientes()
 
+        # todos os movimentos de fiado numa unica chamada -- agrupa
+        # por cliente aqui do lado de fora, em vez de bater 1 endpoint
+        # por cliente (era assim que o saldo de cada card era buscado
+        # antes, uma chamada HTTP por cliente na tela inteira).
+        movimentos_fiado = listar_movimentos()
+
+        movimentos_por_cliente = {}
+        for mov in movimentos_fiado:
+            cid = mov.get("cliente_id")
+            if cid is None:
+                continue
+            movimentos_por_cliente.setdefault(cid, []).append(mov)
+
+        self.agregados_por_cliente = {}
+
         for cliente in self.clientes:
-            cliente["saldo_fiado"] = saldo_cliente(cliente["id"])
+
+            agr = cliente_analise.calcular_agregados(
+                cliente, movimentos_por_cliente.get(cliente["id"], [])
+            )
+
+            self.agregados_por_cliente[cliente["id"]] = agr
+            cliente["saldo_fiado"] = agr["saldo_devedor"]
 
         vendas = listar_vendas()
 
@@ -394,8 +479,6 @@ class Clientes(QWidget):
         # com cliente vinculado (a maioria do PDV nao vincula) e ficava
         # sempre R$0,00 na pratica -- recebido de fiado e um numero
         # real que ja existe (MovimentoFiado tipo PAGAMENTO).
-        movimentos_fiado = listar_movimentos()
-
         self.recebido_fiado_total = sum(
             float(m.get("valor", 0) or 0)
             for m in movimentos_fiado
@@ -414,11 +497,25 @@ class Clientes(QWidget):
 
         total = len(self.clientes)
 
-        ativos = sum(
-            1 for c in self.clientes if c.get("ativo", True)
-        )
+        ativos = 0
+        sem_movimento = 0
+        inadimplentes = 0
 
-        inativos = total - ativos
+        for cliente in self.clientes:
+
+            agr = self.agregados_por_cliente.get(cliente["id"])
+
+            if not agr:
+                continue
+
+            if cliente_analise.eh_ativo(agr):
+                ativos += 1
+
+            if cliente_analise.eh_sem_movimento(agr):
+                sem_movimento += 1
+
+            if cliente_analise.eh_inadimplente(agr, self.prazo_inadimplencia):
+                inadimplentes += 1
 
         total_a_receber = sum(
             float(c.get("saldo_fiado", 0) or 0) for c in self.clientes
@@ -426,7 +523,8 @@ class Clientes(QWidget):
 
         self.card_total.definir_valor(str(total))
         self.card_ativos.definir_valor(str(ativos))
-        self.card_inativos.definir_valor(str(inativos))
+        self.card_sem_movimento.definir_valor(str(sem_movimento))
+        self.card_inadimplentes.definir_valor(str(inadimplentes))
         self.card_recebido_fiado.definir_valor(
             f"R$ {self.recebido_fiado_total:.2f}"
         )
@@ -436,45 +534,11 @@ class Clientes(QWidget):
     # FILTRO DE STATUS
     # ==========================================
 
-    def selecionar_status(self, rotulo):
+    def selecionar_status(self, chave):
 
-        self.filtro_status = rotulo
+        self.filtro_status = chave
 
-        for chave, botao in self.botoes_status.items():
-
-            selecionado = chave == rotulo
-
-            botao.setChecked(selecionado)
-
-            botao.setStyleSheet(f"""
-                QPushButton {{
-                    background: {tokens.PRIMARIA if selecionado else tokens.CARD};
-                    color: {"white" if selecionado else tokens.TEXTO};
-                    border-radius: {tokens.RADIUS_SM}px;
-                    border: 1px solid {tokens.PRIMARIA if selecionado else tokens.BORDA};
-                    font-weight: 700;
-                    font-size: {tokens.TAMANHO_SM}px;
-                }}
-                QPushButton:hover {{
-                    background: {tokens.PRIMARIA_HOVER if selecionado else tokens.FUNDO};
-                }}
-            """)
-
-        self.filtrar_clientes()
-
-    # ==========================================
-    # ORDENAÇÃO (RANKING DE CLIENTES)
-    # ==========================================
-
-    def selecionar_ordenacao(self, chave):
-        """'Maior Compra' reaproveita o mesmo dado já calculado em
-        vendas_por_cliente (usado no rodapé de cada ClienteCard) — é o
-        mesmo padrão client-side já usado no ranking de produtos, sem
-        endpoint novo."""
-
-        self.ordenacao = chave
-
-        for k, botao in self.botoes_ordenacao.items():
+        for k, botao in self.botoes_status.items():
 
             selecionado = k == chave
 
@@ -498,6 +562,27 @@ class Clientes(QWidget):
         self.filtrar_clientes()
 
     # ==========================================
+    # PRAZO DE INADIMPLÊNCIA
+    # ==========================================
+
+    def alterar_prazo_inadimplencia(self, _indice):
+
+        self.prazo_inadimplencia = self.combo_prazo.currentData()
+
+        self.atualizar_cards_resumo()
+        self.filtrar_clientes()
+
+    # ==========================================
+    # ORDENAÇÃO
+    # ==========================================
+
+    def alterar_ordenacao(self, _indice):
+
+        self.ordenacao = self.combo_ordenacao.currentData()
+
+        self.filtrar_clientes()
+
+    # ==========================================
     # FILTRAR CLIENTES
     # ==========================================
 
@@ -507,11 +592,31 @@ class Clientes(QWidget):
 
         clientes = self.clientes
 
-        if self.filtro_status == "ATIVO":
-            clientes = [c for c in clientes if c.get("ativo", True)]
-        elif self.filtro_status == "INATIVO":
+        def agr(c):
+            return self.agregados_por_cliente.get(c["id"], {})
+
+        if self.filtro_status == "ATIVOS":
             clientes = [
-                c for c in clientes if not c.get("ativo", True)
+                c for c in clientes if cliente_analise.eh_ativo(agr(c))
+            ]
+        elif self.filtro_status == "SEM_MOVIMENTO":
+            clientes = [
+                c for c in clientes if cliente_analise.eh_sem_movimento(agr(c))
+            ]
+        elif self.filtro_status == "INADIMPLENTES":
+            clientes = [
+                c for c in clientes
+                if cliente_analise.eh_inadimplente(
+                    agr(c), self.prazo_inadimplencia
+                )
+            ]
+        elif self.filtro_status == "EM_DIA":
+            clientes = [
+                c for c in clientes if cliente_analise.eh_em_dia(agr(c))
+            ]
+        elif self.filtro_status == "NOVOS":
+            clientes = [
+                c for c in clientes if cliente_analise.eh_novo(agr(c))
             ]
 
         if texto != "":
@@ -533,18 +638,60 @@ class Clientes(QWidget):
 
             clientes = filtrados
 
-        if self.ordenacao == "RANKING":
-            clientes = sorted(
-                clientes,
-                key=lambda c: self.vendas_por_cliente.get(c["id"], 0),
-                reverse=True,
-            )
-        else:
-            clientes = sorted(
-                clientes, key=lambda c: (c.get("nome") or "").lower()
-            )
+        clientes = self._ordenar(clientes)
 
         self.preencher_grid(clientes)
+
+    def _ordenar(self, clientes):
+
+        def agr(c):
+            return self.agregados_por_cliente.get(c["id"], {})
+
+        def nome(c):
+            return (c.get("nome") or "").lower()
+
+        # datas/numeros ausentes sempre vao pro final da lista,
+        # independente da direcao da ordenacao
+        def chave_data(campo, reverso):
+            def _chave(c):
+                valor = agr(c).get(campo)
+                ausente = valor is None
+                if reverso:
+                    return (ausente, -valor.timestamp() if valor else 0)
+                return (ausente, valor.timestamp() if valor else 0)
+            return _chave
+
+        if self.ordenacao == "MOVIMENTO_RECENTE":
+            return sorted(
+                clientes, key=chave_data("ultima_movimentacao", True)
+            )
+        if self.ordenacao == "MOVIMENTO_ANTIGO":
+            return sorted(
+                clientes, key=chave_data("ultima_movimentacao", False)
+            )
+        if self.ordenacao == "ULTIMA_COMPRA":
+            return sorted(clientes, key=chave_data("ultima_compra", True))
+        if self.ordenacao == "MAIOR_COMPRA":
+            return sorted(
+                clientes,
+                key=lambda c: agr(c).get("maior_compra", 0),
+                reverse=True,
+            )
+        if self.ordenacao == "MAIOR_SALDO":
+            return sorted(
+                clientes,
+                key=lambda c: agr(c).get("saldo_devedor", 0),
+                reverse=True,
+            )
+        if self.ordenacao == "NOME_ZA":
+            return sorted(clientes, key=nome, reverse=True)
+        if self.ordenacao == "CADASTRO_ANTIGO":
+            return sorted(clientes, key=chave_data("criado_em", False))
+        if self.ordenacao == "CADASTRO_NOVO":
+            return sorted(clientes, key=chave_data("criado_em", True))
+
+        # NOME_AZ e qualquer chave desconhecida caem aqui
+        return sorted(clientes, key=nome)
 
     # ==========================================
     # PREENCHER GRID
@@ -562,9 +709,18 @@ class Clientes(QWidget):
 
         for indice, cliente in enumerate(clientes):
 
+            agr = self.agregados_por_cliente.get(cliente["id"], {})
+            pontuacao = (
+                cliente_analise.calcular_pontuacao(
+                    agr, self.prazo_inadimplencia
+                )
+                if agr else ""
+            )
+
             card = ClienteCard(
                 cliente,
                 cliente.get("saldo_fiado", 0),
+                pontuacao=pontuacao,
             )
             card.clicado.connect(self.ver_ficha)
             card.reativar_solicitado.connect(self.reativar_cliente)

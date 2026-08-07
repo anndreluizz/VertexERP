@@ -66,6 +66,23 @@ def lancar_fiado_manual(cliente_id, valor, descricao, data=None):
     )
 
 
+def lancar_haver(cliente_id, valor, descricao, data=None):
+    """Credito manual em favor do cliente (desconto, devolucao,
+    cortesia) -- reduz o saldo devedor igual um pagamento, mas nunca
+    mexe no caixa (nao e dinheiro recebido de verdade)."""
+
+    return post(
+        "/fiado/movimentos",
+        {
+            "cliente_id": cliente_id,
+            "tipo": "HAVER",
+            "valor": valor,
+            "descricao": descricao,
+            "data": data,
+        },
+    )
+
+
 def editar_movimento(movimento_id, valor=None, descricao=None):
     """Corrige um lançamento de fiado errado (valor e/ou descrição).
     Se era um PAGAMENTO que tinha entrado no caixa, o backend já ajusta

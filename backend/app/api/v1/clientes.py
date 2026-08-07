@@ -6,12 +6,14 @@ from app.schemas.cliente import (
     ClienteCreate,
     ClienteUpdate,
     ClienteResponse,
+    ClienteEnviarWhatsappRequest,
     ClienteObservacaoCreate,
     ClienteObservacaoResponse,
 )
 from app.services.cliente_service import ClienteService
 from app.services.cliente_observacao_service import ClienteObservacaoService
 from app.services.aprovacao_service import AprovacaoService
+from app.services.whatsapp_service import WhatsappService
 from app.auth.dependencies import get_current_user
 
 router = APIRouter(
@@ -80,6 +82,36 @@ def obter_foto_cliente(
         )
 
     return Response(content=cliente.foto, media_type="image/jpeg")
+
+
+@router.post("/{cliente_id}/whatsapp")
+def enviar_whatsapp_texto(
+    cliente_id: int,
+    dados: ClienteEnviarWhatsappRequest,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    """Manda uma mensagem de texto livre pro cliente via WhatsApp --
+    usado pelos itens do menu 'WhatsApp ▾' da ficha do cliente (extrato
+    completo, cobrança, saldo devedor, haver, cadastro). Ao contrário
+    do comprovante de venda, não fica registrado em historico_envios
+    (esse historico e' especifico de venda/comprovante) -- se falhar,
+    quem chamou (frontend) decide se abre o wa.me manual como plano B."""
+
+    cliente = ClienteService.buscar_por_id(db, cliente_id)
+
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+
+    sucesso = WhatsappService.enviar_mensagem(db, cliente.telefone, dados.texto)
+
+    if not sucesso:
+        raise HTTPException(
+            status_code=400,
+            detail="Não foi possível enviar a mensagem pelo WhatsApp.",
+        )
+
+    return {"success": True, "message": "Mensagem enviada pelo WhatsApp."}
 
 
 @router.get(

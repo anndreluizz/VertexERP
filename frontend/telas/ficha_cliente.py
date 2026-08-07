@@ -1,5 +1,6 @@
 import csv
 from datetime import date, datetime
+from urllib.parse import quote
 
 from PySide6.QtCore import Qt, QDate, QUrl
 from PySide6.QtGui import (
@@ -19,11 +20,9 @@ from PySide6.QtWidgets import (
     QFrame,
     QFileDialog,
     QScrollArea,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
     QMessageBox,
     QInputDialog,
+    QMenu,
 )
 
 from services import api
@@ -34,6 +33,7 @@ from services.movimento_fiado_service import (
     listar_movimentos_cliente,
     registrar_pagamento,
     lancar_fiado_manual,
+    lancar_haver,
     editar_movimento,
     excluir_movimento,
 )
@@ -42,6 +42,7 @@ from services.cliente_service import (
     listar_observacoes_cliente,
     criar_observacao_cliente,
     excluir_observacao_cliente,
+    enviar_whatsapp_texto,
 )
 from telas import comprovante_acoes
 from services import cliente_analise
@@ -498,7 +499,132 @@ class RegistrarPagamentoDialog(QDialog):
             QMessageBox.critical(self, "Erro", str(erro))
 
 
+class LancarHaverDialog(QDialog):
+    """Crédito manual em favor do cliente (desconto, devolução,
+    cortesia) -- reduz o saldo devedor igual um pagamento, mas nunca é
+    dinheiro recebido de verdade, então nunca mexe no caixa."""
+
+    def __init__(self, cliente, saldo_devedor, parent=None):
+
+        super().__init__(parent)
+
+        self.cliente = cliente
+
+        self.setWindowTitle("Lançar Haver")
+        self.setFixedSize(420, 420)
+        self.setStyleSheet(f"background:{tokens.CARD};")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(14)
+
+        titulo = QLabel("Lançar Haver")
+        titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XL}px;
+            font-weight:800; color:{tokens.TEXTO};
+        """)
+
+        subtitulo = QLabel(
+            f"Crédito em favor de {cliente['nome']} (desconto, devolução, "
+            f"cortesia). Saldo devedor atual: {_formatar_moeda(saldo_devedor)}."
+        )
+        subtitulo.setWordWrap(True)
+        subtitulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
+
+        layout.addWidget(titulo)
+        layout.addWidget(subtitulo)
+        layout.addSpacing(6)
+
+        lbl_valor_titulo = QLabel("VALOR DO CRÉDITO (R$)")
+        lbl_valor_titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
+
+        self.valor = QLineEdit()
+        self.valor.setPlaceholderText("0,00")
+        self.valor.setAlignment(Qt.AlignCenter)
+        self.valor.setStyleSheet(f"""
+            QLineEdit {{
+                font-size:32px; font-weight:800; color:{tokens.ALERTA};
+                border:none; border-bottom:2px solid {tokens.BORDA};
+                padding:6px 0; background:transparent;
+            }}
+        """)
+
+        layout.addWidget(lbl_valor_titulo)
+        layout.addWidget(self.valor)
+
+        lbl_desc_titulo = QLabel("MOTIVO")
+        lbl_desc_titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
+
+        self.descricao = CampoTexto("Ex: desconto combinado, devolução de item")
+
+        layout.addWidget(lbl_desc_titulo)
+        layout.addWidget(self.descricao)
+
+        layout.addStretch()
+
+        botoes = QHBoxLayout()
+        botoes.setSpacing(10)
+
+        bt_cancelar = BotaoSecundario("Cancelar")
+        bt_cancelar.setMinimumHeight(46)
+        bt_cancelar.setAutoDefault(False)
+        bt_cancelar.clicked.connect(self.reject)
+
+        bt_confirmar = BotaoPrimario("Salvar")
+        bt_confirmar.setMinimumHeight(46)
+        bt_confirmar.setAutoDefault(False)
+        bt_confirmar.clicked.connect(self.confirmar)
+
+        botoes.addWidget(bt_cancelar)
+        botoes.addWidget(bt_confirmar)
+
+        layout.addLayout(botoes)
+
+        self.valor.setFocus()
+
+    def confirmar(self):
+
+        try:
+            valor = float(self.valor.text().replace(",", "."))
+        except ValueError:
+            QMessageBox.warning(self, "Atenção", "Informe um valor válido.")
+            return
+
+        if valor <= 0:
+            QMessageBox.warning(
+                self, "Atenção", "Informe um valor maior que zero."
+            )
+            return
+
+        response = lancar_haver(
+            self.cliente["id"],
+            valor,
+            self.descricao.text().strip() or "Haver",
+        )
+
+        if response.status_code in (200, 201):
+            self.accept()
+        else:
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+
+            QMessageBox.critical(self, "Erro", str(erro))
+
+
 class FichaClienteDialog(QDialog):
+
+    _TIMELINE_PAGINA = 30  # scroll incremental: 30 lançamentos por vez
 
     def __init__(self, cliente, parent=None):
 
@@ -508,6 +634,10 @@ class FichaClienteDialog(QDialog):
         self._vendas_por_id = {}
         self._nomes_produto = {}
         self._movimentos = []
+
+        self._filtro_timeline = "TODOS"
+        self._busca_timeline = ""
+        self._timeline_qtd_exibida = self._TIMELINE_PAGINA
 
         self.setWindowTitle(f"Ficha - {cliente['nome']}")
         self.resize(960, 720)
@@ -520,15 +650,16 @@ class FichaClienteDialog(QDialog):
         raiz.addWidget(self._construir_cabecalho())
 
         corpo = QHBoxLayout()
-        corpo.setContentsMargins(24, 20, 24, 16)
+        corpo.setContentsMargins(24, 16, 24, 12)
         corpo.setSpacing(16)
 
         coluna_esquerda = QVBoxLayout()
-        coluna_esquerda.setSpacing(16)
+        coluna_esquerda.setSpacing(12)
 
-        coluna_esquerda.addWidget(self._construir_card_financeiro())
+        coluna_esquerda.addWidget(self._construir_linha_cards())
         coluna_esquerda.addLayout(self._construir_botoes_acao())
-        coluna_esquerda.addWidget(self._construir_abas(), stretch=1)
+        coluna_esquerda.addWidget(self._construir_filtros_timeline())
+        coluna_esquerda.addWidget(self._construir_timeline(), stretch=1)
 
         corpo.addLayout(coluna_esquerda, stretch=2)
         corpo.addWidget(self._construir_painel_lateral())
@@ -543,19 +674,23 @@ class FichaClienteDialog(QDialog):
     # ======================================
 
     def _construir_cabecalho(self):
+        """Cabeçalho compacto (~40% mais baixo que o anterior): só
+        avatar, nome, telefone, status e os botões de contato -- o
+        resto (CPF/CNPJ, endereço, estatísticas) virou mini-card ou
+        painel lateral, não ocupa mais altura fixa aqui em cima."""
 
         cabecalho = QFrame()
         cabecalho.setStyleSheet(f"background:{tokens.SIDEBAR};")
 
         layout = QHBoxLayout(cabecalho)
-        layout.setContentsMargins(28, 22, 28, 22)
-        layout.setSpacing(16)
+        layout.setContentsMargins(24, 12, 24, 12)
+        layout.setSpacing(14)
 
-        self.avatar = Avatar(self.cliente.get("nome", ""), tamanho=56)
+        self.avatar = Avatar(self.cliente.get("nome", ""), tamanho=40)
         layout.addWidget(self.avatar)
 
         col_texto = QVBoxLayout()
-        col_texto.setSpacing(2)
+        col_texto.setSpacing(1)
 
         linha_nome = QHBoxLayout()
         linha_nome.setSpacing(10)
@@ -563,7 +698,7 @@ class FichaClienteDialog(QDialog):
         self.lbl_titulo = QLabel(self.cliente["nome"])
         self.lbl_titulo.setStyleSheet(f"""
             background:transparent; color:white;
-            font-size:{tokens.TAMANHO_XXL}px; font-weight:800;
+            font-size:{tokens.TAMANHO_LG}px; font-weight:800;
         """)
 
         self.badge_ativo = Badge("Ativo", "sucesso")
@@ -573,38 +708,52 @@ class FichaClienteDialog(QDialog):
         linha_nome.addStretch()
 
         self.lbl_subtitulo = QLabel()
-        self.lbl_subtitulo.setWordWrap(True)
         self.lbl_subtitulo.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO_SIDEBAR};
-            font-size:{tokens.TAMANHO_SM}px;
+            font-size:{tokens.TAMANHO_XS}px;
         """)
 
         col_texto.addLayout(linha_nome)
         col_texto.addWidget(self.lbl_subtitulo)
 
+        layout.addLayout(col_texto, stretch=1)
+
         linha_contato = QHBoxLayout()
         linha_contato.setSpacing(8)
 
-        self.bt_whatsapp = self._botao_contato("WhatsApp", self.abrir_whatsapp)
+        self.bt_whatsapp = self._botao_contato("WhatsApp ▾", None)
+        self.menu_whatsapp = self._construir_menu_whatsapp()
+        self.bt_whatsapp.setMenu(self.menu_whatsapp)
+
         self.bt_ligar = self._botao_contato("Ligar", self.abrir_ligacao)
         self.bt_email = self._botao_contato("E-mail", self.abrir_email)
-        self.bt_mapa = self._botao_contato("Mapa", self.abrir_mapa)
 
         linha_contato.addWidget(self.bt_whatsapp)
         linha_contato.addWidget(self.bt_ligar)
         linha_contato.addWidget(self.bt_email)
-        linha_contato.addWidget(self.bt_mapa)
-        linha_contato.addStretch()
 
-        col_texto.addSpacing(6)
-        col_texto.addLayout(linha_contato)
-
-        layout.addLayout(col_texto, stretch=1)
+        layout.addLayout(linha_contato)
 
         self._atualizar_cabecalho(self.cliente)
         self._atualizar_avatar(self.cliente)
 
         return cabecalho
+
+    def _construir_menu_whatsapp(self):
+        """O botão WhatsApp do cabeçalho virou um menu com as ações
+        mais usadas -- antes eram vários botões espalhados (inclusive
+        "Enviar Último Comprovante", que morava na barra de ações)."""
+
+        menu = QMenu(self)
+
+        menu.addAction("Enviar Extrato Completo", self.enviar_extrato_whatsapp)
+        menu.addAction("Enviar Último Comprovante", self.enviar_ultimo_comprovante)
+        menu.addAction("Enviar Cobrança", self.enviar_cobranca_whatsapp)
+        menu.addAction("Enviar Saldo Devedor", self.enviar_saldo_devedor_whatsapp)
+        menu.addAction("Enviar Haver", self.enviar_haver_whatsapp)
+        menu.addAction("Enviar Cadastro do Cliente", self.enviar_cadastro_whatsapp)
+
+        return menu
 
     def _botao_contato(self, texto, callback):
         """Botão de contato rápido só com texto (sem ícone) — os ícones
@@ -616,7 +765,8 @@ class FichaClienteDialog(QDialog):
         botao = QPushButton(texto)
         botao.setCursor(Qt.PointingHandCursor)
         botao.setFixedHeight(28)
-        botao.clicked.connect(callback)
+        if callback:
+            botao.clicked.connect(callback)
         botao.setStyleSheet(f"""
             QPushButton {{
                 background: rgba(255,255,255,0.08);
@@ -640,18 +790,6 @@ class FichaClienteDialog(QDialog):
     def _telefone_digitos(self):
         return "".join(c for c in (self.cliente.get("telefone") or "") if c.isdigit())
 
-    def abrir_whatsapp(self):
-
-        digitos = self._telefone_digitos()
-
-        if not digitos:
-            return
-
-        if len(digitos) <= 11:
-            digitos = "55" + digitos
-
-        QDesktopServices.openUrl(QUrl(f"https://wa.me/{digitos}"))
-
     def abrir_ligacao(self):
 
         digitos = self._telefone_digitos()
@@ -666,140 +804,73 @@ class FichaClienteDialog(QDialog):
         if email:
             QDesktopServices.openUrl(QUrl(f"mailto:{email}"))
 
-    def abrir_mapa(self):
 
-        from urllib.parse import quote
+    def _construir_linha_cards(self):
+        """Os indicadores viraram mini-cards numa linha só (em vez do
+        card grande de "Saldo Devedor" + grade 4x3 de antes) -- ocupam
+        uma fração pequena da altura da tela, deixando quase tudo pra
+        timeline, que é a área que realmente importa no dia a dia."""
 
-        partes = [
-            self.cliente.get("endereco"),
-            self.cliente.get("cidade"),
-            self.cliente.get("estado"),
-        ]
-        endereco = ", ".join(p for p in partes if p)
+        container = QFrame()
+        container.setStyleSheet("background:transparent;")
 
-        if not endereco:
-            return
+        layout_externo = QVBoxLayout(container)
+        layout_externo.setContentsMargins(0, 0, 0, 0)
+        layout_externo.setSpacing(8)
 
-        QDesktopServices.openUrl(
-            QUrl(f"https://www.google.com/maps/search/?api=1&query={quote(endereco)}")
-        )
+        linha = QHBoxLayout()
+        linha.setSpacing(8)
 
-    def _construir_card_financeiro(self):
+        self.lbl_saldo_valor = self._mini_card(linha, "SALDO ATUAL")
+        self.lbl_total_comprado = self._mini_card(linha, "TOTAL COMPRADO")
+        self.lbl_total_pago_card = self._mini_card(linha, "TOTAL PAGO")
+        self.lbl_ultima_compra = self._mini_card(linha, "ÚLTIMA COMPRA")
+        self.lbl_ultimo_pagamento = self._mini_card(linha, "ÚLTIMO PAGAMENTO")
+        self.lbl_qtd_compras = self._mini_card(linha, "QTD. COMPRAS")
+        self.lbl_cliente_desde = self._mini_card(linha, "CLIENTE DESDE")
+        self.lbl_status_financeiro = self._mini_card(linha, "STATUS FINANCEIRO")
+        self.lbl_score = self._mini_card(linha, "PONTUAÇÃO")
+        self.lbl_dias_desde_ultima_compra = self._mini_card(linha, "DIAS SEM COMPRAR")
 
-        self.card_financeiro = Card()
-
-        layout_externo = QVBoxLayout(self.card_financeiro)
-        layout_externo.setContentsMargins(22, 18, 22, 18)
-        layout_externo.setSpacing(14)
-
-        linha_principal = QHBoxLayout()
-        linha_principal.setSpacing(28)
-
-        col_saldo = QVBoxLayout()
-        col_saldo.setSpacing(2)
-
-        lbl_saldo_titulo = QLabel("SALDO DEVEDOR (FIADO)")
-        lbl_saldo_titulo.setStyleSheet(f"""
-            background:transparent; border:none; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
-
-        self.lbl_saldo_valor = QLabel("R$ 0,00")
-        self.lbl_saldo_valor.setStyleSheet(f"""
-            background:transparent; border:none; font-size:32px;
-            font-weight:800; color:{tokens.ERRO};
-        """)
-
-        self.lbl_saldo_info = QLabel("")
-        self.lbl_saldo_info.setStyleSheet(f"""
-            background:transparent; border:none; font-size:{tokens.TAMANHO_XS}px;
-            color:{tokens.TEXTO_TERCIARIO};
-        """)
-
-        col_saldo.addWidget(lbl_saldo_titulo)
-        col_saldo.addWidget(self.lbl_saldo_valor)
-        col_saldo.addWidget(self.lbl_saldo_info)
-
-        linha_principal.addLayout(col_saldo)
-
-        linha = QFrame()
-        linha.setFixedWidth(1)
-        linha.setStyleSheet(f"background:{tokens.BORDA};")
-        linha_principal.addWidget(linha)
-
-        grid_stats = QGridLayout()
-        grid_stats.setHorizontalSpacing(28)
-        grid_stats.setVerticalSpacing(6)
-
-        self.lbl_total_comprado = self._stat_pequena(
-            grid_stats, 0, 0, "TOTAL COMPRADO"
-        )
-        self.lbl_qtd_compras = self._stat_pequena(
-            grid_stats, 0, 1, "QTD. COMPRAS"
-        )
-        self.lbl_ultima_compra = self._stat_pequena(
-            grid_stats, 0, 2, "ÚLTIMA COMPRA"
-        )
-        self.lbl_ultimo_pagamento = self._stat_pequena(
-            grid_stats, 1, 0, "ÚLTIMO PAGAMENTO"
-        )
-        self.lbl_ultimo_movimento = self._stat_pequena(
-            grid_stats, 1, 1, "ÚLTIMO MOVIMENTO"
-        )
-        self.lbl_dias_sem_movimentacao = self._stat_pequena(
-            grid_stats, 1, 2, "DIAS SEM MOVIMENTAÇÃO"
-        )
-        self.lbl_dias_desde_ultima_compra = self._stat_pequena(
-            grid_stats, 2, 0, "DIAS DESDE ÚLTIMA COMPRA"
-        )
-        self.lbl_dias_desde_ultimo_pagamento = self._stat_pequena(
-            grid_stats, 2, 1, "DIAS DESDE ÚLTIMO PAGAMENTO"
-        )
-        self.lbl_cliente_desde = self._stat_pequena(
-            grid_stats, 2, 2, "CLIENTE DESDE"
-        )
-        self.lbl_status_financeiro = self._stat_pequena(
-            grid_stats, 3, 0, "STATUS FINANCEIRO"
-        )
-        self.lbl_status_relacionamento = self._stat_pequena(
-            grid_stats, 3, 1, "STATUS DE RELACIONAMENTO"
-        )
-        self.lbl_score = self._stat_pequena(
-            grid_stats, 3, 2, "PONTUAÇÃO"
-        )
-
-        linha_principal.addLayout(grid_stats, stretch=1)
-
-        layout_externo.addLayout(linha_principal)
+        layout_externo.addLayout(linha)
 
         self.lbl_aviso_status = QLabel("")
         self.lbl_aviso_status.setAlignment(Qt.AlignCenter)
         self.lbl_aviso_status.setWordWrap(True)
         layout_externo.addWidget(self.lbl_aviso_status)
 
-        return self.card_financeiro
+        return container
 
-    def _stat_pequena(self, grid, linha, coluna, titulo):
+    def _mini_card(self, layout, titulo):
 
-        col = QVBoxLayout()
-        col.setSpacing(0)
+        card = QFrame()
+        card.setStyleSheet(f"""
+            background:{tokens.CARD}; border:1px solid {tokens.BORDA};
+            border-radius:{tokens.RADIUS_SM}px;
+        """)
+
+        col = QVBoxLayout(card)
+        col.setContentsMargins(10, 6, 10, 6)
+        col.setSpacing(2)
 
         lbl_titulo = QLabel(titulo)
+        lbl_titulo.setWordWrap(True)
         lbl_titulo.setStyleSheet(f"""
-            background:transparent; border:none; font-size:{tokens.TAMANHO_XS}px;
+            background:transparent; border:none; font-size:9px;
             font-weight:700; color:{tokens.TEXTO_TERCIARIO};
         """)
 
         lbl_valor = QLabel("—")
+        lbl_valor.setWordWrap(True)
         lbl_valor.setStyleSheet(f"""
-            background:transparent; border:none; font-size:{tokens.TAMANHO_MD}px;
-            font-weight:700; color:{tokens.TEXTO};
+            background:transparent; border:none; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:800; color:{tokens.TEXTO};
         """)
 
         col.addWidget(lbl_titulo)
         col.addWidget(lbl_valor)
 
-        grid.addLayout(col, linha, coluna)
+        layout.addWidget(card, stretch=1)
 
         return lbl_valor
 
@@ -823,24 +894,20 @@ class FichaClienteDialog(QDialog):
         self.bt_extrato.setAutoDefault(False)
         self.bt_extrato.clicked.connect(self.imprimir_extrato)
 
+        self.bt_haver = BotaoSecundario("Lançar Haver", icone_nome="gift")
+        self.bt_haver.setMinimumHeight(46)
+        self.bt_haver.setAutoDefault(False)
+        self.bt_haver.clicked.connect(self.lancar_haver)
+
         self.bt_csv = BotaoSecundario("Exportar CSV", icone_nome="download")
         self.bt_csv.setMinimumHeight(46)
         self.bt_csv.setAutoDefault(False)
         self.bt_csv.clicked.connect(self.exportar_csv)
 
-        self.bt_ultimo_comprovante = BotaoSecundario(
-            "Enviar Último Comprovante", icone_nome="message-circle"
-        )
-        self.bt_ultimo_comprovante.setMinimumHeight(46)
-        self.bt_ultimo_comprovante.setAutoDefault(False)
-        self.bt_ultimo_comprovante.clicked.connect(
-            self.enviar_ultimo_comprovante
-        )
-
         layout.addWidget(self.bt_lancar_fiado)
         layout.addWidget(self.bt_pagar)
+        layout.addWidget(self.bt_haver)
         layout.addStretch()
-        layout.addWidget(self.bt_ultimo_comprovante)
         layout.addWidget(self.bt_extrato)
         layout.addWidget(self.bt_csv)
 
@@ -877,121 +944,284 @@ class FichaClienteDialog(QDialog):
 
         comprovante_acoes.enviar_whatsapp(ultima_venda["id"], self)
 
-    def _construir_abas(self):
+    # ======================================
+    # MENU "WHATSAPP ▾" -- mensagens de texto livre (extrato, cobrança,
+    # saldo, haver, cadastro). Diferente do comprovante (que anexa um
+    # PDF), aqui é só texto -- mesmo esquema de fallback manual (abrir
+    # o wa.me com a mensagem pronta) usado em comprovante_acoes.py.
+    # ======================================
 
-        container = QFrame()
-        container.setStyleSheet("background:transparent;")
+    def _enviar_texto_whatsapp(self, texto, titulo="WhatsApp"):
 
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        telefone = self.cliente.get("telefone")
 
-        abas_layout = QHBoxLayout()
-        abas_layout.setSpacing(24)
+        if not telefone:
+            QMessageBox.warning(
+                self,
+                "Sem telefone",
+                "Este cliente não tem telefone cadastrado.\n\n"
+                "Cadastre um telefone na ficha do cliente pra poder "
+                "enviar mensagens automaticamente.",
+            )
+            return
 
-        self.bt_aba_historico = self._botao_aba("Histórico Financeiro")
-        self.bt_aba_compras = self._botao_aba("Compras")
-        self.bt_aba_pagamentos = self._botao_aba("Pagamentos")
-        self.bt_aba_observacoes = self._botao_aba("Observações")
+        config = api.configuracoes()
 
-        self.bt_aba_historico.clicked.connect(lambda: self._selecionar_aba(0))
-        self.bt_aba_compras.clicked.connect(lambda: self._selecionar_aba(1))
-        self.bt_aba_pagamentos.clicked.connect(lambda: self._selecionar_aba(2))
-        self.bt_aba_observacoes.clicked.connect(lambda: self._selecionar_aba(3))
+        if not config.get("whatsapp_ativo"):
+            self._abrir_fallback_whatsapp(telefone, texto)
+            return
 
-        self.botoes_aba = [
-            self.bt_aba_historico,
-            self.bt_aba_compras,
-            self.bt_aba_pagamentos,
-            self.bt_aba_observacoes,
+        response = enviar_whatsapp_texto(self.cliente["id"], texto)
+
+        if response.status_code == 200:
+            QMessageBox.information(
+                self, titulo, "Mensagem enviada pelo WhatsApp com sucesso."
+            )
+            return
+
+        try:
+            erro = response.json().get("detail") or response.text
+        except Exception:
+            erro = response.text
+
+        resposta = QMessageBox.question(
+            self,
+            "Falha no envio automático",
+            f"Não consegui enviar automaticamente:\n\n{erro}\n\n"
+            "Quer abrir o WhatsApp manualmente com a mensagem pronta?",
+        )
+
+        if resposta == QMessageBox.Yes:
+            self._abrir_fallback_whatsapp(telefone, texto)
+
+    def _abrir_fallback_whatsapp(self, telefone, texto):
+
+        digitos = "".join(c for c in telefone if c.isdigit())
+
+        if len(digitos) <= 11:
+            digitos = "55" + digitos
+
+        QDesktopServices.openUrl(
+            QUrl(f"https://wa.me/{digitos}?text={quote(texto)}")
+        )
+
+    def _cabecalho_texto_whatsapp(self, titulo):
+
+        config = api.configuracoes()
+        nome_loja = config.get("nome_loja") or "Vertex ERP"
+
+        return f"🛍️ {nome_loja}\n*{titulo}*"
+
+    def enviar_extrato_whatsapp(self):
+        """'Extrato Completo' -- envia automaticamente pelo WhatsApp o
+        texto com todas as movimentações do cliente (ver seção 8 do
+        pedido de redesenho da ficha)."""
+
+        saldo = saldo_cliente(self.cliente["id"])
+
+        agr = cliente_analise.calcular_agregados(
+            self.cliente, [mov for mov, _ in reversed(self._movimentos)]
+        )
+
+        cliente_desde = (
+            agr["criado_em"].strftime("%d/%m/%Y") if agr["criado_em"] else "—"
+        )
+        status = cliente_analise.status_financeiro(agr)
+
+        total_pago = sum(
+            float(mov.get("valor", 0) or 0)
+            for mov, _ in self._movimentos
+            if mov.get("tipo") == "PAGAMENTO"
+        )
+
+        linhas = []
+
+        for mov, saldo_apos in reversed(self._movimentos):
+
+            data = str(mov.get("data", ""))
+            if "T" in data:
+                data = data.replace("T", " ")[:16]
+
+            tipo = mov.get("tipo", "")
+            rotulo = {
+                "COMPRA": "🛒 Compra",
+                "PAGAMENTO": "💵 Pagamento",
+                "HAVER": "💰 Haver",
+            }.get(tipo, tipo)
+
+            valor = float(mov.get("valor", 0) or 0)
+            sinal = "+" if tipo == "COMPRA" else "-"
+
+            linhas.append(
+                f"{data} | {rotulo} | {self._descricao_com_itens(mov)} | "
+                f"{sinal} {_formatar_moeda(valor)} | "
+                f"Saldo: {_formatar_moeda(saldo_apos)}"
+            )
+
+        movimentacoes = "\n".join(linhas) if linhas else "Nenhuma movimentação registrada."
+
+        texto = (
+            f"{self._cabecalho_texto_whatsapp('EXTRATO DO CLIENTE')}\n\n"
+            f"Cliente: {self.cliente.get('nome', '')}\n"
+            f"Telefone: {self.cliente.get('telefone') or '—'}\n"
+            f"Status: {status}\n"
+            f"Cliente desde: {cliente_desde}\n"
+            f"Saldo Atual: {_formatar_moeda(saldo)}\n\n"
+            f"*MOVIMENTAÇÕES*\n"
+            f"{movimentacoes}\n\n"
+            f"Total Comprado: {_formatar_moeda(agr['total_comprado'])}\n"
+            f"Total Pago: {_formatar_moeda(total_pago)}\n"
+            f"Saldo Devedor: {_formatar_moeda(saldo)}\n\n"
+            f"Muito obrigado pela preferência!"
+        )
+
+        self._enviar_texto_whatsapp(texto, "Extrato Completo")
+
+    def enviar_cobranca_whatsapp(self):
+        """Mensagem de cobrança -- só faz sentido quando existe saldo
+        devedor de verdade."""
+
+        saldo = saldo_cliente(self.cliente["id"])
+
+        if saldo <= 0:
+            QMessageBox.information(
+                self, "Cobrança", "Este cliente não tem saldo devedor."
+            )
+            return
+
+        texto = (
+            f"{self._cabecalho_texto_whatsapp('COBRANÇA')}\n\n"
+            f"Olá, {self.cliente.get('nome', '')}! 👋\n\n"
+            f"Passando pra lembrar que você tem um saldo em aberto no "
+            f"valor de {_formatar_moeda(saldo)}.\n\n"
+            f"Qualquer dúvida, é só chamar. Obrigado!"
+        )
+
+        self._enviar_texto_whatsapp(texto, "Enviar Cobrança")
+
+    def enviar_saldo_devedor_whatsapp(self):
+        """Informativo -- ao contrário da cobrança, não trava se o
+        saldo for zero (o cliente pode querer confirmar que está em
+        dia)."""
+
+        saldo = saldo_cliente(self.cliente["id"])
+
+        texto = (
+            f"{self._cabecalho_texto_whatsapp('SALDO DEVEDOR')}\n\n"
+            f"Olá, {self.cliente.get('nome', '')}!\n"
+            f"Seu saldo devedor atual é de {_formatar_moeda(saldo)}."
+        )
+
+        self._enviar_texto_whatsapp(texto, "Enviar Saldo Devedor")
+
+    def enviar_haver_whatsapp(self):
+        """Avisa sobre o crédito (Haver) mais recente lançado a favor
+        do cliente."""
+
+        haveres = [
+            (mov, saldo_apos)
+            for mov, saldo_apos in self._movimentos
+            if mov.get("tipo") == "HAVER"
         ]
 
-        for botao in self.botoes_aba:
-            abas_layout.addWidget(botao)
+        if not haveres:
+            QMessageBox.information(
+                self,
+                "Haver",
+                "Este cliente ainda não tem nenhum crédito (Haver) lançado.",
+            )
+            return
 
-        abas_layout.addStretch()
+        mov, saldo_apos = haveres[0]  # self._movimentos já é mais-novo primeiro
 
-        layout.addLayout(abas_layout)
+        data = str(mov.get("data", ""))
+        if "T" in data:
+            data = data.replace("T", " ")[:16]
 
-        linha_abas = QFrame()
-        linha_abas.setFixedHeight(1)
-        linha_abas.setStyleSheet(f"background:{tokens.BORDA};")
-        layout.addWidget(linha_abas)
+        texto = (
+            f"{self._cabecalho_texto_whatsapp('CRÉDITO (HAVER)')}\n\n"
+            f"Olá, {self.cliente.get('nome', '')}!\n"
+            f"Você recebeu um crédito de "
+            f"{_formatar_moeda(float(mov.get('valor', 0) or 0))} em {data}.\n"
+            f"Motivo: {mov.get('descricao') or '—'}\n\n"
+            f"Seu saldo devedor atualizado é de {_formatar_moeda(saldo_apos)}."
+        )
 
-        layout.addSpacing(12)
+        self._enviar_texto_whatsapp(texto, "Enviar Haver")
 
-        self.pagina_historico = self._construir_timeline()
-        self.tabela_compras = self._construir_tabela()
-        self.tabela_pagamentos = self._construir_tabela()
-        self.pagina_observacoes = self._construir_pagina_observacoes()
+    def enviar_cadastro_whatsapp(self):
+        """Ficha completa do cliente via WhatsApp."""
 
-        self.paginas_aba = [
-            self.pagina_historico,
-            self.tabela_compras,
-            self.tabela_pagamentos,
-            self.pagina_observacoes,
-        ]
+        cliente = self.cliente
+        saldo = saldo_cliente(cliente["id"])
 
-        for pagina in self.paginas_aba:
-            layout.addWidget(pagina, stretch=1)
+        agr = cliente_analise.calcular_agregados(
+            cliente, [mov for mov, _ in reversed(self._movimentos)]
+        )
+        cliente_desde = (
+            agr["criado_em"].strftime("%d/%m/%Y") if agr["criado_em"] else "—"
+        )
 
-        self._selecionar_aba(0)
+        partes = [self._cabecalho_texto_whatsapp("CADASTRO DO CLIENTE"), ""]
+        partes.append(f"Nome: {cliente.get('nome', '')}")
 
-        return container
+        if cliente.get("cpf_cnpj"):
+            partes.append(f"CPF/CNPJ: {cliente['cpf_cnpj']}")
+        if cliente.get("telefone"):
+            partes.append(f"Telefone: {cliente['telefone']}")
+        if cliente.get("email"):
+            partes.append(f"E-mail: {cliente['email']}")
 
-    def _botao_aba(self, texto):
+        endereco = ", ".join(
+            filter(None, [cliente.get("endereco"), cliente.get("cidade"), cliente.get("estado")])
+        )
+        if endereco:
+            partes.append(f"Endereço: {endereco}")
 
-        botao = QPushButton(texto)
-        botao.setCheckable(True)
-        botao.setCursor(Qt.PointingHandCursor)
-        botao.setStyleSheet(f"""
-            QPushButton {{
-                background:transparent; border:none;
-                color:{tokens.TEXTO_TERCIARIO}; font-size:{tokens.TAMANHO_SM}px;
-                font-weight:700; padding-bottom:10px;
-            }}
-            QPushButton:checked {{
-                color:{tokens.PRIMARIA}; border-bottom:2px solid {tokens.PRIMARIA};
-            }}
-        """)
-        return botao
+        if cliente.get("data_nascimento"):
+            partes.append(f"Data de Nascimento: {cliente['data_nascimento']}")
 
-    def _selecionar_aba(self, indice):
+        partes.append(f"Cliente desde: {cliente_desde}")
+        partes.append(f"Saldo Atual: {_formatar_moeda(saldo)}")
+        partes.append("")
+        partes.append("Muito obrigado pela preferência!")
 
-        for i, botao in enumerate(self.botoes_aba):
-            botao.setChecked(i == indice)
-
-        for i, pagina in enumerate(self.paginas_aba):
-            pagina.setVisible(i == indice)
+        self._enviar_texto_whatsapp("\n".join(partes), "Enviar Cadastro do Cliente")
 
     def _construir_pagina_observacoes(self):
+        """Antes era a 4ª aba ('Observações'); agora mora dentro do
+        painel lateral recolhível, embaixo do Resumo -- por isso ganha
+        uma altura limitada (rolagem própria) em vez de ocupar a tela
+        inteira como fazia quando era uma aba dedicada."""
 
         pagina = QFrame()
         pagina.setStyleSheet("background:transparent;")
 
         layout = QVBoxLayout(pagina)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setSpacing(8)
 
-        linha_nova = QHBoxLayout()
-        linha_nova.setSpacing(8)
+        linha_nova = QVBoxLayout()
+        linha_nova.setSpacing(6)
 
         self.campo_nova_observacao = CampoTexto(
-            "Escreva uma observação sobre o cliente..."
+            "Escreva uma observação..."
         )
 
         bt_adicionar = BotaoPrimario("Adicionar")
-        bt_adicionar.setFixedHeight(44)
+        bt_adicionar.setFixedHeight(36)
         bt_adicionar.setAutoDefault(False)
         bt_adicionar.clicked.connect(self.adicionar_observacao)
 
-        linha_nova.addWidget(self.campo_nova_observacao, stretch=1)
+        linha_nova.addWidget(self.campo_nova_observacao)
         linha_nova.addWidget(bt_adicionar)
 
         layout.addLayout(linha_nova)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setMinimumHeight(160)
+        scroll.setMaximumHeight(260)
         scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
 
         conteudo = QFrame()
@@ -1003,7 +1233,7 @@ class FichaClienteDialog(QDialog):
         self.layout_observacoes.addStretch()
 
         scroll.setWidget(conteudo)
-        layout.addWidget(scroll, stretch=1)
+        layout.addWidget(scroll)
 
         return pagina
 
@@ -1125,52 +1355,6 @@ class FichaClienteDialog(QDialog):
 
             QMessageBox.critical(self, "Erro", str(erro))
 
-    def _construir_tabela(self):
-
-        tabela = QTableWidget()
-        tabela.setColumnCount(7)
-        tabela.setHorizontalHeaderLabels(
-            ["", "Data", "Descrição", "Forma Pagamento", "Valor", "Saldo Após", ""]
-        )
-        tabela.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-        tabela.setColumnWidth(0, 36)
-        tabela.setColumnWidth(1, 140)
-        tabela.setColumnWidth(3, 140)
-        tabela.setColumnWidth(4, 110)
-        tabela.setColumnWidth(5, 110)
-        tabela.setColumnWidth(6, 70)
-        tabela.verticalHeader().setVisible(False)
-        tabela.verticalHeader().setDefaultSectionSize(38)
-        tabela.setAlternatingRowColors(True)
-        tabela.setEditTriggers(QTableWidget.NoEditTriggers)
-        tabela.setSelectionMode(QTableWidget.NoSelection)
-        tabela.setFocusPolicy(Qt.NoFocus)
-        tabela.setShowGrid(False)
-        tabela.setStyleSheet(f"""
-            QTableWidget {{
-                background:{tokens.CARD};
-                alternate-background-color:{tokens.FUNDO};
-                border:1px solid {tokens.BORDA};
-                border-radius:{tokens.RADIUS_MD}px;
-                color:{tokens.TEXTO};
-                font-size:{tokens.TAMANHO_BASE}px;
-            }}
-            QTableWidget::item {{
-                background:transparent;
-            }}
-            QHeaderView::section {{
-                background:{tokens.FUNDO};
-                color:{tokens.TEXTO_SECUNDARIO};
-                padding:8px;
-                border:none;
-                border-bottom:1px solid {tokens.BORDA};
-                font-weight:700;
-                font-size:{tokens.TAMANHO_XS}px;
-            }}
-        """)
-
-        return tabela
-
     def _acoes_movimento(self, mov):
         """Botões de editar/excluir um lançamento errado -- direto na
         tabela, pra corrigir sem precisar apagar e recriar o cliente
@@ -1288,14 +1472,138 @@ class FichaClienteDialog(QDialog):
 
         self.carregar()
 
+    def _construir_filtros_timeline(self):
+        """Filtros rápidos da timeline única (substituem as antigas
+        abas Histórico/Compras/Pagamentos): chips de tipo + busca por
+        texto, combinados na hora de exibir (ver _movimentos_filtrados)."""
+
+        container = QFrame()
+        container.setStyleSheet("background:transparent;")
+
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        self.botoes_filtro_timeline = {}
+
+        opcoes = [
+            ("TODOS", "Todos"),
+            ("COMPRA", "🛒 Compras"),
+            ("PAGAMENTO", "💵 Pagamentos"),
+            ("HAVER", "💰 Haver"),
+            ("AJUSTES", "Ajustes"),
+            ("30DIAS", "Últimos 30 dias"),
+        ]
+
+        for chave, texto in opcoes:
+
+            botao = QPushButton(texto)
+            botao.setCheckable(True)
+            botao.setChecked(chave == "TODOS")
+            botao.setCursor(Qt.PointingHandCursor)
+            botao.setStyleSheet(f"""
+                QPushButton {{
+                    background:{tokens.CARD}; border:1px solid {tokens.BORDA};
+                    border-radius:{tokens.RADIUS_PILL}px;
+                    color:{tokens.TEXTO_SECUNDARIO}; font-size:{tokens.TAMANHO_XS}px;
+                    font-weight:700; padding:6px 14px;
+                }}
+                QPushButton:checked {{
+                    background:{tokens.PRIMARIA}; border-color:{tokens.PRIMARIA};
+                    color:white;
+                }}
+                QPushButton:hover {{ border-color:{tokens.PRIMARIA}; }}
+            """)
+            botao.clicked.connect(
+                lambda _, chave=chave: self._selecionar_filtro_timeline(chave)
+            )
+
+            self.botoes_filtro_timeline[chave] = botao
+            layout.addWidget(botao)
+
+        layout.addStretch()
+
+        self.campo_busca_timeline = CampoTexto("Pesquisar na timeline...")
+        self.campo_busca_timeline.setFixedWidth(220)
+        self.campo_busca_timeline.setMinimumHeight(0)
+        self.campo_busca_timeline.setFixedHeight(32)
+        self.campo_busca_timeline.textChanged.connect(self._on_busca_timeline)
+
+        layout.addWidget(self.campo_busca_timeline)
+
+        return container
+
+    def _selecionar_filtro_timeline(self, chave):
+
+        self._filtro_timeline = chave
+
+        for k, botao in self.botoes_filtro_timeline.items():
+            botao.setChecked(k == chave)
+
+        self._timeline_qtd_exibida = self._TIMELINE_PAGINA
+        self._preencher_timeline()
+
+    def _on_busca_timeline(self, texto):
+
+        self._busca_timeline = texto.strip().lower()
+        self._timeline_qtd_exibida = self._TIMELINE_PAGINA
+        self._preencher_timeline()
+
+    def _passa_filtro_timeline(self, mov):
+
+        tipo = mov.get("tipo", "")
+        estorno = self._e_estorno(mov)
+        filtro = self._filtro_timeline
+
+        if filtro == "TODOS":
+            return True
+        if filtro == "COMPRA":
+            return tipo == "COMPRA" and not estorno
+        if filtro == "PAGAMENTO":
+            return tipo == "PAGAMENTO" and not estorno
+        if filtro == "HAVER":
+            return tipo == "HAVER" and not estorno
+        if filtro == "AJUSTES":
+            return estorno
+        if filtro == "30DIAS":
+            data = _parse_data(mov.get("data"))
+            return bool(data) and (datetime.now() - data).days <= 30
+
+        return True
+
+    def _movimentos_filtrados(self):
+
+        resultado = []
+
+        for mov, saldo_apos in self._movimentos:
+
+            if not self._passa_filtro_timeline(mov):
+                continue
+
+            if self._busca_timeline:
+                alvo = (
+                    f"{self._descricao_com_itens(mov)} "
+                    f"{mov.get('descricao', '')}"
+                ).lower()
+                if self._busca_timeline not in alvo:
+                    continue
+
+            resultado.append((mov, saldo_apos))
+
+        return resultado
+
     def _construir_timeline(self):
-        """Aba 'Histórico Financeiro' como linha do tempo vertical, em
-        vez de tabela — os dados já vêm calculados cronologicamente
-        (ver carregar()), isso só troca a forma de exibir."""
+        """Linha do tempo única (Compra/Pagamento/Haver/Ajuste), no
+        lugar das antigas abas Histórico/Compras/Pagamentos -- ocupa
+        praticamente toda a área principal (~70% da tela) e tem rolagem
+        própria e incremental (ver _verificar_scroll_timeline)."""
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
+        scroll.verticalScrollBar().valueChanged.connect(
+            self._verificar_scroll_timeline
+        )
 
         conteudo = QFrame()
         conteudo.setStyleSheet("background:transparent;")
@@ -1306,10 +1614,32 @@ class FichaClienteDialog(QDialog):
         self.layout_timeline.addStretch()
 
         scroll.setWidget(conteudo)
+        self.scroll_timeline = scroll
 
         return scroll
 
-    def _preencher_timeline(self, historico):
+    def _verificar_scroll_timeline(self, valor):
+        """Scroll incremental: só monta os próximos 30 lançamentos
+        quando o usuário chega perto do fim da lista já renderizada --
+        evita montar centenas de widgets de uma vez só quando o cliente
+        tem um histórico grande."""
+
+        barra = self.scroll_timeline.verticalScrollBar()
+
+        if barra.maximum() > 0 and valor >= barra.maximum() - 60:
+            self._carregar_mais_timeline()
+
+    def _carregar_mais_timeline(self):
+
+        total_filtrado = len(self._movimentos_filtrados())
+
+        if self._timeline_qtd_exibida >= total_filtrado:
+            return
+
+        self._timeline_qtd_exibida += self._TIMELINE_PAGINA
+        self._preencher_timeline()
+
+    def _preencher_timeline(self):
 
         while self.layout_timeline.count():
             item = self.layout_timeline.takeAt(0)
@@ -1317,8 +1647,10 @@ class FichaClienteDialog(QDialog):
             if widget:
                 widget.deleteLater()
 
+        historico = self._movimentos_filtrados()
+
         if not historico:
-            vazio = QLabel("Nenhuma movimentação registrada ainda.")
+            vazio = QLabel("Nenhuma movimentação encontrada.")
             vazio.setAlignment(Qt.AlignCenter)
             vazio.setStyleSheet(f"""
                 background:transparent; color:{tokens.TEXTO_TERCIARIO};
@@ -1328,8 +1660,22 @@ class FichaClienteDialog(QDialog):
             self.layout_timeline.addStretch()
             return
 
-        for mov, saldo_apos in historico:
+        visiveis = historico[: self._timeline_qtd_exibida]
+
+        for mov, saldo_apos in visiveis:
             self.layout_timeline.addWidget(self._linha_timeline(mov, saldo_apos))
+
+        if len(historico) > len(visiveis):
+            lbl_mais = QLabel(
+                f"Mostrando {len(visiveis)} de {len(historico)} — "
+                "role pra ver mais"
+            )
+            lbl_mais.setAlignment(Qt.AlignCenter)
+            lbl_mais.setStyleSheet(f"""
+                background:transparent; color:{tokens.TEXTO_TERCIARIO};
+                font-size:{tokens.TAMANHO_XS}px; padding:10px;
+            """)
+            self.layout_timeline.addWidget(lbl_mais)
 
         self.layout_timeline.addStretch()
 
@@ -1341,12 +1687,19 @@ class FichaClienteDialog(QDialog):
         if estorno:
             cor = tokens.ERRO
             icone_nome = "refresh-cw"
+            rotulo_tipo = "🔄 Ajuste"
+        elif tipo == "HAVER":
+            cor = tokens.ALERTA
+            icone_nome = "gift"
+            rotulo_tipo = "💰 Haver"
         elif tipo == "COMPRA":
             cor = tokens.PRIMARIA
             icone_nome = "shopping-cart"
+            rotulo_tipo = "🛒 Compra"
         else:
             cor = tokens.SECUNDARIA
             icone_nome = "check"
+            rotulo_tipo = "💵 Pagamento"
 
         linha = QFrame()
         linha.setStyleSheet(f"""
@@ -1372,11 +1725,24 @@ class FichaClienteDialog(QDialog):
         if "T" in data:
             data = data.replace("T", " ")[:16]
 
+        linha_topo = QHBoxLayout()
+        linha_topo.setSpacing(8)
+
+        lbl_tipo = QLabel(rotulo_tipo)
+        lbl_tipo.setStyleSheet(f"""
+            background:transparent; border:none; color:{cor};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:800;
+        """)
+
         lbl_data = QLabel(data)
         lbl_data.setStyleSheet(f"""
             background:transparent; border:none; color:{tokens.TEXTO_TERCIARIO};
             font-size:{tokens.TAMANHO_XS}px; font-weight:700;
         """)
+
+        linha_topo.addWidget(lbl_tipo)
+        linha_topo.addWidget(lbl_data)
+        linha_topo.addStretch()
 
         lbl_descricao = QLabel(self._descricao_com_itens(mov))
         lbl_descricao.setWordWrap(True)
@@ -1385,7 +1751,7 @@ class FichaClienteDialog(QDialog):
             font-size:{tokens.TAMANHO_MD}px; font-weight:600;
         """)
 
-        col_texto.addWidget(lbl_data)
+        col_texto.addLayout(linha_topo)
         col_texto.addWidget(lbl_descricao)
 
         layout.addLayout(col_texto, stretch=1)
@@ -1425,12 +1791,49 @@ class FichaClienteDialog(QDialog):
 
         layout.addLayout(col_valor)
 
+        layout.addWidget(self._acoes_movimento(mov), 0, Qt.AlignTop)
+
         return linha
 
+    _LARGURA_PAINEL_LATERAL = 280
+
     def _construir_painel_lateral(self):
+        """Painel lateral agora é recolhível (botão no topo) -- quando
+        recolhido, libera espaço horizontal pra timeline, que é a área
+        que mais importa no dia a dia. As Observações, que antes eram
+        uma aba própria, moram aqui embaixo do Resumo."""
+
+        self.painel_lateral_expandido = True
+
+        wrapper = QFrame()
+        wrapper.setStyleSheet("background:transparent;")
+        wrapper.setFixedWidth(self._LARGURA_PAINEL_LATERAL)
+
+        layout_wrapper = QVBoxLayout(wrapper)
+        layout_wrapper.setContentsMargins(0, 0, 0, 0)
+        layout_wrapper.setSpacing(6)
+
+        linha_toggle = QHBoxLayout()
+        linha_toggle.addStretch()
+
+        self.bt_recolher_painel = QPushButton("Recolher ›")
+        self.bt_recolher_painel.setCursor(Qt.PointingHandCursor)
+        self.bt_recolher_painel.setFixedHeight(26)
+        self.bt_recolher_painel.setToolTip("Recolher o painel de resumo")
+        self.bt_recolher_painel.clicked.connect(self._alternar_painel_lateral)
+        self.bt_recolher_painel.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD}; border:1px solid {tokens.BORDA};
+                border-radius:{tokens.RADIUS_SM}px; color:{tokens.TEXTO_SECUNDARIO};
+                font-size:{tokens.TAMANHO_XS}px; font-weight:700; padding:0 10px;
+            }}
+            QPushButton:hover {{ background:{tokens.FUNDO}; }}
+        """)
+
+        linha_toggle.addWidget(self.bt_recolher_painel)
+        layout_wrapper.addLayout(linha_toggle)
 
         self.painel_lateral = SecaoCard("Resumo", "bar-chart-2")
-        self.painel_lateral.setFixedWidth(260)
 
         self.lbl_resumo_total_comprado = self._linha_resumo(
             self.painel_lateral, "Total Comprado"
@@ -1454,9 +1857,40 @@ class FichaClienteDialog(QDialog):
             self.painel_lateral, "Total de Compras"
         )
 
-        self.painel_lateral.corpo.addStretch()
+        separador = QFrame()
+        separador.setFixedHeight(1)
+        separador.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
+        self.painel_lateral.corpo.addSpacing(4)
+        self.painel_lateral.corpo.addWidget(separador)
 
-        return self.painel_lateral
+        lbl_obs_titulo = QLabel("Observações")
+        lbl_obs_titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+        """)
+        self.painel_lateral.corpo.addWidget(lbl_obs_titulo)
+        self.painel_lateral.corpo.addWidget(self._construir_pagina_observacoes())
+
+        layout_wrapper.addWidget(self.painel_lateral, stretch=1)
+
+        self._painel_lateral_wrapper = wrapper
+
+        return wrapper
+
+    def _alternar_painel_lateral(self):
+
+        self.painel_lateral_expandido = not self.painel_lateral_expandido
+
+        self.painel_lateral.setVisible(self.painel_lateral_expandido)
+
+        if self.painel_lateral_expandido:
+            self._painel_lateral_wrapper.setFixedWidth(
+                self._LARGURA_PAINEL_LATERAL
+            )
+            self.bt_recolher_painel.setText("Recolher ›")
+        else:
+            self._painel_lateral_wrapper.setFixedWidth(112)
+            self.bt_recolher_painel.setText("‹ Resumo")
 
     def _linha_resumo(self, secao, titulo):
 
@@ -1533,23 +1967,11 @@ class FichaClienteDialog(QDialog):
             font-weight: 600; padding: 3px 10px;
         """)
 
-        detalhes = " · ".join(
-            filter(
-                None,
-                [
-                    cliente.get("telefone"),
-                    cliente.get("cpf_cnpj"),
-                    cliente.get("endereco"),
-                ],
-            )
-        ) or "Sem dados de contato"
-
-        self.lbl_subtitulo.setText(detalhes)
+        self.lbl_subtitulo.setText(cliente.get("telefone") or "Sem telefone")
 
         self.bt_whatsapp.setEnabled(bool(cliente.get("telefone")))
         self.bt_ligar.setEnabled(bool(cliente.get("telefone")))
         self.bt_email.setEnabled(bool(cliente.get("email")))
-        self.bt_mapa.setEnabled(bool(cliente.get("endereco")))
 
     def _atualizar_avatar(self, cliente):
 
@@ -1660,7 +2082,7 @@ class FichaClienteDialog(QDialog):
 
         self.lbl_saldo_valor.setText(_formatar_moeda(saldo))
         self.lbl_saldo_valor.setStyleSheet(f"""
-            background:transparent; border:none; font-size:32px;
+            background:transparent; border:none; font-size:{tokens.TAMANHO_SM}px;
             font-weight:800;
             color:{tokens.ERRO if saldo > 0 else tokens.SECUNDARIA};
         """)
@@ -1699,76 +2121,12 @@ class FichaClienteDialog(QDialog):
         historico_calculado.reverse()
 
         self._movimentos = historico_calculado
+        self._timeline_qtd_exibida = self._TIMELINE_PAGINA
 
-        self._preencher_timeline(historico_calculado)
-        self._preencher_tabela(
-            self.tabela_compras,
-            [h for h in historico_calculado if h[0].get("tipo") == "COMPRA"],
-        )
-        self._preencher_tabela(
-            self.tabela_pagamentos,
-            [h for h in historico_calculado if h[0].get("tipo") == "PAGAMENTO"],
-        )
+        self._preencher_timeline()
 
         self._atualizar_stats(movimentos_cron, saldo)
         self._carregar_observacoes()
-
-    def _preencher_tabela(self, tabela, historico):
-
-        tabela.setRowCount(len(historico))
-
-        for linha, (mov, saldo_apos) in enumerate(historico):
-
-            tipo = mov.get("tipo", "")
-            estorno = self._e_estorno(mov)
-
-            if estorno:
-                cor = tokens.ERRO
-                icone_nome = "refresh-cw"
-            elif tipo == "COMPRA":
-                cor = tokens.PRIMARIA
-                icone_nome = "shopping-cart"
-            else:
-                cor = tokens.SECUNDARIA
-                icone_nome = "check"
-
-            item_icone = QTableWidgetItem()
-            item_icone.setIcon(icone(icone_nome, cor=cor, tamanho=16))
-            tabela.setItem(linha, 0, item_icone)
-
-            data = str(mov.get("data", ""))
-            if "T" in data:
-                data = data.replace("T", " ")
-
-            item_data = QTableWidgetItem(data[:19])
-            item_data.setForeground(QColor(cor))
-            tabela.setItem(linha, 1, item_data)
-
-            item_descricao = QTableWidgetItem(self._descricao_com_itens(mov))
-            item_descricao.setForeground(QColor(tokens.TEXTO))
-            tabela.setItem(linha, 2, item_descricao)
-
-            forma = mov.get("forma_pagamento")
-            texto_forma = NOMES_FORMA_FIADO.get(forma, forma) if forma else "—"
-            item_forma = QTableWidgetItem(texto_forma)
-            item_forma.setForeground(QColor(tokens.TEXTO_SECUNDARIO))
-            tabela.setItem(linha, 3, item_forma)
-
-            valor = float(mov.get("valor", 0) or 0)
-            texto_valor = (
-                f"+ {_formatar_moeda(valor)}"
-                if tipo == "COMPRA"
-                else f"- {_formatar_moeda(valor)}"
-            )
-            item_valor = QTableWidgetItem(texto_valor)
-            item_valor.setForeground(QColor(cor))
-            tabela.setItem(linha, 4, item_valor)
-
-            item_saldo = QTableWidgetItem(_formatar_moeda(saldo_apos))
-            item_saldo.setForeground(QColor(tokens.TEXTO))
-            tabela.setItem(linha, 5, item_saldo)
-
-            tabela.setCellWidget(linha, 6, self._acoes_movimento(mov))
 
     def _atualizar_stats(self, movimentos_cron, saldo_atual):
 
@@ -1792,28 +2150,19 @@ class FichaClienteDialog(QDialog):
                 return "—"
             return "Hoje" if dias == 0 else f"{dias} dia(s)"
 
-        # card financeiro
+        # linha de mini-cards
         self.lbl_total_comprado.setText(_formatar_moeda(total_comprado))
+        self.lbl_total_pago_card.setText(_formatar_moeda(total_pago))
         self.lbl_qtd_compras.setText(str(qtd_compras))
         self.lbl_ultima_compra.setText(_data_curta(agr["ultima_compra"]))
         self.lbl_ultimo_pagamento.setText(_data_curta(agr["ultimo_pagamento"]))
-        self.lbl_ultimo_movimento.setText(_data_curta(agr["ultima_movimentacao"]))
-        self.lbl_dias_sem_movimentacao.setText(
-            _dias_texto(agr["dias_sem_movimentacao"])
-        )
         self.lbl_dias_desde_ultima_compra.setText(
             _dias_texto(agr["dias_desde_ultima_compra"])
-        )
-        self.lbl_dias_desde_ultimo_pagamento.setText(
-            _dias_texto(agr["dias_desde_ultimo_pagamento"])
         )
         self.lbl_cliente_desde.setText(_data_curta(agr["criado_em"]))
 
         self.lbl_status_financeiro.setText(
             cliente_analise.status_financeiro(agr)
-        )
-        self.lbl_status_relacionamento.setText(
-            cliente_analise.status_relacionamento(agr)
         )
         self.lbl_score.setText(cliente_analise.calcular_pontuacao(agr))
 
@@ -1830,15 +2179,6 @@ class FichaClienteDialog(QDialog):
             font-size:{tokens.TAMANHO_SM}px; font-weight:700;
             border-radius:{tokens.RADIUS_SM}px; padding:6px 10px;
         """)
-
-        if saldo_atual > 0 and agr["dias_sem_movimentacao"] is not None:
-            dias = agr["dias_sem_movimentacao"]
-            self.lbl_saldo_info.setText(
-                f"Última movimentação há {dias} dia(s)"
-                if dias > 0 else "Movimentação de hoje"
-            )
-        else:
-            self.lbl_saldo_info.setText("")
 
         # painel lateral
         self.lbl_resumo_total_comprado.setText(_formatar_moeda(total_comprado))
@@ -1875,6 +2215,25 @@ class FichaClienteDialog(QDialog):
     def lancar_fiado(self):
 
         dialogo = LancarFiadoDialog(self.cliente, parent=self)
+
+        if dialogo.exec() != QDialog.Accepted:
+            return
+
+        self.carregar()
+
+    def lancar_haver(self):
+
+        saldo = saldo_cliente(self.cliente["id"])
+
+        if saldo <= 0:
+            QMessageBox.information(
+                self,
+                "Haver",
+                "Este cliente não tem saldo devedor pra aplicar um crédito.",
+            )
+            return
+
+        dialogo = LancarHaverDialog(self.cliente, saldo, parent=self)
 
         if dialogo.exec() != QDialog.Accepted:
             return

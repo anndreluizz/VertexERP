@@ -5,7 +5,7 @@ from datetime import datetime
 from io import BytesIO
 
 import qrcode
-from PySide6.QtGui import QTextDocument, QPageSize
+from PySide6.QtGui import QTextDocument, QPageSize, QImage
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
@@ -114,8 +114,17 @@ def mensagem_whatsapp_padrao(cliente_nome, nome_loja):
 
 
 def _gerar_qrcode_base64(texto):
+    """box_size baixo pra gerar um PNG de origem já pequeno -- o
+    QTextDocument (usado pra imprimir/exportar o comprovante) ignora
+    width/height definidos via CSS em <img>, só respeita os atributos
+    HTML width/height (ver gerar_html_comprovante). Sem isso, o PNG
+    nativo do qrcode (bem maior, ~500-800px) força a largura do
+    documento inteiro e encolhe todo o resto do texto pra caber."""
 
-    imagem = qrcode.make(texto)
+    qr = qrcode.QRCode(box_size=3, border=2)
+    qr.add_data(texto)
+    qr.make(fit=True)
+    imagem = qr.make_image()
 
     buffer = BytesIO()
     imagem.save(buffer, format="PNG")
@@ -152,7 +161,22 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
     forma de pagamento, situacao (pago/fiado), saldo devedor
     atualizado, observacoes e QR Code. Renderizado depois via
     QTextDocument (ver montar_documento) tanto pra tela quanto pra
-    impressão/PDF."""
+    impressão/PDF.
+
+    Font-size sempre em pt, nunca em px: o QTextDocument usa DPI da
+    TELA (~96) quando exibido num QTextBrowser, mas o QPrinter usa o
+    DPI real da impressora/PDF (bem mais alto) -- um font-size em px
+    fica proporcional ao DPI e sai minúsculo no papel/PDF mesmo
+    aparecendo normal na tela. Em pt (unidade física, 1/72") o texto
+    sai do mesmo tamanho nos dois casos. Larguras/margens em px estão
+    OK (não sofrem esse problema); só tamanho de fonte precisa ser pt.
+    Pelo mesmo motivo, as tags <img> aqui usam os atributos width/
+    height do HTML (não CSS): o QTextDocument não aplica width/height
+    de imagem via style=, só via atributo -- sem isso o QR Code (ou
+    logo) nasce no tamanho nativo do PNG e "empurra" a largura do
+    documento inteiro, encolhendo visualmente todo o resto do texto
+    junto (ver _gerar_qrcode_base64 e o cálculo de largura do logo
+    abaixo)."""
 
     nome_loja = config.get("nome_loja") or "Vertex ERP"
     endereco_loja = config.get("endereco") or ""
@@ -161,10 +185,27 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
 
     logo_html = ""
     if logo_bytes:
+
+        # QTextDocument ignora max-height/max-width em CSS -- so
+        # respeita width/height como atributo HTML de verdade, entao
+        # precisa calcular o tamanho final (mantendo proporcao) aqui
+        # em vez de deixar por conta do CSS.
+        imagem_logo = QImage.fromData(logo_bytes)
+        largura_original = imagem_logo.width() or 1
+        altura_original = imagem_logo.height() or 1
+
+        altura_alvo = 70
+        largura_alvo = round(largura_original * (altura_alvo / altura_original))
+
+        if largura_alvo > 200:
+            largura_alvo = 200
+            altura_alvo = round(altura_original * (largura_alvo / largura_original))
+
         logo_b64 = base64.b64encode(logo_bytes).decode("ascii")
         logo_html = (
             f'<img src="data:image/png;base64,{logo_b64}" '
-            f'style="max-height:70px; max-width:200px; margin-bottom:6px;" />'
+            f'width="{largura_alvo}" height="{altura_alvo}" '
+            f'style="margin-bottom:6px;" />'
         )
 
     linhas_itens = "".join(
@@ -252,7 +293,7 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
 
     return f"""
     <html>
-    <body style="font-family: Arial; font-size: 13px; color:#1E293B;">
+    <body style="font-family: Arial; font-size: 10pt; color:#1E293B;">
         <div style="text-align:center;">
             {logo_html}
             <h2 style="margin:2px 0;">{nome_loja}</h2>
@@ -289,10 +330,10 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
         {observacao_linha}
         <div style="text-align:center; margin-top:16px;">
             <img src="data:image/png;base64,{qr_b64}"
-                 style="width:110px; height:110px;" />
+                 width="110" height="110" />
         </div>
         <hr style="border:none; border-top:1px solid #E5E7EB; margin:10px 0;">
-        <p style="color:#94A3B8; font-size:11px; text-align:center;">
+        <p style="color:#94A3B8; font-size:8pt; text-align:center;">
             Este comprovante não tem valor fiscal.<br>
             Documento gerado automaticamente pelo Vertex ERP.
         </p>

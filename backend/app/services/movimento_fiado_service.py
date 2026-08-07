@@ -98,10 +98,13 @@ class MovimentoFiadoService:
 
         tipo = dados.tipo.upper()
 
-        if tipo not in ("COMPRA", "PAGAMENTO"):
+        # HAVER: credito manual em favor do cliente (desconto, devolucao
+        # etc.) -- reduz o saldo devedor igual um pagamento, mas nunca
+        # mexe no caixa (nao e dinheiro recebido de verdade, ver abaixo).
+        if tipo not in ("COMPRA", "PAGAMENTO", "HAVER"):
             raise Exception("Tipo de movimento inválido.")
 
-        if tipo == "PAGAMENTO":
+        if tipo in ("PAGAMENTO", "HAVER"):
 
             saldo_atual = MovimentoFiadoRepository.saldo_por_cliente(
                 db,
@@ -110,9 +113,8 @@ class MovimentoFiadoService:
 
             if dados.valor > saldo_atual:
                 raise Exception(
-                    f"O valor do pagamento (R$ {dados.valor:.2f}) é "
-                    f"maior que o saldo devedor do cliente "
-                    f"(R$ {saldo_atual:.2f})."
+                    f"O valor (R$ {dados.valor:.2f}) é maior que o "
+                    f"saldo devedor do cliente (R$ {saldo_atual:.2f})."
                 )
 
         forma_pagamento = (

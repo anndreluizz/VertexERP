@@ -31,6 +31,14 @@ def reativar_cliente(cliente_id):
     return post(f"/clientes/{cliente_id}/reativar", {})
 
 
+def enviar_whatsapp_texto(cliente_id, texto):
+    """Manda uma mensagem de texto livre pro cliente via WhatsApp
+    (extrato completo, cobrança, saldo devedor, haver, cadastro --
+    ver menu 'WhatsApp ▾' da ficha do cliente)."""
+
+    return post(f"/clientes/{cliente_id}/whatsapp", {"texto": texto})
+
+
 def obter_foto_cliente(cliente_id):
 
     response = get(f"/clientes/{cliente_id}/foto")

@@ -52,6 +52,10 @@ class ClienteResponse(BaseModel):
         orm_mode = True
 
 
+class ClienteEnviarWhatsappRequest(BaseModel):
+    texto: str
+
+
 class ClienteObservacaoCreate(BaseModel):
     texto: str
 

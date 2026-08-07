@@ -819,14 +819,14 @@ class FichaClienteDialog(QDialog):
     _ALTURA_MINI_CARD = 56
 
     def _construir_linha_cards(self):
-        """Indicadores em grid responsivo (FlowLayout) -- em telas
-        largas rende como 2 linhas de até 5 cards (a ordem de inserção
-        decide o agrupamento: 1ª linha é o financeiro do dia a dia, 2ª
-        linha é o perfil/relacionamento do cliente); se a janela ficar
-        mais estreita, quebra pra mais linhas sozinho -- nunca força
-        rolagem horizontal nem estoura a largura do diálogo (o que
-        também tirava a largura mínima do cabeçalho lá em cima, já que
-        os dois dividem o mesmo QVBoxLayout raiz)."""
+        """Indicadores em grid responsivo -- 2 FlowLayouts separados
+        (um por linha), não um só compartilhado: um FlowLayout único
+        deixava um 6º card "subir" pra 1ª linha em janelas bem largas
+        (maximizada, por exemplo), quebrando o agrupamento pedido
+        (1ª linha = financeiro do dia a dia, 2ª linha = perfil do
+        cliente). Com um FlowLayout por linha, cada grupo de 5 fica
+        sempre junto, em qualquer largura -- só quebra pra uma 3ª/4ª
+        linha se a própria linha não couber inteira (janela estreita)."""
 
         container = QFrame()
         container.setStyleSheet("background:transparent;")
@@ -835,23 +835,25 @@ class FichaClienteDialog(QDialog):
         layout_externo.setContentsMargins(0, 0, 0, 0)
         layout_externo.setSpacing(8)
 
-        grid = FlowLayout(espaco_h=8, espaco_v=8)
+        linha1 = FlowLayout(espaco_h=8, espaco_v=8)
+        linha2 = FlowLayout(espaco_h=8, espaco_v=8)
 
         # linha 1 -- financeiro do dia a dia
-        self.lbl_saldo_valor = self._mini_card(grid, "SALDO ATUAL")
-        self.lbl_total_comprado = self._mini_card(grid, "TOTAL COMPRADO")
-        self.lbl_total_pago_card = self._mini_card(grid, "TOTAL PAGO")
-        self.lbl_ultima_compra = self._mini_card(grid, "ÚLTIMA COMPRA")
-        self.lbl_ultimo_pagamento = self._mini_card(grid, "ÚLTIMO PAGAMENTO")
+        self.lbl_saldo_valor = self._mini_card(linha1, "SALDO ATUAL")
+        self.lbl_total_comprado = self._mini_card(linha1, "TOTAL COMPRADO")
+        self.lbl_total_pago_card = self._mini_card(linha1, "TOTAL PAGO")
+        self.lbl_ultima_compra = self._mini_card(linha1, "ÚLTIMA COMPRA")
+        self.lbl_ultimo_pagamento = self._mini_card(linha1, "ÚLTIMO PAGAMENTO")
 
         # linha 2 -- perfil/relacionamento do cliente
-        self.lbl_cliente_desde = self._mini_card(grid, "CLIENTE DESDE")
-        self.lbl_status_financeiro = self._mini_card(grid, "STATUS FINANCEIRO")
-        self.lbl_score = self._mini_card(grid, "PONTUAÇÃO")
-        self.lbl_dias_desde_ultima_compra = self._mini_card(grid, "DIAS SEM COMPRAR")
-        self.lbl_limite_credito = self._mini_card(grid, "LIMITE DE CRÉDITO")
+        self.lbl_cliente_desde = self._mini_card(linha2, "CLIENTE DESDE")
+        self.lbl_status_financeiro = self._mini_card(linha2, "STATUS FINANCEIRO")
+        self.lbl_score = self._mini_card(linha2, "PONTUAÇÃO")
+        self.lbl_dias_desde_ultima_compra = self._mini_card(linha2, "DIAS SEM COMPRAR")
+        self.lbl_limite_credito = self._mini_card(linha2, "LIMITE DE CRÉDITO")
 
-        layout_externo.addLayout(grid)
+        layout_externo.addLayout(linha1)
+        layout_externo.addLayout(linha2)
 
         self.lbl_aviso_status = QLabel("")
         self.lbl_aviso_status.setAlignment(Qt.AlignCenter)

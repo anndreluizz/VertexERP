@@ -1,10 +1,11 @@
-from PySide6.QtCore import QRectF, QSize, Qt, QVariantAnimation
+from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, QVariantAnimation
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QLineEdit,
     QPushButton,
     QVBoxLayout,
@@ -440,3 +441,112 @@ class CampoTexto(QLineEdit):
                 color: {tokens.TEXTO_TERCIARIO};
             }}
         """)
+
+
+# ==========================================
+# FLOW LAYOUT — grid responsivo que quebra sozinho
+# ==========================================
+
+class FlowLayout(QLayout):
+    """Adaptação do "Flow Layout" oficial da documentação do Qt (C++)
+    pro PySide6 -- um QGridLayout comum tem número fixo de colunas e
+    não recalcula isso ao redimensionar a janela; esse layout, ao
+    contrário, vai encaixando os itens da esquerda pra direita e quebra
+    pra próxima linha sozinho assim que não cabe mais, sem nunca forçar
+    rolagem horizontal nem estourar a largura do container.
+
+    Usado nos mini-cards de indicadores da ficha do cliente: em telas
+    largas rende como 2 linhas (a ordem de inserção decide o
+    agrupamento visual), e vai reorganizando pra mais linhas sozinho se
+    a janela ficar mais estreita."""
+
+    def __init__(self, parent=None, margem=0, espaco_h=8, espaco_v=8):
+
+        super().__init__(parent)
+
+        self._espaco_h = espaco_h
+        self._espaco_v = espaco_v
+        self._itens = []
+
+        self.setContentsMargins(margem, margem, margem, margem)
+
+    def addItem(self, item):
+        self._itens.append(item)
+
+    def horizontalSpacing(self):
+        return self._espaco_h
+
+    def verticalSpacing(self):
+        return self._espaco_v
+
+    def count(self):
+        return len(self._itens)
+
+    def itemAt(self, index):
+        if 0 <= index < len(self._itens):
+            return self._itens[index]
+        return None
+
+    def takeAt(self, index):
+        if 0 <= index < len(self._itens):
+            return self._itens.pop(index)
+        return None
+
+    def expandingDirections(self):
+        return Qt.Orientation(0)
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, largura):
+        return self._montar_layout(QRect(0, 0, largura, 0), True)
+
+    def setGeometry(self, rect):
+        super().setGeometry(rect)
+        self._montar_layout(rect, False)
+
+    def sizeHint(self):
+        return self.minimumSize()
+
+    def minimumSize(self):
+
+        tamanho = QSize()
+
+        for item in self._itens:
+            tamanho = tamanho.expandedTo(item.minimumSize())
+
+        margens = self.contentsMargins()
+        tamanho += QSize(
+            margens.left() + margens.right(),
+            margens.top() + margens.bottom(),
+        )
+
+        return tamanho
+
+    def _montar_layout(self, rect, so_calcular):
+
+        esquerda, topo, direita, baixo = self.getContentsMargins()
+        area = rect.adjusted(esquerda, topo, -direita, -baixo)
+
+        x = area.x()
+        y = area.y()
+        altura_linha = 0
+
+        for item in self._itens:
+
+            tamanho_item = item.sizeHint()
+            proximo_x = x + tamanho_item.width() + self._espaco_h
+
+            if proximo_x - self._espaco_h > area.right() and altura_linha > 0:
+                x = area.x()
+                y = y + altura_linha + self._espaco_v
+                proximo_x = x + tamanho_item.width() + self._espaco_h
+                altura_linha = 0
+
+            if not so_calcular:
+                item.setGeometry(QRect(QPoint(x, y), tamanho_item))
+
+            x = proximo_x
+            altura_linha = max(altura_linha, tamanho_item.height())
+
+        return y + altura_linha - rect.y() + baixo

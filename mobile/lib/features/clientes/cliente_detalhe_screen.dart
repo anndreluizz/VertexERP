@@ -133,13 +133,7 @@ class _Ficha extends ConsumerWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: cliente.telefone == null
-                      ? null
-                      : () => _abrirWhatsApp(context, cliente.telefone!),
-                  icon: const Icon(Icons.chat_outlined, size: 17),
-                  label: const Text('WhatsApp'),
-                ),
+                child: _botaoMenuWhatsapp(context, ref),
               ),
             ],
           ),
@@ -254,9 +248,229 @@ class _Ficha extends ConsumerWidget {
     );
   }
 
-  Future<void> _abrirWhatsApp(BuildContext context, String telefone) async {
+  /// Botão "WhatsApp" virou um menu com as mesmas ações do Desktop
+  /// (extrato completo, cobrança, saldo devedor, haver, cadastro) --
+  /// todas via texto livre, mesmo endpoint POST /clientes/{id}/whatsapp.
+  Widget _botaoMenuWhatsapp(BuildContext context, WidgetRef ref) {
+    return PopupMenuButton<_AcaoWhatsapp>(
+      tooltip: 'WhatsApp',
+      enabled: cliente.telefone != null,
+      onSelected: (acao) => _executarAcaoWhatsapp(context, ref, acao),
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: _AcaoWhatsapp.extrato,
+          child: Text('Enviar Extrato Completo'),
+        ),
+        PopupMenuItem(
+          value: _AcaoWhatsapp.cobranca,
+          child: Text('Enviar Cobrança'),
+        ),
+        PopupMenuItem(
+          value: _AcaoWhatsapp.saldo,
+          child: Text('Enviar Saldo Devedor'),
+        ),
+        PopupMenuItem(
+          value: _AcaoWhatsapp.haver,
+          child: Text('Enviar Haver'),
+        ),
+        PopupMenuItem(
+          value: _AcaoWhatsapp.cadastro,
+          child: Text('Enviar Cadastro do Cliente'),
+        ),
+      ],
+      child: IgnorePointer(
+        child: OutlinedButton.icon(
+          onPressed: cliente.telefone == null ? null : () {},
+          icon: const Icon(Icons.chat_outlined, size: 17),
+          label: const Text('WhatsApp'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _executarAcaoWhatsapp(
+    BuildContext context,
+    WidgetRef ref,
+    _AcaoWhatsapp acao,
+  ) async {
+    final saldo = await ref.read(saldoFiadoProvider(cliente.id).future);
+    final historico = await ref.read(historicoFiadoProvider(cliente.id).future);
+
+    if (!context.mounted) return;
+
+    // historicoFiadoProvider ordena mais-novo primeiro; pra somar saldo
+    // corrido (igual o Desktop) precisamos da ordem cronologica.
+    final cronologico = [...historico]
+      ..sort((a, b) => a.data.compareTo(b.data));
+
+    String? texto;
+
+    switch (acao) {
+      case _AcaoWhatsapp.extrato:
+        texto = _textoExtrato(saldo, cronologico);
+        break;
+      case _AcaoWhatsapp.cobranca:
+        if (saldo <= 0) {
+          _mostrarSnack(context, 'Este cliente não tem saldo devedor.');
+          return;
+        }
+        texto = _textoCobranca(saldo);
+        break;
+      case _AcaoWhatsapp.saldo:
+        texto = _textoSaldoDevedor(saldo);
+        break;
+      case _AcaoWhatsapp.haver:
+        final haveres = cronologico
+            .where((m) => m.tipo == 'HAVER')
+            .toList();
+        if (haveres.isEmpty) {
+          _mostrarSnack(
+            context,
+            'Este cliente ainda não tem nenhum crédito (Haver) lançado.',
+          );
+          return;
+        }
+        texto = _textoHaver(haveres.last, cronologico);
+        break;
+      case _AcaoWhatsapp.cadastro:
+        texto = _textoCadastro(saldo);
+        break;
+    }
+
+    if (!context.mounted) return;
+
+    final enviado = await ref
+        .read(clientesActionsProvider)
+        .enviarWhatsapp(cliente.id, texto);
+
+    if (!context.mounted) return;
+
+    if (enviado) {
+      _mostrarSnack(context, 'Mensagem enviada pelo WhatsApp com sucesso.');
+      return;
+    }
+
+    // fallback: abre o WhatsApp com a mensagem ja pronta (integracao
+    // Z-API desligada ou envio automatico falhou).
+    await _abrirWhatsApp(context, cliente.telefone!, texto: texto);
+  }
+
+  String _cabecalho(String titulo) => '*$titulo*';
+
+  String _textoExtrato(double saldo, List<MovimentoFiado> cronologico) {
+    var saldoCorrido = 0.0;
+    final linhas = <String>[];
+    var totalComprado = 0.0;
+    var totalPago = 0.0;
+
+    for (final mov in cronologico) {
+      final compra = mov.tipo == 'COMPRA';
+      saldoCorrido += compra ? mov.valor : -mov.valor;
+
+      if (compra) {
+        totalComprado += mov.valor;
+      } else if (mov.tipo == 'PAGAMENTO') {
+        totalPago += mov.valor;
+      }
+
+      final rotulo = switch (mov.tipo) {
+        'COMPRA' => '🛒 Compra',
+        'PAGAMENTO' => '💵 Pagamento',
+        'HAVER' => '💰 Haver',
+        _ => mov.tipo,
+      };
+      final sinal = compra ? '+' : '-';
+
+      linhas.add(
+        '${formatarDataHora(mov.data)} | $rotulo | '
+        '${mov.descricao ?? "—"} | $sinal ${formatarMoeda(mov.valor)} | '
+        'Saldo: ${formatarMoeda(saldoCorrido)}',
+      );
+    }
+
+    final movimentacoes = linhas.isEmpty
+        ? 'Nenhuma movimentação registrada.'
+        : linhas.join('\n');
+
+    return '${_cabecalho('EXTRATO DO CLIENTE')}\n\n'
+        'Cliente: ${cliente.nome}\n'
+        'Telefone: ${cliente.telefone ?? "—"}\n'
+        'Cliente desde: ${formatarData(cliente.criadoEm)}\n'
+        'Saldo Atual: ${formatarMoeda(saldo)}\n\n'
+        '*MOVIMENTAÇÕES*\n'
+        '$movimentacoes\n\n'
+        'Total Comprado: ${formatarMoeda(totalComprado)}\n'
+        'Total Pago: ${formatarMoeda(totalPago)}\n'
+        'Saldo Devedor: ${formatarMoeda(saldo)}\n\n'
+        'Muito obrigado pela preferência!';
+  }
+
+  String _textoCobranca(double saldo) {
+    return '${_cabecalho('COBRANÇA')}\n\n'
+        'Olá, ${cliente.nome}! 👋\n\n'
+        'Passando pra lembrar que você tem um saldo em aberto no valor '
+        'de ${formatarMoeda(saldo)}.\n\n'
+        'Qualquer dúvida, é só chamar. Obrigado!';
+  }
+
+  String _textoSaldoDevedor(double saldo) {
+    return '${_cabecalho('SALDO DEVEDOR')}\n\n'
+        'Olá, ${cliente.nome}!\n'
+        'Seu saldo devedor atual é de ${formatarMoeda(saldo)}.';
+  }
+
+  String _textoHaver(MovimentoFiado haver, List<MovimentoFiado> cronologico) {
+    var saldoCorrido = 0.0;
+    for (final mov in cronologico) {
+      final compra = mov.tipo == 'COMPRA';
+      saldoCorrido += compra ? mov.valor : -mov.valor;
+      if (identical(mov, haver)) break;
+    }
+
+    return '${_cabecalho('CRÉDITO (HAVER)')}\n\n'
+        'Olá, ${cliente.nome}!\n'
+        'Você recebeu um crédito de ${formatarMoeda(haver.valor)} em '
+        '${formatarDataHora(haver.data)}.\n'
+        'Motivo: ${haver.descricao ?? "—"}\n\n'
+        'Seu saldo devedor atualizado é de ${formatarMoeda(saldoCorrido)}.';
+  }
+
+  String _textoCadastro(double saldo) {
+    final partes = <String>[
+      _cabecalho('CADASTRO DO CLIENTE'),
+      '',
+      'Nome: ${cliente.nome}',
+    ];
+
+    if (cliente.cpfCnpj != null) partes.add('CPF/CNPJ: ${cliente.cpfCnpj}');
+    if (cliente.telefone != null) partes.add('Telefone: ${cliente.telefone}');
+    if (cliente.email != null) partes.add('E-mail: ${cliente.email}');
+    if (cliente.enderecoCompleto.isNotEmpty) {
+      partes.add('Endereço: ${cliente.enderecoCompleto}');
+    }
+
+    partes.add('Cliente desde: ${formatarData(cliente.criadoEm)}');
+    partes.add('Saldo Atual: ${formatarMoeda(saldo)}');
+    partes.add('');
+    partes.add('Muito obrigado pela preferência!');
+
+    return partes.join('\n');
+  }
+
+  void _mostrarSnack(BuildContext context, String mensagem) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(mensagem)),
+    );
+  }
+
+  Future<void> _abrirWhatsApp(
+    BuildContext context,
+    String telefone, {
+    String? texto,
+  }) async {
     final numero = telefone.replaceAll(RegExp(r'[^0-9]'), '');
-    final uri = Uri.parse('https://wa.me/55$numero');
+    final query = texto != null ? '?text=${Uri.encodeComponent(texto)}' : '';
+    final uri = Uri.parse('https://wa.me/55$numero$query');
 
     final abriu = await launchUrl(uri, mode: LaunchMode.externalApplication);
 
@@ -332,23 +546,36 @@ class _Ficha extends ConsumerWidget {
   Widget _linhaMovimento(BuildContext context, MovimentoFiado movimento) {
     final compra = movimento.tipo == 'COMPRA';
 
+    final IconData iconeMovimento;
+    final Color cor;
+    final String descricaoPadrao;
+
+    if (compra) {
+      iconeMovimento = Icons.arrow_upward;
+      cor = VertexColors.erro;
+      descricaoPadrao = 'Compra a prazo';
+    } else if (movimento.tipo == 'HAVER') {
+      iconeMovimento = Icons.card_giftcard;
+      cor = VertexColors.alerta;
+      descricaoPadrao = 'Crédito (Haver)';
+    } else {
+      iconeMovimento = Icons.arrow_downward;
+      cor = VertexColors.secundaria;
+      descricaoPadrao = 'Pagamento';
+    }
+
     return Padding(
       padding: const EdgeInsets.all(14),
       child: Row(
         children: [
-          Icon(
-            compra ? Icons.arrow_upward : Icons.arrow_downward,
-            size: 17,
-            color: compra ? VertexColors.erro : VertexColors.secundaria,
-          ),
+          Icon(iconeMovimento, size: 17, color: cor),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  movimento.descricao ??
-                      (compra ? 'Compra a prazo' : 'Pagamento'),
+                  movimento.descricao ?? descricaoPadrao,
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 Text(
@@ -365,7 +592,7 @@ class _Ficha extends ConsumerWidget {
             '${compra ? '+' : '-'} ${formatarMoeda(movimento.valor)}',
             style: TextStyle(
               fontWeight: FontWeight.w700,
-              color: compra ? VertexColors.erro : VertexColors.secundaria,
+              color: cor,
             ),
           ),
         ],
@@ -373,6 +600,8 @@ class _Ficha extends ConsumerWidget {
     );
   }
 }
+
+enum _AcaoWhatsapp { extrato, cobranca, saldo, haver, cadastro }
 
 class _CartaoValor extends StatelessWidget {
   const _CartaoValor({

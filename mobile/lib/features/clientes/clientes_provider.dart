@@ -128,6 +128,24 @@ class ClientesActions {
       return 'Não foi possível registrar o recebimento.';
     }
   }
+
+  /// Manda uma mensagem de texto livre pro cliente via WhatsApp (mesmo
+  /// endpoint usado pelo menu "WhatsApp ▾" da ficha do cliente no
+  /// Desktop -- extrato, cobrança, saldo, haver, cadastro). Devolve
+  /// `true` se saiu automaticamente; `false` significa que quem chamou
+  /// deve cair pro fallback manual (abrir o wa.me com o texto pronto).
+  Future<bool> enviarWhatsapp(int clienteId, String texto) async {
+    try {
+      final api = _ref.read(apiClientProvider);
+      await api.dio.post(
+        '/clientes/$clienteId/whatsapp',
+        data: {'texto': texto},
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 }
 
 final clientesActionsProvider = Provider((ref) => ClientesActions(ref));

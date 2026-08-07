@@ -58,6 +58,7 @@ from design.widgets import (
     BotaoSucesso,
     CampoTexto,
     Card,
+    FlowLayout,
     SecaoCard,
 )
 
@@ -640,7 +641,11 @@ class FichaClienteDialog(QDialog):
         self._timeline_qtd_exibida = self._TIMELINE_PAGINA
 
         self.setWindowTitle(f"Ficha - {cliente['nome']}")
-        self.resize(960, 720)
+        # largura inicial pensada pra já abrir mostrando as 2 linhas de
+        # 5 mini-cards lado a lado (ver _LARGURA_MINI_CARD) -- em telas
+        # mais estreitas o FlowLayout quebra sozinho pra mais linhas,
+        # sem nunca forçar rolagem horizontal.
+        self.resize(1180, 760)
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         raiz = QVBoxLayout(self)
@@ -658,7 +663,7 @@ class FichaClienteDialog(QDialog):
 
         coluna_esquerda.addWidget(self._construir_linha_cards())
         coluna_esquerda.addLayout(self._construir_botoes_acao())
-        coluna_esquerda.addWidget(self._construir_filtros_timeline())
+        coluna_esquerda.addLayout(self._construir_filtros_timeline())
         coluna_esquerda.addWidget(self._construir_timeline(), stretch=1)
 
         corpo.addLayout(coluna_esquerda, stretch=2)
@@ -805,11 +810,23 @@ class FichaClienteDialog(QDialog):
             QDesktopServices.openUrl(QUrl(f"mailto:{email}"))
 
 
+    # tamanho fixo e uniforme pra cada mini-card -- é o que permite o
+    # FlowLayout calcular a quebra de linha sozinho (ver design/widgets.py)
+    # sem depender de "stretch"; nesses valores, 5 cards cabem numa
+    # linha só na largura padrão do diálogo (ver __init__: resize),
+    # e quebra sozinho pra mais linhas se a janela ficar mais estreita.
+    _LARGURA_MINI_CARD = 140
+    _ALTURA_MINI_CARD = 56
+
     def _construir_linha_cards(self):
-        """Os indicadores viraram mini-cards numa linha só (em vez do
-        card grande de "Saldo Devedor" + grade 4x3 de antes) -- ocupam
-        uma fração pequena da altura da tela, deixando quase tudo pra
-        timeline, que é a área que realmente importa no dia a dia."""
+        """Indicadores em grid responsivo (FlowLayout) -- em telas
+        largas rende como 2 linhas de até 5 cards (a ordem de inserção
+        decide o agrupamento: 1ª linha é o financeiro do dia a dia, 2ª
+        linha é o perfil/relacionamento do cliente); se a janela ficar
+        mais estreita, quebra pra mais linhas sozinho -- nunca força
+        rolagem horizontal nem estoura a largura do diálogo (o que
+        também tirava a largura mínima do cabeçalho lá em cima, já que
+        os dois dividem o mesmo QVBoxLayout raiz)."""
 
         container = QFrame()
         container.setStyleSheet("background:transparent;")
@@ -818,21 +835,23 @@ class FichaClienteDialog(QDialog):
         layout_externo.setContentsMargins(0, 0, 0, 0)
         layout_externo.setSpacing(8)
 
-        linha = QHBoxLayout()
-        linha.setSpacing(8)
+        grid = FlowLayout(espaco_h=8, espaco_v=8)
 
-        self.lbl_saldo_valor = self._mini_card(linha, "SALDO ATUAL")
-        self.lbl_total_comprado = self._mini_card(linha, "TOTAL COMPRADO")
-        self.lbl_total_pago_card = self._mini_card(linha, "TOTAL PAGO")
-        self.lbl_ultima_compra = self._mini_card(linha, "ÚLTIMA COMPRA")
-        self.lbl_ultimo_pagamento = self._mini_card(linha, "ÚLTIMO PAGAMENTO")
-        self.lbl_qtd_compras = self._mini_card(linha, "QTD. COMPRAS")
-        self.lbl_cliente_desde = self._mini_card(linha, "CLIENTE DESDE")
-        self.lbl_status_financeiro = self._mini_card(linha, "STATUS FINANCEIRO")
-        self.lbl_score = self._mini_card(linha, "PONTUAÇÃO")
-        self.lbl_dias_desde_ultima_compra = self._mini_card(linha, "DIAS SEM COMPRAR")
+        # linha 1 -- financeiro do dia a dia
+        self.lbl_saldo_valor = self._mini_card(grid, "SALDO ATUAL")
+        self.lbl_total_comprado = self._mini_card(grid, "TOTAL COMPRADO")
+        self.lbl_total_pago_card = self._mini_card(grid, "TOTAL PAGO")
+        self.lbl_ultima_compra = self._mini_card(grid, "ÚLTIMA COMPRA")
+        self.lbl_ultimo_pagamento = self._mini_card(grid, "ÚLTIMO PAGAMENTO")
 
-        layout_externo.addLayout(linha)
+        # linha 2 -- perfil/relacionamento do cliente
+        self.lbl_cliente_desde = self._mini_card(grid, "CLIENTE DESDE")
+        self.lbl_status_financeiro = self._mini_card(grid, "STATUS FINANCEIRO")
+        self.lbl_score = self._mini_card(grid, "PONTUAÇÃO")
+        self.lbl_dias_desde_ultima_compra = self._mini_card(grid, "DIAS SEM COMPRAR")
+        self.lbl_limite_credito = self._mini_card(grid, "LIMITE DE CRÉDITO")
+
+        layout_externo.addLayout(grid)
 
         self.lbl_aviso_status = QLabel("")
         self.lbl_aviso_status.setAlignment(Qt.AlignCenter)
@@ -844,6 +863,7 @@ class FichaClienteDialog(QDialog):
     def _mini_card(self, layout, titulo):
 
         card = QFrame()
+        card.setFixedSize(self._LARGURA_MINI_CARD, self._ALTURA_MINI_CARD)
         card.setStyleSheet(f"""
             background:{tokens.CARD}; border:1px solid {tokens.BORDA};
             border-radius:{tokens.RADIUS_SM}px;
@@ -853,31 +873,40 @@ class FichaClienteDialog(QDialog):
         col.setContentsMargins(10, 6, 10, 6)
         col.setSpacing(2)
 
+        # título numa linha só (sem quebra) -- todos os rótulos usados
+        # cabem tranquilos na largura do card nesse tamanho de fonte
         lbl_titulo = QLabel(titulo)
-        lbl_titulo.setWordWrap(True)
+        lbl_titulo.setWordWrap(False)
         lbl_titulo.setStyleSheet(f"""
-            background:transparent; border:none; font-size:9px;
+            background:transparent; border:none; font-size:8px;
             font-weight:700; color:{tokens.TEXTO_TERCIARIO};
         """)
 
+        # valor pode quebrar linha (alguns são mais longos, ex.
+        # pontuação/status), mas a altura fixa do card garante que a
+        # linha toda continua com a mesma altura mesmo assim
         lbl_valor = QLabel("—")
         lbl_valor.setWordWrap(True)
         lbl_valor.setStyleSheet(f"""
-            background:transparent; border:none; font-size:{tokens.TAMANHO_SM}px;
+            background:transparent; border:none; font-size:{tokens.TAMANHO_XS}px;
             font-weight:800; color:{tokens.TEXTO};
         """)
 
         col.addWidget(lbl_titulo)
-        col.addWidget(lbl_valor)
+        col.addWidget(lbl_valor, stretch=1)
 
-        layout.addWidget(card, stretch=1)
+        layout.addWidget(card)
 
         return lbl_valor
 
     def _construir_botoes_acao(self):
+        """FlowLayout em vez de QHBoxLayout -- uma linha fixa de 5
+        botões força a largura mínima do diálogo inteiro à soma de
+        todos eles (o que impedia a janela de encolher); com o
+        FlowLayout, a largura mínima vira só a do maior botão sozinho,
+        e os outros quebram pra linha de baixo se não couberem."""
 
-        layout = QHBoxLayout()
-        layout.setSpacing(10)
+        layout = FlowLayout(espaco_h=10, espaco_v=10)
 
         self.bt_lancar_fiado = BotaoPerigo("Lançar Fiado", icone_nome="plus")
         self.bt_lancar_fiado.setMinimumHeight(46)
@@ -889,15 +918,15 @@ class FichaClienteDialog(QDialog):
         self.bt_pagar.setAutoDefault(False)
         self.bt_pagar.clicked.connect(self.registrar_pagamento)
 
-        self.bt_extrato = BotaoSecundario("Imprimir Extrato", icone_nome="printer")
-        self.bt_extrato.setMinimumHeight(46)
-        self.bt_extrato.setAutoDefault(False)
-        self.bt_extrato.clicked.connect(self.imprimir_extrato)
-
         self.bt_haver = BotaoSecundario("Lançar Haver", icone_nome="gift")
         self.bt_haver.setMinimumHeight(46)
         self.bt_haver.setAutoDefault(False)
         self.bt_haver.clicked.connect(self.lancar_haver)
+
+        self.bt_extrato = BotaoSecundario("Imprimir Extrato", icone_nome="printer")
+        self.bt_extrato.setMinimumHeight(46)
+        self.bt_extrato.setAutoDefault(False)
+        self.bt_extrato.clicked.connect(self.imprimir_extrato)
 
         self.bt_csv = BotaoSecundario("Exportar CSV", icone_nome="download")
         self.bt_csv.setMinimumHeight(46)
@@ -907,7 +936,6 @@ class FichaClienteDialog(QDialog):
         layout.addWidget(self.bt_lancar_fiado)
         layout.addWidget(self.bt_pagar)
         layout.addWidget(self.bt_haver)
-        layout.addStretch()
         layout.addWidget(self.bt_extrato)
         layout.addWidget(self.bt_csv)
 
@@ -1475,14 +1503,13 @@ class FichaClienteDialog(QDialog):
     def _construir_filtros_timeline(self):
         """Filtros rápidos da timeline única (substituem as antigas
         abas Histórico/Compras/Pagamentos): chips de tipo + busca por
-        texto, combinados na hora de exibir (ver _movimentos_filtrados)."""
+        texto, combinados na hora de exibir (ver _movimentos_filtrados).
+        FlowLayout em vez de QHBoxLayout -- os 6 chips + a busca numa
+        linha fixa forçavam o diálogo inteiro a não encolher abaixo
+        dessa largura; aqui eles quebram pra linha de baixo sozinhos
+        se não couberem."""
 
-        container = QFrame()
-        container.setStyleSheet("background:transparent;")
-
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout = FlowLayout(espaco_h=8, espaco_v=8)
 
         self.botoes_filtro_timeline = {}
 
@@ -1521,8 +1548,6 @@ class FichaClienteDialog(QDialog):
             self.botoes_filtro_timeline[chave] = botao
             layout.addWidget(botao)
 
-        layout.addStretch()
-
         self.campo_busca_timeline = CampoTexto("Pesquisar na timeline...")
         self.campo_busca_timeline.setFixedWidth(220)
         self.campo_busca_timeline.setMinimumHeight(0)
@@ -1531,7 +1556,7 @@ class FichaClienteDialog(QDialog):
 
         layout.addWidget(self.campo_busca_timeline)
 
-        return container
+        return layout
 
     def _selecionar_filtro_timeline(self, chave):
 
@@ -2153,7 +2178,6 @@ class FichaClienteDialog(QDialog):
         # linha de mini-cards
         self.lbl_total_comprado.setText(_formatar_moeda(total_comprado))
         self.lbl_total_pago_card.setText(_formatar_moeda(total_pago))
-        self.lbl_qtd_compras.setText(str(qtd_compras))
         self.lbl_ultima_compra.setText(_data_curta(agr["ultima_compra"]))
         self.lbl_ultimo_pagamento.setText(_data_curta(agr["ultimo_pagamento"]))
         self.lbl_dias_desde_ultima_compra.setText(
@@ -2165,6 +2189,11 @@ class FichaClienteDialog(QDialog):
             cliente_analise.status_financeiro(agr)
         )
         self.lbl_score.setText(cliente_analise.calcular_pontuacao(agr))
+
+        limite_credito = self.cliente.get("limite_credito")
+        self.lbl_limite_credito.setText(
+            _formatar_moeda(limite_credito) if limite_credito else "Sem limite"
+        )
 
         aviso = cliente_analise.calcular_aviso(agr)
         cor_fundo, cor_texto = {

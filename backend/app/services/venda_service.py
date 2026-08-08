@@ -390,6 +390,24 @@ class VendaService:
                 except Exception:
                     pass
 
+            nome_cliente = None
+
+            if venda.cliente_id:
+                cliente_venda = (
+                    db.query(Cliente)
+                    .filter(Cliente.id == venda.cliente_id)
+                    .first()
+                )
+                nome_cliente = cliente_venda.nome if cliente_venda else None
+
+            NotificacaoService.enviar_para_admins(
+                db,
+                "Nova venda",
+                f"Venda #{venda.id} — {_moeda(venda.valor_total)}"
+                + (f" ({nome_cliente})" if nome_cliente else ""),
+                excluir_usuario_id=usuario_id,
+            )
+
             return venda
 
         except Exception as e:

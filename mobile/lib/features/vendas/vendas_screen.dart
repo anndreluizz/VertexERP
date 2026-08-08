@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatadores.dart';
+import '../../models/movimento_fiado.dart';
 import '../../models/venda.dart';
 import '../../theme/vertex_colors.dart';
+import '../clientes/cliente_detalhe_screen.dart';
 import 'venda_detalhe_screen.dart';
 import 'vendas_provider.dart';
 
@@ -13,7 +15,7 @@ class VendasScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final periodo = ref.watch(periodoVendasProvider);
-    final vendasAsync = ref.watch(vendasProvider);
+    final atividadeAsync = ref.watch(atividadeVendasProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Vendas')),
@@ -42,8 +44,8 @@ class VendasScreen extends ConsumerWidget {
           ),
           Expanded(
             child: RefreshIndicator(
-              onRefresh: () => ref.refresh(vendasProvider.future),
-              child: vendasAsync.when(
+              onRefresh: () => ref.refresh(atividadeVendasProvider.future),
+              child: atividadeAsync.when(
                 loading: () =>
                     const Center(child: CircularProgressIndicator()),
                 error: (erro, _) => ListView(
@@ -54,12 +56,12 @@ class VendasScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
-                data: (vendas) {
-                  final filtradas = vendas
-                      .where((v) => periodo.contem(v.data))
+                data: (itens) {
+                  final filtrados = itens
+                      .where((item) => periodo.contem(item.data))
                       .toList();
 
-                  if (filtradas.isEmpty) {
+                  if (filtrados.isEmpty) {
                     return ListView(
                       children: const [
                         SizedBox(height: 80),
@@ -72,11 +74,22 @@ class VendasScreen extends ConsumerWidget {
 
                   return ListView.separated(
                     padding: const EdgeInsets.all(16),
-                    itemCount: filtradas.length,
+                    itemCount: filtrados.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (context, indice) {
-                      final venda = filtradas[indice];
-                      return _CartaoVenda(venda: venda);
+                      final item = filtrados[indice];
+                      return switch (item) {
+                        AtividadeVenda(:final venda) =>
+                          _CartaoVenda(venda: venda),
+                        AtividadeRecebimento(
+                          :final movimento,
+                          :final clienteNome,
+                        ) =>
+                          _CartaoRecebimento(
+                            movimento: movimento,
+                            clienteNome: clienteNome,
+                          ),
+                      };
                     },
                   );
                 },
@@ -147,6 +160,84 @@ class _CartaoVenda extends StatelessWidget {
               Text(
                 formatarMoeda(venda.valorTotal),
                 style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Recebimento de fiado (pagamento de uma compra a prazo já feita) --
+/// mesmo cartão visual da venda, mas com ícone/cor diferentes (é
+/// dinheiro entrando, não uma venda nova) e toque leva pra ficha do
+/// cliente em vez do detalhe de uma venda.
+class _CartaoRecebimento extends StatelessWidget {
+  const _CartaoRecebimento({
+    required this.movimento,
+    required this.clienteNome,
+  });
+
+  final MovimentoFiado movimento;
+  final String clienteNome;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) =>
+                ClienteDetalheScreen(clienteId: movimento.clienteId),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: VertexColors.primariaClara,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.call_received,
+                  color: VertexColors.primaria,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Recebimento de fiado — $clienteNome',
+                      style: Theme.of(context).textTheme.titleMedium,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      formatarDataHora(movimento.data),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: VertexColors.textoSecundario,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                formatarMoeda(movimento.valor),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(color: VertexColors.primaria),
               ),
             ],
           ),

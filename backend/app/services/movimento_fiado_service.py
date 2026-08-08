@@ -167,6 +167,14 @@ class MovimentoFiadoService:
         if tipo == "COMPRA":
             _verificar_limite_credito(db, dados.cliente_id)
 
+        if tipo == "PAGAMENTO":
+            NotificacaoService.enviar_para_admins(
+                db,
+                "Recebimento de fiado",
+                f"{cliente.nome} pagou R$ {dados.valor:.2f}.",
+                excluir_usuario_id=usuario_id,
+            )
+
         return movimento
 
     @staticmethod

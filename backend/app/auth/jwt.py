@@ -3,10 +3,10 @@ import os
 from jose import jwt
 from datetime import datetime, timedelta
 
-# Cai pro literal antigo só quando não há .env (ex.: rodando testes
-# soltos) — toda instalação de verdade grava sua própria chave em
-# launcher.py::garantir_env(), então isso nunca deveria ser usado em
-# produção depois dessa mudança.
+# Cai no literal antigo só se a instalação não tiver gerado uma chave
+# própria (ver launcher.py::garantir_env) — sem isso, uma chave igual em
+# toda instalação permite forjar token válido pra qualquer usuário, de
+# qualquer loja, sem nunca saber a senha.
 SECRET_KEY = os.getenv("SECRET_KEY", "VERTEXERP2026SECRET")
 
 ALGORITHM = "HS256"

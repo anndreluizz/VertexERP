@@ -511,7 +511,7 @@ class Clientes(QWidget):
             if cliente_analise.eh_ativo(agr):
                 ativos += 1
 
-            if cliente_analise.eh_sem_movimento(agr):
+            if cliente_analise.eh_sem_movimento(agr, self.prazo_inadimplencia):
                 sem_movimento += 1
 
             if cliente_analise.eh_inadimplente(agr, self.prazo_inadimplencia):
@@ -601,7 +601,10 @@ class Clientes(QWidget):
             ]
         elif self.filtro_status == "SEM_MOVIMENTO":
             clientes = [
-                c for c in clientes if cliente_analise.eh_sem_movimento(agr(c))
+                c for c in clientes
+                if cliente_analise.eh_sem_movimento(
+                    agr(c), self.prazo_inadimplencia
+                )
             ]
         elif self.filtro_status == "INADIMPLENTES":
             clientes = [

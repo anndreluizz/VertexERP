@@ -113,10 +113,12 @@ def eh_ativo(agr):
     return dias is not None and dias <= LIMITE_ATIVO_DIAS
 
 
-def eh_sem_movimento(agr):
+def eh_sem_movimento(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
     """Sem compra e sem pagamento há mais de 90 dias -- inclui quem
-    nunca teve nenhuma movimentação."""
-    return not eh_ativo(agr)
+    nunca teve nenhuma movimentação. Não conta quem já é inadimplente:
+    esse cliente tem categoria própria (mais urgente) e não deve
+    aparecer misturado em "Sem Movimento"."""
+    return not eh_ativo(agr) and not eh_inadimplente(agr, prazo_dias)
 
 
 def eh_inadimplente(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
@@ -157,7 +159,7 @@ def calcular_aviso(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
 
     if eh_inadimplente(agr, prazo_dias):
         return "🔴 Cliente inadimplente"
-    if eh_sem_movimento(agr):
+    if eh_sem_movimento(agr, prazo_dias):
         return "🟡 Cliente sem movimentação"
     return "🟢 Cliente Ativo"
 
@@ -180,7 +182,7 @@ def calcular_pontuacao(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
     if eh_inadimplente(agr, prazo_dias):
         return "🔴 Cliente Inadimplente"
 
-    if eh_sem_movimento(agr):
+    if eh_sem_movimento(agr, prazo_dias):
         return "🟠 Cliente Sem Movimento"
 
     if agr["qtd_compras"] >= 5:

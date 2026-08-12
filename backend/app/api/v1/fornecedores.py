@@ -8,7 +8,7 @@ from app.schemas.fornecedor import (
     FornecedorResponse,
 )
 from app.services.fornecedor_service import FornecedorService
-from app.auth.dependencies import get_current_user, require_admin
+from app.auth.dependencies import get_current_user, get_current_admin
 
 router = APIRouter(
     prefix="/fornecedores",
@@ -70,7 +70,7 @@ def atualizar(
 def excluir(
     fornecedor_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(require_admin),
+    usuario=Depends(get_current_admin),
 ):
     return FornecedorService.excluir(
         db,

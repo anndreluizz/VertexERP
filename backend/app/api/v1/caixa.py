@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, require_admin
+from app.auth.dependencies import get_current_user, get_current_admin
 from app.database.session import SessionLocal
 from app.schemas.caixa import (
     CaixaCreate,
@@ -59,7 +59,7 @@ def abrir_caixa(
 def fechar_caixa(
     dados: FecharCaixaRequest,
     db: Session = Depends(get_db),
-    usuario=Depends(require_admin),
+    usuario=Depends(get_current_admin),
 ):
     try:
         caixa = CaixaService.fechar(

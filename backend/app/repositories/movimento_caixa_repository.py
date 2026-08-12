@@ -13,12 +13,10 @@ class MovimentoCaixaRepository:
         return movimento
 
     @staticmethod
-    def listar(db: Session, skip: int = 0, limit: int = 100):
+    def listar(db: Session):
         return (
             db.query(MovimentoCaixa)
             .order_by(MovimentoCaixa.data.desc())
-            .offset(skip)
-            .limit(limit)
             .all()
         )
 
@@ -31,18 +29,11 @@ class MovimentoCaixaRepository:
         )
 
     @staticmethod
-    def listar_por_caixa(
-        db: Session,
-        caixa_id: int,
-        skip: int = 0,
-        limit: int = 100,
-    ):
+    def listar_por_caixa(db: Session, caixa_id: int):
         return (
             db.query(MovimentoCaixa)
             .filter(MovimentoCaixa.caixa_id == caixa_id)
             .order_by(MovimentoCaixa.data.desc())
-            .offset(skip)
-            .limit(limit)
             .all()
         )
 

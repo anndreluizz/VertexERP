@@ -29,7 +29,7 @@ from services.produto_service import obter_foto_produto
 
 class CadastroProdutoWindow(QDialog):
 
-    def __init__(self, produto=None, codigo_sugerido=None):
+    def __init__(self, produto=None):
         super().__init__()
 
         self.produto = produto
@@ -419,8 +419,6 @@ class CadastroProdutoWindow(QDialog):
         layout.addLayout(rodape)
 
         self.selecionar_modo("UN")
-
-        self.codigo_barras.returnPressed.connect(self.nome.setFocus)
 
         if self.produto:
             self.preencher_campos()

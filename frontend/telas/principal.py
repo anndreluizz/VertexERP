@@ -43,37 +43,7 @@ ITENS_MENU = [
 ]
 
 
-class PilhaDePaginas(QStackedWidget):
-    """QStackedWidget comum dimensiona a janela pelo MAIOR conteúdo entre
-    TODAS as páginas cadastradas, não só a que está visível — uma tela
-    larga (ex.: Relatórios, com filtros + gráficos lado a lado) inflava a
-    janela inteira mesmo com o usuário em outra página, tipo o
-    Dashboard. Aqui o tamanho considera só a página atual."""
-
-    def sizeHint(self):
-        atual = self.currentWidget()
-        return atual.sizeHint() if atual else super().sizeHint()
-
-    def minimumSizeHint(self):
-        atual = self.currentWidget()
-        return (
-            atual.minimumSizeHint()
-            if atual
-            else super().minimumSizeHint()
-        )
-
-
 class PrincipalWindow(QMainWindow):
-
-    def _ajustar_tamanho_a_tela(self):
-        # Calcular pixel na mão (resize + setMaximumSize) deu problema nos
-        # dois sentidos dependendo da tela/escala do Windows de cada PC —
-        # ora abria maior que a tela, ora travava pequena sem deixar
-        # aumentar. Deixa o próprio Windows decidir o que cabe: maximiza
-        # (preenche a área útil, sem cobrir a barra de tarefas) e não
-        # define nenhum tamanho máximo, então o usuário ainda pode
-        # restaurar e redimensionar a janela livremente se quiser.
-        self.setWindowState(Qt.WindowMaximized)
 
     def __init__(self):
         super().__init__()
@@ -130,7 +100,6 @@ class PrincipalWindow(QMainWindow):
         self.dashboard = Dashboard()
         self.pdv = PDV()
         self.produtos = Produtos()
-        self.clientes = Clientes()
 
         self.clientes = Clientes()
 

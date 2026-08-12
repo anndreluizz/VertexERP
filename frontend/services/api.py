@@ -14,7 +14,6 @@ _PORTA_PADRAO = "58734" if getattr(sys, "frozen", False) else "8000"
 URL = f"http://127.0.0.1:{os.getenv('VERTEXERP_PORT', _PORTA_PADRAO)}"
 
 TOKEN = None
-ADMIN = False
 
 
 def definir_url(endereco):
@@ -43,7 +42,7 @@ def definir_url(endereco):
 
 def login(usuario: str, senha: str):
 
-    global TOKEN, ADMIN
+    global TOKEN
 
     response = requests.post(
         f"{URL}/auth/login",
@@ -56,13 +55,6 @@ def login(usuario: str, senha: str):
     if response.status_code == 200:
 
         TOKEN = response.json()["access_token"]
-
-        perfil = get("/users/me")
-
-        ADMIN = (
-            perfil.status_code == 200
-            and perfil.json()["data"]["admin"]
-        )
 
         return True
 
@@ -153,23 +145,6 @@ def delete(endpoint: str):
             "Authorization": f"Bearer {TOKEN}"
         },
     )
-
-
-def post_file(endpoint: str, campo: str, caminho_arquivo: str):
-
-    if TOKEN is None:
-        raise Exception("Usuário não autenticado.")
-
-    with open(caminho_arquivo, "rb") as arquivo:
-        return requests.post(
-            URL + endpoint,
-            files={
-                campo: (os.path.basename(caminho_arquivo), arquivo)
-            },
-            headers={
-                "Authorization": f"Bearer {TOKEN}"
-            },
-        )
 
 
 def dashboard():

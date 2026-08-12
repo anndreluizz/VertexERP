@@ -3,7 +3,7 @@ import base64
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, require_admin
+from app.auth.dependencies import get_current_user
 from app.database.session import SessionLocal
 from app.models.cliente import Cliente
 from app.schemas.venda import (
@@ -35,12 +35,10 @@ def get_db():
 
 @router.get("/", response_model=list[VendaResponse])
 def listar(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    return VendaService.listar(db, skip, limit)
+    return VendaService.listar(db)
 
 
 @router.get("/{venda_id}", response_model=VendaResponse)
@@ -76,7 +74,7 @@ def criar(
 def excluir(
     venda_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(require_admin),
+    usuario=Depends(get_current_user),
 ):
 
     ok = VendaService.excluir(db, venda_id, usuario.id)

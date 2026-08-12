@@ -54,12 +54,10 @@ def criar_usuario(
 
 @router.get("/")
 def listar_usuarios(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_admin),
 ):
-    usuarios = UserService.listar_usuarios(db, skip, limit)
+    usuarios = UserService.listar_usuarios(db)
 
     return ApiResponse.success(
         data=[

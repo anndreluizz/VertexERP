@@ -22,38 +22,6 @@ from design.widgets import BotaoPrimario, CampoTexto
 from services.api import login
 from telas.principal import PrincipalWindow
 
-CAMPO_ESTILO = """
-    QLineEdit {
-        border: 1px solid #dcdcdc;
-        border-radius: 6px;
-        padding: 10px 12px;
-        font-size: 14px;
-        background: #fafafa;
-    }
-    QLineEdit:focus {
-        border: 1px solid #1565C0;
-        background: white;
-    }
-"""
-
-BOTAO_ESTILO = """
-    QPushButton {
-        background: #1565C0;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        padding: 12px;
-        font-size: 14px;
-        font-weight: bold;
-    }
-    QPushButton:hover {
-        background: #0D47A1;
-    }
-    QPushButton:disabled {
-        background: #90A4AE;
-    }
-"""
-
 
 BENEFICIOS = [
     "Frente de caixa rápida, com atalhos de teclado",

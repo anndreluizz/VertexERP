@@ -16,7 +16,6 @@ from app.repositories.caixa_repository import CaixaRepository
 from app.repositories.movimento_fiado_repository import (
     MovimentoFiadoRepository,
 )
-from app.services.fiado_service import FiadoService
 
 from app.services.movimento_fiado_service import (
     MovimentoFiadoService,
@@ -115,8 +114,8 @@ def _parcelas_pagamento(venda_ou_dados, valor_total):
 class VendaService:
 
     @staticmethod
-    def listar(db: Session, skip: int = 0, limit: int = 100):
-        return VendaRepository.listar(db, skip, limit)
+    def listar(db: Session):
+        return VendaRepository.listar(db)
 
     @staticmethod
     def buscar(
@@ -253,8 +252,6 @@ class VendaService:
             valor_total = 0
             produtos_com_estoque_baixo = []
 
-            descricoes_itens = []
-
             for item in dados.itens:
 
                 produto = (
@@ -314,10 +311,6 @@ class VendaService:
                 )
 
                 valor_total += subtotal
-
-                descricoes_itens.append(
-                    f"{item.quantidade}x {produto.nome}"
-                )
 
             venda.valor_total = (
                 valor_total

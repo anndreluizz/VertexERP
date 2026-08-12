@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 # produção depois dessa mudança.
 SECRET_KEY = os.getenv("SECRET_KEY", "VERTEXERP2026SECRET")
 
-SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = "HS256"
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 

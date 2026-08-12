@@ -20,7 +20,6 @@ from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (
     QWidget,
     QDialog,
-    QFrame,
     QVBoxLayout,
     QHBoxLayout,
     QFrame,
@@ -31,8 +30,6 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QTableWidget,
     QTableWidgetItem,
-    QAbstractItemView,
-    QHeaderView,
     QMessageBox,
     QFileDialog,
 )
@@ -48,48 +45,6 @@ from design.widgets import (
     BotaoSucesso,
     CampoTexto,
 )
-
-TABELA_ESTILO = """
-    QTableWidget {
-        background: #1e1e1e;
-        gridline-color: #333;
-        border: none;
-    }
-    QTableWidget::item {
-        padding: 4px;
-    }
-    QTableWidget::item:selected {
-        background: #1565C0;
-    }
-    QHeaderView::section {
-        background: #2b2b2b;
-        color: white;
-        font-weight: bold;
-        padding: 6px;
-        border: none;
-        border-bottom: 2px solid #1565C0;
-    }
-"""
-
-CAMPO_ESTILO = """
-    QLineEdit {
-        padding: 8px;
-        border: 1px solid #444;
-        border-radius: 6px;
-        background: #2b2b2b;
-    }
-    QLineEdit:focus {
-        border: 1px solid #1565C0;
-    }
-"""
-
-FORMAS_PAGAMENTO_LABEL = {
-    "DINHEIRO": "Dinheiro",
-    "PIX": "PIX",
-    "DEBITO": "Cartão de Débito",
-    "CREDITO": "Cartão de Crédito",
-    "PRAZO": "Prazo (Fiado)",
-}
 
 
 def _formatar_moeda(valor):
@@ -968,8 +923,6 @@ class PDV(QWidget):
 
     def atualizar_tabela(self):
 
-        self.tabela.blockSignals(True)
-
         self.tabela.setRowCount(len(self.itens))
 
         for linha, item in enumerate(self.itens):
@@ -1442,15 +1395,6 @@ class PDV(QWidget):
 
         try:
 
-            data_vencimento = None
-
-            if tela.forma_pagamento == "PRAZO":
-                # Fiado: vencimento padrão de 30 dias, sem pedir a data
-                # ao operador do caixa (mantém o fluxo simples).
-                data_vencimento = (
-                    datetime.now() + timedelta(days=30)
-                ).isoformat()
-
             response = enviar_venda(
                 itens=self.itens,
                 forma_pagamento=tela.forma_pagamento,
@@ -1481,20 +1425,6 @@ class PDV(QWidget):
                 concluida.exec()
 
                 self.limpar_venda()
-
-                self.carregar_produtos()
-
-                self._beep_sucesso()
-
-                mensagem = (
-                    f"✅ Venda #{venda['id']} concluída — "
-                    f"Total R$ {total:.2f}"
-                )
-
-                if impressora:
-                    mensagem += f" — 🖨️ impresso em {impressora}"
-
-                self._status(mensagem, "ok")
 
             else:
 

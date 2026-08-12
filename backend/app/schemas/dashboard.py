@@ -24,8 +24,6 @@ class DashboardResponse(BaseModel):
 
     contas_pagar: float
 
-    total_fiado_devedor: float
-
     clientes: int
 
     fornecedores: int

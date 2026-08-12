@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import date
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -75,22 +75,11 @@ class DashboardService:
     @staticmethod
     def resumo(db: Session):
 
-        # Venda.data/Compra.data são gravados com datetime.utcnow(), então
-        # "hoje" também precisa ser a data em UTC — usar a data local aqui
-        # causa mismatch perto da virada da meia-noite UTC.
-        hoje = datetime.utcnow().date()
+        hoje = date.today()
 
-        # Só conta vendas de fato finalizadas -- comandas de mesa ainda
-        # ABERTAS não são receita. Usa data_fechamento quando existir
-        # (fechamento de mesa), senão cai para "data" (venda de balcão).
         vendas_hoje = (
             db.query(func.coalesce(func.sum(Venda.valor_total), 0))
-            .filter(Venda.status == "FINALIZADA")
-            .filter(
-                func.date(
-                    func.coalesce(Venda.data_fechamento, Venda.data)
-                ) == hoje
-            )
+            .filter(func.date(Venda.data) == hoje)
             .scalar()
         )
 
@@ -138,11 +127,7 @@ class DashboardService:
             .scalar()
         )
 
-        clientes = (
-            db.query(Cliente)
-            .filter(Cliente.ativo.is_(True))
-            .count()
-        )
+        clientes = db.query(Cliente).count()
 
         fornecedores = db.query(Fornecedor).count()
 
@@ -251,7 +236,6 @@ class DashboardService:
             "saldo_caixa": float(saldo_caixa),
             "contas_receber": float(contas_receber),
             "contas_pagar": float(contas_pagar),
-            "total_fiado_devedor": float(total_fiado_devedor),
             "clientes": clientes,
             "fornecedores": fornecedores,
             "produtos": produtos,

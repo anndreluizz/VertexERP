@@ -43,8 +43,8 @@ class ClienteService:
         return ClienteRepository.criar(db, novo_cliente)
 
     @staticmethod
-    def listar(db: Session, skip: int = 0, limit: int = 100):
-        return ClienteRepository.listar(db, skip, limit)
+    def listar(db: Session):
+        return ClienteRepository.listar(db)
 
     @staticmethod
     def buscar_por_id(db: Session, cliente_id: int):

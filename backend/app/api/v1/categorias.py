@@ -8,7 +8,7 @@ from app.schemas.categoria import (
     CategoriaResponse
 )
 from app.services.categoria_service import CategoriaService
-from app.auth.dependencies import get_current_user, require_admin
+from app.auth.dependencies import get_current_user
 
 router = APIRouter(
     prefix="/categorias",
@@ -38,12 +38,10 @@ def criar_categoria(
 
 @router.get("/", response_model=list[CategoriaResponse])
 def listar_categorias(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user)
 ):
-    return CategoriaService.listar(db, skip, limit)
+    return CategoriaService.listar(db)
 
 
 @router.get("/{categoria_id}", response_model=CategoriaResponse)
@@ -81,7 +79,7 @@ def atualizar_categoria(
 def excluir_categoria(
     categoria_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(require_admin)
+    usuario=Depends(get_current_user)
 ):
     return CategoriaService.excluir(
         db,

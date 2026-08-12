@@ -1,5 +1,4 @@
-from PySide6.QtGui import QShortcut, QKeySequence
-from PySide6.QtWidgets import QMessageBox, QTableWidgetItem, QDialog
+from PySide6.QtWidgets import QMessageBox
 
 from telas.cadastro_produto import CadastroProdutoWindow
 from telas.produto_criado import ProdutoCriadoDialog
@@ -43,32 +42,12 @@ from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, CampoTex
 from widgets.banner import Banner
 
 
-class Produtos(BaseCRUDWindow):
-
-    titulo = "PRODUTOS"
-
-    colunas = [
-        "Código",
-        "Nome",
-        "Preço",
-        "Estoque",
-        "Status",
-    ]
-
-    campos = [
-        "codigo",
-        "nome",
-        "preco_venda",
-        "estoque",
-        "ativo",
-    ]
+class Produtos(QWidget):
 
     voltar = Signal()
 
     def __init__(self):
         super().__init__()
-        # BaseCRUDWindow já chama self.carregar() no final do próprio __init__,
-        # então não é preciso chamar de novo aqui.
 
         self.produtos = []
         self.categorias = []
@@ -299,11 +278,8 @@ class Produtos(BaseCRUDWindow):
         conteudo_layout.addLayout(rodape)
 
         # ==========================================
-        # ATALHOS DE TECLADO E DUPLO CLIQUE
+        # DICAS DE ATALHOS
         # ==========================================
-        QShortcut(QKeySequence("Delete"), self, self.excluir)
-        QShortcut(QKeySequence("F5"), self, self.carregar)
-        QShortcut(QKeySequence("Ctrl+N"), self, self.novo)
 
         dicas = QLabel(
             "Ctrl+N Novo produto    ·    "
@@ -374,7 +350,9 @@ class Produtos(BaseCRUDWindow):
     # ==========================================
     # CARREGAR PRODUTOS
     # ==========================================
+
     def carregar(self):
+
         self.produtos = listar_produtos()
         self.categorias = listar_categorias()
 
@@ -480,7 +458,9 @@ class Produtos(BaseCRUDWindow):
     # ==========================================
     # FILTRAR PRODUTOS
     # ==========================================
-    def filtrar(self):
+
+    def filtrar_produtos(self):
+
         texto = self.pesquisa.text().lower().strip()
 
         produtos = self.produtos
@@ -531,6 +511,7 @@ class Produtos(BaseCRUDWindow):
     # ==========================================
     # PREENCHER TABELA
     # ==========================================
+
     def preencher_tabela(self, produtos):
 
         self.produtos_exibidos = produtos
@@ -549,7 +530,6 @@ class Produtos(BaseCRUDWindow):
                 produto.get("codigo_barras")
                 or produto["codigo"]
             )
-            self.tabela.setItem(linha, 3, QTableWidgetItem(str(produto["estoque"])))
 
             self.tabela.setItem(
                 linha,
@@ -682,13 +662,17 @@ class Produtos(BaseCRUDWindow):
     # ==========================================
     # NOVO PRODUTO
     # ==========================================
-    def novo(self):
-        tela = CadastroProdutoWindow(codigo_sugerido=self._proximo_codigo())
+
+    def novo_produto(self):
+
+        tela = CadastroProdutoWindow()
 
         if tela.exec() != QDialog.Accepted:
             return
 
-        response = cadastrar_produto(tela.dados)
+        response = cadastrar_produto(
+            tela.dados
+        )
 
         if response.status_code == 201:
 
@@ -713,16 +697,32 @@ class Produtos(BaseCRUDWindow):
                 self._abrir_edicao(produto_criado)
 
         else:
-            self._exibir_erro(response)
+
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+
+            QMessageBox.critical(
+                self,
+                "Erro",
+                erro,
+            )
 
     # ==========================================
     # EDITAR PRODUTO
     # ==========================================
-    def editar(self):
+
+    def editar_produto(self):
+
         linha = self.tabela.currentRow()
 
         if linha < 0:
-            QMessageBox.warning(self, "Aviso", "Selecione um produto.")
+            QMessageBox.warning(
+                self,
+                "Aviso",
+                "Selecione um produto."
+            )
             return
 
         produto = self.produtos_exibidos[linha]
@@ -736,7 +736,10 @@ class Produtos(BaseCRUDWindow):
         if tela.exec() != QDialog.Accepted:
             return
 
-        response = atualizar_produto(produto["id"], tela.dados)
+        response = atualizar_produto(
+            produto["id"],
+            tela.dados,
+        )
 
         if response.status_code == 200:
 
@@ -752,17 +755,34 @@ class Produtos(BaseCRUDWindow):
             )
 
             self.carregar()
+
         else:
-            self._exibir_erro(response)
+
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+
+            QMessageBox.critical(
+                self,
+                "Erro",
+                erro,
+            )
 
     # ==========================================
     # EXCLUIR PRODUTO
     # ==========================================
-    def excluir(self):
+
+    def excluir_produto(self):
+
         linha = self.tabela.currentRow()
 
         if linha < 0:
-            QMessageBox.warning(self, "Aviso", "Selecione um produto.")
+            QMessageBox.warning(
+                self,
+                "Aviso",
+                "Selecione um produto."
+            )
             return
 
         produto = self.produtos_exibidos[linha]
@@ -770,25 +790,32 @@ class Produtos(BaseCRUDWindow):
         resposta = QMessageBox.question(
             self,
             "Excluir Produto",
-            f"Deseja excluir o produto\n\n{produto['nome']} ?",
+            f"Deseja excluir o produto\n\n{produto['nome']} ?"
         )
 
         if resposta != QMessageBox.Yes:
             return
 
-        response = excluir_produto(produto["id"])
+        response = excluir_produto(
+            produto["id"]
+        )
 
         if response.status_code == 200:
-            QMessageBox.information(self, "Sucesso", "Produto excluído.")
-            self.carregar()
-        else:
-            self._exibir_erro(response)
 
-    # ==========================================
-    # PRÓXIMO CÓDIGO SEQUENCIAL
-    # ==========================================
-    def _proximo_codigo(self):
-        maior = 0
+            QMessageBox.information(
+                self,
+                "Sucesso",
+                "Produto excluído."
+            )
+
+            self.carregar()
+
+        else:
+
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
 
             QMessageBox.critical(
                 self,

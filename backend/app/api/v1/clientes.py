@@ -44,12 +44,10 @@ def criar_cliente(
 
 @router.get("/", response_model=list[ClienteResponse])
 def listar_clientes(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user)
 ):
-    return ClienteService.listar(db, skip, limit)
+    return ClienteService.listar(db)
 
 
 @router.get("/{cliente_id}", response_model=ClienteResponse)
@@ -180,7 +178,7 @@ def atualizar_cliente(
 def excluir_cliente(
     cliente_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(require_admin)
+    usuario=Depends(get_current_user)
 ):
     try:
         # Admin exclui direto, igual sempre foi. Quem nao e admin so

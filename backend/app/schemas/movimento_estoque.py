@@ -2,23 +2,21 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.enums.tipo_movimento_estoque import TipoMovimentoEstoque
 
-
-class MovimentoEstoqueCreate(BaseModel):
+class MovimentoEstoqueBase(BaseModel):
     produto_id: int
-    tipo: TipoMovimentoEstoque
+    tipo: str
     quantidade: int
     motivo: str | None = None
 
 
-class MovimentoEstoqueResponse(BaseModel):
+class MovimentoEstoqueCreate(MovimentoEstoqueBase):
+    pass
+
+
+class MovimentoEstoqueResponse(MovimentoEstoqueBase):
     id: int
-    produto_id: int
     usuario_id: int
-    tipo: TipoMovimentoEstoque
-    quantidade: int
-    motivo: str | None
     data: datetime
 
     class Config:

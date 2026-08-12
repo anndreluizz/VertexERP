@@ -29,3 +29,9 @@ class UserRepository:
         db.commit()
         db.refresh(user)
         return user
+
+    @staticmethod
+    def atualizar(db: Session, user: User):
+        db.commit()
+        db.refresh(user)
+        return user

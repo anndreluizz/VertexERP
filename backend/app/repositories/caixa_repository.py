@@ -13,10 +13,11 @@ class CaixaRepository:
         return caixa
 
     @staticmethod
-    def buscar_aberto(db: Session):
+    def buscar_aberto(db: Session, usuario_id: int):
         return (
             db.query(Caixa)
             .filter(Caixa.status == "ABERTO")
+            .filter(Caixa.usuario_id == usuario_id)
             .first()
         )
 
@@ -25,3 +26,12 @@ class CaixaRepository:
         db.commit()
         db.refresh(caixa)
         return caixa
+
+    @staticmethod
+    def listar(db: Session, limite: int = 20):
+        return (
+            db.query(Caixa)
+            .order_by(Caixa.data_abertura.desc())
+            .limit(limite)
+            .all()
+        )

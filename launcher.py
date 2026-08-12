@@ -1,5 +1,6 @@
 import ctypes
 import os
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -42,6 +43,22 @@ PG_BANCO = "vertexerp"
 LOCK_FILE = os.path.join(BASE_DIR, ".vertexerp.lock")
 
 CREATE_NO_WINDOW = 0x08000000
+
+
+def caminho_tem_caractere_nao_ascii():
+    """O initdb desse Postgres portátil quebra (erro de encoding UTF-8
+    interno) quando o caminho de instalação tem letra acentuada — e
+    "Área de Trabalho" é justamente o nome padrão da Área de Trabalho
+    em qualquer Windows em português, então é fácil o cliente cair
+    exatamente nessa armadilha sem querer. Detecta isso ANTES de tentar
+    subir o Postgres, pra mostrar um aviso claro em vez de um erro
+    cripto vindo de dentro do initdb."""
+
+    try:
+        BASE_DIR.encode("ascii")
+        return False
+    except UnicodeEncodeError:
+        return True
 
 
 def ambiente_para_subprocessos():
@@ -254,15 +271,44 @@ def garantir_banco_vertexerp():
     )
 
 
+def _perguntar_sim_nao(titulo, mensagem):
+    # MB_YESNO (0x4) | MB_ICONQUESTION (0x20); IDYES == 6
+    resposta = ctypes.windll.user32.MessageBoxW(
+        None, mensagem, titulo, 0x4 | 0x20
+    )
+    return resposta == 6
+
+
 def garantir_env():
     """Gera o backend/.env (na raiz da instalação) apontando pro Postgres
     portátil, se ainda não existir — não sobrescreve um .env que o usuário
-    já tenha configurado manualmente."""
+    já tenha configurado manualmente.
+
+    Só roda uma vez por instalação (a próxima abertura já encontra o
+    .env pronto), então é o momento certo pra perguntar se esse PC vai
+    servir de "servidor" pros outros caixas da loja."""
 
     caminho_env = os.path.join(BASE_DIR, ".env")
 
     if os.path.exists(caminho_env):
         return
+
+    modo_servidor = _perguntar_sim_nao(
+        "Modo Servidor",
+        "Este PC vai funcionar como Servidor pros outros caixas da loja?\n\n"
+        "Escolha Sim se outros computadores vão se conectar a este aqui "
+        "pra dividir o mesmo estoque, clientes e vendas.\n\n"
+        "Escolha Não se este vai ser o único PC (ou um caixa que se conecta "
+        "a outro servidor) — pode mudar isso depois editando o arquivo "
+        ".env, se precisar.",
+    )
+
+    host = "0.0.0.0" if modo_servidor else "127.0.0.1"
+
+    # Chave só desse install, gerada na hora — nunca a mesma em duas
+    # instalações diferentes (ver auth/jwt.py: sem isso, qualquer
+    # instalação aceitaria token assinado por qualquer outra).
+    chave_secreta = secrets.token_hex(32)
 
     with open(caminho_env, "w", encoding="utf-8") as arquivo:
         arquivo.write(
@@ -273,7 +319,8 @@ def garantir_env():
             f"DB_NAME={PG_BANCO}\n"
             f"DB_USER={PG_SUPERUSER}\n"
             f"DB_PASSWORD={PG_SUPERSENHA}\n\n"
-            "SECRET_KEY=VertexERP2026SuperSecretKey\n"
+            f"VERTEXERP_HOST={host}\n\n"
+            f"SECRET_KEY={chave_secreta}\n"
             "JWT_ALGORITHM=HS256\n"
             "ACCESS_TOKEN_EXPIRE_MINUTES=60\n"
         )
@@ -286,8 +333,15 @@ def garantir_env():
 def backend_pronto():
     import urllib.request
 
+    # Tem que bater com o padrao de backend/backend_entry.py e
+    # frontend/services/api.py (58734) — ver comentario lá pra entender
+    # por que nao pode ser 8000.
+    porta = os.getenv("VERTEXERP_PORT", "58734")
+
     try:
-        urllib.request.urlopen("http://127.0.0.1:8000/docs", timeout=3)
+        urllib.request.urlopen(
+            f"http://127.0.0.1:{porta}/docs", timeout=3
+        )
         return True
     except Exception:
         return False
@@ -357,6 +411,27 @@ def _mostrar_erro(titulo, mensagem):
 
 def main():
     if not obter_trava():
+        return
+
+    if caminho_tem_caractere_nao_ascii():
+        _mostrar_erro(
+            "Caminho de instalação inválido",
+            "A pasta do Vertex ERP está num caminho com acento ou "
+            "caractere especial:\n\n"
+            f"{BASE_DIR}\n\n"
+            "O banco de dados não consegue iniciar nesse caso. Mova "
+            "essa pasta inteira pra um caminho simples, sem acentos "
+            "nem espaços incomuns — por exemplo:\n\n"
+            "C:\\VertexERP\n\n"
+            "Depois, se quiser um atalho na Área de Trabalho, crie um "
+            "atalho apontando pro VertexERP.exe de lá (o atalho em si "
+            "pode ficar na Área de Trabalho normalmente — só a pasta "
+            "de instalação não pode).",
+        )
+
+        if os.path.exists(LOCK_FILE):
+            os.remove(LOCK_FILE)
+
         return
 
     try:

@@ -22,20 +22,19 @@ backend/logs/
 # Postgres portatil (runtime local, nao deve ir pro repo)
 postgres-portable/
 
-# Migrações
-backend/migrations/
-
-# Uploads (logo da loja, etc.)
-backend/uploads/
-
 # Banco SQLite
 *.db
 *.sqlite3
 
-# Empacotamento (PyInstaller) e trava do launcher
+# Artefatos de build (PyInstaller)
 build/
 dist/
-*.spec
-VertexERP.exe
-icone.ico
-.vertexerp.lock
+dist_final/
+*.egg-info/
+
+# Postgres portátil (baixado à parte, não faz parte do código-fonte)
+postgres-portable/
+
+# Credencial da conta de serviço do Firebase (chave privada) — nunca
+# deve ir pro repositório, cada instalação/ambiente tem a sua própria.
+firebase-credentials.json

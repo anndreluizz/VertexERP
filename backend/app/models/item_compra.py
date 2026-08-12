@@ -40,4 +40,5 @@ class ItemCompra(Base):
 
     produto = relationship(
         "Produto",
+        back_populates="itens_compra",
     )

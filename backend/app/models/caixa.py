@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy.orm import relationship
-from sqlalchemy import DateTime, Float, String
+from sqlalchemy import DateTime, Float, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database.base import Base
@@ -39,6 +39,22 @@ class Caixa(Base):
         String(20),
         default="ABERTO"
     )
+
+    valor_contado: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True
+    )
+
+    observacoes: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True
+    )
+
+    usuario_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=True
+    )
+
     movimentos = relationship(
         "MovimentoCaixa",
         back_populates="caixa",

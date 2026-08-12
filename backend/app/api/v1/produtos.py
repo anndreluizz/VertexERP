@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user, require_admin
@@ -51,17 +51,33 @@ def buscar(
     return produto
 
 
-# ===== TESTE TEMPORÁRIO =====
-# Removemos o response_model apenas para descobrir
-# onde está o erro de serialização.
-@router.post("/", status_code=201)
+@router.post("/", response_model=ProdutoResponse, status_code=201)
 def criar(
     dados: ProdutoCreate,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    produto = ProdutoService.criar(db, dados)
-    return produto
+    try:
+        return ProdutoService.criar(db, dados)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{produto_id}/foto")
+def obter_foto(
+    produto_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    produto = ProdutoService.buscar(db, produto_id)
+
+    if not produto or not produto.foto:
+        raise HTTPException(
+            status_code=404,
+            detail="Produto sem foto cadastrada."
+        )
+
+    return Response(content=produto.foto, media_type="image/jpeg")
 
 
 @router.put("/{produto_id}", response_model=ProdutoResponse)

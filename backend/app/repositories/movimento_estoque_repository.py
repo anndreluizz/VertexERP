@@ -13,27 +13,26 @@ class MovimentoEstoqueRepository:
         return movimento
 
     @staticmethod
-    def listar(db: Session, skip: int = 0, limit: int = 100):
+    def listar(db: Session):
         return (
             db.query(MovimentoEstoque)
             .order_by(MovimentoEstoque.data.desc())
-            .offset(skip)
-            .limit(limit)
             .all()
         )
 
     @staticmethod
-    def listar_por_produto(
-        db: Session,
-        produto_id: int,
-        skip: int = 0,
-        limit: int = 100,
-    ):
+    def buscar_por_id(db: Session, movimento_id: int):
+        return (
+            db.query(MovimentoEstoque)
+            .filter(MovimentoEstoque.id == movimento_id)
+            .first()
+        )
+
+    @staticmethod
+    def listar_por_produto(db: Session, produto_id: int):
         return (
             db.query(MovimentoEstoque)
             .filter(MovimentoEstoque.produto_id == produto_id)
             .order_by(MovimentoEstoque.data.desc())
-            .offset(skip)
-            .limit(limit)
             .all()
         )

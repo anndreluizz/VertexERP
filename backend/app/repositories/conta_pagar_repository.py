@@ -20,6 +20,11 @@ class ContaPagarRepository:
         return conta
 
     @staticmethod
+    def excluir(db: Session, conta: ContaPagar):
+        db.delete(conta)
+        db.commit()
+
+    @staticmethod
     def buscar_por_id(
         db: Session,
         conta_id: int,

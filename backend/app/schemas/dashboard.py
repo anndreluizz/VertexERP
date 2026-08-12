@@ -1,18 +1,20 @@
 from pydantic import BaseModel
 
 
-class VendaPorDia(BaseModel):
+class SerieMensalItem(BaseModel):
 
-    data: str
+    mes: str
 
-    total: float
+    valor: float
 
 
 class DashboardResponse(BaseModel):
 
     vendas_hoje: float
 
-    vendas_ontem: float
+    vendas_hoje_qtd: int
+
+    vendas_mes: float
 
     compras_hoje: float
 
@@ -32,4 +34,24 @@ class DashboardResponse(BaseModel):
 
     estoque_baixo: int
 
-    vendas_ultimos_7_dias: list[VendaPorDia]
+    contas_vencidas_qtd: int
+
+    contas_vencidas_valor: float
+
+    contas_vencendo_hoje_qtd: int
+
+    contas_vencendo_hoje_valor: float
+
+    contas_pagas_hoje_qtd: int
+
+    contas_pagas_hoje_valor: float
+
+    fiado_recebido_hoje: float
+
+    contas_mes_pago: float
+
+    contas_mes_pendente: float
+
+    serie_recebimentos_mensal: list[SerieMensalItem]
+
+    serie_pagamentos_mensal: list[SerieMensalItem]

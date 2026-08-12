@@ -1,0 +1,380 @@
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QMessageBox,
+)
+
+from services.user_service import (
+    listar_usuarios,
+    atualizar_usuario,
+    criar_usuario,
+)
+
+from design import tokens
+from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, BotaoSucesso
+
+
+class NovoUsuarioDialog(QDialog):
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle("Novo Usuário")
+        self.setFixedSize(400, 420)
+        self.setStyleSheet(f"background:{tokens.CARD};")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(10)
+
+        titulo = QLabel("Novo Usuário")
+        titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XL}px;
+            font-weight:800; color:{tokens.TEXTO};
+        """)
+
+        subtitulo = QLabel(
+            "Crie o acesso de um novo funcionário ao sistema."
+        )
+        subtitulo.setWordWrap(True)
+        subtitulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
+
+        layout.addWidget(titulo)
+        layout.addWidget(subtitulo)
+        layout.addSpacing(10)
+
+        self.nome = self._campo(layout, "NOME COMPLETO", "Nome")
+        self.email = self._campo(
+            layout, "E-MAIL", "email@exemplo.com"
+        )
+        self.senha = self._campo(
+            layout, "SENHA", "••••••", senha=True
+        )
+        self.confirmar = self._campo(
+            layout, "CONFIRMAR SENHA", "••••••", senha=True
+        )
+
+        layout.addStretch()
+
+        botoes = QHBoxLayout()
+        botoes.setSpacing(10)
+
+        bt_cancelar = BotaoSecundario("Cancelar")
+        bt_cancelar.setMinimumHeight(44)
+        bt_cancelar.setAutoDefault(False)
+        bt_cancelar.clicked.connect(self.reject)
+
+        bt_criar = BotaoSucesso("Cadastrar")
+        bt_criar.setMinimumHeight(44)
+        bt_criar.setAutoDefault(False)
+        bt_criar.clicked.connect(self.criar)
+
+        botoes.addWidget(bt_cancelar)
+        botoes.addWidget(bt_criar)
+
+        layout.addLayout(botoes)
+
+        self.nome.setFocus()
+
+    def _campo(self, layout, rotulo, placeholder, senha=False):
+
+        lbl = QLabel(rotulo)
+        lbl.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
+
+        campo = QLineEdit()
+        campo.setPlaceholderText(placeholder)
+        campo.setMinimumHeight(40)
+        campo.setStyleSheet(f"""
+            QLineEdit {{
+                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
+                background: {tokens.CARD};
+            }}
+            QLineEdit:focus {{ border: 1.5px solid {tokens.PRIMARIA}; }}
+        """)
+
+        if senha:
+            campo.setEchoMode(QLineEdit.Password)
+
+        layout.addWidget(lbl)
+        layout.addWidget(campo)
+
+        return campo
+
+    def criar(self):
+
+        nome = self.nome.text().strip()
+        email = self.email.text().strip()
+        senha = self.senha.text()
+
+        if not nome or not email or not senha:
+            QMessageBox.warning(
+                self, "Atenção", "Preencha todos os campos."
+            )
+            return
+
+        if senha != self.confirmar.text():
+            QMessageBox.warning(
+                self, "Atenção", "As senhas não coincidem."
+            )
+            return
+
+        response = criar_usuario(nome, email, senha)
+
+        if response.status_code == 200:
+            self.accept()
+        else:
+            try:
+                erro = response.json().get("detail") or str(
+                    response.json()
+                )
+            except Exception:
+                erro = response.text
+
+            QMessageBox.critical(self, "Erro", str(erro))
+
+
+class GerenciarUsuariosDialog(QDialog):
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.usuarios = []
+
+        self.setWindowTitle("Gerenciar Usuários")
+        self.resize(680, 500)
+        self.setStyleSheet(f"background:{tokens.CARD};")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(14)
+
+        cabecalho = QHBoxLayout()
+
+        titulo = QLabel("Gerenciar Usuários")
+        titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XL}px;
+            font-weight:800; color:{tokens.TEXTO};
+        """)
+
+        bt_novo = BotaoSucesso("Novo Usuário", icone_nome="plus")
+        bt_novo.setAutoDefault(False)
+        bt_novo.clicked.connect(self.novo_usuario)
+
+        cabecalho.addWidget(titulo)
+        cabecalho.addStretch()
+        cabecalho.addWidget(bt_novo)
+
+        layout.addLayout(cabecalho)
+
+        self.tabela = QTableWidget()
+        self.tabela.setColumnCount(4)
+        self.tabela.setHorizontalHeaderLabels(
+            ["Nome", "E-mail", "Status", "Admin"]
+        )
+        self.tabela.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Stretch
+        )
+        self.tabela.verticalHeader().setDefaultSectionSize(40)
+        self.tabela.verticalHeader().setVisible(False)
+        self.tabela.setAlternatingRowColors(True)
+        self.tabela.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabela.setSelectionMode(QTableWidget.SingleSelection)
+        self.tabela.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tabela.setShowGrid(False)
+        self.tabela.setStyleSheet(f"""
+            QTableWidget {{
+                border: 1px solid {tokens.BORDA};
+                border-radius: {tokens.RADIUS_MD}px;
+                color: {tokens.TEXTO};
+                background: {tokens.CARD};
+                alternate-background-color: {tokens.FUNDO};
+                font-size: {tokens.TAMANHO_BASE}px;
+            }}
+            QTableWidget::item:selected {{
+                background: {tokens.PRIMARIA};
+                color: white;
+            }}
+            QHeaderView::section {{
+                background: {tokens.FUNDO};
+                color: {tokens.TEXTO_SECUNDARIO};
+                font-weight: 700;
+                font-size: {tokens.TAMANHO_XS}px;
+                padding: 8px;
+                border: none;
+                border-bottom: 1px solid {tokens.BORDA};
+            }}
+        """)
+
+        layout.addWidget(self.tabela, stretch=1)
+
+        rodape = QHBoxLayout()
+        rodape.setSpacing(10)
+
+        self.bt_ativar_desativar = BotaoPerigo("Ativar / Desativar")
+        self.bt_ativar_desativar.setAutoDefault(False)
+        self.bt_ativar_desativar.clicked.connect(
+            self.alternar_ativo
+        )
+
+        self.bt_admin = BotaoPrimario("Tornar / Remover Admin")
+        self.bt_admin.setAutoDefault(False)
+        self.bt_admin.clicked.connect(self.alternar_admin)
+
+        bt_fechar = BotaoSecundario("Fechar")
+        bt_fechar.setAutoDefault(False)
+        bt_fechar.clicked.connect(self.accept)
+
+        rodape.addWidget(self.bt_ativar_desativar)
+        rodape.addWidget(self.bt_admin)
+        rodape.addStretch()
+        rodape.addWidget(bt_fechar)
+
+        layout.addLayout(rodape)
+
+        self.carregar()
+
+    # ======================================
+
+    def carregar(self):
+
+        self.usuarios = listar_usuarios()
+
+        self.tabela.setRowCount(len(self.usuarios))
+
+        for linha, usuario in enumerate(self.usuarios):
+
+            self.tabela.setItem(
+                linha, 0, QTableWidgetItem(usuario.get("nome") or "")
+            )
+            self.tabela.setItem(
+                linha, 1, QTableWidgetItem(usuario.get("email") or "")
+            )
+
+            ativo = usuario.get("ativo", True)
+            item_status = QTableWidgetItem("Ativo" if ativo else "Inativo")
+            item_status.setForeground(
+                QColor(tokens.SECUNDARIA_HOVER if ativo else tokens.ERRO)
+            )
+            self.tabela.setItem(linha, 2, item_status)
+
+            admin = usuario.get("admin")
+            item_admin = QTableWidgetItem("Sim" if admin else "Não")
+            item_admin.setForeground(
+                QColor(tokens.PRIMARIA if admin else tokens.TEXTO_TERCIARIO)
+            )
+            self.tabela.setItem(linha, 3, item_admin)
+
+        self.tabela.setCurrentCell(-1, -1)
+        self.tabela.clearSelection()
+
+    def _usuario_selecionado(self):
+
+        linha = self.tabela.currentRow()
+
+        if linha < 0:
+            QMessageBox.warning(
+                self, "Aviso", "Selecione um usuário."
+            )
+            return None
+
+        return self.usuarios[linha]
+
+    def novo_usuario(self):
+
+        dialogo = NovoUsuarioDialog(parent=self)
+
+        if dialogo.exec() != QDialog.Accepted:
+            return
+
+        self.carregar()
+
+    def alternar_ativo(self):
+
+        usuario = self._usuario_selecionado()
+
+        if usuario is None:
+            return
+
+        novo_status = not usuario.get("ativo", True)
+
+        resposta = QMessageBox.question(
+            self,
+            "Confirmar",
+            (
+                f"Desativar o acesso de {usuario['nome']}?"
+                if not novo_status
+                else f"Reativar o acesso de {usuario['nome']}?"
+            ),
+        )
+
+        if resposta != QMessageBox.Yes:
+            return
+
+        response = atualizar_usuario(
+            usuario["id"], {"ativo": novo_status}
+        )
+
+        if response.status_code == 200:
+            self.carregar()
+        else:
+            try:
+                erro = response.json().get("detail") or str(
+                    response.json()
+                )
+            except Exception:
+                erro = response.text
+
+            QMessageBox.critical(self, "Erro", str(erro))
+
+    def alternar_admin(self):
+
+        usuario = self._usuario_selecionado()
+
+        if usuario is None:
+            return
+
+        novo_admin = not usuario.get("admin", False)
+
+        resposta = QMessageBox.question(
+            self,
+            "Confirmar",
+            (
+                f"Tornar {usuario['nome']} administrador?"
+                if novo_admin
+                else f"Remover {usuario['nome']} da administração?"
+            ),
+        )
+
+        if resposta != QMessageBox.Yes:
+            return
+
+        response = atualizar_usuario(
+            usuario["id"], {"admin": novo_admin}
+        )
+
+        if response.status_code == 200:
+            self.carregar()
+        else:
+            try:
+                erro = response.json().get("detail") or str(
+                    response.json()
+                )
+            except Exception:
+                erro = response.text
+
+            QMessageBox.critical(self, "Erro", str(erro))

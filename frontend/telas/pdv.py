@@ -1,34 +1,52 @@
-import base64
-import winsound
 from datetime import datetime, timedelta
 
 from telas.pagamento import PagamentoWindow
-from services.venda_service import finalizar_venda as enviar_venda
+from telas.buscar_produto import BuscarProdutoDialog
+from telas.venda_concluida import VendaConcluidaDialog
+from telas.cadastro_produto import CadastroProdutoWindow
+from telas.selecionar_cliente import SelecionarClienteDialog
+from services.venda_service import finalizar_venda as enviar_venda, listar_vendas
+from services.produto_service import listar_produtos, cadastrar_produto
 from services.pdv_service import buscar_produto
-from services.produto_service import listar_produtos
-from services.fiado_service import registrar_pagamento
-from services.configuracao_service import (
-    buscar_configuracoes,
-    buscar_logo_bytes,
-)
+from services.caixa_service import caixa_aberto
+from services.api import configuracoes, me
+from services import preferencias_service
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QShortcut, QKeySequence, QTextDocument
-from PySide6.QtPrintSupport import QPrinter, QPrinterInfo
+ATALHOS_PADRAO = {"busca": "F1", "cadastro_rapido": "F4", "cancelar": "Esc"}
+
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QShortcut, QKeySequence, QFont, QTextDocument
+from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (
     QWidget,
     QDialog,
     QFrame,
     QVBoxLayout,
     QHBoxLayout,
+    QFrame,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QAbstractItemView,
     QHeaderView,
     QMessageBox,
+    QFileDialog,
+)
+
+from design import tokens
+from design.animations import fade_in
+from design.icons import icone, icone_pixmap
+from design.widgets import (
+    Badge,
+    BotaoPerigo,
+    BotaoPrimario,
+    BotaoSecundario,
+    BotaoSucesso,
+    CampoTexto,
 )
 
 TABELA_ESTILO = """
@@ -74,227 +92,496 @@ FORMAS_PAGAMENTO_LABEL = {
 }
 
 
+def _formatar_moeda(valor):
+    return (
+        f"R$ {float(valor):,.2f}".replace(",", "X")
+        .replace(".", ",").replace("X", ".")
+    )
+
+
+def _parse_data(texto):
+    try:
+        return datetime.fromisoformat(texto)
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_valor(texto):
+    try:
+        return max(0.0, float((texto or "").strip().replace(",", ".") or 0))
+    except ValueError:
+        return 0.0
+
+
+class VendasSuspensasDialog(QDialog):
+    """Lista as vendas suspensas do carrinho atual (só em memória — não
+    sobrevivem a fechar o app, apenas a navegar entre telas, já que o
+    PDV nunca é recriado enquanto o app está aberto). Permite retomar
+    ou excluir uma venda suspensa."""
+
+    def __init__(self, vendas_suspensas, parent=None):
+
+        super().__init__(parent)
+
+        self.indice_selecionado = None
+        self.acao = None
+
+        self.setWindowTitle("Vendas Suspensas")
+        self.resize(480, 420)
+        self.setStyleSheet(f"background:{tokens.FUNDO};")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        titulo = QLabel("Vendas Suspensas")
+        titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_XL}px; font-weight:800;
+        """)
+        layout.addWidget(titulo)
+
+        self.lista = QTableWidget()
+        self.lista.setColumnCount(1)
+        self.lista.horizontalHeader().setVisible(False)
+        self.lista.verticalHeader().setVisible(False)
+        self.lista.setSelectionBehavior(QTableWidget.SelectRows)
+        self.lista.setSelectionMode(QTableWidget.SingleSelection)
+        self.lista.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.lista.horizontalHeader().setStretchLastSection(True)
+        self.lista.setStyleSheet(f"""
+            QTableWidget {{
+                border:1px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
+                background:{tokens.CARD};
+            }}
+        """)
+
+        self.lista.setRowCount(len(vendas_suspensas))
+
+        for linha, venda in enumerate(vendas_suspensas):
+
+            total = sum(
+                item["preco"] * item["quantidade"] for item in venda["itens"]
+            )
+            hora_texto = venda["hora"].strftime("%H:%M")
+            texto = (
+                f"{venda['rotulo']}   ·   {len(venda['itens'])} item(ns)   ·   "
+                f"{_formatar_moeda(total)}   ·   {hora_texto}"
+            )
+
+            self.lista.setItem(linha, 0, QTableWidgetItem(texto))
+
+        self.lista.verticalHeader().setDefaultSectionSize(40)
+
+        if self.lista.rowCount() > 0:
+            self.lista.selectRow(0)
+
+        layout.addWidget(self.lista, stretch=1)
+
+        rodape = QHBoxLayout()
+        rodape.setSpacing(10)
+
+        bt_excluir = BotaoPerigo("Excluir")
+        bt_excluir.clicked.connect(self._excluir)
+
+        bt_retomar = BotaoPrimario("Retomar")
+        bt_retomar.clicked.connect(self._retomar)
+
+        rodape.addWidget(bt_excluir)
+        rodape.addStretch()
+        rodape.addWidget(bt_retomar)
+
+        layout.addLayout(rodape)
+
+    def _linha_atual(self):
+        linhas = self.lista.selectionModel().selectedRows()
+        return linhas[0].row() if linhas else -1
+
+    def _retomar(self):
+        linha = self._linha_atual()
+        if linha < 0:
+            return
+        self.indice_selecionado = linha
+        self.acao = "retomar"
+        self.accept()
+
+    def _excluir(self):
+        linha = self._linha_atual()
+        if linha < 0:
+            return
+        self.indice_selecionado = linha
+        self.acao = "excluir"
+        self.accept()
+
+
 class PDV(QWidget):
+
+    voltar = Signal()
 
     def __init__(self):
         super().__init__()
 
         self.itens = []
-        self.produtos = []
+        self.cliente_id = None
+        self.cliente_nome = None
+        self.desconto_valor = 0.0
+        self.acrescimo_valor = 0.0
+        self.vendas_suspensas = []
+
+        self._usuario_id = (me() or {}).get("id")
+        self.atalhos = self._carregar_atalhos()
+
+        self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        titulo = QLabel("PONTO DE VENDA")
-        titulo.setAlignment(Qt.AlignCenter)
-        titulo.setStyleSheet("""
-            font-size:24px;
-            font-weight:bold;
-        """)
+        # Em telas mais baixas (notebooks, resoluções menores), a soma de
+        # cabeçalho + código de barras + tabela + ajuste + resumo pode não
+        # caber na janela — sem rolagem, o conteúdo de baixo (inclusive os
+        # botões Buscar/Adicionar/Pagar) simplesmente ficava cortado fora
+        # da área visível. A barra de atalhos fica FORA da área rolável,
+        # de propósito: ela precisa estar sempre visível e alcançável,
+        # nunca escondida atrás de uma rolagem.
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
 
-        layout.addWidget(titulo)
+        conteudo = QWidget()
+        conteudo.setStyleSheet("background:transparent;")
 
-        area = QHBoxLayout()
-        area.setSpacing(16)
+        layout_conteudo = QVBoxLayout(conteudo)
+        layout_conteudo.setContentsMargins(24, 20, 24, 0)
+        layout_conteudo.setSpacing(14)
 
-        self.frame_produtos = self._montar_painel_produtos()
-        area.addWidget(self.frame_produtos, 2)
-        area.addWidget(self._montar_painel_venda(), 3)
+        layout_conteudo.addLayout(self._construir_cabecalho())
+        layout_conteudo.addWidget(self._construir_campo_codigo())
+        layout_conteudo.addWidget(self.lbl_status_busca)
+        layout_conteudo.addWidget(self._construir_linha_cliente())
+        layout_conteudo.addWidget(self._construir_mais_vendidos())
+        layout_conteudo.addWidget(self._construir_tabela(), stretch=1)
+        layout_conteudo.addWidget(self._construir_bloco_ajuste())
+        layout_conteudo.addLayout(self._construir_resumo())
 
-        layout.addLayout(area)
+        self.tabela.setMinimumHeight(160)
 
-        # O painel de busca por grade é um apoio pra quando o código de
-        # barras falha — o fluxo normal é só escanear, então ele começa
-        # fechado pra não disputar espaço/atenção com o carrinho.
-        self.frame_produtos.setVisible(False)
+        scroll.setWidget(conteudo)
+        layout.addWidget(scroll, stretch=1)
 
-        # ==========================================
+        rodape = QVBoxLayout()
+        rodape.setContentsMargins(24, 14, 24, 20)
+        rodape.addLayout(self._construir_barra_atalhos())
+
+        layout.addLayout(rodape)
+
+        # ======================
         # ATALHOS DE TECLADO
-        # ==========================================
-        QShortcut(QKeySequence("F2"), self, lambda: self.codigo.setFocus())
-        QShortcut(QKeySequence("F3"), self, self.abrir_painel_produtos)
-        QShortcut(QKeySequence("F4"), self, self.finalizar_venda)
-        QShortcut(QKeySequence("Delete"), self, self.remover_item_selecionado)
-        QShortcut(QKeySequence("Escape"), self, self.fechar_painel_produtos)
+        # ======================
 
-        # +/- só ativam com o foco na tabela do carrinho (não na janela
-        # inteira) — assim não conflitam com o campo de código, onde "+"
-        # ou "-" digitado por engano corromperia o código de barras.
-        self._atalho_mais = QShortcut(QKeySequence("+"), self.tabela)
-        self._atalho_mais.setContext(Qt.WidgetWithChildrenShortcut)
-        self._atalho_mais.activated.connect(self.aumentar_quantidade_selecionada)
+        contexto = Qt.WidgetWithChildrenShortcut
 
-        self._atalho_menos = QShortcut(QKeySequence("-"), self.tabela)
-        self._atalho_menos.setContext(Qt.WidgetWithChildrenShortcut)
-        self._atalho_menos.activated.connect(self.diminuir_quantidade_selecionada)
+        self.atalho_f1 = QShortcut(QKeySequence(self.atalhos["busca"]), self)
+        self.atalho_f1.setContext(contexto)
+        self.atalho_f1.activated.connect(self.abrir_busca)
 
-        self.carregar_produtos()
+        self.atalho_f4 = QShortcut(QKeySequence(self.atalhos["cadastro_rapido"]), self)
+        self.atalho_f4.setContext(contexto)
+        self.atalho_f4.activated.connect(self.abrir_novo_produto)
 
-        self.codigo.setFocus()
+        self.atalho_esc = QShortcut(QKeySequence(self.atalhos["cancelar"]), self)
+        self.atalho_esc.setContext(contexto)
+        self.atalho_esc.activated.connect(self.cancelar_venda)
+
+        fade_in(self, duracao=200)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.atualizar_indicador_caixa()
+        self.atualizar_mais_vendidos()
+        self.recarregar_atalhos()
+        self.campo_codigo.setFocus()
+
+    def _carregar_atalhos(self):
+        salvo = preferencias_service.carregar(self._usuario_id, "pdv_atalhos", {})
+        return {**ATALHOS_PADRAO, **(salvo or {})}
+
+    def recarregar_atalhos(self):
+        """Reflete na hora qualquer remapeamento feito em Configurações
+        — chamado toda vez que a tela do PDV é reaberta, já que o
+        widget nunca é recriado enquanto o app está de pé."""
+
+        self.atalhos = self._carregar_atalhos()
+
+        self.atalho_f1.setKey(QKeySequence(self.atalhos["busca"]))
+        self.atalho_f4.setKey(QKeySequence(self.atalhos["cadastro_rapido"]))
+        self.atalho_esc.setKey(QKeySequence(self.atalhos["cancelar"]))
+
+        self.bt_buscar.setText(f"Buscar ({self.atalhos['busca']})")
+        self.bt_adicionar.setText(f"Novo Produto ({self.atalhos['cadastro_rapido']})")
 
     # ==================================================
-    # ABRIR/FECHAR PAINEL DE PRODUTOS
+    # CONSTRUÇÃO DA INTERFACE
     # ==================================================
 
-    def abrir_painel_produtos(self):
-        self.frame_produtos.setVisible(True)
-        self.busca_produto.setFocus()
+    def _construir_cabecalho(self):
 
-    def fechar_painel_produtos(self):
-        self.frame_produtos.setVisible(False)
-        self.codigo.setFocus()
+        cabecalho = QHBoxLayout()
+        cabecalho.setSpacing(12)
 
-    def alternar_painel_produtos(self):
-        if self.frame_produtos.isVisible():
-            self.fechar_painel_produtos()
-        else:
-            self.abrir_painel_produtos()
+        self.bt_voltar = QPushButton()
+        self.bt_voltar.setFixedSize(38, 38)
+        self.bt_voltar.setCursor(Qt.PointingHandCursor)
+        self.bt_voltar.setIcon(icone("chevron-left", cor=tokens.TEXTO_SECUNDARIO, tamanho=18))
+        self.bt_voltar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD};
+                border: 1px solid {tokens.BORDA};
+                border-radius: {tokens.RADIUS_SM}px;
+            }}
+            QPushButton:hover {{ background: {tokens.FUNDO}; }}
+        """)
+        self.bt_voltar.clicked.connect(self.voltar.emit)
 
-    # ==================================================
-    # PAINEL DE PRODUTOS (ESQUERDA)
-    # ==================================================
+        col_titulo = QVBoxLayout()
+        col_titulo.setSpacing(0)
 
-    def _montar_painel_produtos(self):
-        frame = QFrame()
-        frame.setStyleSheet("""
-            QFrame {
-                background: #232323;
-                border: 1px solid #333;
-                border-radius: 10px;
-            }
+        titulo = QLabel("Frente de Caixa")
+        titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_XL}px; font-weight:800;
         """)
 
-        painel = QVBoxLayout(frame)
-        painel.setContentsMargins(14, 14, 14, 14)
-        painel.setSpacing(10)
+        config = configuracoes()
+        nome_loja = config.get("nome_loja") or ""
 
-        titulo = QLabel("📦 Produtos")
-        titulo.setStyleSheet("font-size:16px; font-weight:bold; border:none;")
-        painel.addWidget(titulo)
-
-        self.busca_produto = QLineEdit()
-        self.busca_produto.setPlaceholderText(
-            "Buscar produto por nome ou código (F3)"
-        )
-        self.busca_produto.setStyleSheet(CAMPO_ESTILO)
-        self.busca_produto.textChanged.connect(self.filtrar_produtos)
-        painel.addWidget(self.busca_produto)
-
-        self.tabela_produtos = QTableWidget()
-        self.tabela_produtos.setColumnCount(4)
-        self.tabela_produtos.setHorizontalHeaderLabels([
-            "Código",
-            "Produto",
-            "Preço",
-            "Estoque",
-        ])
-        self.tabela_produtos.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Stretch
-        )
-        self.tabela_produtos.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.tabela_produtos.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tabela_produtos.setAlternatingRowColors(True)
-        self.tabela_produtos.verticalHeader().setVisible(False)
-        self.tabela_produtos.setStyleSheet(TABELA_ESTILO)
-        self.tabela_produtos.verticalHeader().setDefaultSectionSize(32)
-        self.tabela_produtos.doubleClicked.connect(
-            self.adicionar_produto_da_grade
-        )
-
-        painel.addWidget(self.tabela_produtos)
-
-        dica = QLabel("Duplo clique adiciona o produto ao carrinho")
-        dica.setStyleSheet("color:#888; font-size:11px; border:none;")
-        painel.addWidget(dica)
-
-        return frame
-
-    # ==================================================
-    # PAINEL DE VENDA (DIREITA)
-    # ==================================================
-
-    def _montar_painel_venda(self):
-        frame = QFrame()
-        frame.setStyleSheet("""
-            QFrame {
-                background: #232323;
-                border: 1px solid #333;
-                border-radius: 10px;
-            }
+        self.lbl_loja = QLabel(nome_loja)
+        self.lbl_loja.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px;
         """)
 
-        painel = QVBoxLayout(frame)
-        painel.setContentsMargins(14, 14, 14, 14)
-        painel.setSpacing(10)
+        col_titulo.addWidget(titulo)
+        col_titulo.addWidget(self.lbl_loja)
 
-        titulo = QLabel("🛒 Carrinho")
-        titulo.setStyleSheet("font-size:16px; font-weight:bold; border:none;")
-        painel.addWidget(titulo)
+        self.badge_caixa = Badge("Caixa aberto", "sucesso")
 
-        pesquisa = QHBoxLayout()
+        self.bt_retomar = BotaoSecundario("Vendas Suspensas")
+        self.bt_retomar.setEnabled(False)
+        self.bt_retomar.clicked.connect(self.abrir_vendas_suspensas)
 
-        self.codigo = QLineEdit()
-        self.codigo.setPlaceholderText(
-            "Código ou Código de Barras (F2) — ex: 3*código lança 3 unidades"
-        )
-        self.codigo.setStyleSheet(CAMPO_ESTILO)
+        self.bt_suspender = BotaoSecundario("Suspender")
+        self.bt_suspender.clicked.connect(self.suspender_venda)
 
-        self.bt_buscar = QPushButton("Buscar")
-        self.bt_buscar.setStyleSheet("""
-            QPushButton {
-                background:#1565C0;
-                color:white;
-                font-weight:bold;
-                border:none;
-                border-radius:6px;
-                padding:8px 16px;
-            }
-            QPushButton:hover {
-                background:#0D47A1;
-            }
+        self.bt_orcamento = BotaoSecundario("Orçamento", icone_nome="printer")
+        self.bt_orcamento.clicked.connect(self.imprimir_orcamento)
+
+        self.bt_cancelar = BotaoPerigo("Cancelar Venda", icone_nome="x")
+        self.bt_cancelar.clicked.connect(self.cancelar_venda)
+
+        cabecalho.addWidget(self.bt_voltar)
+        cabecalho.addLayout(col_titulo)
+        cabecalho.addSpacing(4)
+        cabecalho.addWidget(self.badge_caixa, alignment=Qt.AlignVCenter)
+        cabecalho.addStretch()
+        cabecalho.addWidget(self.bt_retomar)
+        cabecalho.addWidget(self.bt_suspender)
+        cabecalho.addWidget(self.bt_orcamento)
+        cabecalho.addWidget(self.bt_cancelar)
+
+        return cabecalho
+
+    def _construir_campo_codigo(self):
+
+        container = QFrame()
+        container.setFixedHeight(68)
+        container.setStyleSheet(f"""
+            QFrame {{
+                background: {tokens.CARD};
+                border: 2px solid {tokens.PRIMARIA};
+                border-radius: {tokens.RADIUS_MD}px;
+            }}
         """)
 
-        self.bt_buscar.clicked.connect(
-            self.adicionar_produto
-        )
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(20, 0, 20, 0)
+        layout.setSpacing(14)
 
-        self.codigo.returnPressed.connect(
-            self.adicionar_produto
-        )
+        lbl_icone = QLabel()
+        lbl_icone.setStyleSheet("background:transparent;")
+        lbl_icone.setPixmap(icone_pixmap("shopping-cart", cor=tokens.PRIMARIA, tamanho=26))
+        layout.addWidget(lbl_icone)
 
-        self.bt_toggle_produtos = QPushButton("🔍 (F3)")
-        self.bt_toggle_produtos.setToolTip(
-            "Buscar produto numa lista (quando o código de barras falha)"
+        self.campo_codigo = QLineEdit()
+        self.campo_codigo.setPlaceholderText(
+            "Código de barras ou código do produto — pressione Enter"
         )
-        self.bt_toggle_produtos.setStyleSheet("""
-            QPushButton {
-                background:#333;
-                color:white;
-                border:none;
-                border-radius:6px;
-                padding:8px 12px;
-            }
-            QPushButton:hover {
-                background:#444;
-            }
+        self.campo_codigo.setFont(QFont(tokens.FONTE_FAMILIA_PADRAO, 20))
+        self.campo_codigo.setStyleSheet(f"""
+            QLineEdit {{
+                border: none; background: transparent;
+                color: {tokens.TEXTO}; font-size: 20px; font-weight: 600;
+            }}
         """)
-        self.bt_toggle_produtos.clicked.connect(
-            self.alternar_painel_produtos
-        )
+        self.campo_codigo.returnPressed.connect(self.processar_codigo)
+        layout.addWidget(self.campo_codigo, stretch=1)
 
-        pesquisa.addWidget(self.codigo)
-        pesquisa.addWidget(self.bt_buscar)
-        pesquisa.addWidget(self.bt_toggle_produtos)
+        dica = QLabel("F1 busca por nome")
+        dica.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
+        layout.addWidget(dica)
 
-        painel.addLayout(pesquisa)
+        self.lbl_status_busca = QLabel("")
+        self.lbl_status_busca.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; padding-left: 4px;
+        """)
 
-        self.status_label = QLabel("")
-        self.status_label.setAlignment(Qt.AlignCenter)
-        self.status_label.setVisible(False)
-        painel.addWidget(self.status_label)
+        return container
+
+    def _construir_linha_cliente(self):
+
+        linha = QFrame()
+        linha.setStyleSheet("background:transparent; border:none;")
+
+        layout = QHBoxLayout(linha)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        lbl_icone = QLabel()
+        lbl_icone.setStyleSheet("background:transparent;")
+        lbl_icone.setPixmap(icone_pixmap("users", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        layout.addWidget(lbl_icone)
+
+        self.lbl_cliente = QLabel("Nenhum cliente selecionado")
+        self.lbl_cliente.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
+        layout.addWidget(self.lbl_cliente)
+        layout.addStretch()
+
+        self.bt_limpar_cliente = QPushButton("remover")
+        self.bt_limpar_cliente.setCursor(Qt.PointingHandCursor)
+        self.bt_limpar_cliente.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; border:none;
+                color:{tokens.ERRO}; font-size:{tokens.TAMANHO_XS}px;
+            }}
+        """)
+        self.bt_limpar_cliente.clicked.connect(self.limpar_cliente)
+        self.bt_limpar_cliente.setVisible(False)
+        layout.addWidget(self.bt_limpar_cliente)
+
+        self.bt_selecionar_cliente = BotaoSecundario("Selecionar Cliente", icone_nome="users")
+        self.bt_selecionar_cliente.setMinimumHeight(32)
+        self.bt_selecionar_cliente.clicked.connect(self.abrir_selecionar_cliente)
+        layout.addWidget(self.bt_selecionar_cliente)
+
+        return linha
+
+    def _construir_mais_vendidos(self):
+
+        self.linha_mais_vendidos = QFrame()
+        self.linha_mais_vendidos.setStyleSheet("background:transparent; border:none;")
+        self.linha_mais_vendidos.setVisible(False)
+
+        layout = QHBoxLayout(self.linha_mais_vendidos)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        lbl_icone = QLabel()
+        lbl_icone.setStyleSheet("background:transparent;")
+        lbl_icone.setPixmap(icone_pixmap("trending-up", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        layout.addWidget(lbl_icone)
+
+        lbl_titulo = QLabel("Mais vendidos:")
+        lbl_titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
+        layout.addWidget(lbl_titulo)
+
+        self.layout_chips_mais_vendidos = QHBoxLayout()
+        self.layout_chips_mais_vendidos.setSpacing(6)
+        layout.addLayout(self.layout_chips_mais_vendidos)
+
+        layout.addStretch()
+
+        return self.linha_mais_vendidos
+
+    def atualizar_mais_vendidos(self):
+        """Painel de acesso rápido pros produtos mais vendidos nos
+        últimos 30 dias — mesma agregação client-side já usada em
+        relatorios.py (sem endpoint novo no backend)."""
+
+        while self.layout_chips_mais_vendidos.count():
+            item = self.layout_chips_mais_vendidos.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        try:
+            vendas = listar_vendas()
+            produtos = listar_produtos()
+        except Exception:
+            self.linha_mais_vendidos.setVisible(False)
+            return
+
+        produtos_por_id = {p["id"]: p for p in produtos}
+        limite = datetime.now() - timedelta(days=30)
+
+        qtd_por_produto = {}
+
+        for venda in vendas:
+
+            if venda.get("status") != "FINALIZADA":
+                continue
+
+            data_venda = _parse_data(venda.get("data"))
+
+            if data_venda is None or data_venda < limite:
+                continue
+
+            for item in venda.get("itens", []):
+                pid = item.get("produto_id")
+                qtd_por_produto[pid] = qtd_por_produto.get(pid, 0) + item.get("quantidade", 0)
+
+        top = sorted(qtd_por_produto.items(), key=lambda item: -item[1])[:5]
+        exibidos = 0
+
+        for pid, _qtd in top:
+
+            produto = produtos_por_id.get(pid)
+
+            if not produto or not produto.get("ativo", True):
+                continue
+
+            chip = BotaoSecundario(produto["nome"][:18])
+            chip.setMinimumHeight(30)
+            chip.clicked.connect(
+                lambda _checked, p=produto: self.adicionar_produto_ao_carrinho(
+                    {
+                        "id": p["id"],
+                        "codigo": p["codigo"],
+                        "nome": p["nome"],
+                        "preco": float(p["preco_venda"]),
+                    },
+                    1,
+                )
+            )
+            self.layout_chips_mais_vendidos.addWidget(chip)
+            exibidos += 1
+
+        self.linha_mais_vendidos.setVisible(exibidos > 0)
+
+    def _construir_tabela(self):
 
         self.tabela = QTableWidget()
 
-        self.tabela.setColumnCount(5)
+        self.tabela.setColumnCount(6)
 
         self.tabela.setHorizontalHeaderLabels([
             "Código",
@@ -302,207 +589,224 @@ class PDV(QWidget):
             "Qtde",
             "Unitário",
             "Total",
+            "",
         ])
 
-        self.tabela.horizontalHeader().setStretchLastSection(True)
-        self.tabela.setEditTriggers(QAbstractItemView.DoubleClicked)
-        self.tabela.setAlternatingRowColors(True)
         self.tabela.verticalHeader().setVisible(False)
-        self.tabela.verticalHeader().setDefaultSectionSize(32)
-        self.tabela.setStyleSheet(TABELA_ESTILO)
-        self.tabela.itemChanged.connect(self.item_alterado)
+        self.tabela.setSelectionMode(QTableWidget.NoSelection)
+        self.tabela.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tabela.setShowGrid(False)
+        self.tabela.verticalHeader().setDefaultSectionSize(46)
 
-        painel.addWidget(self.tabela)
-
-        dica = QLabel(
-            "Duplo clique na Qtde pra editar   •   +/- aumenta/diminui   •   "
-            "Delete remove o item selecionado"
+        self.tabela.horizontalHeader().setStretchLastSection(False)
+        self.tabela.setColumnWidth(2, 120)
+        self.tabela.setColumnWidth(5, 48)
+        self.tabela.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.Stretch
         )
-        dica.setStyleSheet("color:#888; font-size:11px; border:none;")
-        painel.addWidget(dica)
-
-        total_layout = QHBoxLayout()
-
-        self.bt_cancelar = QPushButton("Cancelar Venda")
-        self.bt_finalizar = QPushButton("Finalizar Venda (F4)")
-
-        self.bt_cancelar.setMinimumHeight(45)
-        self.bt_finalizar.setMinimumHeight(45)
-
-        self.bt_cancelar.setStyleSheet("""
-        QPushButton{
-            background:#C62828;
-            color:white;
-            font-size:15px;
-            font-weight:bold;
-        }
-
-        QPushButton:hover{
-            background:#B71C1C;
-        }
+        self.tabela.setStyleSheet(f"""
+            QTableWidget {{
+                border: 1px solid {tokens.BORDA};
+                border-radius: {tokens.RADIUS_MD}px;
+                gridline-color: {tokens.BORDA};
+                color: {tokens.TEXTO};
+                background: {tokens.CARD};
+                font-size: {tokens.TAMANHO_BASE}px;
+            }}
+            QHeaderView::section {{
+                background: {tokens.FUNDO};
+                color: {tokens.TEXTO_SECUNDARIO};
+                font-weight: 700;
+                font-size: {tokens.TAMANHO_XS}px;
+                padding: 8px;
+                border: none;
+                border-bottom: 1px solid {tokens.BORDA};
+            }}
+            QTableWidget::item {{
+                border-bottom: 1px solid {tokens.BORDA};
+                padding: 4px;
+            }}
         """)
 
-        self.bt_finalizar.setStyleSheet("""
-        QPushButton{
-            background:#2E7D32;
-            color:white;
-            font-size:15px;
-            font-weight:bold;
-        }
+        return self.tabela
 
-        QPushButton:hover{
-            background:#1B5E20;
-        }
+    def _construir_bloco_ajuste(self):
+
+        container = QWidget()
+        container.setStyleSheet("background:transparent;")
+
+        layout_container = QVBoxLayout(container)
+        layout_container.setContentsMargins(0, 0, 0, 0)
+        layout_container.setSpacing(8)
+
+        self.bt_alternar_ajuste = QPushButton("+ Desconto ou acréscimo")
+        self.bt_alternar_ajuste.setCursor(Qt.PointingHandCursor)
+        self.bt_alternar_ajuste.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; border:none; text-align:left;
+                color:{tokens.PRIMARIA}; font-size:{tokens.TAMANHO_SM}px;
+                font-weight:600; padding: 0;
+            }}
+        """)
+        self.bt_alternar_ajuste.clicked.connect(self._alternar_bloco_ajuste)
+        layout_container.addWidget(self.bt_alternar_ajuste)
+
+        self.bloco_ajuste = QFrame()
+        self.bloco_ajuste.setVisible(False)
+        self.bloco_ajuste.setStyleSheet(f"""
+            QFrame {{
+                background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px;
+            }}
         """)
 
-        self.total = QLabel("TOTAL: R$ 0,00")
+        ajuste_layout = QHBoxLayout(self.bloco_ajuste)
+        ajuste_layout.setContentsMargins(16, 14, 16, 14)
+        ajuste_layout.setSpacing(16)
 
-        self.total.setStyleSheet("""
-            font-size:26px;
-            font-weight:bold;
-            color:#1565C0;
+        col_desconto = QVBoxLayout()
+        col_desconto.setSpacing(4)
+        lbl_desconto = QLabel("DESCONTO (R$)")
+        lbl_desconto.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+        """)
+        self.campo_desconto = CampoTexto("0,00")
+        self.campo_desconto.textChanged.connect(self._recalcular_totais)
+        col_desconto.addWidget(lbl_desconto)
+        col_desconto.addWidget(self.campo_desconto)
+
+        col_acrescimo = QVBoxLayout()
+        col_acrescimo.setSpacing(4)
+        lbl_acrescimo = QLabel("ACRÉSCIMO (R$)")
+        lbl_acrescimo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+        """)
+        self.campo_acrescimo = CampoTexto("0,00")
+        self.campo_acrescimo.textChanged.connect(self._recalcular_totais)
+        col_acrescimo.addWidget(lbl_acrescimo)
+        col_acrescimo.addWidget(self.campo_acrescimo)
+
+        ajuste_layout.addLayout(col_desconto)
+        ajuste_layout.addLayout(col_acrescimo)
+        ajuste_layout.addStretch()
+
+        layout_container.addWidget(self.bloco_ajuste)
+
+        return container
+
+    def _construir_resumo(self):
+
+        resumo = QHBoxLayout()
+
+        col_itens = QVBoxLayout()
+        col_itens.setSpacing(0)
+
+        lbl_itens_titulo = QLabel("ITENS")
+        lbl_itens_titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
         """)
 
-        total_layout.addWidget(self.bt_cancelar)
-        total_layout.addStretch()
-        total_layout.addWidget(self.total)
-        total_layout.addStretch()
-        total_layout.addWidget(self.bt_finalizar)
+        self.lbl_itens_valor = QLabel("0")
+        self.lbl_itens_valor.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_XXL}px; font-weight:800;
+        """)
 
-        painel.addLayout(total_layout)
+        col_itens.addWidget(lbl_itens_titulo)
+        col_itens.addWidget(self.lbl_itens_valor)
 
-        self.bt_cancelar.clicked.connect(
-            self.cancelar_venda
+        col_total = QVBoxLayout()
+        col_total.setSpacing(0)
+        col_total.setAlignment(Qt.AlignRight)
+
+        self.lbl_subtotal_info = QLabel("")
+        self.lbl_subtotal_info.setAlignment(Qt.AlignRight)
+        self.lbl_subtotal_info.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px;
+        """)
+        self.lbl_subtotal_info.setVisible(False)
+
+        self.total = QLabel("R$ 0,00")
+        self.total.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.total.setStyleSheet(f"""
+            background:transparent; font-size: 38px; font-weight: 800;
+            color: {tokens.SECUNDARIA};
+        """)
+
+        col_total.addWidget(self.lbl_subtotal_info)
+        col_total.addWidget(self.total)
+
+        resumo.addLayout(col_itens)
+        resumo.addStretch()
+        resumo.addLayout(col_total)
+
+        return resumo
+
+    def _construir_barra_atalhos(self):
+
+        barra = QHBoxLayout()
+        barra.setSpacing(14)
+
+        self.bt_buscar = BotaoSecundario(
+            f"Buscar ({self.atalhos['busca']})", icone_nome="search"
         )
+        self.bt_buscar.setMinimumHeight(56)
 
-        self.bt_finalizar.clicked.connect(
-            self.finalizar_venda
+        self.bt_adicionar = BotaoPrimario(
+            f"Novo Produto ({self.atalhos['cadastro_rapido']})", icone_nome="plus"
         )
+        self.bt_adicionar.setMinimumHeight(56)
 
-        return frame
+        self.bt_pagar = BotaoSucesso("Pagar (F3)", icone_nome="credit-card")
+        self.bt_pagar.setMinimumHeight(56)
 
-    # ==================================================
-    # CARREGAR PRODUTOS NA GRADE
-    # ==================================================
+        self.bt_buscar.clicked.connect(self.abrir_busca)
+        self.bt_pagar.clicked.connect(self.finalizar_venda)
+        self.bt_adicionar.clicked.connect(self.abrir_novo_produto)
 
-    def carregar_produtos(self):
-        self.produtos = listar_produtos()
-        self.preencher_tabela_produtos(self.produtos)
+        barra.addWidget(self.bt_buscar, stretch=1)
+        barra.addWidget(self.bt_adicionar, stretch=1)
+        barra.addWidget(self.bt_pagar, stretch=2)
 
-    # ==================================================
-    # FILTRAR PRODUTOS
-    # ==================================================
-
-    def filtrar_produtos(self):
-        texto = self.busca_produto.text().lower().strip()
-
-        if texto == "":
-            produtos = self.produtos
-        else:
-            produtos = [
-                produto
-                for produto in self.produtos
-                if texto in produto["nome"].lower()
-                or texto in str(produto.get("codigo") or "").lower()
-                or texto in str(produto.get("codigo_barras") or "").lower()
-            ]
-
-        self.preencher_tabela_produtos(produtos)
+        return barra
 
     # ==================================================
-    # PREENCHER TABELA DE PRODUTOS
+    # INDICADOR DE CAIXA ABERTO
     # ==================================================
 
-    def preencher_tabela_produtos(self, produtos):
-        self.tabela_produtos.setRowCount(len(produtos))
+    def atualizar_indicador_caixa(self):
 
-        for linha, produto in enumerate(produtos):
-            self.tabela_produtos.setItem(
-                linha, 0, QTableWidgetItem(produto["codigo"])
-            )
-            self.tabela_produtos.setItem(
-                linha, 1, QTableWidgetItem(produto["nome"])
-            )
-            self.tabela_produtos.setItem(
-                linha,
-                2,
-                QTableWidgetItem(f"R$ {float(produto['preco_venda']):.2f}"),
-            )
-            self.tabela_produtos.setItem(
-                linha, 3, QTableWidgetItem(str(produto.get("estoque", 0)))
-            )
+        info = caixa_aberto()
 
-    # ==================================================
-    # ADICIONAR PRODUTO A PARTIR DA GRADE (DUPLO CLIQUE)
-    # ==================================================
-
-    def adicionar_produto_da_grade(self, index):
-        linha = index.row()
-
-        if linha < 0 or linha >= self.tabela_produtos.rowCount():
+        if not info:
+            self.badge_caixa.setText("Caixa fechado")
+            self.badge_caixa.setStyleSheet(f"""
+                background: {tokens.ERRO_CLARO}; color: {tokens.ERRO_HOVER};
+                border-radius: {tokens.RADIUS_PILL}px; font-size: {tokens.TAMANHO_XS}px;
+                font-weight: 600; padding: 3px 10px;
+            """)
             return
 
-        codigo = self.tabela_produtos.item(linha, 0).text()
+        abertura = _parse_data(info.get("data_abertura"))
+        hora_texto = abertura.strftime("%H:%M") if abertura else "—"
 
-        self.adicionar_produto(codigo)
-
-        # Depois de achar na grade, volta pro fluxo normal de scan.
-        self.fechar_painel_produtos()
-
-    # ==================================================
-    # STATUS NÃO-BLOQUEANTE + BEEP
-    # ==================================================
-
-    def _beep_sucesso(self):
-        try:
-            winsound.Beep(1500, 80)
-        except Exception:
-            pass
-
-    def _beep_erro(self):
-        try:
-            winsound.Beep(300, 250)
-        except Exception:
-            pass
-
-    def _status(self, mensagem, tipo="ok"):
-        cores = {
-            "ok": "#2E7D32",
-            "erro": "#C62828",
-        }
-
-        self.status_label.setStyleSheet(
-            "font-weight:bold; padding:6px; border-radius:6px; "
-            f"background:{cores.get(tipo, '#1565C0')}; color:white;"
-        )
-        self.status_label.setText(mensagem)
-        self.status_label.setVisible(True)
-
-        QTimer.singleShot(
-            2500, lambda: self.status_label.setVisible(False)
-        )
+        self.badge_caixa.setText(f"Caixa aberto às {hora_texto}")
+        self.badge_caixa.setStyleSheet(f"""
+            background: {tokens.SUCESSO_CLARO}; color: {tokens.SECUNDARIA_HOVER};
+            border-radius: {tokens.RADIUS_PILL}px; font-size: {tokens.TAMANHO_XS}px;
+            font-weight: 600; padding: 3px 10px;
+        """)
 
     # ==================================================
-    # ADICIONAR PRODUTO
+    # CÓDIGO DE BARRAS (campo gigante)
     # ==================================================
 
-    def adicionar_produto(self, codigo=None):
+    def processar_codigo(self):
 
-        quantidade_extra = 1
-
-        if codigo is None:
-            texto = self.codigo.text().strip()
-
-            if "*" in texto:
-                multiplicador, _, texto = texto.partition("*")
-                multiplicador = multiplicador.strip()
-
-                if multiplicador.isdigit() and int(multiplicador) > 0:
-                    quantidade_extra = int(multiplicador)
-
-            codigo = texto.strip()
-        else:
-            codigo = str(codigo).strip()
+        codigo = self.campo_codigo.text().strip()
 
         if not codigo:
             return
@@ -510,14 +814,44 @@ class PDV(QWidget):
         produto = buscar_produto(codigo)
 
         if produto is None:
-
-            self._beep_erro()
-            self._status("Produto não encontrado.", "erro")
-
-            self.codigo.clear()
-            self.codigo.setFocus()
-
+            self._mostrar_status_busca(f"Produto não encontrado: {codigo}", erro=True)
+            self.campo_codigo.selectAll()
             return
+
+        self.adicionar_produto_ao_carrinho(produto, 1)
+        self.campo_codigo.clear()
+        self._mostrar_status_busca(f"Adicionado: {produto['nome']}", erro=False)
+
+    def _mostrar_status_busca(self, texto, erro):
+
+        cor = tokens.ERRO if erro else tokens.SECUNDARIA
+        self.lbl_status_busca.setStyleSheet(f"""
+            background:transparent; color:{cor};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:600;
+        """)
+        self.lbl_status_busca.setText(texto)
+
+        QTimer.singleShot(
+            2500,
+            lambda: (
+                self.lbl_status_busca.setText("")
+                if self.lbl_status_busca.text() == texto else None
+            ),
+        )
+
+    # ==================================================
+    # BUSCAR PRODUTO (F1) - abre o modal de pesquisa
+    # ==================================================
+
+    def abrir_busca(self):
+
+        dialog = BuscarProdutoDialog(self)
+        dialog.produto_selecionado.connect(
+            self.adicionar_produto_ao_carrinho
+        )
+        dialog.exec()
+
+    def adicionar_produto_ao_carrinho(self, produto, quantidade):
 
         encontrou = False
 
@@ -525,7 +859,7 @@ class PDV(QWidget):
 
             if item["id"] == produto["id"]:
 
-                item["quantidade"] += quantidade_extra
+                item["quantidade"] += quantidade
 
                 encontrou = True
 
@@ -539,21 +873,97 @@ class PDV(QWidget):
                     "codigo": produto["codigo"],
                     "nome": produto["nome"],
                     "preco": float(produto["preco"]),
-                    "quantidade": quantidade_extra,
+                    "quantidade": quantidade,
                 }
             )
 
         self.atualizar_tabela()
 
-        self._beep_sucesso()
-        self._status(f"{produto['nome']} adicionado", "ok")
+    # ==================================================
+    # NOVO PRODUTO (F4) - cadastro completo sem sair do PDV
+    # ==================================================
 
-        self.codigo.clear()
+    def abrir_novo_produto(self):
 
-        self.codigo.setFocus()
+        dialog = CadastroProdutoWindow()
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        response = cadastrar_produto(dialog.dados)
+
+        if response.status_code != 201:
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+            QMessageBox.critical(self, "Erro", str(erro))
+            return
+
+        produto_criado = response.json()
+
+        # a resposta do cadastro vem no formato "cru" (preco_venda) --
+        # o carrinho espera o formato do PDV (preco), entao rebusca
+        # pelo codigo pra pegar exatamente o mesmo shape que o F1/scanner usa
+        codigo = (
+            produto_criado.get("codigo_barras")
+            or produto_criado.get("codigo")
+        )
+
+        produto = buscar_produto(codigo)
+
+        if produto is None:
+            return
+
+        self.adicionar_produto_ao_carrinho(produto, 1)
+        self._mostrar_status_busca(
+            f"Produto cadastrado e adicionado: {produto['nome']}",
+            erro=False,
+        )
 
     # ==================================================
-    # ATUALIZAR TABELA
+    # CLIENTE (opcional, vale pra qualquer forma de pagamento)
+    # ==================================================
+
+    def abrir_selecionar_cliente(self):
+
+        dialogo = SelecionarClienteDialog(self)
+        dialogo.cliente_selecionado.connect(self.definir_cliente)
+        dialogo.exec()
+
+    def definir_cliente(self, cliente):
+
+        self.cliente_id = cliente["id"]
+        self.cliente_nome = cliente["nome"]
+
+        self.lbl_cliente.setText(cliente["nome"])
+        self.lbl_cliente.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:600;
+        """)
+        self.bt_limpar_cliente.setVisible(True)
+
+    def limpar_cliente(self):
+
+        self.cliente_id = None
+        self.cliente_nome = None
+
+        self.lbl_cliente.setText("Nenhum cliente selecionado")
+        self.lbl_cliente.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
+        self.bt_limpar_cliente.setVisible(False)
+
+    # ==================================================
+    # DESCONTO / ACRÉSCIMO
+    # ==================================================
+
+    def _alternar_bloco_ajuste(self):
+        self.bloco_ajuste.setVisible(not self.bloco_ajuste.isVisible())
+
+    # ==================================================
+    # ATUALIZAR TABELA / TOTAIS
     # ==================================================
 
     def atualizar_tabela(self):
@@ -562,117 +972,172 @@ class PDV(QWidget):
 
         self.tabela.setRowCount(len(self.itens))
 
-        total = 0
-
         for linha, item in enumerate(self.itens):
-            subtotal = (
-                    item["preco"] *
-                    item["quantidade"]
-            )
-
-            total += subtotal
-
-            codigo = QTableWidgetItem(item["codigo"])
-            codigo.setFlags(codigo.flags() & ~Qt.ItemIsEditable)
-            self.tabela.setItem(linha, 0, codigo)
-
-            nome = QTableWidgetItem(item["nome"])
-            nome.setFlags(nome.flags() & ~Qt.ItemIsEditable)
-            self.tabela.setItem(linha, 1, nome)
+            subtotal = item["preco"] * item["quantidade"]
 
             self.tabela.setItem(
-                linha,
-                2,
-                QTableWidgetItem(str(item["quantidade"]))
+                linha, 0, QTableWidgetItem(item["codigo"])
             )
 
-            unitario = QTableWidgetItem(f"R$ {item['preco']:.2f}")
-            unitario.setFlags(unitario.flags() & ~Qt.ItemIsEditable)
-            self.tabela.setItem(linha, 3, unitario)
+            self.tabela.setItem(
+                linha, 1, QTableWidgetItem(item["nome"])
+            )
 
-            total_item = QTableWidgetItem(f"R$ {subtotal:.2f}")
-            total_item.setFlags(total_item.flags() & ~Qt.ItemIsEditable)
-            self.tabela.setItem(linha, 4, total_item)
+            self.tabela.setCellWidget(
+                linha, 2, self.criar_widget_qtde(linha, item["quantidade"])
+            )
 
-        self.total.setText(
-            f"TOTAL: R$ {total:.2f}"
+            self.tabela.setItem(
+                linha, 3, QTableWidgetItem(_formatar_moeda(item["preco"]))
+            )
+
+            self.tabela.setItem(
+                linha, 4, QTableWidgetItem(_formatar_moeda(subtotal))
+            )
+
+            self.tabela.setCellWidget(
+                linha, 5, self.criar_widget_excluir(linha)
+            )
+
+        self._recalcular_totais()
+        self.campo_codigo.setFocus()
+
+    def _recalcular_totais(self):
+
+        subtotal = sum(item["preco"] * item["quantidade"] for item in self.itens)
+
+        self.desconto_valor = _parse_valor(self.campo_desconto.text())
+        self.acrescimo_valor = _parse_valor(self.campo_acrescimo.text())
+
+        total = max(0.0, subtotal - self.desconto_valor + self.acrescimo_valor)
+
+        self.lbl_itens_valor.setText(str(len(self.itens)))
+        self.total.setText(_formatar_moeda(total))
+
+        if self.desconto_valor or self.acrescimo_valor:
+
+            partes = [f"Subtotal {_formatar_moeda(subtotal)}"]
+
+            if self.desconto_valor:
+                partes.append(f"desconto -{_formatar_moeda(self.desconto_valor)}")
+
+            if self.acrescimo_valor:
+                partes.append(f"acréscimo +{_formatar_moeda(self.acrescimo_valor)}")
+
+            self.lbl_subtotal_info.setText("  ·  ".join(partes))
+            self.lbl_subtotal_info.setVisible(True)
+
+        else:
+            self.lbl_subtotal_info.setVisible(False)
+
+        return total
+
+    # ==================================================
+    # WIDGETS DE QUANTIDADE / EXCLUIR (por linha)
+    # ==================================================
+
+    def criar_widget_qtde(self, linha, quantidade):
+
+        widget = QWidget()
+
+        caixa = QHBoxLayout(widget)
+        caixa.setContentsMargins(4, 2, 4, 2)
+        caixa.setSpacing(4)
+
+        estilo_botao = f"""
+            QPushButton {{
+                background:{tokens.FUNDO};
+                border-radius:4px;
+                font-weight:bold;
+                color:{tokens.TEXTO};
+            }}
+            QPushButton:hover {{
+                background:{tokens.BORDA};
+            }}
+        """
+
+        bt_menos = QPushButton("-")
+        bt_menos.setFixedSize(24, 24)
+        bt_menos.setCursor(Qt.PointingHandCursor)
+        bt_menos.setStyleSheet(estilo_botao)
+        bt_menos.clicked.connect(
+            lambda: self.alterar_quantidade(linha, -1)
         )
 
-        self.tabela.blockSignals(False)
+        lbl_qtde = QLabel(str(quantidade))
+        lbl_qtde.setAlignment(Qt.AlignCenter)
+        lbl_qtde.setFixedWidth(24)
+        lbl_qtde.setStyleSheet(
+            f"background:transparent; color:{tokens.TEXTO}; font-weight:bold;"
+        )
 
-    # ==================================================
-    # ITEM ALTERADO (EDIÇÃO DE QUANTIDADE)
-    # ==================================================
+        bt_mais = QPushButton("+")
+        bt_mais.setFixedSize(24, 24)
+        bt_mais.setCursor(Qt.PointingHandCursor)
+        bt_mais.setStyleSheet(estilo_botao)
+        bt_mais.clicked.connect(
+            lambda: self.alterar_quantidade(linha, 1)
+        )
 
-    def item_alterado(self, item):
+        caixa.addWidget(bt_menos)
+        caixa.addWidget(lbl_qtde)
+        caixa.addWidget(bt_mais)
+        caixa.addStretch()
 
-        linha = item.row()
-        coluna = item.column()
+        return widget
 
-        if linha >= len(self.itens) or coluna != 2:
-            return
+    def criar_widget_excluir(self, linha):
 
-        try:
-            quantidade = int(item.text())
+        widget = QWidget()
 
-            if quantidade <= 0:
-                quantidade = 1
+        caixa = QHBoxLayout(widget)
+        caixa.setContentsMargins(0, 0, 0, 0)
 
-            self.itens[linha]["quantidade"] = quantidade
+        bt_excluir = QPushButton()
+        bt_excluir.setFixedSize(28, 28)
+        bt_excluir.setCursor(Qt.PointingHandCursor)
+        bt_excluir.setIcon(icone("trash-2", cor=tokens.TEXTO_TERCIARIO, tamanho=15))
+        bt_excluir.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent;
+                border:none;
+                border-radius:6px;
+            }}
+            QPushButton:hover {{
+                background:{tokens.ERRO_CLARO};
+            }}
+        """)
+        bt_excluir.clicked.connect(
+            lambda: self.remover_item(linha)
+        )
 
-            self.atualizar_tabela()
+        caixa.addWidget(bt_excluir)
 
-        except Exception:
-            QMessageBox.warning(
-                self,
-                "Aviso",
-                "Quantidade inválida."
-            )
+        return widget
 
-            self.atualizar_tabela()
+    def alterar_quantidade(self, linha, delta):
 
-    # ==================================================
-    # REMOVER ITEM SELECIONADO (DELETE)
-    # ==================================================
-
-    def remover_item_selecionado(self):
-
-        linha = self.tabela.currentRow()
-
-        if linha < 0 or linha >= len(self.itens):
-            return
-
-        del self.itens[linha]
-
-        self.atualizar_tabela()
-
-    # ==================================================
-    # +/- QUANTIDADE DO ITEM SELECIONADO
-    # ==================================================
-
-    def aumentar_quantidade_selecionada(self):
-        self._alterar_quantidade_selecionada(1)
-
-    def diminuir_quantidade_selecionada(self):
-        self._alterar_quantidade_selecionada(-1)
-
-    def _alterar_quantidade_selecionada(self, delta):
-
-        linha = self.tabela.currentRow()
-
-        if linha < 0 or linha >= len(self.itens):
+        if linha >= len(self.itens):
             return
 
         nova_quantidade = self.itens[linha]["quantidade"] + delta
 
         if nova_quantidade <= 0:
+            self.remover_item(linha)
             return
 
         self.itens[linha]["quantidade"] = nova_quantidade
 
         self.atualizar_tabela()
 
-        self.tabela.selectRow(linha)
+    def remover_item(self, linha):
+
+        if linha >= len(self.itens):
+            return
+
+        del self.itens[linha]
+
+        self.atualizar_tabela()
 
     # ==================================================
     # CANCELAR VENDA
@@ -694,20 +1159,260 @@ class PDV(QWidget):
         if resposta == QMessageBox.No:
             return
 
+        self.limpar_venda()
+
+    def limpar_venda(self):
+
         self.itens.clear()
 
         self.tabela.setRowCount(0)
 
-        self.total.setText(
-            "TOTAL: R$ 0,00"
-        )
+        self.limpar_cliente()
 
-        self.codigo.clear()
+        self.campo_desconto.setText("")
+        self.campo_acrescimo.setText("")
+        self.bloco_ajuste.setVisible(False)
 
-        self.codigo.setFocus()
+        self.lbl_itens_valor.setText("0")
+
+        self.total.setText("R$ 0,00")
+        self.lbl_subtotal_info.setVisible(False)
+
+        self.campo_codigo.setFocus()
 
     # ==================================================
-    # FINALIZAR VENDA
+    # VENDA SUSPENSA (pré-venda) — só em memória, some se o app
+    # for fechado; sobrevive a navegar pra outra tela porque o
+    # widget PDV nunca é recriado enquanto o app está aberto.
+    # ==================================================
+
+    def suspender_venda(self):
+
+        if not self.itens:
+            QMessageBox.warning(
+                self, "Aviso", "Não há itens no carrinho pra suspender."
+            )
+            return
+
+        rotulo = f"Venda {len(self.vendas_suspensas) + 1}"
+
+        if self.cliente_nome:
+            rotulo += f" — {self.cliente_nome}"
+
+        self.vendas_suspensas.append({
+            "rotulo": rotulo,
+            "itens": [dict(item) for item in self.itens],
+            "cliente_id": self.cliente_id,
+            "cliente_nome": self.cliente_nome,
+            "desconto_texto": self.campo_desconto.text(),
+            "acrescimo_texto": self.campo_acrescimo.text(),
+            "hora": datetime.now(),
+        })
+
+        self.limpar_venda()
+        self._atualizar_botao_retomar()
+
+        QMessageBox.information(
+            self,
+            "Venda suspensa",
+            f'"{rotulo}" foi suspensa. Use "Vendas Suspensas" pra '
+            "retomar de onde parou.",
+        )
+
+    def abrir_vendas_suspensas(self):
+
+        dialogo = VendasSuspensasDialog(self.vendas_suspensas, parent=self)
+
+        if dialogo.exec() != QDialog.Accepted or dialogo.indice_selecionado is None:
+            return
+
+        if dialogo.acao == "excluir":
+            del self.vendas_suspensas[dialogo.indice_selecionado]
+            self._atualizar_botao_retomar()
+            return
+
+        if self.itens:
+            QMessageBox.warning(
+                self,
+                "Aviso",
+                "Finalize, cancele ou suspenda a venda atual antes de "
+                "retomar outra.",
+            )
+            return
+
+        venda = self.vendas_suspensas.pop(dialogo.indice_selecionado)
+
+        self.itens = venda["itens"]
+        self.atualizar_tabela()
+
+        if venda["cliente_id"]:
+            self.definir_cliente({
+                "id": venda["cliente_id"],
+                "nome": venda["cliente_nome"],
+            })
+        else:
+            self.limpar_cliente()
+
+        self.campo_desconto.setText(venda["desconto_texto"])
+        self.campo_acrescimo.setText(venda["acrescimo_texto"])
+        self.bloco_ajuste.setVisible(
+            bool(venda["desconto_texto"] or venda["acrescimo_texto"])
+        )
+
+        self._atualizar_botao_retomar()
+
+    def _atualizar_botao_retomar(self):
+
+        total = len(self.vendas_suspensas)
+
+        self.bt_retomar.setText(
+            f"Vendas Suspensas ({total})" if total else "Vendas Suspensas"
+        )
+        self.bt_retomar.setEnabled(total > 0)
+
+    # ==================================================
+    # ORÇAMENTO — imprime/exporta o carrinho atual sem finalizar a
+    # venda. Não fica salvo nem listável em nenhum lugar: se virar
+    # venda de verdade, é só continuar normalmente e ir em "Pagar".
+    # ==================================================
+
+    def imprimir_orcamento(self):
+
+        if not self.itens:
+            QMessageBox.warning(
+                self, "Aviso", "Não há itens no carrinho pra gerar um orçamento."
+            )
+            return
+
+        documento = self._montar_documento_orcamento()
+
+        janela = QDialog(self)
+        janela.setWindowTitle("Orçamento")
+        janela.setFixedSize(360, 230)
+        janela.setStyleSheet(f"background:{tokens.FUNDO};")
+
+        layout = QVBoxLayout(janela)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(12)
+
+        lbl = QLabel(
+            "O orçamento não gera nenhuma venda — é só um documento "
+            "pra levar ou enviar ao cliente."
+        )
+        lbl.setWordWrap(True)
+        lbl.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
+        layout.addWidget(lbl)
+
+        bt_imprimir = BotaoPrimario("Imprimir", icone_nome="printer")
+        bt_imprimir.clicked.connect(
+            lambda: self._imprimir_documento(documento, janela)
+        )
+
+        bt_pdf = BotaoSecundario("Salvar PDF")
+        bt_pdf.clicked.connect(lambda: self._salvar_pdf_documento(documento))
+
+        bt_fechar = BotaoSecundario("Fechar")
+        bt_fechar.clicked.connect(janela.accept)
+
+        layout.addWidget(bt_imprimir)
+        layout.addWidget(bt_pdf)
+        layout.addWidget(bt_fechar)
+
+        janela.exec()
+
+    def _montar_documento_orcamento(self):
+
+        config = configuracoes()
+        nome_loja = config.get("nome_loja") or "Loja"
+
+        subtotal = sum(item["preco"] * item["quantidade"] for item in self.itens)
+        total = max(0.0, subtotal - self.desconto_valor + self.acrescimo_valor)
+
+        linhas_itens = "".join(
+            "<tr>"
+            f"<td style='padding:4px 8px;'>{item['nome']}</td>"
+            f"<td style='padding:4px 8px; text-align:center;'>{item['quantidade']}</td>"
+            f"<td style='padding:4px 8px; text-align:right;'>{_formatar_moeda(item['preco'])}</td>"
+            f"<td style='padding:4px 8px; text-align:right;'>"
+            f"{_formatar_moeda(item['preco'] * item['quantidade'])}</td>"
+            "</tr>"
+            for item in self.itens
+        )
+
+        cliente_linha = (
+            f"<p>Cliente: {self.cliente_nome}</p>" if self.cliente_nome else ""
+        )
+
+        html = f"""
+        <html>
+        <body style="font-family: Arial; font-size: 13px; color:#1E293B;">
+            <h2 style="margin-bottom:0;">{nome_loja}</h2>
+            <p style="color:#64748B; margin-top:2px;">
+                Orçamento — {datetime.now().strftime('%d/%m/%Y %H:%M')}
+            </p>
+            {cliente_linha}
+            <table style="width:100%; border-collapse:collapse; margin-top:12px;">
+                <tr style="background:#F1F5F9;">
+                    <th style="padding:4px 8px; text-align:left;">Produto</th>
+                    <th style="padding:4px 8px;">Qtd</th>
+                    <th style="padding:4px 8px; text-align:right;">Unitário</th>
+                    <th style="padding:4px 8px; text-align:right;">Subtotal</th>
+                </tr>
+                {linhas_itens}
+            </table>
+            <h3 style="text-align:right; margin-top:16px;">
+                Total: {_formatar_moeda(total)}
+            </h3>
+            <p style="color:#94A3B8; font-size:11px; margin-top:24px;">
+                Este orçamento não tem valor fiscal e não gera nenhuma venda.
+                Os valores podem mudar até a confirmação da compra.
+            </p>
+        </body>
+        </html>
+        """
+
+        documento = QTextDocument()
+        documento.setHtml(html)
+
+        return documento
+
+    def _imprimir_documento(self, documento, parent):
+
+        printer = QPrinter(QPrinter.HighResolution)
+        dialogo = QPrintDialog(printer, parent)
+
+        if dialogo.exec() != QPrintDialog.Accepted:
+            return
+
+        documento.print_(printer)
+
+    def _salvar_pdf_documento(self, documento):
+
+        caminho, _ = QFileDialog.getSaveFileName(
+            self, "Salvar Orçamento", "orcamento.pdf", "Arquivo PDF (*.pdf)",
+        )
+
+        if not caminho:
+            return
+
+        if not caminho.lower().endswith(".pdf"):
+            caminho += ".pdf"
+
+        printer = QPrinter(QPrinter.HighResolution)
+        printer.setOutputFormat(QPrinter.PdfFormat)
+        printer.setOutputFileName(caminho)
+
+        documento.print_(printer)
+
+        QMessageBox.information(
+            self, "Sucesso", "Orçamento salvo em PDF com sucesso."
+        )
+
+    # ==================================================
+    # FINALIZAR VENDA (PAGAR - F3)
     # ==================================================
 
     def finalizar_venda(self):
@@ -721,15 +1426,19 @@ class PDV(QWidget):
 
             return
 
-        total = sum(
-            item["preco"] * item["quantidade"]
-            for item in self.itens
-        )
+        total = self._recalcular_totais()
 
-        tela = PagamentoWindow(total)
+        tela = PagamentoWindow(
+            total,
+            self.itens,
+            cliente_id=self.cliente_id,
+            cliente_nome=self.cliente_nome,
+        )
 
         if tela.exec() != QDialog.Accepted:
             return
+
+        desconto_liquido = self.desconto_valor - self.acrescimo_valor
 
         try:
 
@@ -746,57 +1455,32 @@ class PDV(QWidget):
                 itens=self.itens,
                 forma_pagamento=tela.forma_pagamento,
                 cliente_id=tela.cliente_id,
-                desconto=0,
-                observacao=None,
-                data_vencimento=data_vencimento,
+                desconto=desconto_liquido,
+                observacao=tela.observacao.text().strip() or None,
+                data_vencimento=None,
+                forma_pagamento_2=tela.forma_pagamento_2,
+                valor_forma_2=(
+                    tela.valor_forma_2 if tela.forma_pagamento_2 else None
+                ),
             )
 
             if response.status_code == 201:
 
-                venda = response.json()
+                venda_criada = response.json()
 
-                if tela.forma_pagamento == "PRAZO" and tela.valor_entrada > 0:
-                    # Entrada paga no ato abate o fiado imediatamente,
-                    # já que a venda inteira foi lançada como COMPRA.
-                    registrar_pagamento(
-                        cliente_id=tela.cliente_id,
-                        valor=tela.valor_entrada,
-                        descricao=f"Entrada na venda #{venda['id']}",
-                    )
-
-                impressora = None
-
-                preferencia = (
-                    buscar_configuracoes().get("impressao_comprovante")
-                    or "perguntar"
+                concluida = VendaConcluidaDialog(
+                    venda_criada["id"],
+                    total,
+                    self.itens,
+                    tela.forma_pagamento,
+                    cliente_nome=tela.cliente_nome,
+                    forma_pagamento_2=tela.forma_pagamento_2,
+                    valor_forma_2=tela.valor_forma_2,
+                    parent=self,
                 )
+                concluida.exec()
 
-                deve_imprimir = preferencia == "sempre"
-
-                if preferencia == "perguntar":
-                    resposta = QMessageBox.question(
-                        self,
-                        "Imprimir Comprovante",
-                        "Deseja imprimir o comprovante desta venda?",
-                        QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.Yes,
-                    )
-                    deve_imprimir = resposta == QMessageBox.Yes
-
-                if deve_imprimir:
-                    impressora = self.imprimir_comprovante(venda, tela)
-
-                self.itens.clear()
-
-                self.tabela.setRowCount(0)
-
-                self.total.setText(
-                    "TOTAL: R$ 0,00"
-                )
-
-                self.codigo.clear()
-
-                self.codigo.setFocus()
+                self.limpar_venda()
 
                 self.carregar_produtos()
 
@@ -839,129 +1523,3 @@ class PDV(QWidget):
                 "Erro",
                 str(e)
             )
-
-    # ==================================================
-    # IMPRIMIR COMPROVANTE
-    # ==================================================
-
-    def imprimir_comprovante(self, venda, tela):
-
-        total = sum(
-            item["preco"] * item["quantidade"]
-            for item in self.itens
-        )
-
-        linhas_itens = ""
-
-        for item in self.itens:
-            subtotal = item["preco"] * item["quantidade"]
-
-            linhas_itens += (
-                "<tr>"
-                f"<td>{item['nome']}</td>"
-                f"<td align='center'>{item['quantidade']}</td>"
-                f"<td align='right'>R$ {item['preco']:.2f}</td>"
-                f"<td align='right'>R$ {subtotal:.2f}</td>"
-                "</tr>"
-            )
-
-        cliente_html = ""
-
-        if tela.cliente_id:
-            cliente_html = f"<p>Cliente: {tela.cliente_nome}</p>"
-
-        entrada_html = ""
-
-        if tela.forma_pagamento == "PRAZO" and tela.valor_entrada > 0:
-            entrada_html = (
-                f"<p>Entrada paga: R$ {tela.valor_entrada:.2f} — "
-                f"Restante no fiado: R$ {total - tela.valor_entrada:.2f}</p>"
-            )
-
-        forma = FORMAS_PAGAMENTO_LABEL.get(
-            tela.forma_pagamento, tela.forma_pagamento
-        )
-
-        config = buscar_configuracoes()
-        nome_loja = config.get("nome_loja") or "VERTEX ERP"
-
-        cabecalho_loja = f"<h2 style='text-align:center;'>{nome_loja}</h2>"
-
-        logo_bytes = buscar_logo_bytes()
-
-        if logo_bytes:
-            logo_base64 = base64.b64encode(logo_bytes).decode("ascii")
-            cabecalho_loja = (
-                "<p style='text-align:center;'>"
-                f"<img src='data:image/png;base64,{logo_base64}' "
-                "height='60'></p>"
-            ) + cabecalho_loja
-
-        dados_loja_html = ""
-
-        detalhes_loja = " • ".join(
-            filter(None, [config.get("cnpj_cpf"), config.get("telefone")])
-        )
-
-        if detalhes_loja:
-            dados_loja_html += (
-                f"<p style='text-align:center;'>{detalhes_loja}</p>"
-            )
-
-        if config.get("endereco"):
-            dados_loja_html += (
-                f"<p style='text-align:center;'>{config['endereco']}</p>"
-            )
-
-        html = f"""
-        {cabecalho_loja}
-        {dados_loja_html}
-        <p style='text-align:center;'>Comprovante de Venda #{venda['id']}</p>
-        <p>Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
-        {cliente_html}
-        <table width='100%' cellspacing='0' cellpadding='4'>
-            <tr>
-                <th align='left'>Produto</th>
-                <th align='center'>Qtde</th>
-                <th align='right'>Unitário</th>
-                <th align='right'>Subtotal</th>
-            </tr>
-            {linhas_itens}
-        </table>
-        <h3 style='text-align:right;'>TOTAL: R$ {total:.2f}</h3>
-        <p>Forma de Pagamento: {forma}</p>
-        {entrada_html}
-        <p style='text-align:center;'>Obrigado pela preferência!</p>
-        """
-
-        try:
-            impressora_padrao = QPrinterInfo.defaultPrinter()
-
-            if impressora_padrao.isNull():
-                QMessageBox.warning(
-                    self,
-                    "Impressão",
-                    "Nenhuma impressora padrão configurada no Windows. "
-                    "O comprovante não foi impresso."
-                )
-                return
-
-            printer = QPrinter(
-                impressora_padrao, QPrinter.HighResolution
-            )
-
-            documento = QTextDocument()
-            documento.setHtml(html)
-            documento.print_(printer)
-
-            return impressora_padrao.printerName()
-
-        except Exception as e:
-
-            QMessageBox.warning(
-                self,
-                "Impressão",
-                f"Não foi possível imprimir o comprovante.\n\n{e}"
-            )
-
-            return None

@@ -1,41 +1,14 @@
-from services.api import get, post, delete
+from services.api import get, post
 
-
-# ==========================================
-# LISTAR
-# ==========================================
 
 def listar_vendas():
 
-    response = get("/vendas")
+    response = get("/vendas/")
 
     if response.status_code != 200:
         return []
 
     return response.json()
-
-
-# ==========================================
-# BUSCAR
-# ==========================================
-
-def buscar_venda(venda_id):
-
-    response = get(f"/vendas/{venda_id}")
-
-    if response.status_code != 200:
-        return None
-
-    return response.json()
-
-
-# ==========================================
-# CANCELAR
-# ==========================================
-
-def cancelar_venda(venda_id):
-
-    return delete(f"/vendas/{venda_id}")
 
 
 def finalizar_venda(
@@ -45,6 +18,8 @@ def finalizar_venda(
     desconto=0,
     observacao=None,
     data_vencimento=None,
+    forma_pagamento_2=None,
+    valor_forma_2=None,
 ):
 
     dados = {
@@ -52,6 +27,8 @@ def finalizar_venda(
         "observacao": observacao,
         "desconto": desconto,
         "forma_pagamento": forma_pagamento,
+        "forma_pagamento_2": forma_pagamento_2,
+        "valor_forma_2": valor_forma_2,
         "data_vencimento": data_vencimento,
         "itens": [],
     }

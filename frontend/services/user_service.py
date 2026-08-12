@@ -8,10 +8,15 @@ def listar_usuarios():
     if response.status_code != 200:
         return []
 
-    return response.json()["data"]
+    return response.json().get("data", [])
 
 
-def cadastrar_usuario(nome, email, senha):
+def atualizar_usuario(user_id, dados):
+
+    return put(f"/users/{user_id}", dados)
+
+
+def criar_usuario(nome, email, senha):
 
     return post(
         "/users/",
@@ -21,13 +26,3 @@ def cadastrar_usuario(nome, email, senha):
             "senha": senha,
         },
     )
-
-
-def definir_admin(user_id, admin):
-
-    return put(f"/users/{user_id}/admin", {"admin": admin})
-
-
-def definir_ativo(user_id, ativo):
-
-    return put(f"/users/{user_id}/ativo", {"ativo": ativo})

@@ -46,29 +46,3 @@ class MovimentoCaixaRepository:
             .all()
         )
 
-    @staticmethod
-    def buscar_movimento_venda(db: Session, venda_id: int):
-        return (
-            db.query(MovimentoCaixa)
-            .filter(
-                MovimentoCaixa.venda_id == venda_id,
-                MovimentoCaixa.tipo == "VENDA",
-            )
-            .first()
-        )
-
-    @staticmethod
-    def listar_por_tipo(
-        db: Session,
-        tipo: str,
-        skip: int = 0,
-        limit: int = 100,
-    ):
-        return (
-            db.query(MovimentoCaixa)
-            .filter(MovimentoCaixa.tipo == tipo)
-            .order_by(MovimentoCaixa.data.desc())
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )

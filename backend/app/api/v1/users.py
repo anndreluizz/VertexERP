@@ -1,15 +1,14 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, require_admin
+from app.auth.dependencies import (
+    get_current_user,
+    get_current_admin,
+    exigir_admin_apos_primeiro_usuario,
+)
 from app.core.responses import ApiResponse
 from app.database.session import SessionLocal
-from app.schemas.user import (
-    UserAdminUpdate,
-    UserAtivoUpdate,
-    UserCreate,
-    UserResponse,
-)
+from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.services.user_service import UserService
 
 router = APIRouter(
@@ -26,13 +25,26 @@ def get_db():
         db.close()
 
 
+@router.get("/existe")
+def existe_usuario(
+    db: Session = Depends(get_db),
+):
+    return ApiResponse.success(
+        data={"existe": UserService.existe_usuario(db)},
+        message="Verificação concluída.",
+    )
+
+
 @router.post("/")
 def criar_usuario(
     dados: UserCreate,
     db: Session = Depends(get_db),
-    usuario_logado=Depends(require_admin),
+    _autorizacao=Depends(exigir_admin_apos_primeiro_usuario),
 ):
-    usuario = UserService.criar_usuario(db, dados)
+    try:
+        usuario = UserService.criar_usuario(db, dados)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     return ApiResponse.success(
         data=UserResponse.from_orm(usuario).dict(),
@@ -45,7 +57,7 @@ def listar_usuarios(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(get_current_admin),
 ):
     usuarios = UserService.listar_usuarios(db, skip, limit)
 
@@ -58,41 +70,19 @@ def listar_usuarios(
     )
 
 
-@router.get("/me")
-def meu_perfil(
-    usuario=Depends(get_current_user),
-):
-    return ApiResponse.success(
-        data=UserResponse.from_orm(usuario).dict(),
-        message="Perfil carregado com sucesso.",
-    )
-
-
-@router.put("/{user_id}/admin")
-def definir_admin(
+@router.put("/{user_id}")
+def atualizar_usuario(
     user_id: int,
-    dados: UserAdminUpdate,
+    dados: UserUpdate,
     db: Session = Depends(get_db),
-    usuario=Depends(require_admin),
+    usuario=Depends(get_current_admin),
 ):
-    usuario_alvo = UserService.definir_admin(db, user_id, dados.admin)
+    try:
+        atualizado = UserService.atualizar(db, user_id, dados, usuario)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     return ApiResponse.success(
-        data=UserResponse.from_orm(usuario_alvo).dict(),
-        message="Permissão atualizada com sucesso.",
-    )
-
-
-@router.put("/{user_id}/ativo")
-def definir_ativo(
-    user_id: int,
-    dados: UserAtivoUpdate,
-    db: Session = Depends(get_db),
-    usuario=Depends(require_admin),
-):
-    usuario_alvo = UserService.definir_ativo(db, user_id, dados.ativo)
-
-    return ApiResponse.success(
-        data=UserResponse.from_orm(usuario_alvo).dict(),
-        message="Status atualizado com sucesso.",
+        data=UserResponse.from_orm(atualizado).dict(),
+        message="Usuário atualizado com sucesso.",
     )

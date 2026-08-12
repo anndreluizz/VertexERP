@@ -1,67 +1,40 @@
-import os
+import base64
 
 from sqlalchemy.orm import Session
 
-from app.repositories.configuracao_repository import (
-    ConfiguracaoRepository,
-)
-
-DIRETORIO_UPLOADS = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-    "uploads",
-)
+from app.models.configuracao import Configuracao
+from app.repositories.configuracao_repository import ConfiguracaoRepository
+from app.schemas.configuracao import ConfiguracaoUpdate
 
 
 class ConfiguracaoService:
 
     @staticmethod
     def buscar(db: Session):
-        return ConfiguracaoRepository.buscar(db)
 
-    @staticmethod
-    def atualizar(db: Session, dados):
-        config = ConfiguracaoRepository.buscar(db)
+        configuracao = ConfiguracaoRepository.buscar(db)
 
-        for campo, valor in dados.dict(exclude_unset=True).items():
-            setattr(config, campo, valor)
-
-        return ConfiguracaoRepository.salvar(db, config)
-
-    @staticmethod
-    def salvar_logo(db: Session, nome_arquivo: str, conteudo: bytes):
-        if not conteudo:
-            raise Exception("Arquivo de logo vazio.")
-
-        os.makedirs(DIRETORIO_UPLOADS, exist_ok=True)
-
-        extensao = os.path.splitext(nome_arquivo)[1].lower() or ".png"
-
-        if extensao not in (".png", ".jpg", ".jpeg"):
-            raise Exception(
-                "Formato de imagem não suportado. Use PNG ou JPG."
+        if not configuracao:
+            configuracao = ConfiguracaoRepository.criar(
+                db,
+                Configuracao()
             )
 
-        nome_salvo = f"logo{extensao}"
-        caminho = os.path.join(DIRETORIO_UPLOADS, nome_salvo)
-
-        with open(caminho, "wb") as arquivo:
-            arquivo.write(conteudo)
-
-        config = ConfiguracaoRepository.buscar(db)
-        config.logo_filename = nome_salvo
-
-        return ConfiguracaoRepository.salvar(db, config)
+        return configuracao
 
     @staticmethod
-    def caminho_logo(db: Session) -> str | None:
-        config = ConfiguracaoRepository.buscar(db)
+    def atualizar(db: Session, dados: ConfiguracaoUpdate):
 
-        if not config.logo_filename:
-            return None
+        configuracao = ConfiguracaoService.buscar(db)
 
-        caminho = os.path.join(DIRETORIO_UPLOADS, config.logo_filename)
+        campos = dados.dict(exclude_unset=True, exclude={"logo_base64"})
 
-        if not os.path.isfile(caminho):
-            return None
+        for campo, valor in campos.items():
+            setattr(configuracao, campo, valor)
 
-        return caminho
+        # mesmo padrao do Cliente.foto_base64: so troca o logo se veio
+        # um valor de verdade, senao mantem o que ja estava salvo
+        if dados.logo_base64:
+            configuracao.logo = base64.b64decode(dados.logo_base64)
+
+        return ConfiguracaoRepository.atualizar(db, configuracao)

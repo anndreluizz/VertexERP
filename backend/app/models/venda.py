@@ -19,6 +19,13 @@ class Venda(Base):
         nullable=True
     )
 
+    # quem vendeu — nullable pra nao quebrar vendas ja existentes (nunca
+    # tiveram esse dado) e pra registros futuros sem usuario disponivel
+    usuario_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=True
+    )
+
     data: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow
@@ -50,6 +57,20 @@ class Venda(Base):
         default="AVISTA"
     )
 
+    # pagamento dividido (no maximo 2 formas por venda): a forma
+    # principal usa valor_total - valor_forma_2, e essa segunda forma
+    # cobre o restante — usado pra casos tipo "parte dinheiro parte
+    # pix" ou "entrada + resto no fiado"
+    forma_pagamento_2: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    valor_forma_2: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
     # NOVO
     data_vencimento: Mapped[datetime | None] = mapped_column(
         DateTime,
@@ -71,3 +92,25 @@ class Venda(Base):
         back_populates="venda",
         cascade="all, delete-orphan"
     )
+
+    usuario = relationship("User")
+
+    @property
+    def usuario_nome(self) -> str | None:
+        return self.usuario.nome if self.usuario else None
+
+    @property
+    def lucro(self) -> float | None:
+        """Valor total (ja com desconto aplicado) menos o custo dos
+        produtos vendidos -- so pra dar visibilidade de margem no
+        detalhe da venda; None se algum item nao tiver produto/custo
+        disponivel (produto removido, por exemplo)."""
+
+        try:
+            custo_total = sum(
+                (item.produto.preco_custo or 0) * item.quantidade
+                for item in self.itens
+            )
+            return self.valor_total - custo_total
+        except Exception:
+            return None

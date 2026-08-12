@@ -1,18 +1,9 @@
-from services.api import (
-    get,
-    post,
-    put,
-    delete,
-)
+from services.api import get, post, put, delete
 
-
-# ==========================================
-# LISTAR
-# ==========================================
 
 def listar_clientes():
 
-    response = get("/clientes")
+    response = get("/clientes/")
 
     if response.status_code != 200:
         return []
@@ -20,55 +11,59 @@ def listar_clientes():
     return response.json()
 
 
-# ==========================================
-# BUSCAR
-# ==========================================
+def cadastrar_cliente(dados):
 
-def buscar_cliente(cliente_id):
+    return post("/clientes/", dados)
 
-    response = get(
-        f"/clientes/{cliente_id}"
-    )
+
+def atualizar_cliente(cliente_id, dados):
+
+    return put(f"/clientes/{cliente_id}", dados)
+
+
+def excluir_cliente(cliente_id):
+
+    return delete(f"/clientes/{cliente_id}")
+
+
+def reativar_cliente(cliente_id):
+
+    return post(f"/clientes/{cliente_id}/reativar", {})
+
+
+def enviar_whatsapp_texto(cliente_id, texto):
+    """Manda uma mensagem de texto livre pro cliente via WhatsApp
+    (extrato completo, cobrança, saldo devedor, haver, cadastro --
+    ver menu 'WhatsApp ▾' da ficha do cliente)."""
+
+    return post(f"/clientes/{cliente_id}/whatsapp", {"texto": texto})
+
+
+def obter_foto_cliente(cliente_id):
+
+    response = get(f"/clientes/{cliente_id}/foto")
 
     if response.status_code != 200:
         return None
 
+    return response.content
+
+
+def listar_observacoes_cliente(cliente_id):
+
+    response = get(f"/clientes/{cliente_id}/observacoes")
+
+    if response.status_code != 200:
+        return []
+
     return response.json()
 
 
-# ==========================================
-# CADASTRAR
-# ==========================================
+def criar_observacao_cliente(cliente_id, texto):
 
-def cadastrar_cliente(dados):
-
-    return post(
-        "/clientes",
-        dados,
-    )
+    return post(f"/clientes/{cliente_id}/observacoes", {"texto": texto})
 
 
-# ==========================================
-# ATUALIZAR
-# ==========================================
+def excluir_observacao_cliente(cliente_id, observacao_id):
 
-def atualizar_cliente(
-    cliente_id,
-    dados,
-):
-
-    return put(
-        f"/clientes/{cliente_id}",
-        dados,
-    )
-
-
-# ==========================================
-# EXCLUIR
-# ==========================================
-
-def excluir_cliente(cliente_id):
-
-    return delete(
-        f"/clientes/{cliente_id}"
-    )
+    return delete(f"/clientes/{cliente_id}/observacoes/{observacao_id}")

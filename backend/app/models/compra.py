@@ -41,7 +41,7 @@ class Compra(Base):
 
     forma_pagamento: Mapped[str] = mapped_column(
         String(20),
-        default="DINHEIRO",
+        default="AVISTA",
     )
 
     data_vencimento: Mapped[datetime | None] = mapped_column(

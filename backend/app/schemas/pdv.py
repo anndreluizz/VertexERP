@@ -10,3 +10,5 @@ class ProdutoPDV(BaseModel):
     nome: str
     preco: Decimal
     estoque: int
+    tem_foto: bool = False
+    favorito: bool = False

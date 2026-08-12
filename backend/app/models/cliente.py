@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import String, Boolean, DateTime
+from sqlalchemy import String, Boolean, DateTime, Date, Float, LargeBinary
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -53,7 +53,47 @@ class Cliente(Base):
         DateTime,
         default=datetime.utcnow
     )
+
+    data_nascimento: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True
+    )
+
+    limite_credito: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True
+    )
+
+    foto: Mapped[bytes | None] = mapped_column(
+        LargeBinary,
+        nullable=True
+    )
+
+    # Quando foi mandado o ultimo lembrete de fiado parado via
+    # WhatsApp -- evita mandar o mesmo aviso todo dia enquanto o
+    # cliente nao paga (ver whatsapp_lembrete_service.py).
+    whatsapp_fiado_avisado_em: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True
+    )
+
+    @property
+    def tem_foto(self) -> bool:
+        return self.foto is not None
+
     vendas = relationship(
         "Venda",
         back_populates="cliente"
+    )
+
+    movimentos_fiado = relationship(
+        "MovimentoFiado",
+        back_populates="cliente"
+    )
+
+    observacoes = relationship(
+        "ClienteObservacao",
+        back_populates="cliente",
+        cascade="all, delete-orphan",
+        order_by="ClienteObservacao.criado_em.desc()",
     )

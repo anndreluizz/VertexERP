@@ -1,40 +1,38 @@
 from datetime import datetime
-from decimal import Decimal
 
 from pydantic import BaseModel
 
-from app.enums.tipo_movimento_fiado import TipoMovimentoFiado
 
-
-class PagamentoFiadoCreate(BaseModel):
+class MovimentoFiadoBase(BaseModel):
     cliente_id: int
-    valor: Decimal
+    venda_id: int | None = None
+    tipo: str
+    valor: float
     descricao: str | None = None
+    forma_pagamento: str | None = None
     data: datetime | None = None
 
 
-class CompraFiadoCreate(BaseModel):
-    cliente_id: int
-    valor: Decimal
+class MovimentoFiadoCreate(MovimentoFiadoBase):
+    pass
+
+
+class MovimentoFiadoUpdate(BaseModel):
+    # correcao de um lancamento errado -- so valor/descricao, o resto
+    # (tipo, cliente, forma de pagamento) nao muda depois de criado.
+    valor: float | None = None
     descricao: str | None = None
-    data: datetime | None = None
 
 
-class MovimentoFiadoResponse(BaseModel):
+class MovimentoFiadoResponse(MovimentoFiadoBase):
     id: int
-    cliente_id: int
-    venda_id: int | None
-    tipo: TipoMovimentoFiado
-    valor: Decimal
-    descricao: str | None
+    usuario_id: int
     data: datetime
 
     class Config:
         orm_mode = True
 
 
-class FichaClienteResponse(BaseModel):
+class SaldoFiadoResponse(BaseModel):
     cliente_id: int
-    nome: str
-    saldo_devedor: Decimal
-    movimentos: list[MovimentoFiadoResponse]
+    saldo: float

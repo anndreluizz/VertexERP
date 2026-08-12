@@ -1,18 +1,15 @@
-from fastapi import APIRouter, Depends, File, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, require_admin
+from app.auth.dependencies import get_current_user
 from app.database.session import SessionLocal
-from app.schemas.configuracao import (
-    ConfiguracaoResponse,
-    ConfiguracaoUpdate,
-)
+from app.schemas.configuracao import ConfiguracaoResponse, ConfiguracaoUpdate
 from app.services.configuracao_service import ConfiguracaoService
 
 router = APIRouter(
     prefix="/configuracoes",
-    tags=["Configurações"],
+    tags=["Configurações"]
 )
 
 
@@ -25,41 +22,33 @@ def get_db():
 
 
 @router.get("/", response_model=ConfiguracaoResponse)
-def buscar_configuracoes(
+def buscar_configuracao(
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(get_current_user)
 ):
     return ConfiguracaoService.buscar(db)
 
 
 @router.put("/", response_model=ConfiguracaoResponse)
-def atualizar_configuracoes(
+def atualizar_configuracao(
     dados: ConfiguracaoUpdate,
     db: Session = Depends(get_db),
-    usuario=Depends(require_admin),
+    usuario=Depends(get_current_user)
 ):
     return ConfiguracaoService.atualizar(db, dados)
 
 
-@router.post("/logo", response_model=ConfiguracaoResponse)
-async def enviar_logo(
-    arquivo: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    usuario=Depends(require_admin),
-):
-    conteudo = await arquivo.read()
-
-    return ConfiguracaoService.salvar_logo(db, arquivo.filename, conteudo)
-
-
 @router.get("/logo")
-def buscar_logo(
+def obter_logo(
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(get_current_user)
 ):
-    caminho = ConfiguracaoService.caminho_logo(db)
+    config = ConfiguracaoService.buscar(db)
 
-    if caminho is None:
-        raise Exception("Nenhuma logo cadastrada.")
+    if not config.logo:
+        raise HTTPException(
+            status_code=404,
+            detail="Loja sem logo cadastrado."
+        )
 
-    return FileResponse(caminho)
+    return Response(content=config.logo, media_type="image/png")

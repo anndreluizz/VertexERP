@@ -17,7 +17,7 @@ class MovimentoCaixaService:
         usuario_id: int,
     ):
 
-        caixa = CaixaRepository.buscar_aberto(db)
+        caixa = CaixaRepository.buscar_aberto(db, usuario_id)
 
         if not caixa:
             raise Exception("Não existe caixa aberto.")
@@ -65,21 +65,5 @@ class MovimentoCaixaService:
     ):
         return MovimentoCaixaRepository.listar_por_caixa(
             db,
-            caixa_id,
-            skip,
-            limit,
-        )
-
-    @staticmethod
-    def listar_por_tipo(
-        db: Session,
-        tipo: str,
-        skip: int = 0,
-        limit: int = 100,
-    ):
-        return MovimentoCaixaRepository.listar_por_tipo(
-            db,
-            tipo.upper(),
-            skip,
-            limit,
+            caixa_id
         )

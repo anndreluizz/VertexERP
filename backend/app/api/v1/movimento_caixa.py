@@ -84,27 +84,3 @@ def listar_por_caixa(
         MovimentoCaixaResponse.from_orm(m)
         for m in movimentos
     ]
-
-
-@router.get(
-    "/tipo/{tipo}",
-    response_model=list[MovimentoCaixaResponse],
-)
-def listar_por_tipo(
-    tipo: str,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
-    db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
-):
-    movimentos = MovimentoCaixaService.listar_por_tipo(
-        db,
-        tipo,
-        skip,
-        limit,
-    )
-
-    return [
-        MovimentoCaixaResponse.from_orm(m)
-        for m in movimentos
-    ]

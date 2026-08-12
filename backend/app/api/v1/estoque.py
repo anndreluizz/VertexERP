@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
@@ -7,7 +7,7 @@ from app.schemas.movimento_estoque import (
     MovimentoEstoqueCreate,
     MovimentoEstoqueResponse,
 )
-from app.services.estoque_service import EstoqueService
+from app.services.movimento_estoque_service import MovimentoEstoqueService
 
 router = APIRouter(
     prefix="/estoque",
@@ -23,38 +23,53 @@ def get_db():
         db.close()
 
 
-@router.post(
-    "/ajuste",
-    response_model=MovimentoEstoqueResponse,
-    status_code=201,
-)
-def ajustar_estoque(
+@router.post("/movimentos", response_model=MovimentoEstoqueResponse)
+def criar_movimento(
     dados: MovimentoEstoqueCreate,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    return EstoqueService.ajustar(db, dados, usuario.id)
+    try:
+        movimento = MovimentoEstoqueService.criar(
+            db,
+            dados,
+            usuario.id,
+        )
+
+        return MovimentoEstoqueResponse.from_orm(movimento)
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/movimentos", response_model=list[MovimentoEstoqueResponse])
 def listar_movimentos(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    return EstoqueService.listar(db, skip, limit)
+    movimentos = MovimentoEstoqueService.listar(db)
+
+    return [
+        MovimentoEstoqueResponse.from_orm(m)
+        for m in movimentos
+    ]
 
 
 @router.get(
-    "/movimentos/{produto_id}",
+    "/movimentos/produto/{produto_id}",
     response_model=list[MovimentoEstoqueResponse],
 )
-def listar_movimentos_por_produto(
+def listar_por_produto(
     produto_id: int,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    return EstoqueService.listar_por_produto(db, produto_id, skip, limit)
+    movimentos = MovimentoEstoqueService.listar_por_produto(
+        db,
+        produto_id,
+    )
+
+    return [
+        MovimentoEstoqueResponse.from_orm(m)
+        for m in movimentos
+    ]

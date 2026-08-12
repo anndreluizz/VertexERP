@@ -1,228 +1,783 @@
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QShortcut, QKeySequence, QColor
-from PySide6.QtWidgets import QMessageBox, QPushButton, QTableWidgetItem, QDialog
+from PySide6.QtWidgets import QMessageBox
 
-from telas.cadastro_cliente import CadastroClienteWindow
-from telas.ficha_cliente import FichaClienteWindow
-from services.cliente_service import (
-    listar_clientes,
-    cadastrar_cliente,
-    atualizar_cliente,
-    excluir_cliente,
+from telas.cadastro_cliente import CadastroClienteDialog
+from telas.ficha_cliente import FichaClienteDialog
+
+from services.api import configuracoes
+from services.cliente_service import listar_clientes, reativar_cliente
+from services.movimento_fiado_service import listar_movimentos
+from services.venda_service import listar_vendas
+from services import cliente_analise
+
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QShortcut, QKeySequence
+
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGridLayout,
+    QLabel,
+    QPushButton,
+    QFrame,
+    QScrollArea,
+    QDialog,
+    QComboBox,
 )
-from services.fiado_service import buscar_saldos
-from services.api import usuario_e_admin
-from widgets.base.base_crud_window import BaseCRUDWindow
+
+from design import tokens
+from design.icons import icone, icone_pixmap
+from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
 
 
-class Clientes(BaseCRUDWindow):
+# rótulo exibido -> chave interna do filtro
+FILTROS = [
+    ("Todos", "TODOS"),
+    ("Clientes Ativos", "ATIVOS"),
+    ("Sem Movimento", "SEM_MOVIMENTO"),
+    ("Inadimplentes", "INADIMPLENTES"),
+    ("Em Dia", "EM_DIA"),
+    ("Novos Clientes", "NOVOS"),
+]
 
-    titulo = "CLIENTES"
+# rótulo exibido -> chave interna da ordenação, na ordem que aparece no combo
+ORDENACOES = [
+    ("Último Movimento (mais recente primeiro)", "MOVIMENTO_RECENTE"),
+    ("Último Movimento (mais antigo primeiro)", "MOVIMENTO_ANTIGO"),
+    ("Última Compra", "ULTIMA_COMPRA"),
+    ("Maior Compra", "MAIOR_COMPRA"),
+    ("Maior Saldo Devedor", "MAIOR_SALDO"),
+    ("Nome (A-Z)", "NOME_AZ"),
+    ("Nome (Z-A)", "NOME_ZA"),
+    ("Cliente Mais Antigo", "CADASTRO_ANTIGO"),
+    ("Cliente Mais Novo", "CADASTRO_NOVO"),
+]
 
-    colunas = [
-        "Nome",
-        "CPF",
-        "Telefone",
-        "Endereço",
-        "Status",
-        "Saldo Devedor",
-    ]
+_CORES_PONTUACAO = {
+    "🔴": tokens.ERRO,
+    "🟠": tokens.ALERTA,
+    "🟡": tokens.ALERTA,
+    "🔵": tokens.PRIMARIA,
+    "🟢": tokens.SECUNDARIA,
+}
+
+
+class ClienteCard(QFrame):
+
+    clicado = Signal(dict)
+    reativar_solicitado = Signal(dict)
+
+    def __init__(self, cliente, saldo_fiado, pontuacao=""):
+
+        super().__init__()
+
+        self.cliente = cliente
+
+        self.setCursor(Qt.PointingHandCursor)
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {tokens.CARD};
+                border-radius: {tokens.RADIUS_LG}px;
+                border: 1px solid {tokens.BORDA};
+            }}
+            QFrame:hover {{
+                border: 1px solid {tokens.PRIMARIA};
+            }}
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
+
+        topo = QHBoxLayout()
+        topo.setSpacing(12)
+
+        avatar = Avatar(cliente.get("nome", ""), tamanho=44)
+
+        col_nome = QVBoxLayout()
+        col_nome.setSpacing(2)
+
+        linha_nome = QHBoxLayout()
+
+        nome = QLabel(cliente.get("nome") or "")
+        nome.setStyleSheet(f"""
+            background:transparent; border:none;
+            font-size:{tokens.TAMANHO_MD}px; font-weight:700; color:{tokens.TEXTO};
+        """)
+
+        ativo = cliente.get("ativo", True)
+
+        badge = Badge("Ativo" if ativo else "Inativo", "sucesso" if ativo else "erro")
+
+        linha_nome.addWidget(nome)
+        linha_nome.addStretch()
+        linha_nome.addWidget(badge)
+
+        contato = " · ".join(
+            filter(None, [cliente.get("telefone")])
+        ) or "Sem telefone"
+
+        lbl_contato = QLabel(contato)
+        lbl_contato.setStyleSheet(f"""
+            background:transparent; border:none;
+            font-size:{tokens.TAMANHO_SM}px; color:{tokens.TEXTO_SECUNDARIO};
+        """)
+
+        local = cliente.get("cidade") or cliente.get("endereco") or ""
+
+        col_nome.addLayout(linha_nome)
+        col_nome.addWidget(lbl_contato)
+
+        if local:
+            lbl_local = QLabel(local)
+            lbl_local.setStyleSheet(f"""
+                background:transparent; border:none;
+                font-size:{tokens.TAMANHO_SM}px; color:{tokens.TEXTO_SECUNDARIO};
+            """)
+            col_nome.addWidget(lbl_local)
+
+        topo.addWidget(avatar)
+        topo.addLayout(col_nome, stretch=1)
+
+        layout.addLayout(topo)
+
+        if pontuacao:
+
+            emoji = pontuacao.split(" ")[0]
+            cor = _CORES_PONTUACAO.get(emoji, tokens.TEXTO_SECUNDARIO)
+
+            lbl_pontuacao = QLabel(pontuacao)
+            lbl_pontuacao.setStyleSheet(f"""
+                background:transparent; border:none;
+                font-size:{tokens.TAMANHO_XS}px; font-weight:700; color:{cor};
+            """)
+            layout.addWidget(lbl_pontuacao)
+
+        linha = QFrame()
+        linha.setFixedHeight(1)
+        linha.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
+
+        layout.addWidget(linha)
+
+        rodape = QHBoxLayout()
+
+        if saldo_fiado > 0:
+            lbl_fiado = QLabel(f"Fiado: R$ {saldo_fiado:.2f}")
+            lbl_fiado.setStyleSheet(f"""
+                background:transparent; border:none;
+                font-size:{tokens.TAMANHO_SM}px; font-weight:700; color:{tokens.ERRO};
+            """)
+            rodape.addWidget(lbl_fiado)
+
+        rodape.addStretch()
+
+        if not ativo:
+            bt_reativar = QPushButton("Reativar")
+            bt_reativar.setCursor(Qt.PointingHandCursor)
+            bt_reativar.setStyleSheet(f"""
+                QPushButton {{
+                    background:{tokens.SECUNDARIA}; color:white;
+                    border:none; border-radius:{tokens.RADIUS_SM}px;
+                    padding:4px 12px; font-size:{tokens.TAMANHO_SM}px;
+                    font-weight:700;
+                }}
+                QPushButton:hover {{ background:{tokens.SECUNDARIA_HOVER}; }}
+            """)
+            bt_reativar.clicked.connect(
+                lambda: self.reativar_solicitado.emit(self.cliente)
+            )
+            rodape.addWidget(bt_reativar)
+
+        layout.addLayout(rodape)
+
+    def mousePressEvent(self, event):
+        self.clicado.emit(self.cliente)
+        super().mousePressEvent(event)
+
+
+class Clientes(QWidget):
+
+    voltar = Signal()
 
     def __init__(self):
         super().__init__()
-        # BaseCRUDWindow já chama self.carregar() no final do próprio __init__,
-        # então não é preciso chamar de novo aqui.
 
-        # Excluir é uma ação de administrador — operadores não veem o botão.
-        if not usuario_e_admin():
-            self.toolbar.bt_excluir.setVisible(False)
+        self.clientes = []
+        self.vendas_por_cliente = {}
+        self.agregados_por_cliente = {}
+        self.filtro_status = "TODOS"
+        self.ordenacao = "MOVIMENTO_RECENTE"
+        self.prazo_inadimplencia = cliente_analise.PRAZO_INADIMPLENCIA_PADRAO
 
-        # Botão extra: ficha de fiado do cliente (não faz parte do
-        # CrudToolbar padrão, só é usado nesta tela).
-        self.bt_ficha = QPushButton("📒 Ver Ficha")
-        self.bt_ficha.setStyleSheet("""
-            QPushButton{
-                background:#6A1B9A;
-                color:white;
-                font-weight:bold;
-                border:none;
-                border-radius:6px;
-                padding:6px 14px;
-            }
-            QPushButton:hover{
-                background:#4A148C;
-            }
+        self.setStyleSheet(f"background:{tokens.FUNDO};")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 20, 28, 20)
+        layout.setSpacing(16)
+
+        # ======================
+        # CABEÇALHO
+        # ======================
+
+        cabecalho = QHBoxLayout()
+        cabecalho.setSpacing(12)
+
+        self.bt_voltar = QPushButton()
+        self.bt_voltar.setFixedSize(36, 36)
+        self.bt_voltar.setCursor(Qt.PointingHandCursor)
+        self.bt_voltar.setIcon(icone("chevron-left", cor=tokens.TEXTO_SECUNDARIO, tamanho=18))
+        self.bt_voltar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD}; border:1px solid {tokens.BORDA};
+                border-radius:{tokens.RADIUS_SM}px;
+            }}
+            QPushButton:hover {{ background:{tokens.FUNDO}; }}
         """)
-        self.toolbar.layout().insertWidget(3, self.bt_ficha)
-        self.bt_ficha.clicked.connect(self.ver_ficha)
+        self.bt_voltar.clicked.connect(self.voltar.emit)
+
+        icone_titulo = QLabel()
+        icone_titulo.setFixedSize(36, 36)
+        icone_titulo.setAlignment(Qt.AlignCenter)
+        icone_titulo.setStyleSheet(f"""
+            background:{tokens.PRIMARIA_CLARA}; border-radius:{tokens.RADIUS_SM}px;
+        """)
+        icone_titulo.setPixmap(icone_pixmap("users", cor=tokens.PRIMARIA, tamanho=18))
+
+        col_titulo = QVBoxLayout()
+        col_titulo.setSpacing(0)
+
+        config = configuracoes()
+        nome_loja = config.get("nome_loja") or "Vertex ERP"
+
+        titulo = QLabel(nome_loja)
+        titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_LG}px;
+            font-weight:800; color:{tokens.TEXTO};
+        """)
+
+        subtitulo = QLabel("LOJA OPERACIONAL")
+        subtitulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            color:{tokens.SECUNDARIA_HOVER}; font-weight:700;
+        """)
+
+        col_titulo.addWidget(titulo)
+        col_titulo.addWidget(subtitulo)
+
+        self.bt_exportar = BotaoSecundario("Exportar Planilha", icone_nome="download")
+        self.bt_exportar.clicked.connect(self.exportar_em_breve)
+
+        self.bt_novo = BotaoPrimario("Novo Cliente", icone_nome="plus")
+        self.bt_novo.clicked.connect(self.novo_cliente)
+
+        cabecalho.addWidget(self.bt_voltar)
+        cabecalho.addWidget(icone_titulo)
+        cabecalho.addLayout(col_titulo)
+        cabecalho.addStretch()
+        cabecalho.addWidget(self.bt_exportar)
+        cabecalho.addWidget(self.bt_novo)
+
+        layout.addLayout(cabecalho)
+
+        # ======================
+        # CARDS DE RESUMO
+        # ======================
+
+        resumo_layout = QGridLayout()
+        resumo_layout.setSpacing(14)
+
+        self.card_total = CardKPI("Cadastros (Total)", "users", tokens.PRIMARIA)
+        self.card_ativos = CardKPI("Clientes Ativos", "check", tokens.SECUNDARIA)
+        self.card_sem_movimento = CardKPI("Sem Movimento", "alert-triangle", tokens.ALERTA)
+        self.card_inadimplentes = CardKPI("Inadimplentes", "alert-triangle", tokens.ERRO)
+        self.card_recebido_fiado = CardKPI("Recebido de Fiado", "wallet", tokens.SECUNDARIA)
+        self.card_a_receber = CardKPI("A Receber (Fiado em aberto)", "credit-card", tokens.ERRO)
+
+        resumo_layout.addWidget(self.card_total, 0, 0)
+        resumo_layout.addWidget(self.card_ativos, 0, 1)
+        resumo_layout.addWidget(self.card_sem_movimento, 0, 2)
+        resumo_layout.addWidget(self.card_inadimplentes, 0, 3)
+        resumo_layout.addWidget(self.card_recebido_fiado, 0, 4)
+        resumo_layout.addWidget(self.card_a_receber, 0, 5)
+
+        for coluna in range(6):
+            resumo_layout.setColumnStretch(coluna, 1)
+
+        layout.addLayout(resumo_layout)
+
+        # ======================
+        # BUSCA + FILTRO
+        # ======================
+
+        barra = QHBoxLayout()
+        barra.setSpacing(10)
+
+        self.pesquisa = CampoTexto("Buscar por nome, telefone ou CPF/CNPJ...")
+        self.pesquisa.textChanged.connect(self.filtrar_clientes)
+
+        barra.addWidget(self.pesquisa, stretch=1)
+
+        self.botoes_status = {}
+
+        for rotulo, chave in FILTROS:
+
+            bt = QPushButton(rotulo)
+            bt.setCheckable(True)
+            bt.setCursor(Qt.PointingHandCursor)
+            bt.setMinimumHeight(44)
+            bt.clicked.connect(
+                lambda checked, c=chave: self.selecionar_status(c)
+            )
+
+            self.botoes_status[chave] = bt
+            barra.addWidget(bt)
+
+        layout.addLayout(barra)
+
+        # ======================
+        # PRAZO DE INADIMPLÊNCIA + ORDENAÇÃO
+        # ======================
+
+        barra_ordenacao = QHBoxLayout()
+        barra_ordenacao.setSpacing(10)
+
+        lbl_prazo = QLabel("Prazo de inadimplência:")
+        lbl_prazo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+        """)
+
+        self.combo_prazo = QComboBox()
+        for dias in cliente_analise.PRAZOS_INADIMPLENCIA:
+            self.combo_prazo.addItem(f"{dias} dias", dias)
+        self.combo_prazo.setCurrentIndex(
+            cliente_analise.PRAZOS_INADIMPLENCIA.index(
+                cliente_analise.PRAZO_INADIMPLENCIA_PADRAO
+            )
+        )
+        self.combo_prazo.setMinimumHeight(34)
+        self.combo_prazo.currentIndexChanged.connect(self.alterar_prazo_inadimplencia)
+
+        barra_ordenacao.addWidget(lbl_prazo)
+        barra_ordenacao.addWidget(self.combo_prazo)
+
+        barra_ordenacao.addSpacing(20)
+
+        lbl_ordenar = QLabel("Ordenar por:")
+        lbl_ordenar.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+        """)
+        barra_ordenacao.addWidget(lbl_ordenar)
+
+        self.combo_ordenacao = QComboBox()
+        for rotulo, chave in ORDENACOES:
+            self.combo_ordenacao.addItem(rotulo, chave)
+        self.combo_ordenacao.setMinimumHeight(34)
+        self.combo_ordenacao.setMinimumWidth(260)
+        self.combo_ordenacao.currentIndexChanged.connect(self.alterar_ordenacao)
+
+        barra_ordenacao.addWidget(self.combo_ordenacao)
+
+        barra_ordenacao.addStretch()
+
+        layout.addLayout(barra_ordenacao)
+
+        # ======================
+        # GRID DE CLIENTES
+        # ======================
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+        )
+
+        self.grid_widget = QWidget()
+        self.grid_widget.setStyleSheet("background:transparent;")
+        self.grid_layout = QGridLayout(self.grid_widget)
+        self.grid_layout.setSpacing(14)
+        self.grid_layout.setAlignment(Qt.AlignTop)
+
+        self.scroll.setWidget(self.grid_widget)
+
+        layout.addWidget(self.scroll, stretch=1)
+
+        self.lbl_vazio = QLabel(
+            "Nenhum cliente cadastrado ainda.\n"
+            "Clique em \"Novo Cliente\" pra começar o caderninho."
+        )
+        self.lbl_vazio.setAlignment(Qt.AlignCenter)
+        self.lbl_vazio.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_BASE}px;
+        """)
+        self.lbl_vazio.setVisible(False)
+
+        layout.addWidget(self.lbl_vazio)
 
         # ==========================================
-        # ATALHOS DE TECLADO E DUPLO CLIQUE
+        # ATALHOS DE TECLADO
         # ==========================================
-        QShortcut(QKeySequence("Delete"), self, self.excluir)
+
         QShortcut(QKeySequence("F5"), self, self.carregar)
-        QShortcut(QKeySequence("Ctrl+N"), self, self.novo)
+        QShortcut(QKeySequence("Ctrl+N"), self, self.novo_cliente)
 
-        self.tabela.doubleClicked.connect(lambda index: self.ver_ficha())
+        self.selecionar_status("TODOS")
+
+        self.carregar()
 
     # ==========================================
     # CARREGAR CLIENTES
     # ==========================================
+
     def carregar(self):
-        todos = listar_clientes()
 
-        self.clientes = [
-            cliente for cliente in todos if cliente.get("ativo", True)
-        ]
+        self.clientes = listar_clientes()
 
-        self.saldos = buscar_saldos()
+        # todos os movimentos de fiado numa unica chamada -- agrupa
+        # por cliente aqui do lado de fora, em vez de bater 1 endpoint
+        # por cliente (era assim que o saldo de cada card era buscado
+        # antes, uma chamada HTTP por cliente na tela inteira).
+        movimentos_fiado = listar_movimentos()
 
-        self.preencher_tabela(self.clientes)
+        movimentos_por_cliente = {}
+        for mov in movimentos_fiado:
+            cid = mov.get("cliente_id")
+            if cid is None:
+                continue
+            movimentos_por_cliente.setdefault(cid, []).append(mov)
+
+        self.agregados_por_cliente = {}
+
+        for cliente in self.clientes:
+
+            agr = cliente_analise.calcular_agregados(
+                cliente, movimentos_por_cliente.get(cliente["id"], [])
+            )
+
+            self.agregados_por_cliente[cliente["id"]] = agr
+            cliente["saldo_fiado"] = agr["saldo_devedor"]
+
+        vendas = listar_vendas()
+
+        self.vendas_por_cliente = {}
+
+        for venda in vendas:
+
+            cid = venda.get("cliente_id")
+
+            if cid is None:
+                continue
+
+            self.vendas_por_cliente[cid] = (
+                self.vendas_por_cliente.get(cid, 0)
+                + float(venda.get("valor_total", 0) or 0)
+            )
+
+        # "Faturamento" somando venda.valor_total so contava vendas
+        # com cliente vinculado (a maioria do PDV nao vincula) e ficava
+        # sempre R$0,00 na pratica -- recebido de fiado e um numero
+        # real que ja existe (MovimentoFiado tipo PAGAMENTO).
+        self.recebido_fiado_total = sum(
+            float(m.get("valor", 0) or 0)
+            for m in movimentos_fiado
+            if m.get("tipo") == "PAGAMENTO"
+        )
+
+        self.atualizar_cards_resumo()
+
+        self.filtrar_clientes()
+
+    # ==========================================
+    # CARDS DE RESUMO
+    # ==========================================
+
+    def atualizar_cards_resumo(self):
+
+        total = len(self.clientes)
+
+        ativos = 0
+        sem_movimento = 0
+        inadimplentes = 0
+
+        for cliente in self.clientes:
+
+            agr = self.agregados_por_cliente.get(cliente["id"])
+
+            if not agr:
+                continue
+
+            if cliente_analise.eh_ativo(agr):
+                ativos += 1
+
+            if cliente_analise.eh_sem_movimento(agr):
+                sem_movimento += 1
+
+            if cliente_analise.eh_inadimplente(agr, self.prazo_inadimplencia):
+                inadimplentes += 1
+
+        total_a_receber = sum(
+            float(c.get("saldo_fiado", 0) or 0) for c in self.clientes
+        )
+
+        self.card_total.definir_valor(str(total))
+        self.card_ativos.definir_valor(str(ativos))
+        self.card_sem_movimento.definir_valor(str(sem_movimento))
+        self.card_inadimplentes.definir_valor(str(inadimplentes))
+        self.card_recebido_fiado.definir_valor(
+            f"R$ {self.recebido_fiado_total:.2f}"
+        )
+        self.card_a_receber.definir_valor(f"R$ {total_a_receber:.2f}")
+
+    # ==========================================
+    # FILTRO DE STATUS
+    # ==========================================
+
+    def selecionar_status(self, chave):
+
+        self.filtro_status = chave
+
+        for k, botao in self.botoes_status.items():
+
+            selecionado = k == chave
+
+            botao.setChecked(selecionado)
+
+            botao.setStyleSheet(f"""
+                QPushButton {{
+                    background: {tokens.PRIMARIA if selecionado else tokens.CARD};
+                    color: {"white" if selecionado else tokens.TEXTO};
+                    border-radius: {tokens.RADIUS_SM}px;
+                    border: 1px solid {tokens.PRIMARIA if selecionado else tokens.BORDA};
+                    font-weight: 700;
+                    font-size: {tokens.TAMANHO_SM}px;
+                    padding: 0 14px;
+                }}
+                QPushButton:hover {{
+                    background: {tokens.PRIMARIA_HOVER if selecionado else tokens.FUNDO};
+                }}
+            """)
+
+        self.filtrar_clientes()
+
+    # ==========================================
+    # PRAZO DE INADIMPLÊNCIA
+    # ==========================================
+
+    def alterar_prazo_inadimplencia(self, _indice):
+
+        self.prazo_inadimplencia = self.combo_prazo.currentData()
+
+        self.atualizar_cards_resumo()
+        self.filtrar_clientes()
+
+    # ==========================================
+    # ORDENAÇÃO
+    # ==========================================
+
+    def alterar_ordenacao(self, _indice):
+
+        self.ordenacao = self.combo_ordenacao.currentData()
+
+        self.filtrar_clientes()
 
     # ==========================================
     # FILTRAR CLIENTES
     # ==========================================
-    def filtrar(self):
+
+    def filtrar_clientes(self):
+
         texto = self.pesquisa.text().lower().strip()
 
-        if texto == "":
-            clientes = self.clientes
-        else:
+        clientes = self.clientes
+
+        def agr(c):
+            return self.agregados_por_cliente.get(c["id"], {})
+
+        if self.filtro_status == "ATIVOS":
             clientes = [
-                cliente
-                for cliente in self.clientes
-                if texto in cliente["nome"].lower()
-                or texto in str(cliente.get("cpf_cnpj") or "").lower()
-                or texto in str(cliente.get("telefone") or "").lower()
-                or texto in str(cliente.get("endereco") or "").lower()
+                c for c in clientes if cliente_analise.eh_ativo(agr(c))
+            ]
+        elif self.filtro_status == "SEM_MOVIMENTO":
+            clientes = [
+                c for c in clientes if cliente_analise.eh_sem_movimento(agr(c))
+            ]
+        elif self.filtro_status == "INADIMPLENTES":
+            clientes = [
+                c for c in clientes
+                if cliente_analise.eh_inadimplente(
+                    agr(c), self.prazo_inadimplencia
+                )
+            ]
+        elif self.filtro_status == "EM_DIA":
+            clientes = [
+                c for c in clientes if cliente_analise.eh_em_dia(agr(c))
+            ]
+        elif self.filtro_status == "NOVOS":
+            clientes = [
+                c for c in clientes if cliente_analise.eh_novo(agr(c))
             ]
 
-        self.preencher_tabela(clientes)
+        if texto != "":
+
+            filtrados = []
+
+            for cliente in clientes:
+
+                nome = str(cliente.get("nome") or "").lower()
+                whatsapp = str(cliente.get("telefone") or "").lower()
+                cpf = str(cliente.get("cpf_cnpj") or "").lower()
+
+                if (
+                    texto in nome
+                    or texto in whatsapp
+                    or texto in cpf
+                ):
+                    filtrados.append(cliente)
+
+            clientes = filtrados
+
+        clientes = self._ordenar(clientes)
+
+        self.preencher_grid(clientes)
+
+    def _ordenar(self, clientes):
+
+        def agr(c):
+            return self.agregados_por_cliente.get(c["id"], {})
+
+        def nome(c):
+            return (c.get("nome") or "").lower()
+
+        # datas/numeros ausentes sempre vao pro final da lista,
+        # independente da direcao da ordenacao
+        def chave_data(campo, reverso):
+            def _chave(c):
+                valor = agr(c).get(campo)
+                ausente = valor is None
+                if reverso:
+                    return (ausente, -valor.timestamp() if valor else 0)
+                return (ausente, valor.timestamp() if valor else 0)
+            return _chave
+
+        if self.ordenacao == "MOVIMENTO_RECENTE":
+            return sorted(
+                clientes, key=chave_data("ultima_movimentacao", True)
+            )
+        if self.ordenacao == "MOVIMENTO_ANTIGO":
+            return sorted(
+                clientes, key=chave_data("ultima_movimentacao", False)
+            )
+        if self.ordenacao == "ULTIMA_COMPRA":
+            return sorted(clientes, key=chave_data("ultima_compra", True))
+        if self.ordenacao == "MAIOR_COMPRA":
+            return sorted(
+                clientes,
+                key=lambda c: agr(c).get("maior_compra", 0),
+                reverse=True,
+            )
+        if self.ordenacao == "MAIOR_SALDO":
+            return sorted(
+                clientes,
+                key=lambda c: agr(c).get("saldo_devedor", 0),
+                reverse=True,
+            )
+        if self.ordenacao == "NOME_ZA":
+            return sorted(clientes, key=nome, reverse=True)
+        if self.ordenacao == "CADASTRO_ANTIGO":
+            return sorted(clientes, key=chave_data("criado_em", False))
+        if self.ordenacao == "CADASTRO_NOVO":
+            return sorted(clientes, key=chave_data("criado_em", True))
+
+        # NOME_AZ e qualquer chave desconhecida caem aqui
+        return sorted(clientes, key=nome)
 
     # ==========================================
-    # PREENCHER TABELA
+    # PREENCHER GRID
     # ==========================================
-    def preencher_tabela(self, clientes):
-        self.tabela.setRowCount(len(clientes))
 
-        for linha, cliente in enumerate(clientes):
-            self.tabela.setItem(linha, 0, QTableWidgetItem(cliente["nome"]))
-            self.tabela.setItem(
-                linha, 1, QTableWidgetItem(cliente.get("cpf_cnpj") or "")
-            )
-            self.tabela.setItem(
-                linha, 2, QTableWidgetItem(cliente.get("telefone") or "")
-            )
-            self.tabela.setItem(
-                linha, 3, QTableWidgetItem(cliente.get("endereco") or "")
+    def preencher_grid(self, clientes):
+
+        while self.grid_layout.count():
+            item = self.grid_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        colunas = 3
+
+        for indice, cliente in enumerate(clientes):
+
+            agr = self.agregados_por_cliente.get(cliente["id"], {})
+            pontuacao = (
+                cliente_analise.calcular_pontuacao(
+                    agr, self.prazo_inadimplencia
+                )
+                if agr else ""
             )
 
-            status = "Ativo" if cliente.get("ativo", True) else "Inativo"
-            self.tabela.setItem(linha, 4, QTableWidgetItem(status))
-
-            saldo = self.saldos.get(str(cliente["id"]), 0.0)
-            item_saldo = QTableWidgetItem(
-                f"R$ {saldo:,.2f}".replace(",", "#").replace(".", ",").replace("#", ".")
+            card = ClienteCard(
+                cliente,
+                cliente.get("saldo_fiado", 0),
+                pontuacao=pontuacao,
             )
-            item_saldo.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            if saldo > 0:
-                item_saldo.setForeground(QColor("#C62828"))
-            elif saldo < 0:
-                item_saldo.setForeground(QColor("#2E7D32"))
-            self.tabela.setItem(linha, 5, item_saldo)
+            card.clicado.connect(self.ver_ficha)
+            card.reativar_solicitado.connect(self.reativar_cliente)
+
+            self.grid_layout.addWidget(
+                card, indice // colunas, indice % colunas
+            )
+
+        self.scroll.setVisible(len(clientes) > 0)
+        self.lbl_vazio.setVisible(len(clientes) == 0)
 
     # ==========================================
-    # NOVO CLIENTE
+    # AÇÕES
     # ==========================================
-    def novo(self):
-        tela = CadastroClienteWindow()
+
+    def novo_cliente(self):
+
+        tela = CadastroClienteDialog(parent=self)
 
         if tela.exec() != QDialog.Accepted:
             return
 
-        response = cadastrar_cliente(tela.dados)
+        self.carregar()
 
-        if response.status_code in (200, 201):
-            QMessageBox.information(self, "Sucesso", "Cliente cadastrado com sucesso.")
-            self.carregar()
-        else:
-            self._exibir_erro(response)
+    def ver_ficha(self, cliente):
 
-    # ==========================================
-    # EDITAR CLIENTE
-    # ==========================================
-    def editar(self):
-        linha = self.tabela.currentRow()
+        tela = FichaClienteDialog(cliente, parent=self)
+        tela.exec()
 
-        if linha < 0:
-            QMessageBox.warning(self, "Aviso", "Selecione um cliente.")
-            return
+        self.carregar()
 
-        cliente = self.clientes[linha]
-        tela = CadastroClienteWindow(cliente)
-
-        if tela.exec() != QDialog.Accepted:
-            return
-
-        response = atualizar_cliente(cliente["id"], tela.dados)
-
-        if response.status_code == 200:
-            QMessageBox.information(self, "Sucesso", "Cliente atualizado.")
-            self.carregar()
-        else:
-            self._exibir_erro(response)
-
-    # ==========================================
-    # EXCLUIR CLIENTE
-    # ==========================================
-    def excluir(self):
-        linha = self.tabela.currentRow()
-
-        if linha < 0:
-            QMessageBox.warning(self, "Aviso", "Selecione um cliente.")
-            return
-
-        cliente = self.clientes[linha]
+    def reativar_cliente(self, cliente):
 
         resposta = QMessageBox.question(
             self,
-            "Excluir",
-            f"Deseja realmente excluir \"{cliente['nome']}\"?",
+            "Reativar Cliente",
+            f"Reativar \"{cliente.get('nome')}\"?",
         )
 
         if resposta != QMessageBox.Yes:
             return
 
-        response = excluir_cliente(cliente["id"])
+        response = reativar_cliente(cliente["id"])
 
-        if response.status_code == 200:
-            QMessageBox.information(self, "Sucesso", "Cliente excluído.")
-            self.carregar()
-        else:
-            self._exibir_erro(response)
-
-    # ==========================================
-    # VER FICHA DO CLIENTE
-    # ==========================================
-    def ver_ficha(self):
-        linha = self.tabela.currentRow()
-
-        if linha < 0:
-            QMessageBox.warning(self, "Aviso", "Selecione um cliente.")
+        if response.status_code != 200:
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+            QMessageBox.critical(self, "Erro", str(erro))
             return
 
-        cliente = self.clientes[linha]
+        self.carregar()
 
-        tela = FichaClienteWindow(cliente)
-        tela.exec()
-
-    # ==========================================
-    # HELPER DE ERRO
-    # ==========================================
-    def _exibir_erro(self, response):
-        try:
-            erro = response.json()["detail"]
-        except Exception:
-            erro = response.text
-
-        QMessageBox.critical(self, "Erro", erro)
+    def exportar_em_breve(self):
+        QMessageBox.information(
+            self,
+            "Em breve",
+            "A exportação de planilha ainda está em desenvolvimento.",
+        )

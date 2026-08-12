@@ -15,24 +15,33 @@ class MovimentoFiado(Base):
     )
 
     cliente_id: Mapped[int] = mapped_column(
-        ForeignKey("clientes.id")
+        ForeignKey("clientes.id"),
+        nullable=False
     )
 
     venda_id: Mapped[int | None] = mapped_column(
-        ForeignKey("vendas.id"),
+        ForeignKey("vendas.id", ondelete="SET NULL"),
         nullable=True
     )
 
     usuario_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id")
+        ForeignKey("users.id"),
+        nullable=False
     )
 
     tipo: Mapped[str] = mapped_column(
-        String(20)
+        String(20),
+        nullable=False
+    )
+
+    forma_pagamento: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True
     )
 
     valor: Mapped[float] = mapped_column(
-        Float
+        Float,
+        nullable=False
     )
 
     descricao: Mapped[str | None] = mapped_column(
@@ -45,7 +54,10 @@ class MovimentoFiado(Base):
         default=datetime.utcnow
     )
 
-    cliente = relationship("Cliente")
+    cliente = relationship(
+        "Cliente",
+        back_populates="movimentos_fiado"
+    )
 
     venda = relationship("Venda")
 

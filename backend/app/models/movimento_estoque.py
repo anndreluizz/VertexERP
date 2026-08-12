@@ -15,19 +15,23 @@ class MovimentoEstoque(Base):
     )
 
     produto_id: Mapped[int] = mapped_column(
-        ForeignKey("produtos.id")
+        ForeignKey("produtos.id"),
+        nullable=False
     )
 
     usuario_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id")
+        ForeignKey("users.id"),
+        nullable=False
     )
 
     tipo: Mapped[str] = mapped_column(
-        String(20)
+        String(20),
+        nullable=False
     )
 
     quantidade: Mapped[int] = mapped_column(
-        Integer
+        Integer,
+        nullable=False
     )
 
     motivo: Mapped[str | None] = mapped_column(
@@ -40,6 +44,9 @@ class MovimentoEstoque(Base):
         default=datetime.utcnow
     )
 
-    produto = relationship("Produto")
+    produto = relationship(
+        "Produto",
+        back_populates="movimentos_estoque"
+    )
 
     usuario = relationship("User")

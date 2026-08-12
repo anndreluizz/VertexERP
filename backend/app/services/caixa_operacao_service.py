@@ -7,11 +7,12 @@ from app.models.movimento_caixa import MovimentoCaixa
 class CaixaOperacaoService:
 
     @staticmethod
-    def buscar_caixa_aberto(db: Session):
+    def buscar_caixa_aberto(db: Session, usuario_id: int):
 
         return (
             db.query(Caixa)
             .filter(Caixa.status == "ABERTO")
+            .filter(Caixa.usuario_id == usuario_id)
             .first()
         )
 
@@ -52,7 +53,7 @@ class CaixaOperacaoService:
         descricao: str,
     ):
 
-        caixa = CaixaOperacaoService.buscar_caixa_aberto(db)
+        caixa = CaixaOperacaoService.buscar_caixa_aberto(db, usuario_id)
 
         if not caixa:
             raise Exception("Nenhum caixa aberto.")

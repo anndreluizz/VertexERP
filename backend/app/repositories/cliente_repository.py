@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models.cliente import Cliente
+from ..models.cliente import Cliente
 
 
 class ClienteRepository:
@@ -13,8 +13,14 @@ class ClienteRepository:
         return cliente
 
     @staticmethod
-    def listar(db: Session):
-        return db.query(Cliente).all()
+    def listar(db: Session, skip: int = 0, limit: int = 100):
+        return (
+            db.query(Cliente)
+            .order_by(Cliente.id)
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
 
     @staticmethod
     def buscar_por_id(db: Session, cliente_id: int):
@@ -35,6 +41,6 @@ class ClienteRepository:
         return cliente
 
     @staticmethod
-    def excluir(db: Session, cliente: Cliente):
-        db.delete(cliente)
+    def excluir(db, cliente):
+        cliente.ativo = False
         db.commit()

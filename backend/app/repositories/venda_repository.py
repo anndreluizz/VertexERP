@@ -6,8 +6,14 @@ from app.models.venda import Venda
 class VendaRepository:
 
     @staticmethod
-    def listar(db: Session):
-        return db.query(Venda).all()
+    def listar(db: Session, skip: int = 0, limit: int = 100):
+        return (
+            db.query(Venda)
+            .order_by(Venda.id)
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
 
     @staticmethod
     def buscar_por_id(db: Session, venda_id: int):

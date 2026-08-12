@@ -17,6 +17,7 @@ class MovimentoCaixaResponse(MovimentoCaixaBase):
     id: int
     caixa_id: int
     usuario_id: int
+    venda_id: int | None = None
     data: datetime
 
     class Config:

@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_admin
 from app.database.session import SessionLocal
 
 from app.schemas.conta_pagar import (
@@ -53,11 +53,13 @@ def criar(
 
 @router.get("/", response_model=list[ContaPagarResponse])
 def listar(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
 
-    contas = ContaPagarService.listar(db)
+    contas = ContaPagarService.listar(db, skip, limit)
 
     return [
         ContaPagarResponse.from_orm(c)
@@ -73,6 +75,8 @@ def listar_pendentes(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    # Sem paginação de propósito: essa lista também alimenta o cálculo
+    # do fluxo de caixa (financeiro_service), que precisa do total real.
 
     contas = ContaPagarService.listar_pendentes(db)
 
@@ -87,11 +91,13 @@ def listar_pendentes(
     response_model=list[ContaPagarResponse],
 )
 def listar_pagas(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
 
-    contas = ContaPagarService.listar_pagas(db)
+    contas = ContaPagarService.listar_pagas(db, skip, limit)
 
     return [
         ContaPagarResponse.from_orm(c)
@@ -143,7 +149,7 @@ def pagar(
         conta = ContaPagarService.pagar(
             db,
             conta_id,
-            usuario["id"],
+            usuario.id,
         )
 
         return ContaPagarResponse.from_orm(conta)
@@ -163,7 +169,7 @@ def pagar(
 def cancelar(
     conta_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(require_admin),
 ):
 
     try:

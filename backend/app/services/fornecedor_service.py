@@ -8,13 +8,14 @@ from app.schemas.fornecedor import (
 )
 from app.repositories.fornecedor_repository import (
     FornecedorRepository,
+    FornecedorCNPJDuplicadoError,
 )
 
 
 class FornecedorService:
 
     @staticmethod
-    def criar(db: Session, dados: FornecedorCreate):
+    def criar(db: Session, dados: FornecedorCreate) -> Fornecedor:
 
         fornecedor = Fornecedor(
             razao_social=dados.razao_social,
@@ -27,24 +28,33 @@ class FornecedorService:
             ativo=True,
         )
 
-        return FornecedorRepository.criar(db, fornecedor)
+        try:
+            return FornecedorRepository.criar(db, fornecedor)
+
+        except FornecedorCNPJDuplicadoError:
+            raise HTTPException(
+                status_code=409,
+                detail="Já existe um fornecedor cadastrado com este CNPJ.",
+            )
 
     @staticmethod
-    def listar(db: Session):
-        return FornecedorRepository.listar(db)
+    def listar(
+        db: Session, skip: int = 0, limit: int = 100
+    ) -> list[Fornecedor]:
+        return FornecedorRepository.listar(db, skip, limit)
 
     @staticmethod
-    def buscar(db: Session, fornecedor_id: int):
+    def buscar(db: Session, fornecedor_id: int) -> Fornecedor:
 
         fornecedor = FornecedorRepository.buscar_por_id(
             db,
-            fornecedor_id
+            fornecedor_id,
         )
 
         if not fornecedor:
             raise HTTPException(
                 status_code=404,
-                detail="Fornecedor não encontrado."
+                detail="Fornecedor não encontrado.",
             )
 
         return fornecedor
@@ -54,18 +64,10 @@ class FornecedorService:
         db: Session,
         fornecedor_id: int,
         dados: FornecedorUpdate,
-    ):
+    ) -> Fornecedor:
 
-        fornecedor = FornecedorRepository.buscar_por_id(
-            db,
-            fornecedor_id
-        )
-
-        if not fornecedor:
-            raise HTTPException(
-                status_code=404,
-                detail="Fornecedor não encontrado."
-            )
+        # Reaproveita buscar() -> já trata o 404
+        fornecedor = FornecedorService.buscar(db, fornecedor_id)
 
         fornecedor.razao_social = dados.razao_social
         fornecedor.nome_fantasia = dados.nome_fantasia
@@ -76,26 +78,22 @@ class FornecedorService:
         fornecedor.estado = dados.estado
         fornecedor.ativo = dados.ativo
 
-        FornecedorRepository.atualizar(db)
+        try:
+            FornecedorRepository.atualizar(db)
+
+        except FornecedorCNPJDuplicadoError:
+            raise HTTPException(
+                status_code=409,
+                detail="Já existe um fornecedor cadastrado com este CNPJ.",
+            )
 
         return fornecedor
 
     @staticmethod
-    def excluir(
-        db: Session,
-        fornecedor_id: int,
-    ):
+    def excluir(db: Session, fornecedor_id: int) -> dict:
 
-        fornecedor = FornecedorRepository.buscar_por_id(
-            db,
-            fornecedor_id
-        )
-
-        if not fornecedor:
-            raise HTTPException(
-                status_code=404,
-                detail="Fornecedor não encontrado."
-            )
+        # Reaproveita buscar() -> já trata o 404
+        fornecedor = FornecedorService.buscar(db, fornecedor_id)
 
         FornecedorRepository.excluir(db, fornecedor)
 

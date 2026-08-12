@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 
 class CaixaBase(BaseModel):
@@ -19,4 +19,5 @@ class CaixaResponse(BaseModel):
     saldo_final: float
     status: str
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        orm_mode = True

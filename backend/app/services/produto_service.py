@@ -8,8 +8,8 @@ from app.schemas.produto import ProdutoCreate, ProdutoUpdate
 class ProdutoService:
 
     @staticmethod
-    def listar(db: Session):
-        return ProdutoRepository.listar(db)
+    def listar(db: Session, skip: int = 0, limit: int = 100):
+        return ProdutoRepository.listar(db, skip, limit)
 
     @staticmethod
     def buscar(db: Session, produto_id: int):

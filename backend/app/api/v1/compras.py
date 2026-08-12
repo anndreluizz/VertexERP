@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_admin
 from app.database.session import SessionLocal
 
 from app.schemas.compra import (
@@ -50,11 +50,13 @@ def criar(
 
 @router.get("/", response_model=list[CompraResponse])
 def listar(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
 
-    compras = CompraService.listar(db)
+    compras = CompraService.listar(db, skip, limit)
 
     return [
         CompraResponse.from_orm(c)
@@ -88,7 +90,7 @@ def buscar(
 def excluir(
     compra_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(require_admin),
 ):
 
     if not CompraService.excluir(

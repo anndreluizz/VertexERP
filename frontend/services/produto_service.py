@@ -7,7 +7,7 @@ from services.api import get, post, put, delete
 
 def listar_produtos():
 
-    response = get("/produtos")
+    response = get("/produtos?limit=500")
 
     if response.status_code != 200:
         return []

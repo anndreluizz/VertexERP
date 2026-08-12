@@ -1,0 +1,194 @@
+def test_usuario_comum_nao_pode_excluir_cliente(
+    client, auth_headers_comum, cliente
+):
+    response = client.delete(
+        f"/clientes/{cliente.id}", headers=auth_headers_comum
+    )
+
+    assert response.status_code == 403
+    assert (
+        response.json()["detail"]
+        == "Apenas administradores podem realizar esta ação."
+    )
+
+
+def test_usuario_comum_nao_pode_excluir_fornecedor(
+    client, auth_headers_comum, fornecedor
+):
+    response = client.delete(
+        f"/fornecedores/{fornecedor.id}", headers=auth_headers_comum
+    )
+
+    assert response.status_code == 403
+
+
+def test_usuario_comum_nao_pode_excluir_categoria(
+    client, auth_headers, auth_headers_comum
+):
+    criada = client.post(
+        "/categorias/",
+        json={"nome": "Bebidas"},
+        headers=auth_headers,
+    ).json()
+
+    response = client.delete(
+        f"/categorias/{criada['id']}", headers=auth_headers_comum
+    )
+
+    assert response.status_code == 403
+
+
+def test_usuario_comum_nao_pode_excluir_produto(
+    client, auth_headers_comum, produto
+):
+    response = client.delete(
+        f"/produtos/{produto.id}", headers=auth_headers_comum
+    )
+
+    assert response.status_code == 403
+
+
+def test_usuario_comum_nao_pode_excluir_compra(
+    client, auth_headers, auth_headers_comum, fornecedor, produto
+):
+    criada = client.post(
+        "/compras/",
+        json={
+            "fornecedor_id": fornecedor.id,
+            "forma_pagamento": "DINHEIRO",
+            "itens": [
+                {
+                    "produto_id": produto.id,
+                    "quantidade": 1,
+                    "valor_unitario": "5.00",
+                }
+            ],
+        },
+        headers=auth_headers,
+    ).json()
+
+    response = client.delete(
+        f"/compras/{criada['id']}", headers=auth_headers_comum
+    )
+
+    assert response.status_code == 403
+
+
+def test_usuario_comum_nao_pode_excluir_venda(
+    client, auth_headers, auth_headers_comum, produto, caixa_aberto
+):
+    criada = client.post(
+        "/vendas/",
+        json={
+            "forma_pagamento": "DINHEIRO",
+            "itens": [
+                {
+                    "produto_id": produto.id,
+                    "quantidade": 1,
+                    "valor_unitario": "10.00",
+                }
+            ],
+        },
+        headers=auth_headers,
+    ).json()
+
+    response = client.delete(
+        f"/vendas/{criada['id']}", headers=auth_headers_comum
+    )
+
+    assert response.status_code == 403
+
+
+def test_usuario_comum_nao_pode_fechar_caixa(
+    client, auth_headers_comum, caixa_aberto
+):
+    response = client.post("/caixa/fechar", headers=auth_headers_comum)
+
+    assert response.status_code == 403
+
+
+def test_usuario_comum_nao_pode_cancelar_conta_pagar(
+    client, auth_headers, auth_headers_comum, fornecedor
+):
+    conta = client.post(
+        "/contas-pagar/",
+        json={
+            "fornecedor_id": fornecedor.id,
+            "data_vencimento": "2026-12-31T00:00:00",
+            "valor": "100.00",
+        },
+        headers=auth_headers,
+    ).json()
+
+    response = client.post(
+        f"/contas-pagar/{conta['id']}/cancelar",
+        headers=auth_headers_comum,
+    )
+
+    assert response.status_code == 403
+
+
+def test_usuario_comum_nao_pode_cancelar_conta_receber(
+    client, auth_headers, auth_headers_comum, cliente
+):
+    conta = client.post(
+        "/contas-receber/",
+        json={
+            "cliente_id": cliente.id,
+            "data_vencimento": "2026-12-31T00:00:00",
+            "valor": 100.0,
+        },
+        headers=auth_headers,
+    ).json()
+
+    response = client.post(
+        f"/contas-receber/{conta['id']}/cancelar",
+        headers=auth_headers_comum,
+    )
+
+    assert response.status_code == 403
+
+
+def test_admin_pode_excluir_cliente(client, auth_headers, cliente):
+    response = client.delete(f"/clientes/{cliente.id}", headers=auth_headers)
+
+    assert response.status_code == 200
+
+
+def test_usuario_comum_nao_pode_promover_outro_usuario(
+    client, auth_headers_comum, usuario
+):
+    response = client.put(
+        f"/users/{usuario.id}/admin",
+        json={"admin": True},
+        headers=auth_headers_comum,
+    )
+
+    assert response.status_code == 403
+
+
+def test_admin_pode_promover_usuario_a_admin(
+    client, auth_headers, usuario_comum, fornecedor
+):
+    response = client.put(
+        f"/users/{usuario_comum.id}/admin",
+        json={"admin": True},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["admin"] is True
+
+    # loga de novo pra pegar um token que reflita a promoção
+    novo_token = client.post(
+        "/auth/login",
+        json={"email": usuario_comum.email, "senha": "123456"},
+    ).json()["access_token"]
+
+    novos_headers = {"Authorization": f"Bearer {novo_token}"}
+
+    resposta_exclusao = client.delete(
+        f"/fornecedores/{fornecedor.id}", headers=novos_headers
+    )
+
+    assert resposta_exclusao.status_code == 200

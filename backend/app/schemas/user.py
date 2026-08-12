@@ -12,6 +12,14 @@ class UserLogin(BaseModel):
     senha: str
 
 
+class UserAdminUpdate(BaseModel):
+    admin: bool
+
+
+class UserAtivoUpdate(BaseModel):
+    ativo: bool
+
+
 class UserResponse(BaseModel):
     id: int
     nome: str

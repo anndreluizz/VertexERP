@@ -24,6 +24,7 @@ class ClienteService:
             cpf_cnpj=dados.cpf_cnpj,
             telefone=dados.telefone,
             email=dados.email,
+            endereco=dados.endereco,
             ativo=True
 
         )
@@ -31,8 +32,8 @@ class ClienteService:
         return ClienteRepository.criar(db, novo_cliente)
 
     @staticmethod
-    def listar(db: Session):
-        return ClienteRepository.listar(db)
+    def listar(db: Session, skip: int = 0, limit: int = 100):
+        return ClienteRepository.listar(db, skip, limit)
 
     @staticmethod
     def buscar_por_id(db: Session, cliente_id: int):

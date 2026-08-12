@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_admin
 from app.database.session import SessionLocal
 
 from app.schemas.conta_receber import (
@@ -49,10 +49,12 @@ def criar(
 
 @router.get("/", response_model=list[ContaReceberResponse])
 def listar(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    contas = ContaReceberService.listar(db)
+    contas = ContaReceberService.listar(db, skip, limit)
 
     return [
         ContaReceberResponse.from_orm(c)
@@ -68,6 +70,8 @@ def listar_pendentes(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    # Sem paginação de propósito: essa lista também alimenta o cálculo
+    # do fluxo de caixa (financeiro_service), que precisa do total real.
     contas = ContaReceberService.listar_pendentes(db)
 
     return [
@@ -81,10 +85,12 @@ def listar_pendentes(
     response_model=list[ContaReceberResponse],
 )
 def listar_recebidas(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    contas = ContaReceberService.listar_recebidas(db)
+    contas = ContaReceberService.listar_recebidas(db, skip, limit)
 
     return [
         ContaReceberResponse.from_orm(c)
@@ -98,12 +104,16 @@ def listar_recebidas(
 )
 def listar_cliente(
     cliente_id: int,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
     contas = ContaReceberService.listar_por_cliente(
         db,
         cliente_id,
+        skip,
+        limit,
     )
 
     return [
@@ -151,7 +161,7 @@ def receber(
         conta = ContaReceberService.receber(
             db,
             conta_id,
-            usuario["id"],   # <-- usuário do token JWT
+            usuario.id,   # <-- usuário do token JWT
         )
 
         return ContaReceberResponse.from_orm(conta)
@@ -170,7 +180,7 @@ def receber(
 def cancelar(
     conta_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(require_admin),
 ):
     try:
         conta = ContaReceberService.cancelar(

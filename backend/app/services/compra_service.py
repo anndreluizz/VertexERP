@@ -17,8 +17,8 @@ from app.services.conta_pagar_service import ContaPagarService
 class CompraService:
 
     @staticmethod
-    def listar(db: Session):
-        return CompraRepository.listar(db)
+    def listar(db: Session, skip: int = 0, limit: int = 100):
+        return CompraRepository.listar(db, skip, limit)
 
     @staticmethod
     def buscar(db: Session, compra_id: int):

@@ -4,7 +4,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy import DateTime, Float, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.database.base import Base
+from ..database.base import Base
 
 
 class Caixa(Base):

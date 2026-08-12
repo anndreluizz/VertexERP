@@ -54,6 +54,11 @@ class ContaPagar(Base):
         nullable=True,
     )
 
+    numero_boleto: Mapped[str | None] = mapped_column(
+        String(60),
+        nullable=True,
+    )
+
     status: Mapped[str] = mapped_column(
         String(20),
         default="PENDENTE",

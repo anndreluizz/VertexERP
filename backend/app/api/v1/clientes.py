@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database.session import SessionLocal
@@ -8,7 +8,7 @@ from app.schemas.cliente import (
     ClienteResponse
 )
 from app.services.cliente_service import ClienteService
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_admin
 
 router = APIRouter(
     prefix="/clientes",
@@ -35,10 +35,12 @@ def criar_cliente(
 
 @router.get("/", response_model=list[ClienteResponse])
 def listar_clientes(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user)
 ):
-    return ClienteService.listar(db)
+    return ClienteService.listar(db, skip, limit)
 
 
 @router.get("/{cliente_id}", response_model=ClienteResponse)
@@ -73,7 +75,7 @@ def atualizar_cliente(
 def excluir_cliente(
     cliente_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user)
+    usuario=Depends(require_admin)
 ):
     return ClienteService.excluir(
         db,

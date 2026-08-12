@@ -12,14 +12,30 @@ venv/
 # Cache Python
 __pycache__/
 *.py[cod]
+.pytest_cache/
 
 # Logs
 logs/
 backend/logs/
+*.log
+
+# Postgres portatil (runtime local, nao deve ir pro repo)
+postgres-portable/
 
 # Migrações
 backend/migrations/
 
+# Uploads (logo da loja, etc.)
+backend/uploads/
+
 # Banco SQLite
 *.db
 *.sqlite3
+
+# Empacotamento (PyInstaller) e trava do launcher
+build/
+dist/
+*.spec
+VertexERP.exe
+icone.ico
+.vertexerp.lock

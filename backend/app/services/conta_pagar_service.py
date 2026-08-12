@@ -37,6 +37,7 @@ class ContaPagarService:
             data_pagamento=None,
             valor=float(dados.valor),
             observacao=dados.observacao,
+            numero_boleto=dados.numero_boleto,
             status=StatusContaPagar.PENDENTE.value,
         )
 
@@ -46,16 +47,16 @@ class ContaPagarService:
         )
 
     @staticmethod
-    def listar(db: Session):
-        return ContaPagarRepository.listar(db)
+    def listar(db: Session, skip: int = 0, limit: int = 100):
+        return ContaPagarRepository.listar(db, skip, limit)
 
     @staticmethod
     def listar_pendentes(db: Session):
         return ContaPagarRepository.listar_pendentes(db)
 
     @staticmethod
-    def listar_pagas(db: Session):
-        return ContaPagarRepository.listar_pagas(db)
+    def listar_pagas(db: Session, skip: int = 0, limit: int = 100):
+        return ContaPagarRepository.listar_pagas(db, skip, limit)
 
     @staticmethod
     def buscar_por_id(

@@ -31,5 +31,35 @@ class UserService:
         return UserRepository.criar(db, novo_usuario)
 
     @staticmethod
-    def listar_usuarios(db: Session):
-        return UserRepository.listar(db)
+    def listar_usuarios(db: Session, skip: int = 0, limit: int = 100):
+        return UserRepository.listar(db, skip, limit)
+
+    @staticmethod
+    def definir_admin(db: Session, user_id: int, admin: bool):
+
+        usuario = UserRepository.buscar_por_id(db, user_id)
+
+        if not usuario:
+            raise Exception("Usuário não encontrado.")
+
+        usuario.admin = admin
+
+        db.commit()
+        db.refresh(usuario)
+
+        return usuario
+
+    @staticmethod
+    def definir_ativo(db: Session, user_id: int, ativo: bool):
+
+        usuario = UserRepository.buscar_por_id(db, user_id)
+
+        if not usuario:
+            raise Exception("Usuário não encontrado.")
+
+        usuario.ativo = ativo
+
+        db.commit()
+        db.refresh(usuario)
+
+        return usuario

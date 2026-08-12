@@ -6,8 +6,14 @@ from app.models.produto import Produto
 class ProdutoRepository:
 
     @staticmethod
-    def listar(db: Session):
-        return db.query(Produto).all()
+    def listar(db: Session, skip: int = 0, limit: int = 100):
+        return (
+            db.query(Produto)
+            .order_by(Produto.id)
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
 
     @staticmethod
     def buscar_por_id(db: Session, produto_id: int):
@@ -23,8 +29,10 @@ class ProdutoRepository:
         return produto
 
     @staticmethod
-    def atualizar(db: Session):
+    def atualizar(db: Session, produto: Produto):
         db.commit()
+        db.refresh(produto)
+        return produto
 
     @staticmethod
     def excluir(db: Session, produto: Produto):

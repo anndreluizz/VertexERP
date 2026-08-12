@@ -53,25 +53,33 @@ class MovimentoCaixaService:
         )
 
     @staticmethod
-    def listar(db: Session):
-        return MovimentoCaixaRepository.listar(db)
+    def listar(db: Session, skip: int = 0, limit: int = 100):
+        return MovimentoCaixaRepository.listar(db, skip, limit)
 
     @staticmethod
     def listar_por_caixa(
         db: Session,
         caixa_id: int,
+        skip: int = 0,
+        limit: int = 100,
     ):
         return MovimentoCaixaRepository.listar_por_caixa(
             db,
-            caixa_id
+            caixa_id,
+            skip,
+            limit,
         )
 
     @staticmethod
     def listar_por_tipo(
         db: Session,
         tipo: str,
+        skip: int = 0,
+        limit: int = 100,
     ):
         return MovimentoCaixaRepository.listar_por_tipo(
             db,
-            tipo.upper()
+            tipo.upper(),
+            skip,
+            limit,
         )

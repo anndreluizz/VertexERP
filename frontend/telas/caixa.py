@@ -29,6 +29,8 @@ from services.movimento_caixa_service import (
     criar_suprimento,
 )
 
+from services.api import usuario_e_admin
+
 
 class Caixa(QWidget):
 
@@ -151,6 +153,10 @@ class Caixa(QWidget):
         self.bt_sangria = QPushButton("Sangria")
         self.bt_suprimento = QPushButton("Suprimento")
         self.bt_atualizar = QPushButton("Atualizar")
+
+        # Fechar caixa é uma ação de administrador — operadores não veem o botão.
+        if not usuario_e_admin():
+            self.bt_fechar.setVisible(False)
 
         botoes.addWidget(self.bt_abrir)
         botoes.addWidget(self.bt_fechar)

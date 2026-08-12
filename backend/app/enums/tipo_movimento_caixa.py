@@ -8,3 +8,4 @@ class TipoMovimentoCaixa(str, Enum):
     RECEBIMENTO = "RECEBIMENTO"
     PAGAMENTO = "PAGAMENTO"
     AJUSTE = "AJUSTE"
+    ESTORNO = "ESTORNO"

@@ -13,13 +13,16 @@ class Cliente(Base):
 
     nome: Mapped[str] = mapped_column(String(150), nullable=False)
 
-    cpf_cnpj: Mapped[str] = mapped_column(
+    cpf_cnpj: Mapped[str | None] = mapped_column(
         String(20),
         unique=True,
-        nullable=False
+        nullable=True
     )
 
-    telefone: Mapped[str] = mapped_column(String(20))
+    telefone: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True
+    )
 
     email: Mapped[str] = mapped_column(
         String(150),

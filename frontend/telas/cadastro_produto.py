@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 
 class CadastroProdutoWindow(QDialog):
 
-    def __init__(self, produto=None):
+    def __init__(self, produto=None, codigo_sugerido=None):
         super().__init__()
 
         self.produto = produto
@@ -65,12 +65,23 @@ class CadastroProdutoWindow(QDialog):
         )
 
         self.codigo_barras = QLineEdit()
+        self.codigo_barras.setPlaceholderText(
+            "Escaneie ou digite o código de barras"
+        )
 
         formulario.addWidget(
             self.codigo_barras,
             1,
             1,
         )
+
+        # Cadastro novo: código interno é gerado automaticamente (sequencial)
+        # para que o operador só precise identificar o produto pelo código
+        # de barras, agilizando o cadastro com leitor.
+        if not self.produto and codigo_sugerido:
+            self.codigo.setText(codigo_sugerido)
+            self.codigo.setReadOnly(True)
+            self.codigo.setStyleSheet("background:#333; color:#aaa;")
 
         # ==========================================
         # Nome
@@ -254,9 +265,13 @@ class CadastroProdutoWindow(QDialog):
         # PREENCHER DADOS (EDIÇÃO)
         # ==========================================
 
+        self.codigo_barras.returnPressed.connect(self.nome.setFocus)
+
         if self.produto:
             self.preencher_campos()
             self.codigo.setFocus()
+        else:
+            self.codigo_barras.setFocus()
 
     # ==========================================
     # PREENCHER CAMPOS (EDIÇÃO)

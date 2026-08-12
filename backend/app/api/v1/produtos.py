@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_admin
 from app.database.session import SessionLocal
 from app.schemas.produto import (
     ProdutoCreate,
@@ -26,10 +26,12 @@ def get_db():
 
 @router.get("/", response_model=list[ProdutoResponse])
 def listar(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    return ProdutoService.listar(db)
+    return ProdutoService.listar(db, skip, limit)
 
 
 @router.get("/{produto_id}", response_model=ProdutoResponse)
@@ -88,7 +90,7 @@ def atualizar(
 def excluir(
     produto_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(require_admin),
 ):
     ok = ProdutoService.excluir(db, produto_id)
 

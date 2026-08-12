@@ -10,6 +10,7 @@ class ContaPagarBase(BaseModel):
     data_vencimento: datetime
     valor: Decimal
     observacao: str | None = None
+    numero_boleto: str | None = None
 
 
 class ContaPagarCreate(ContaPagarBase):
@@ -20,6 +21,7 @@ class ContaPagarUpdate(BaseModel):
     data_vencimento: datetime | None = None
     valor: Decimal | None = None
     observacao: str | None = None
+    numero_boleto: str | None = None
     status: str | None = None
 
 
@@ -39,6 +41,8 @@ class ContaPagarResponse(BaseModel):
     valor: Decimal
 
     observacao: str | None
+
+    numero_boleto: str | None
 
     status: str
 

@@ -13,8 +13,14 @@ class CategoriaRepository:
         return categoria
 
     @staticmethod
-    def listar(db: Session):
-        return db.query(Categoria).all()
+    def listar(db: Session, skip: int = 0, limit: int = 100):
+        return (
+            db.query(Categoria)
+            .order_by(Categoria.id)
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
 
     @staticmethod
     def buscar_por_id(db: Session, categoria_id: int):

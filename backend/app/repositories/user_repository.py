@@ -14,8 +14,14 @@ class UserRepository:
         return db.query(User).filter(User.id == user_id).first()
 
     @staticmethod
-    def listar(db: Session):
-        return db.query(User).all()
+    def listar(db: Session, skip: int = 0, limit: int = 100):
+        return (
+            db.query(User)
+            .order_by(User.id)
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
 
     @staticmethod
     def criar(db: Session, user: User):

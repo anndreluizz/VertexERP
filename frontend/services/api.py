@@ -1,13 +1,16 @@
+import os
+
 import requests
 
 URL = "http://127.0.0.1:8000"
 
 TOKEN = None
+ADMIN = False
 
 
 def login(usuario: str, senha: str):
 
-    global TOKEN
+    global TOKEN, ADMIN
 
     response = requests.post(
         f"{URL}/auth/login",
@@ -21,9 +24,20 @@ def login(usuario: str, senha: str):
 
         TOKEN = response.json()["access_token"]
 
+        perfil = get("/users/me")
+
+        ADMIN = (
+            perfil.status_code == 200
+            and perfil.json()["data"]["admin"]
+        )
+
         return True
 
     return False
+
+
+def usuario_e_admin():
+    return ADMIN
 
 
 def get(endpoint: str):
@@ -80,6 +94,23 @@ def delete(endpoint: str):
     )
 
 
+def post_file(endpoint: str, campo: str, caminho_arquivo: str):
+
+    if TOKEN is None:
+        raise Exception("Usuário não autenticado.")
+
+    with open(caminho_arquivo, "rb") as arquivo:
+        return requests.post(
+            URL + endpoint,
+            files={
+                campo: (os.path.basename(caminho_arquivo), arquivo)
+            },
+            headers={
+                "Authorization": f"Bearer {TOKEN}"
+            },
+        )
+
+
 def dashboard():
 
     response = get("/dashboard")
@@ -87,4 +118,7 @@ def dashboard():
     if response.status_code == 200:
         return response.json()
 
-    return {}
+    raise Exception(
+        f"Falha ao carregar o dashboard (HTTP {response.status_code}): "
+        f"{response.text}"
+    )

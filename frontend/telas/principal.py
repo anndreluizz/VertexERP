@@ -2,8 +2,22 @@ from telas.dashboard import Dashboard
 from telas.pdv import PDV
 from telas.caixa import Caixa
 from telas.produtos import Produtos
+from telas.clientes import Clientes
+from telas.fornecedores import Fornecedores
+from telas.compras import Compras
+from telas.vendas import Vendas
+from telas.ajuste_estoque import AjusteEstoque
+from telas.relatorios import Relatorios
+from telas.configuracoes import Configuracoes
+from telas.contas_pagar import ContasPagar
+from services.api import usuario_e_admin
+from services.configuracao_service import (
+    buscar_configuracoes,
+    buscar_logo_bytes,
+)
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -16,13 +30,42 @@ from PySide6.QtWidgets import (
 )
 
 
+class PilhaDePaginas(QStackedWidget):
+    """QStackedWidget comum dimensiona a janela pelo MAIOR conteúdo entre
+    TODAS as páginas cadastradas, não só a que está visível — uma tela
+    larga (ex.: Relatórios, com filtros + gráficos lado a lado) inflava a
+    janela inteira mesmo com o usuário em outra página, tipo o
+    Dashboard. Aqui o tamanho considera só a página atual."""
+
+    def sizeHint(self):
+        atual = self.currentWidget()
+        return atual.sizeHint() if atual else super().sizeHint()
+
+    def minimumSizeHint(self):
+        atual = self.currentWidget()
+        return (
+            atual.minimumSizeHint()
+            if atual
+            else super().minimumSizeHint()
+        )
+
+
 class PrincipalWindow(QMainWindow):
+
+    def _ajustar_tamanho_a_tela(self):
+        # Calcular pixel na mão (resize + setMaximumSize) deu problema nos
+        # dois sentidos dependendo da tela/escala do Windows de cada PC —
+        # ora abria maior que a tela, ora travava pequena sem deixar
+        # aumentar. Deixa o próprio Windows decidir o que cabe: maximiza
+        # (preenche a área útil, sem cobrir a barra de tarefas) e não
+        # define nenhum tamanho máximo, então o usuário ainda pode
+        # restaurar e redimensionar a janela livremente se quiser.
+        self.setWindowState(Qt.WindowMaximized)
 
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("Vertex ERP")
-        self.resize(1400, 800)
+        self._ajustar_tamanho_a_tela()
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -65,7 +108,21 @@ class PrincipalWindow(QMainWindow):
 
         menu_layout = QVBoxLayout(menu)
 
-        titulo = QLabel("VERTEX ERP")
+        config = buscar_configuracoes()
+        logo_bytes = buscar_logo_bytes()
+
+        self.setWindowTitle(config.get("nome_loja") or "Vertex ERP")
+
+        if logo_bytes:
+            pixmap = QPixmap()
+            pixmap.loadFromData(logo_bytes)
+            titulo = QLabel()
+            titulo.setPixmap(
+                pixmap.scaledToWidth(140, Qt.SmoothTransformation)
+            )
+        else:
+            titulo = QLabel(config.get("nome_loja") or "VERTEX ERP")
+
         titulo.setAlignment(Qt.AlignCenter)
 
         menu_layout.addWidget(titulo)
@@ -78,6 +135,8 @@ class PrincipalWindow(QMainWindow):
         self.bt_compras = QPushButton("📥 Compras")
         self.bt_vendas = QPushButton("🧾 Vendas")
         self.bt_caixa = QPushButton("💰 Caixa")
+        self.bt_contas_pagar = QPushButton("📄 Contas a Pagar")
+        self.bt_ajuste_estoque = QPushButton("🔧 Ajuste Estoque")
         self.bt_relatorios = QPushButton("📊 Relatórios")
         self.bt_config = QPushButton("⚙ Configurações")
 
@@ -90,6 +149,8 @@ class PrincipalWindow(QMainWindow):
             self.bt_compras,
             self.bt_vendas,
             self.bt_caixa,
+            self.bt_contas_pagar,
+            self.bt_ajuste_estoque,
             self.bt_relatorios,
             self.bt_config,
         ]
@@ -103,31 +164,28 @@ class PrincipalWindow(QMainWindow):
         # ÁREA CENTRAL
         # ======================
 
-        self.paginas = QStackedWidget()
+        self.paginas = PilhaDePaginas()
 
         self.dashboard = Dashboard()
         self.pdv = PDV()
         self.produtos = Produtos()
+        self.clientes = Clientes()
 
-        self.clientes = QLabel("Clientes")
-        self.clientes.setAlignment(Qt.AlignCenter)
+        self.fornecedores = Fornecedores()
 
-        self.fornecedores = QLabel("Fornecedores")
-        self.fornecedores.setAlignment(Qt.AlignCenter)
+        self.compras = Compras()
 
-        self.compras = QLabel("Compras")
-        self.compras.setAlignment(Qt.AlignCenter)
-
-        self.vendas = QLabel("Vendas")
-        self.vendas.setAlignment(Qt.AlignCenter)
+        self.vendas = Vendas()
 
         self.caixa = Caixa()
 
-        self.relatorios = QLabel("Relatórios")
-        self.relatorios.setAlignment(Qt.AlignCenter)
+        self.contas_pagar = ContasPagar()
 
-        self.config = QLabel("Configurações")
-        self.config.setAlignment(Qt.AlignCenter)
+        self.ajuste_estoque = AjusteEstoque()
+
+        self.relatorios = Relatorios()
+
+        self.config = Configuracoes()
 
         self.paginas.addWidget(self.dashboard)
         self.paginas.addWidget(self.pdv)
@@ -137,6 +195,8 @@ class PrincipalWindow(QMainWindow):
         self.paginas.addWidget(self.compras)
         self.paginas.addWidget(self.vendas)
         self.paginas.addWidget(self.caixa)
+        self.paginas.addWidget(self.contas_pagar)
+        self.paginas.addWidget(self.ajuste_estoque)
         self.paginas.addWidget(self.relatorios)
         self.paginas.addWidget(self.config)
 
@@ -179,6 +239,14 @@ class PrincipalWindow(QMainWindow):
             lambda: self.paginas.setCurrentWidget(self.caixa)
         )
 
+        self.bt_contas_pagar.clicked.connect(
+            lambda: self.paginas.setCurrentWidget(self.contas_pagar)
+        )
+
+        self.bt_ajuste_estoque.clicked.connect(
+            lambda: self.paginas.setCurrentWidget(self.ajuste_estoque)
+        )
+
         self.bt_relatorios.clicked.connect(
             lambda: self.paginas.setCurrentWidget(self.relatorios)
         )
@@ -186,3 +254,8 @@ class PrincipalWindow(QMainWindow):
         self.bt_config.clicked.connect(
             lambda: self.paginas.setCurrentWidget(self.config)
         )
+
+        # Configurações da loja/PIX/usuários é coisa de admin — operador
+        # nem vê o menu.
+        if not usuario_e_admin():
+            self.bt_config.setVisible(False)

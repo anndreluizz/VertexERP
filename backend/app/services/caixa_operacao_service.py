@@ -23,6 +23,7 @@ class CaixaOperacaoService:
         tipo: str,
         descricao: str,
         valor: float,
+        venda_id: int | None = None,
     ):
 
         movimento = MovimentoCaixa(
@@ -31,13 +32,15 @@ class CaixaOperacaoService:
             tipo=tipo,
             descricao=descricao,
             valor=valor,
+            venda_id=venda_id,
         )
 
         db.add(movimento)
 
         caixa.saldo_final += valor
 
-        db.flush()
+        db.commit()
+        db.refresh(movimento)
 
         return movimento
 

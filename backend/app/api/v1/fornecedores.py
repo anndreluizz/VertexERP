@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database.session import SessionLocal
@@ -8,7 +8,7 @@ from app.schemas.fornecedor import (
     FornecedorResponse,
 )
 from app.services.fornecedor_service import FornecedorService
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_admin
 
 router = APIRouter(
     prefix="/fornecedores",
@@ -35,10 +35,12 @@ def criar(
 
 @router.get("/", response_model=list[FornecedorResponse])
 def listar(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    return FornecedorService.listar(db)
+    return FornecedorService.listar(db, skip, limit)
 
 
 @router.get("/{fornecedor_id}", response_model=FornecedorResponse)
@@ -68,7 +70,7 @@ def atualizar(
 def excluir(
     fornecedor_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(require_admin),
 ):
     return FornecedorService.excluir(
         db,

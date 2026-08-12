@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
@@ -49,10 +49,12 @@ def criar_movimento(
 
 @router.get("/", response_model=list[MovimentoCaixaResponse])
 def listar_movimentos(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    movimentos = MovimentoCaixaService.listar(db)
+    movimentos = MovimentoCaixaService.listar(db, skip, limit)
 
     return [
         MovimentoCaixaResponse.from_orm(m)
@@ -66,12 +68,16 @@ def listar_movimentos(
 )
 def listar_por_caixa(
     caixa_id: int,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
     movimentos = MovimentoCaixaService.listar_por_caixa(
         db,
         caixa_id,
+        skip,
+        limit,
     )
 
     return [
@@ -86,12 +92,16 @@ def listar_por_caixa(
 )
 def listar_por_tipo(
     tipo: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
     movimentos = MovimentoCaixaService.listar_por_tipo(
         db,
         tipo,
+        skip,
+        limit,
     )
 
     return [

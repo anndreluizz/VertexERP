@@ -52,25 +52,29 @@ class ContaReceberService:
         )
 
     @staticmethod
-    def listar(db: Session):
-        return ContaReceberRepository.listar(db)
+    def listar(db: Session, skip: int = 0, limit: int = 100):
+        return ContaReceberRepository.listar(db, skip, limit)
 
     @staticmethod
     def listar_pendentes(db: Session):
         return ContaReceberRepository.listar_pendentes(db)
 
     @staticmethod
-    def listar_recebidas(db: Session):
-        return ContaReceberRepository.listar_recebidas(db)
+    def listar_recebidas(db: Session, skip: int = 0, limit: int = 100):
+        return ContaReceberRepository.listar_recebidas(db, skip, limit)
 
     @staticmethod
     def listar_por_cliente(
         db: Session,
         cliente_id: int,
+        skip: int = 0,
+        limit: int = 100,
     ):
         return ContaReceberRepository.listar_por_cliente(
             db,
             cliente_id,
+            skip,
+            limit,
         )
 
     @staticmethod

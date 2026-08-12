@@ -3,6 +3,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
+from app.enums.forma_pagamento import FormaPagamento
+
 
 class ItemCompraCreate(BaseModel):
     produto_id: int
@@ -27,7 +29,7 @@ class CompraCreate(BaseModel):
 
     observacao: str | None = None
 
-    forma_pagamento: str
+    forma_pagamento: FormaPagamento
 
     data_vencimento: datetime | None = None
 

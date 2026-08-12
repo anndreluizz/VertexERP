@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.models.conta_pagar import ContaPagar
-from app.enums.status_conta_receber import StatusContaReceber
+from app.enums.status_conta_pagar import StatusContaPagar
 
 
 class ContaPagarRepository:
@@ -33,31 +33,38 @@ class ContaPagarRepository:
         )
 
     @staticmethod
-    def listar(db: Session):
+    def listar(db: Session, skip: int = 0, limit: int = 100):
         return (
             db.query(ContaPagar)
             .order_by(
                 ContaPagar.data_vencimento
             )
+            .offset(skip)
+            .limit(limit)
             .all()
         )
 
     @staticmethod
     def listar_pendentes(db: Session):
+        # Sem paginação: usado internamente por FinanceiroService.fluxo_caixa,
+        # que precisa do total real de contas pendentes para o cálculo do
+        # saldo projetado, não só da primeira página.
         return (
             db.query(ContaPagar)
             .filter(
-                ContaPagar.status == StatusContaReceber.PENDENTE.value
+                ContaPagar.status == StatusContaPagar.PENDENTE.value
             )
             .all()
         )
 
     @staticmethod
-    def listar_pagas(db: Session):
+    def listar_pagas(db: Session, skip: int = 0, limit: int = 100):
         return (
             db.query(ContaPagar)
             .filter(
-                ContaPagar.status == StatusContaReceber.RECEBIDO.value
+                ContaPagar.status == StatusContaPagar.PAGO.value
             )
+            .offset(skip)
+            .limit(limit)
             .all()
         )

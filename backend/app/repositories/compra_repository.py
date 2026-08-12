@@ -19,9 +19,12 @@ class CompraRepository:
         db.commit()
 
     @staticmethod
-    def listar(db: Session):
+    def listar(db: Session, skip: int = 0, limit: int = 100):
         return (
             db.query(Compra)
+            .order_by(Compra.id)
+            .offset(skip)
+            .limit(limit)
             .all()
         )
 

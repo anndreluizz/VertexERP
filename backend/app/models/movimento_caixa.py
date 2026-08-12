@@ -24,6 +24,11 @@ class MovimentoCaixa(Base):
         nullable=False
     )
 
+    venda_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vendas.id", ondelete="SET NULL"),
+        nullable=True
+    )
+
     data: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow
@@ -49,4 +54,8 @@ class MovimentoCaixa(Base):
 
     usuario = relationship(
         "User"
+    )
+
+    venda = relationship(
+        "Venda"
     )

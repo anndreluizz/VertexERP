@@ -58,3 +58,16 @@ def get_current_user(
             status_code=401,
             detail="Token inválido."
         )
+
+
+def require_admin(
+    usuario: User = Depends(get_current_user),
+) -> User:
+
+    if not usuario.admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas administradores podem realizar esta ação."
+        )
+
+    return usuario

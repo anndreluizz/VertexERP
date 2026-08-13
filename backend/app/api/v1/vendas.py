@@ -1,6 +1,6 @@
 import base64
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
@@ -35,10 +35,12 @@ def get_db():
 
 @router.get("/", response_model=list[VendaResponse])
 def listar(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    return VendaService.listar(db)
+    return VendaService.listar(db, skip, limit)
 
 
 @router.get("/{venda_id}", response_model=VendaResponse)

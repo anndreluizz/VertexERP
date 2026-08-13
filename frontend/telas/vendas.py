@@ -1,12 +1,15 @@
 from datetime import datetime
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QShortcut, QKeySequence
-from PySide6.QtWidgets import QMessageBox, QTableWidgetItem
+from PySide6.QtWidgets import QMessageBox, QPushButton, QTableWidgetItem
 
-from services.venda_service import listar_vendas, cancelar_venda
+from services.venda_service import listar_vendas_pagina, cancelar_venda
 from services.cliente_service import listar_clientes
 from services.api import usuario_e_admin
 from widgets.base.base_crud_window import BaseCRUDWindow
+
+_TAMANHO_PAGINA = 100
 
 FORMAS_PAGAMENTO = {
     "DINHEIRO": "Dinheiro",
@@ -37,6 +40,10 @@ class Vendas(BaseCRUDWindow):
     )
 
     def __init__(self):
+
+        self.vendas = []
+        self.tem_mais_vendas = False
+
         super().__init__()
 
         # Vendas só são criadas pelo PDV, não por aqui.
@@ -49,20 +56,41 @@ class Vendas(BaseCRUDWindow):
         if not usuario_e_admin():
             self.toolbar.bt_excluir.setVisible(False)
 
+        self.bt_carregar_mais = QPushButton("Carregar mais vendas ▾")
+        self.bt_carregar_mais.setCursor(Qt.PointingHandCursor)
+        self.bt_carregar_mais.clicked.connect(self.carregar_mais)
+        self.layout().addWidget(self.bt_carregar_mais)
+        self.bt_carregar_mais.setVisible(self.tem_mais_vendas)
+
         QShortcut(QKeySequence("F5"), self, self.carregar)
         QShortcut(QKeySequence("Delete"), self, self.excluir)
 
         self.tabela.doubleClicked.connect(lambda index: self.editar())
 
     # ==========================================
-    # CARREGAR VENDAS
+    # CARREGAR VENDAS (paginado — mais recentes primeiro)
     # ==========================================
     def carregar(self):
         self.clientes_map = {
             cliente["id"]: cliente["nome"] for cliente in listar_clientes()
         }
 
-        self.vendas = listar_vendas()
+        self.vendas = []
+        self._buscar_pagina()
+
+    def carregar_mais(self):
+        self._buscar_pagina()
+
+    def _buscar_pagina(self):
+        pagina = listar_vendas_pagina(len(self.vendas), _TAMANHO_PAGINA)
+
+        self.vendas.extend(pagina)
+        self.tem_mais_vendas = len(pagina) == _TAMANHO_PAGINA
+
+        botao = getattr(self, "bt_carregar_mais", None)
+        if botao is not None:
+            botao.setVisible(self.tem_mais_vendas)
+
         self.preencher_tabela(self.vendas)
 
     # ==========================================

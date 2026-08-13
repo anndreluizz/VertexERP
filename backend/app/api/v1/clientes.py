@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.database.session import SessionLocal
@@ -44,10 +44,12 @@ def criar_cliente(
 
 @router.get("/", response_model=list[ClienteResponse])
 def listar_clientes(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user)
 ):
-    return ClienteService.listar(db)
+    return ClienteService.listar(db, skip, limit)
 
 
 @router.get("/{cliente_id}", response_model=ClienteResponse)

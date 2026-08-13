@@ -7,9 +7,12 @@ class VendaRepository:
 
     @staticmethod
     def listar(db: Session, skip: int = 0, limit: int = 100):
+        # mais recente primeiro -- pra "carregar mais" na tela de
+        # vendas mostrar o historico atual logo na primeira pagina,
+        # em vez de comecar pelas vendas mais antigas
         return (
             db.query(Venda)
-            .order_by(Venda.id)
+            .order_by(Venda.id.desc())
             .offset(skip)
             .limit(limit)
             .all()

@@ -113,8 +113,8 @@ def _parcelas_pagamento(venda_ou_dados, valor_total):
 class VendaService:
 
     @staticmethod
-    def listar(db: Session):
-        return VendaRepository.listar(db)
+    def listar(db: Session, skip: int = 0, limit: int = 100):
+        return VendaRepository.listar(db, skip, limit)
 
     @staticmethod
     def buscar(

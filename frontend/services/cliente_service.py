@@ -1,14 +1,36 @@
 from services.api import get, post, put, delete
 
+# a API nunca devolve mais que isso por chamada (ver clientes.py no
+# backend) -- listar_clientes() varre todas as paginas por baixo dos
+# panos, entao pra quem chama continua parecendo uma lista so, so que
+# agora sem truncar silenciosamente em 100 registros.
+_TAMANHO_PAGINA = 500
+
 
 def listar_clientes():
 
-    response = get("/clientes/")
+    clientes = []
+    pagina = 0
 
-    if response.status_code != 200:
-        return []
+    while True:
 
-    return response.json()
+        response = get(
+            f"/clientes/?skip={pagina * _TAMANHO_PAGINA}"
+            f"&limit={_TAMANHO_PAGINA}"
+        )
+
+        if response.status_code != 200:
+            break
+
+        lote = response.json()
+        clientes.extend(lote)
+
+        if len(lote) < _TAMANHO_PAGINA:
+            break
+
+        pagina += 1
+
+    return clientes
 
 
 def cadastrar_cliente(dados):

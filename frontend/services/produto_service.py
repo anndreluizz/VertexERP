@@ -1,5 +1,11 @@
 from services.api import get, post, put, delete
 
+# a API nunca devolve mais que isso por chamada (ver produtos.py no
+# backend) -- listar_produtos() varre todas as paginas por baixo dos
+# panos, entao pra quem chama continua parecendo uma lista so, so que
+# agora sem truncar silenciosamente em 100 registros.
+_TAMANHO_PAGINA = 500
+
 
 # ==========================================
 # LISTAR PRODUTOS
@@ -7,12 +13,28 @@ from services.api import get, post, put, delete
 
 def listar_produtos():
 
-    response = get("/produtos?limit=500")
+    produtos = []
+    pagina = 0
 
-    if response.status_code != 200:
-        return []
+    while True:
 
-    return response.json()
+        response = get(
+            f"/produtos?skip={pagina * _TAMANHO_PAGINA}"
+            f"&limit={_TAMANHO_PAGINA}"
+        )
+
+        if response.status_code != 200:
+            break
+
+        lote = response.json()
+        produtos.extend(lote)
+
+        if len(lote) < _TAMANHO_PAGINA:
+            break
+
+        pagina += 1
+
+    return produtos
 
 
 # ==========================================

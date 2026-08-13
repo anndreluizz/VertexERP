@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 )
 
 from design.responsive import tamanho_fixo_seguro
+from utils.formatacao import formatar_moeda
 
 
 class ProdutoCriadoDialog(QDialog):
@@ -87,7 +88,7 @@ class ProdutoCriadoDialog(QDialog):
             "font-weight:bold; color:#202225;"
         )
 
-        lbl_preco = QLabel(f"R$ {preco_venda:.2f}")
+        lbl_preco = QLabel(formatar_moeda(preco_venda))
         lbl_preco.setAlignment(Qt.AlignCenter)
         lbl_preco.setStyleSheet("""
             background:#e8f5e9;

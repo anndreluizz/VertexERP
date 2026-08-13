@@ -167,6 +167,14 @@ def me():
     return {}
 
 
+def usuario_e_admin():
+    """Se o usuário logado é administrador -- usado pra esconder ações
+    restritas (cancelar venda, gerenciar fornecedores etc.) de quem
+    não tem permissão, além da checagem que o backend já faz."""
+
+    return bool(me().get("admin"))
+
+
 def configuracoes():
 
     response = get("/configuracoes")

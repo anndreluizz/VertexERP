@@ -11,6 +11,7 @@ from design.animations import fade_in
 from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoPrimario, BotaoSecundario, BotaoSucesso
 from telas import comprovante_acoes
+from utils.formatacao import formatar_moeda
 from telas.comprovante_dialog import ComprovanteDialog
 
 
@@ -72,7 +73,7 @@ class VendaConcluidaDialog(QDialog):
             "font-weight:bold;"
         )
 
-        valor = QLabel(f"R$ {total:.2f}")
+        valor = QLabel(formatar_moeda(total))
         valor.setAlignment(Qt.AlignCenter)
         valor.setStyleSheet(
             "background:transparent; font-size:30px; font-weight:bold; "
@@ -98,7 +99,7 @@ class VendaConcluidaDialog(QDialog):
                 if forma_pagamento == "PRAZO"
                 else (
                     f"Fiado de {cliente_nome} — "
-                    f"R$ {self.valor_forma_2:.2f}"
+                    f"{formatar_moeda(self.valor_forma_2)}"
                 )
             )
 

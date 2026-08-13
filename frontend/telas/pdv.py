@@ -45,13 +45,7 @@ from design.widgets import (
     BotaoSucesso,
     CampoTexto,
 )
-
-
-def _formatar_moeda(valor):
-    return (
-        f"R$ {float(valor):,.2f}".replace(",", "X")
-        .replace(".", ",").replace("X", ".")
-    )
+from utils.formatacao import formatar_moeda
 
 
 def _parse_data(texto):
@@ -121,7 +115,7 @@ class VendasSuspensasDialog(QDialog):
             hora_texto = venda["hora"].strftime("%H:%M")
             texto = (
                 f"{venda['rotulo']}   ·   {len(venda['itens'])} item(ns)   ·   "
-                f"{_formatar_moeda(total)}   ·   {hora_texto}"
+                f"{formatar_moeda(total)}   ·   {hora_texto}"
             )
 
             self.lista.setItem(linha, 0, QTableWidgetItem(texto))
@@ -960,11 +954,11 @@ class PDV(QWidget):
             )
 
             self.tabela.setItem(
-                linha, 3, QTableWidgetItem(_formatar_moeda(item["preco"]))
+                linha, 3, QTableWidgetItem(formatar_moeda(item["preco"]))
             )
 
             self.tabela.setItem(
-                linha, 4, QTableWidgetItem(_formatar_moeda(subtotal))
+                linha, 4, QTableWidgetItem(formatar_moeda(subtotal))
             )
 
             self.tabela.setCellWidget(
@@ -984,17 +978,17 @@ class PDV(QWidget):
         total = max(0.0, subtotal - self.desconto_valor + self.acrescimo_valor)
 
         self.lbl_itens_valor.setText(str(len(self.itens)))
-        self.total.setText(_formatar_moeda(total))
+        self.total.setText(formatar_moeda(total))
 
         if self.desconto_valor or self.acrescimo_valor:
 
-            partes = [f"Subtotal {_formatar_moeda(subtotal)}"]
+            partes = [f"Subtotal {formatar_moeda(subtotal)}"]
 
             if self.desconto_valor:
-                partes.append(f"desconto -{_formatar_moeda(self.desconto_valor)}")
+                partes.append(f"desconto -{formatar_moeda(self.desconto_valor)}")
 
             if self.acrescimo_valor:
-                partes.append(f"acréscimo +{_formatar_moeda(self.acrescimo_valor)}")
+                partes.append(f"acréscimo +{formatar_moeda(self.acrescimo_valor)}")
 
             self.lbl_subtotal_info.setText("  ·  ".join(partes))
             self.lbl_subtotal_info.setVisible(True)
@@ -1318,9 +1312,9 @@ class PDV(QWidget):
             "<tr>"
             f"<td style='padding:4px 8px;'>{item['nome']}</td>"
             f"<td style='padding:4px 8px; text-align:center;'>{item['quantidade']}</td>"
-            f"<td style='padding:4px 8px; text-align:right;'>{_formatar_moeda(item['preco'])}</td>"
+            f"<td style='padding:4px 8px; text-align:right;'>{formatar_moeda(item['preco'])}</td>"
             f"<td style='padding:4px 8px; text-align:right;'>"
-            f"{_formatar_moeda(item['preco'] * item['quantidade'])}</td>"
+            f"{formatar_moeda(item['preco'] * item['quantidade'])}</td>"
             "</tr>"
             for item in self.itens
         )
@@ -1347,7 +1341,7 @@ class PDV(QWidget):
                 {linhas_itens}
             </table>
             <h3 style="text-align:right; margin-top:16px;">
-                Total: {_formatar_moeda(total)}
+                Total: {formatar_moeda(total)}
             </h3>
             <p style="color:#94A3B8; font-size:11px; margin-top:24px;">
                 Este orçamento não tem valor fiscal e não gera nenhuma venda.

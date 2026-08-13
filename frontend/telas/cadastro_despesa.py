@@ -30,13 +30,7 @@ from telas.gerenciar_categorias_despesa import (
 
 from design import tokens
 from design.widgets import BotaoPerigo, BotaoSecundario, CampoTexto
-
-
-def _formatar_moeda(valor):
-    return (
-        f"R$ {float(valor):,.2f}".replace(",", "X")
-        .replace(".", ",").replace("X", ".")
-    )
+from utils.formatacao import formatar_moeda
 
 
 def _parse_valor(texto):
@@ -407,7 +401,7 @@ class CadastroDespesaDialog(QDialog):
 
         final = max(0.0, valor_base - desconto + juros + multa)
 
-        self.lbl_valor_final.setText(_formatar_moeda(final))
+        self.lbl_valor_final.setText(formatar_moeda(final))
 
         return final
 

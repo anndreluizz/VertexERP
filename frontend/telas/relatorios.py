@@ -24,6 +24,7 @@ from services.caixa_service import historico_caixa
 from design import tokens
 from design.icons import icone
 from design.widgets import BotaoSecundario, CardKPI, SecaoCard
+from utils.formatacao import formatar_moeda
 
 
 NOMES_FORMA_PAGAMENTO = {
@@ -491,15 +492,9 @@ class Relatorios(QWidget):
         volume = len(vendas_periodo)
         ticket_medio = faturamento / volume if volume else 0
 
-        self.card_faturamento.definir_valor(
-            f"R$ {faturamento:,.2f}".replace(",", "X")
-            .replace(".", ",").replace("X", ".")
-        )
+        self.card_faturamento.definir_valor(formatar_moeda(faturamento))
         self.card_volume.definir_valor(str(volume))
-        self.card_ticket.definir_valor(
-            f"R$ {ticket_medio:,.2f}".replace(",", "X")
-            .replace(".", ",").replace("X", ".")
-        )
+        self.card_ticket.definir_valor(formatar_moeda(ticket_medio))
 
         self._atualizar_ranking_produtos(vendas_periodo)
         self._atualizar_mix_pagamentos(vendas_periodo)
@@ -547,8 +542,7 @@ class Relatorios(QWidget):
             linha = LinhaBarra(
                 f"{posicao}. {nome}",
                 None,
-                f"R$ {total:,.2f}".replace(",", "X")
-                .replace(".", ",").replace("X", "."),
+                formatar_moeda(total),
                 percentual,
                 tokens.PRIMARIA,
             )
@@ -610,8 +604,7 @@ class Relatorios(QWidget):
             linha = LinhaBarra(
                 nome,
                 f"{percentual:.1f}% do total",
-                f"R$ {total:,.2f}".replace(",", "X")
-                .replace(".", ",").replace("X", "."),
+                formatar_moeda(total),
                 percentual,
                 cor,
             )
@@ -675,18 +668,14 @@ class Relatorios(QWidget):
             self.tabela_caixa.setItem(
                 linha, 1,
                 QTableWidgetItem(
-                    f"R$ {float(caixa.get('saldo_inicial', 0)):,.2f}"
-                    .replace(",", "X")
-                    .replace(".", ",").replace("X", ".")
+                    formatar_moeda(caixa.get("saldo_inicial", 0))
                 ),
             )
             self.tabela_caixa.setItem(
                 linha, 2,
                 QTableWidgetItem(
-                    "—" if status == "ABERTO" else
-                    f"R$ {float(saldo_final or 0):,.2f}"
-                    .replace(",", "X")
-                    .replace(".", ",").replace("X", ".")
+                    "—" if status == "ABERTO"
+                    else formatar_moeda(saldo_final)
                 ),
             )
 
@@ -847,9 +836,7 @@ class Relatorios(QWidget):
             self.tabela_estoque.setItem(
                 linha, 2,
                 QTableWidgetItem(
-                    f"R$ {float(produto.get('preco_venda', 0)):,.2f}"
-                    .replace(",", "X")
-                    .replace(".", ",").replace("X", ".")
+                    formatar_moeda(produto.get("preco_venda", 0))
                 ),
             )
             self.tabela_estoque.setItem(

@@ -16,6 +16,7 @@ from services.caixa_service import historico_caixa
 from design import tokens
 from design.responsive import tamanho_fixo_seguro
 from design.widgets import Badge, BotaoSecundario, BotaoSucesso
+from utils.formatacao import formatar_moeda
 
 VALORES_RAPIDOS = [50, 100, 150, 200, 300, 500]
 
@@ -214,7 +215,7 @@ class AbrirCaixaWindow(QDialog):
             )
 
             saldo = float(sessao.get("saldo_final", 0) or 0)
-            lbl_saldo = QLabel(f"R$ {saldo:.2f}")
+            lbl_saldo = QLabel(formatar_moeda(saldo))
             lbl_saldo.setAlignment(Qt.AlignRight)
             lbl_saldo.setStyleSheet(f"""
                 background:transparent; font-size:{tokens.TAMANHO_SM}px;

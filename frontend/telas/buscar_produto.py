@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from services.pdv_service import pesquisar_produtos
 from services.produto_service import obter_foto_produto
+from utils.formatacao import formatar_moeda
 
 
 class ItemResultado(QWidget):
@@ -79,7 +80,7 @@ class ItemResultado(QWidget):
         col_texto.addWidget(nome)
         col_texto.addWidget(subtitulo)
 
-        preco = QLabel(f"R$ {float(produto['preco']):.2f}")
+        preco = QLabel(formatar_moeda(produto["preco"]))
         preco.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         preco.setStyleSheet(
             "font-size:14px; font-weight:bold; background:transparent;"

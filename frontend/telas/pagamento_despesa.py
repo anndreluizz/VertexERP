@@ -24,6 +24,7 @@ from services.conta_pagar_service import atualizar_conta_pagar, pagar_conta_paga
 from design import tokens
 from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoPerigo, BotaoSecundario, BotaoSucesso, CampoTexto
+from utils.formatacao import formatar_moeda
 
 
 FORMAS_PAGAMENTO = [
@@ -35,13 +36,6 @@ FORMAS_PAGAMENTO = [
 ]
 
 NOMES_FORMA = {valor: rotulo for rotulo, valor in FORMAS_PAGAMENTO}
-
-
-def _formatar_moeda(valor):
-    return (
-        f"R$ {float(valor):,.2f}".replace(",", "X")
-        .replace(".", ",").replace("X", ".")
-    )
 
 
 class PagamentoDespesaDialog(QDialog):
@@ -273,7 +267,7 @@ class PagamentoDespesaDialog(QDialog):
             venc = self.conta.get("data_vencimento", "—")
 
         self.lbl_vencimento.setText(venc)
-        self.lbl_valor.setText(_formatar_moeda(self.conta.get("valor", 0)))
+        self.lbl_valor.setText(formatar_moeda(self.conta.get("valor", 0)))
 
     def selecionar_forma(self, valor):
 
@@ -455,7 +449,7 @@ class PagamentoDespesaDialog(QDialog):
             f"não fiscal</span><br><br>"
             f"<b>Descrição:</b> {self.conta.get('descricao') or 'Despesa'}<br>"
             f"<b>Categoria:</b> {self.conta.get('categoria') or '—'}<br>"
-            f"<b>Valor pago:</b> {_formatar_moeda(self.conta.get('valor', 0))}<br>"
+            f"<b>Valor pago:</b> {formatar_moeda(self.conta.get('valor', 0))}<br>"
             f"<b>Forma de pagamento:</b> {NOMES_FORMA[self.forma_pagamento]}<br>"
             f"<b>Data:</b> {agora}<br><br>"
             f"{observacao_final.replace(chr(10), '<br>')}"

@@ -26,6 +26,7 @@ from services.user_service import listar_usuarios
 from services import preferencias_service
 
 from telas.relatorios import NOMES_FORMA_PAGAMENTO, CORES_FORMA_PAGAMENTO
+from utils.formatacao import formatar_moeda
 
 
 DIAS_SEMANA_ABREV = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
@@ -38,13 +39,6 @@ VARIANTE_BADGE_FORMA = {
     "BOLETO": "neutro",
     "PRAZO": "alerta",
 }
-
-
-def _formatar_moeda(valor):
-    return (
-        f"R$ {float(valor):,.2f}".replace(",", "X")
-        .replace(".", ",").replace("X", ".")
-    )
 
 
 def _parse_data(texto):
@@ -346,13 +340,13 @@ class Dashboard(QWidget):
         vendas_hoje = float(dados.get("vendas_hoje", 0) or 0)
         vendas_hoje_qtd = int(dados.get("vendas_hoje_qtd", 0) or 0)
 
-        self.kpi_faturamento.definir_valor(_formatar_moeda(vendas_hoje))
+        self.kpi_faturamento.definir_valor(formatar_moeda(vendas_hoje))
         self.kpi_pedidos.definir_valor(str(vendas_hoje_qtd))
 
         ticket_medio = (vendas_hoje / vendas_hoje_qtd) if vendas_hoje_qtd else 0
-        self.kpi_ticket.definir_valor(_formatar_moeda(ticket_medio))
+        self.kpi_ticket.definir_valor(formatar_moeda(ticket_medio))
 
-        self.kpi_caixa.definir_valor(_formatar_moeda(dados.get("saldo_caixa", 0) or 0))
+        self.kpi_caixa.definir_valor(formatar_moeda(dados.get("saldo_caixa", 0) or 0))
         self.kpi_clientes.definir_valor(str(dados.get("clientes", 0)))
         self.kpi_produtos.definir_valor(str(dados.get("produtos", 0)))
         self.kpi_estoque.definir_valor(str(dados.get("estoque_baixo", 0)))
@@ -378,7 +372,7 @@ class Dashboard(QWidget):
 
                 lucro_hoje += (valor_unit - custo) * item.get("quantidade", 0)
 
-        self.kpi_lucro.definir_valor(_formatar_moeda(lucro_hoje))
+        self.kpi_lucro.definir_valor(formatar_moeda(lucro_hoje))
 
     def _atualizar_grafico(self, vendas_finalizadas):
 
@@ -434,7 +428,7 @@ class Dashboard(QWidget):
             linha = LinhaProgresso(
                 NOMES_FORMA_PAGAMENTO.get(forma, forma),
                 None,
-                _formatar_moeda(valor),
+                formatar_moeda(valor),
                 percentual,
                 CORES_FORMA_PAGAMENTO.get(forma, tokens.PRIMARIA),
             )
@@ -555,7 +549,7 @@ class Dashboard(QWidget):
             self.secao_alertas.corpo.addWidget(
                 self._linha_alerta(
                     conta.get("descricao") or "Conta a pagar",
-                    f"{_formatar_moeda(conta.get('valor', 0))} — {texto_prazo}",
+                    f"{formatar_moeda(conta.get('valor', 0))} — {texto_prazo}",
                     "erro" if (dias is not None and dias < 0) else "alerta",
                 )
             )
@@ -565,7 +559,7 @@ class Dashboard(QWidget):
             self.secao_alertas.corpo.addWidget(
                 self._linha_alerta(
                     f"Cliente devendo: {nome}",
-                    f"Saldo em aberto: {_formatar_moeda(saldo)}",
+                    f"Saldo em aberto: {formatar_moeda(saldo)}",
                     "alerta",
                 )
             )
@@ -664,7 +658,7 @@ class Dashboard(QWidget):
         layout.addLayout(col_texto)
         layout.addStretch()
 
-        lbl_valor = QLabel(_formatar_moeda(venda.get("valor_total", 0)))
+        lbl_valor = QLabel(formatar_moeda(venda.get("valor_total", 0)))
         lbl_valor.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO};
             font-size:{tokens.TAMANHO_SM}px; font-weight:700;

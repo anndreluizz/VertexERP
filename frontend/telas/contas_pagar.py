@@ -30,13 +30,7 @@ from telas.pagamento_despesa import PagamentoDespesaDialog
 from design import tokens
 from design.icons import icone
 from design.widgets import Badge, BotaoPerigo, BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
-
-
-def _formatar_moeda(valor):
-    return (
-        f"R$ {float(valor):,.2f}".replace(",", "X")
-        .replace(".", ",").replace("X", ".")
-    )
+from utils.formatacao import formatar_moeda
 
 
 def _status_real(conta):
@@ -203,7 +197,7 @@ class DespesaCard(Card):
 
         layout.addLayout(col_texto, stretch=1)
 
-        lbl_valor = QLabel(_formatar_moeda(conta.get("valor", 0)))
+        lbl_valor = QLabel(formatar_moeda(conta.get("valor", 0)))
         lbl_valor.setStyleSheet(f"""
             background:transparent; border:none; font-size:{tokens.TAMANHO_LG}px;
             font-weight:800; color:{tokens.TEXTO};
@@ -599,13 +593,13 @@ class ContasPagar(QWidget):
             previsao_total / len(contas_validas) if contas_validas else 0
         )
 
-        self.card_previsao.definir_valor(_formatar_moeda(previsao_total))
-        self.card_pago.definir_valor(_formatar_moeda(total_pago))
-        self.card_aberto.definir_valor(_formatar_moeda(em_aberto))
-        self.card_vencidas.definir_valor(_formatar_moeda(vencidas_total))
-        self.card_vence_hoje.definir_valor(_formatar_moeda(vence_hoje_total))
-        self.card_proximos_7.definir_valor(_formatar_moeda(proximos_7_total))
-        self.card_valor_medio.definir_valor(_formatar_moeda(valor_medio))
+        self.card_previsao.definir_valor(formatar_moeda(previsao_total))
+        self.card_pago.definir_valor(formatar_moeda(total_pago))
+        self.card_aberto.definir_valor(formatar_moeda(em_aberto))
+        self.card_vencidas.definir_valor(formatar_moeda(vencidas_total))
+        self.card_vence_hoje.definir_valor(formatar_moeda(vence_hoje_total))
+        self.card_proximos_7.definir_valor(formatar_moeda(proximos_7_total))
+        self.card_valor_medio.definir_valor(formatar_moeda(valor_medio))
 
     def _filtrar_status(self, filtro):
 

@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QMessageBox, QPushButton, QTableWidgetItem
 from services.venda_service import listar_vendas_pagina, cancelar_venda
 from services.cliente_service import listar_clientes
 from services.api import usuario_e_admin
+from utils.formatacao import formatar_moeda
 from widgets.base.base_crud_window import BaseCRUDWindow
 
 _TAMANHO_PAGINA = 100
@@ -135,7 +136,7 @@ class Vendas(BaseCRUDWindow):
                 ),
             )
             self.tabela.setItem(
-                linha, 4, QTableWidgetItem(f'R$ {float(venda["valor_total"]):.2f}')
+                linha, 4, QTableWidgetItem(formatar_moeda(venda["valor_total"]))
             )
             self.tabela.setItem(linha, 5, QTableWidgetItem(venda["status"]))
 
@@ -156,7 +157,7 @@ class Vendas(BaseCRUDWindow):
 
         linhas = [
             f"- {item['quantidade']}x produto #{item['produto_id']} "
-            f"= R$ {float(item['subtotal']):.2f}"
+            f"= {formatar_moeda(item['subtotal'])}"
             for item in venda["itens"]
         ]
 

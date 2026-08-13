@@ -15,6 +15,7 @@ from services.caixa_service import resumo_caixa, fechar_caixa
 from design import tokens
 from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoPerigo, BotaoSecundario, BotaoSucesso
+from utils.formatacao import formatar_moeda
 
 
 class FecharCaixaWindow(QDialog):
@@ -324,13 +325,13 @@ class FecharCaixaWindow(QDialog):
         vendas_cartao = float(r.get("vendas_cartao", 0) or 0)
         total_geral = float(r.get("total_geral", 0) or 0)
 
-        self.lbl_troco_inicial.setText(f"R$ {saldo_inicial:.2f}")
-        self.lbl_vendas_dinheiro.setText(f"R$ {vendas_dinheiro:.2f}")
-        self.lbl_suprimentos.setText(f"+ R$ {suprimentos:.2f}")
-        self.lbl_sangrias.setText(f"- R$ {sangrias:.2f}")
-        self.lbl_total_previsto.setText(f"R$ {total_previsto:.2f}")
+        self.lbl_troco_inicial.setText(formatar_moeda(saldo_inicial))
+        self.lbl_vendas_dinheiro.setText(formatar_moeda(vendas_dinheiro))
+        self.lbl_suprimentos.setText(f"+ {formatar_moeda(suprimentos)}")
+        self.lbl_sangrias.setText(f"- {formatar_moeda(sangrias)}")
+        self.lbl_total_previsto.setText(formatar_moeda(total_previsto))
 
-        self.lbl_valor_contado.setText(f"R$ {self.valor_contado:.2f}")
+        self.lbl_valor_contado.setText(formatar_moeda(self.valor_contado))
 
         diferenca = self.valor_contado - total_previsto
 
@@ -339,10 +340,10 @@ class FecharCaixaWindow(QDialog):
             texto = "R$ 0,00 (confere)"
         elif diferenca > 0:
             cor = tokens.PRIMARIA
-            texto = f"+ R$ {diferenca:.2f} (sobra)"
+            texto = f"+ {formatar_moeda(diferenca)} (sobra)"
         else:
             cor = tokens.ERRO
-            texto = f"- R$ {abs(diferenca):.2f} (falta)"
+            texto = f"- {formatar_moeda(abs(diferenca))} (falta)"
 
         self.lbl_diferenca.setText(texto)
         self.lbl_diferenca.setStyleSheet(f"""
@@ -350,9 +351,9 @@ class FecharCaixaWindow(QDialog):
             font-size:{tokens.TAMANHO_SM}px; font-weight:700; color:{cor};
         """)
 
-        self.lbl_vendas_pix.setText(f"R$ {vendas_pix:.2f}")
-        self.lbl_vendas_cartao.setText(f"R$ {vendas_cartao:.2f}")
-        self.lbl_total_geral.setText(f"R$ {total_geral:.2f}")
+        self.lbl_vendas_pix.setText(formatar_moeda(vendas_pix))
+        self.lbl_vendas_cartao.setText(formatar_moeda(vendas_cartao))
+        self.lbl_total_geral.setText(formatar_moeda(total_geral))
 
     def confirmar_fechamento(self):
 

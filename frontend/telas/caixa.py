@@ -36,6 +36,7 @@ from services.movimento_caixa_service import (
 from design import tokens
 from design.icons import icone_pixmap
 from design.widgets import BotaoSecundario, CardKPI
+from utils.formatacao import formatar_moeda
 
 
 class Caixa(QWidget):
@@ -389,34 +390,34 @@ class Caixa(QWidget):
         self.lbl_abertura.setText(f"Aberto em {data_abertura}")
 
         total_previsto = float(resumo.get("total_previsto", 0) or 0)
-        self.lbl_total_previsto.setText(f"R$ {total_previsto:.2f}")
+        self.lbl_total_previsto.setText(formatar_moeda(total_previsto))
 
         self.card_troco.definir_valor(
-            f"R$ {float(resumo.get('saldo_inicial', 0) or 0):.2f}"
+            formatar_moeda(resumo.get("saldo_inicial", 0))
         )
         self.card_dinheiro.definir_valor(
-            f"R$ {float(resumo.get('vendas_dinheiro', 0) or 0):.2f}"
+            formatar_moeda(resumo.get("vendas_dinheiro", 0))
         )
         self.card_pix.definir_valor(
-            f"R$ {float(resumo.get('vendas_pix', 0) or 0):.2f}"
+            formatar_moeda(resumo.get("vendas_pix", 0))
         )
         self.card_cartao.definir_valor(
-            f"R$ {float(resumo.get('vendas_cartao', 0) or 0):.2f}"
+            formatar_moeda(resumo.get("vendas_cartao", 0))
         )
         self.card_suprimentos.definir_valor(
-            f"+ R$ {float(resumo.get('suprimentos', 0) or 0):.2f}"
+            f"+ {formatar_moeda(resumo.get('suprimentos', 0))}"
         )
         self.card_sangrias.definir_valor(
-            f"- R$ {float(resumo.get('sangrias', 0) or 0):.2f}"
+            f"- {formatar_moeda(resumo.get('sangrias', 0))}"
         )
         self.card_prazo.definir_valor(
-            f"R$ {float(resumo.get('vendas_prazo', 0) or 0):.2f}"
+            formatar_moeda(resumo.get("vendas_prazo", 0))
         )
         self.card_recebimentos_fiado.definir_valor(
-            f"R$ {float(resumo.get('recebimentos_fiado', 0) or 0):.2f}"
+            formatar_moeda(resumo.get("recebimentos_fiado", 0))
         )
         self.card_total_geral.definir_valor(
-            f"R$ {float(resumo.get('total_geral', 0) or 0):.2f}"
+            formatar_moeda(resumo.get("total_geral", 0))
         )
 
         self.carregar_movimentos(caixa["id"])
@@ -451,7 +452,7 @@ class Caixa(QWidget):
                 linha,
                 2,
                 QTableWidgetItem(
-                    f"R$ {float(mov.get('valor', 0) or 0):.2f}"
+                    formatar_moeda(mov.get("valor", 0))
                 ),
             )
             self.tabela_movimentos.setItem(

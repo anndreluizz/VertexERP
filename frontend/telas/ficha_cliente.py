@@ -51,6 +51,7 @@ from services import cliente_analise
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.responsive import tamanho_fixo_seguro
+from utils.formatacao import formatar_moeda
 from design.widgets import (
     Avatar,
     Badge,
@@ -102,13 +103,6 @@ FORMAS_PAGAMENTO = [
 ]
 
 NOMES_FORMA_FIADO = {valor: rotulo for rotulo, valor in FORMAS_PAGAMENTO}
-
-
-def _formatar_moeda(valor):
-    return (
-        f"R$ {float(valor):,.2f}".replace(",", "X")
-        .replace(".", ",").replace("X", ".")
-    )
 
 
 def _parse_data(texto):
@@ -267,8 +261,8 @@ class LancarFiadoDialog(QDialog):
                     self,
                     "Limite de crédito",
                     f"Esse lançamento deixa o saldo devedor em "
-                    f"{_formatar_moeda(saldo_projetado)}, acima do limite "
-                    f"de crédito cadastrado ({_formatar_moeda(limite)}).\n\n"
+                    f"{formatar_moeda(saldo_projetado)}, acima do limite "
+                    f"de crédito cadastrado ({formatar_moeda(limite)}).\n\n"
                     "Deseja lançar mesmo assim?",
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.No,
@@ -326,7 +320,7 @@ class RegistrarPagamentoDialog(QDialog):
 
         subtitulo = QLabel(
             f"Saldo devedor de {cliente['nome']}: "
-            f"{_formatar_moeda(saldo_devedor)}"
+            f"{formatar_moeda(saldo_devedor)}"
         )
         subtitulo.setWordWrap(True)
         subtitulo.setStyleSheet(f"""
@@ -536,7 +530,7 @@ class LancarHaverDialog(QDialog):
 
         subtitulo = QLabel(
             f"Crédito em favor de {cliente['nome']} (desconto, devolução, "
-            f"cortesia). Saldo devedor atual: {_formatar_moeda(saldo_devedor)}."
+            f"cortesia). Saldo devedor atual: {formatar_moeda(saldo_devedor)}."
         )
         subtitulo.setWordWrap(True)
         subtitulo.setStyleSheet(f"""
@@ -989,7 +983,7 @@ class FichaClienteDialog(QDialog):
             self,
             "Enviar Último Comprovante",
             f"Enviar pelo WhatsApp o comprovante da venda #{ultima_venda['id']}"
-            f" ({data}, R$ {float(ultima_venda['valor_total']):.2f})?",
+            f" ({data}, {formatar_moeda(ultima_venda['valor_total'])})?",
         )
 
         if resposta != QMessageBox.Yes:
@@ -1107,8 +1101,8 @@ class FichaClienteDialog(QDialog):
 
             linhas.append(
                 f"{data} | {rotulo} | {self._descricao_com_itens(mov)} | "
-                f"{sinal} {_formatar_moeda(valor)} | "
-                f"Saldo: {_formatar_moeda(saldo_apos)}"
+                f"{sinal} {formatar_moeda(valor)} | "
+                f"Saldo: {formatar_moeda(saldo_apos)}"
             )
 
         movimentacoes = "\n".join(linhas) if linhas else "Nenhuma movimentação registrada."
@@ -1119,12 +1113,12 @@ class FichaClienteDialog(QDialog):
             f"Telefone: {self.cliente.get('telefone') or '—'}\n"
             f"Status: {status}\n"
             f"Cliente desde: {cliente_desde}\n"
-            f"Saldo Atual: {_formatar_moeda(saldo)}\n\n"
+            f"Saldo Atual: {formatar_moeda(saldo)}\n\n"
             f"*MOVIMENTAÇÕES*\n"
             f"{movimentacoes}\n\n"
-            f"Total Comprado: {_formatar_moeda(agr['total_comprado'])}\n"
-            f"Total Pago: {_formatar_moeda(total_pago)}\n"
-            f"Saldo Devedor: {_formatar_moeda(saldo)}\n\n"
+            f"Total Comprado: {formatar_moeda(agr['total_comprado'])}\n"
+            f"Total Pago: {formatar_moeda(total_pago)}\n"
+            f"Saldo Devedor: {formatar_moeda(saldo)}\n\n"
             f"Muito obrigado pela preferência!"
         )
 
@@ -1146,7 +1140,7 @@ class FichaClienteDialog(QDialog):
             f"{self._cabecalho_texto_whatsapp('COBRANÇA')}\n\n"
             f"Olá, {self.cliente.get('nome', '')}! 👋\n\n"
             f"Passando pra lembrar que você tem um saldo em aberto no "
-            f"valor de {_formatar_moeda(saldo)}.\n\n"
+            f"valor de {formatar_moeda(saldo)}.\n\n"
             f"Qualquer dúvida, é só chamar. Obrigado!"
         )
 
@@ -1162,7 +1156,7 @@ class FichaClienteDialog(QDialog):
         texto = (
             f"{self._cabecalho_texto_whatsapp('SALDO DEVEDOR')}\n\n"
             f"Olá, {self.cliente.get('nome', '')}!\n"
-            f"Seu saldo devedor atual é de {_formatar_moeda(saldo)}."
+            f"Seu saldo devedor atual é de {formatar_moeda(saldo)}."
         )
 
         self._enviar_texto_whatsapp(texto, "Enviar Saldo Devedor")
@@ -1195,9 +1189,9 @@ class FichaClienteDialog(QDialog):
             f"{self._cabecalho_texto_whatsapp('CRÉDITO (HAVER)')}\n\n"
             f"Olá, {self.cliente.get('nome', '')}!\n"
             f"Você recebeu um crédito de "
-            f"{_formatar_moeda(float(mov.get('valor', 0) or 0))} em {data}.\n"
+            f"{formatar_moeda(float(mov.get('valor', 0) or 0))} em {data}.\n"
             f"Motivo: {mov.get('descricao') or '—'}\n\n"
-            f"Seu saldo devedor atualizado é de {_formatar_moeda(saldo_apos)}."
+            f"Seu saldo devedor atualizado é de {formatar_moeda(saldo_apos)}."
         )
 
         self._enviar_texto_whatsapp(texto, "Enviar Haver")
@@ -1235,7 +1229,7 @@ class FichaClienteDialog(QDialog):
             partes.append(f"Data de Nascimento: {cliente['data_nascimento']}")
 
         partes.append(f"Cliente desde: {cliente_desde}")
-        partes.append(f"Saldo Atual: {_formatar_moeda(saldo)}")
+        partes.append(f"Saldo Atual: {formatar_moeda(saldo)}")
         partes.append("")
         partes.append("Muito obrigado pela preferência!")
 
@@ -1820,9 +1814,9 @@ class FichaClienteDialog(QDialog):
 
         valor = float(mov.get("valor", 0) or 0)
         texto_valor = (
-            f"+ {_formatar_moeda(valor)}"
+            f"+ {formatar_moeda(valor)}"
             if tipo == "COMPRA"
-            else f"- {_formatar_moeda(valor)}"
+            else f"- {formatar_moeda(valor)}"
         )
 
         lbl_valor = QLabel(texto_valor)
@@ -1832,7 +1826,7 @@ class FichaClienteDialog(QDialog):
             font-size:{tokens.TAMANHO_MD}px; font-weight:800;
         """)
 
-        lbl_saldo = QLabel(f"Saldo: {_formatar_moeda(saldo_apos)}")
+        lbl_saldo = QLabel(f"Saldo: {formatar_moeda(saldo_apos)}")
         lbl_saldo.setAlignment(Qt.AlignRight)
         lbl_saldo.setStyleSheet(f"""
             background:transparent; border:none; color:{tokens.TEXTO_TERCIARIO};
@@ -2147,7 +2141,7 @@ class FichaClienteDialog(QDialog):
 
         saldo = saldo_cliente(self.cliente["id"])
 
-        self.lbl_saldo_valor.setText(_formatar_moeda(saldo))
+        self.lbl_saldo_valor.setText(formatar_moeda(saldo))
         self.lbl_saldo_valor.setStyleSheet(f"""
             background:transparent; border:none; font-size:{tokens.TAMANHO_SM}px;
             font-weight:800;
@@ -2218,8 +2212,8 @@ class FichaClienteDialog(QDialog):
             return "Hoje" if dias == 0 else f"{dias} dia(s)"
 
         # linha de mini-cards
-        self.lbl_total_comprado.setText(_formatar_moeda(total_comprado))
-        self.lbl_total_pago_card.setText(_formatar_moeda(total_pago))
+        self.lbl_total_comprado.setText(formatar_moeda(total_comprado))
+        self.lbl_total_pago_card.setText(formatar_moeda(total_pago))
         self.lbl_ultima_compra.setText(_data_curta(agr["ultima_compra"]))
         self.lbl_ultimo_pagamento.setText(_data_curta(agr["ultimo_pagamento"]))
         self.lbl_dias_desde_ultima_compra.setText(
@@ -2234,7 +2228,7 @@ class FichaClienteDialog(QDialog):
 
         limite_credito = self.cliente.get("limite_credito")
         self.lbl_limite_credito.setText(
-            _formatar_moeda(limite_credito) if limite_credito else "Sem limite"
+            formatar_moeda(limite_credito) if limite_credito else "Sem limite"
         )
 
         aviso = cliente_analise.calcular_aviso(agr)
@@ -2252,12 +2246,12 @@ class FichaClienteDialog(QDialog):
         """)
 
         # painel lateral
-        self.lbl_resumo_total_comprado.setText(_formatar_moeda(total_comprado))
-        self.lbl_resumo_total_pago.setText(_formatar_moeda(total_pago))
-        self.lbl_resumo_saldo_atual.setText(_formatar_moeda(saldo_atual))
-        self.lbl_resumo_maior_compra.setText(_formatar_moeda(maior_compra))
+        self.lbl_resumo_total_comprado.setText(formatar_moeda(total_comprado))
+        self.lbl_resumo_total_pago.setText(formatar_moeda(total_pago))
+        self.lbl_resumo_saldo_atual.setText(formatar_moeda(saldo_atual))
+        self.lbl_resumo_maior_compra.setText(formatar_moeda(maior_compra))
         self.lbl_resumo_ultima_compra.setText(_data_curta(agr["ultima_compra"]))
-        self.lbl_resumo_ticket_medio.setText(_formatar_moeda(ticket_medio))
+        self.lbl_resumo_ticket_medio.setText(formatar_moeda(ticket_medio))
         self.lbl_resumo_total_compras.setText(str(qtd_compras))
 
     def registrar_pagamento(self):
@@ -2339,8 +2333,8 @@ class FichaClienteDialog(QDialog):
             valor = float(mov.get("valor", 0) or 0)
             descricao = self._descricao_com_itens(mov)
 
-            debito = _formatar_moeda(valor) if tipo == "COMPRA" else ""
-            credito = _formatar_moeda(valor) if tipo == "PAGAMENTO" else ""
+            debito = formatar_moeda(valor) if tipo == "COMPRA" else ""
+            credito = formatar_moeda(valor) if tipo == "PAGAMENTO" else ""
 
             linhas_tabela.append(
                 f"<tr>"
@@ -2348,7 +2342,7 @@ class FichaClienteDialog(QDialog):
                 f"<td>{descricao}</td>"
                 f"<td align='right'>{debito}</td>"
                 f"<td align='right'>{credito}</td>"
-                f"<td align='right'>{_formatar_moeda(saldo_apos)}</td>"
+                f"<td align='right'>{formatar_moeda(saldo_apos)}</td>"
                 f"</tr>"
             )
 
@@ -2397,7 +2391,7 @@ class FichaClienteDialog(QDialog):
         <table width="100%">
             <tr>
                 <td><b>Total Devedor:</b></td>
-                <td align="right"><b>{_formatar_moeda(saldo)}</b></td>
+                <td align="right"><b>{formatar_moeda(saldo)}</b></td>
             </tr>
             <tr>
                 <td>Responsável:</td>

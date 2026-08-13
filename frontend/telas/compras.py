@@ -28,6 +28,8 @@ from services.pdv_service import (
     buscar_produto,
 )
 
+from utils.formatacao import formatar_moeda
+
 from services.compra_service import (
     cadastrar_compra,
 )
@@ -453,12 +455,12 @@ class Compras(QWidget):
                 linha,
                 3,
                 QTableWidgetItem(
-                    f"R$ {item['preco']:.2f}"
+                    formatar_moeda(item["preco"])
                 )
             )
 
             subtotal_item = QTableWidgetItem(
-                f"R$ {subtotal:.2f}"
+                formatar_moeda(subtotal)
             )
 
             subtotal_item.setFlags(
@@ -472,8 +474,7 @@ class Compras(QWidget):
             )
 
         self.total.setText(
-            f"TOTAL: R$ {total:.2f}"
-
+            f"TOTAL: {formatar_moeda(total)}"
         )
         self.tabela.blockSignals(False)
 

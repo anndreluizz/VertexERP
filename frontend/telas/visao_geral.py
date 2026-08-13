@@ -26,13 +26,7 @@ from telas.relatorios import (
     LinhaBarra,
     NOMES_FORMA_PAGAMENTO,
 )
-
-
-def _formatar_moeda(valor):
-    return (
-        f"R$ {float(valor):,.2f}".replace(",", "X")
-        .replace(".", ",").replace("X", ".")
-    )
+from utils.formatacao import formatar_moeda
 
 
 def _parse_data(texto):
@@ -675,19 +669,19 @@ class VisaoGeral(QWidget):
             return ((atual - anterior) / anterior) * 100
 
         self.card_faturamento.atualizar(
-            _formatar_moeda(faturamento),
+            formatar_moeda(faturamento),
             variacao(faturamento, faturamento_ant),
         )
         self.card_lucro.atualizar(
-            _formatar_moeda(lucro),
+            formatar_moeda(lucro),
             variacao(lucro, lucro_ant),
         )
         self.card_despesas.atualizar(
-            _formatar_moeda(despesas),
+            formatar_moeda(despesas),
             variacao(despesas, despesas_ant),
         )
         self.card_ticket.atualizar(
-            _formatar_moeda(ticket_medio),
+            formatar_moeda(ticket_medio),
             variacao(ticket_medio, ticket_medio_ant),
         )
 
@@ -775,7 +769,7 @@ class VisaoGeral(QWidget):
             self.tabela_transacoes.setItem(
                 linha, 3,
                 QTableWidgetItem(
-                    _formatar_moeda(venda.get("valor_total", 0))
+                    formatar_moeda(venda.get("valor_total", 0))
                 ),
             )
 

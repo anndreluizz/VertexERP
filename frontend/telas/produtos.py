@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
+from utils.formatacao import formatar_moeda
 from widgets.banner import Banner
 
 
@@ -388,7 +389,7 @@ class Produtos(QWidget):
 
         self.card_total.definir_valor(str(total))
         self.card_alerta.definir_valor(str(em_alerta))
-        self.card_patrimonio.definir_valor(f"R$ {patrimonio:.2f}")
+        self.card_patrimonio.definir_valor(formatar_moeda(patrimonio))
         self.card_categorias.definir_valor(str(categorias_ativas))
 
     # ==========================================
@@ -570,7 +571,7 @@ class Produtos(QWidget):
                 linha,
                 5,
                 QTableWidgetItem(
-                    f'R$ {float(produto["preco_venda"]):.2f}'
+                    formatar_moeda(produto["preco_venda"])
                 )
             )
 

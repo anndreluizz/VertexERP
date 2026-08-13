@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
+from utils.formatacao import formatar_moeda
 
 
 # rótulo exibido -> chave interna do filtro
@@ -162,7 +163,7 @@ class ClienteCard(QFrame):
         rodape = QHBoxLayout()
 
         if saldo_fiado > 0:
-            lbl_fiado = QLabel(f"Fiado: R$ {saldo_fiado:.2f}")
+            lbl_fiado = QLabel(f"Fiado: {formatar_moeda(saldo_fiado)}")
             lbl_fiado.setStyleSheet(f"""
                 background:transparent; border:none;
                 font-size:{tokens.TAMANHO_SM}px; font-weight:700; color:{tokens.ERRO};
@@ -526,9 +527,9 @@ class Clientes(QWidget):
         self.card_sem_movimento.definir_valor(str(sem_movimento))
         self.card_inadimplentes.definir_valor(str(inadimplentes))
         self.card_recebido_fiado.definir_valor(
-            f"R$ {self.recebido_fiado_total:.2f}"
+            formatar_moeda(self.recebido_fiado_total)
         )
-        self.card_a_receber.definir_valor(f"R$ {total_a_receber:.2f}")
+        self.card_a_receber.definir_valor(formatar_moeda(total_a_receber))
 
     # ==========================================
     # FILTRO DE STATUS

@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel
 
@@ -6,7 +7,7 @@ from pydantic import BaseModel
 class MovimentoCaixaBase(BaseModel):
     tipo: str
     descricao: str | None = None
-    valor: float
+    valor: Decimal
 
 
 class MovimentoCaixaCreate(MovimentoCaixaBase):

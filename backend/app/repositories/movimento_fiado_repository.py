@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
@@ -52,7 +53,7 @@ class MovimentoFiadoRepository:
         )
 
     @staticmethod
-    def saldo_por_cliente(db: Session, cliente_id: int) -> float:
+    def saldo_por_cliente(db: Session, cliente_id: int) -> Decimal:
         valor_assinado = case(
             (MovimentoFiado.tipo == "COMPRA", MovimentoFiado.valor),
             else_=-MovimentoFiado.valor,
@@ -64,7 +65,7 @@ class MovimentoFiadoRepository:
             .scalar()
         )
 
-        return saldo or 0.0
+        return saldo or Decimal("0")
 
     @staticmethod
     def listar_parados(db: Session, dias_limite: int):
@@ -100,7 +101,7 @@ class MovimentoFiadoRepository:
         )
 
     @staticmethod
-    def saldo_total(db: Session) -> float:
+    def saldo_total(db: Session) -> Decimal:
         """Soma o fiado em aberto de TODOS os clientes numa unica query
         -- mesmo criterio de saldo_por_cliente, so sem o filtro de
         cliente. Usado no KPI 'Contas a receber' do dashboard (a tabela
@@ -114,4 +115,4 @@ class MovimentoFiadoRepository:
 
         saldo = db.query(func.sum(valor_assinado)).scalar()
 
-        return saldo or 0.0
+        return saldo or Decimal("0")

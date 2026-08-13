@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -46,7 +47,7 @@ class CaixaService:
     def fechar(
         db: Session,
         usuario_id: int,
-        valor_contado: float | None = None,
+        valor_contado: Decimal | None = None,
         observacoes: str | None = None,
     ):
 
@@ -101,7 +102,7 @@ class CaixaService:
                     MovimentoCaixa.forma_pagamento == forma_pagamento
                 )
 
-            return float(query.scalar() or 0)
+            return query.scalar() or Decimal("0")
 
         vendas_dinheiro = soma(
             tipo="VENDA", forma_pagamento="DINHEIRO"

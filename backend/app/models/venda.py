@@ -1,6 +1,7 @@
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import DateTime, Float, ForeignKey, String
+from sqlalchemy import DateTime, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -31,13 +32,13 @@ class Venda(Base):
         default=datetime.utcnow
     )
 
-    valor_total: Mapped[float] = mapped_column(
-        Float,
+    valor_total: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
         default=0
     )
 
-    desconto: Mapped[float] = mapped_column(
-        Float,
+    desconto: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
         default=0
     )
 
@@ -66,8 +67,8 @@ class Venda(Base):
         nullable=True,
     )
 
-    valor_forma_2: Mapped[float | None] = mapped_column(
-        Float,
+    valor_forma_2: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
         nullable=True,
     )
 
@@ -100,7 +101,7 @@ class Venda(Base):
         return self.usuario.nome if self.usuario else None
 
     @property
-    def lucro(self) -> float | None:
+    def lucro(self) -> Decimal | None:
         """Valor total (ja com desconto aplicado) menos o custo dos
         produtos vendidos -- so pra dar visibilidade de margem no
         detalhe da venda; None se algum item nao tiver produto/custo

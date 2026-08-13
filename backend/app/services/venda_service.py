@@ -98,7 +98,6 @@ def _parcelas_pagamento(venda_ou_dados, valor_total):
     if not forma_2 or not valor_2:
         return [(forma_1, valor_total)]
 
-    valor_2 = float(valor_2)
     valor_1 = valor_total - valor_2
 
     parcelas = []
@@ -232,11 +231,11 @@ class VendaService:
                 cliente_id=dados.cliente_id,
                 usuario_id=usuario_id,
                 observacao=dados.observacao,
-                desconto=float(dados.desconto),
+                desconto=dados.desconto,
                 forma_pagamento=forma_pagamento,
                 forma_pagamento_2=forma_pagamento_2,
                 valor_forma_2=(
-                    float(dados.valor_forma_2)
+                    dados.valor_forma_2
                     if dados.valor_forma_2
                     else None
                 ),
@@ -272,18 +271,13 @@ class VendaService:
                         f"Estoque insuficiente para {produto.nome}."
                     )
 
-                subtotal = (
-                    float(item.valor_unitario)
-                    * item.quantidade
-                )
+                subtotal = item.valor_unitario * item.quantidade
 
                 item_venda = ItemVenda(
                     venda_id=venda.id,
                     produto_id=produto.id,
                     quantidade=item.quantidade,
-                    valor_unitario=float(
-                        item.valor_unitario
-                    ),
+                    valor_unitario=item.valor_unitario,
                     subtotal=subtotal,
                 )
 
@@ -314,7 +308,7 @@ class VendaService:
 
             venda.valor_total = (
                 valor_total
-                - float(dados.desconto)
+                - dados.desconto
             )
 
             if (

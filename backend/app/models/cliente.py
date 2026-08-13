@@ -1,6 +1,7 @@
 from datetime import date, datetime
+from decimal import Decimal
 
-from sqlalchemy import String, Boolean, DateTime, Date, Float, LargeBinary
+from sqlalchemy import String, Boolean, DateTime, Date, Numeric, LargeBinary
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -59,8 +60,8 @@ class Cliente(Base):
         nullable=True
     )
 
-    limite_credito: Mapped[float | None] = mapped_column(
-        Float,
+    limite_credito: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
         nullable=True
     )
 

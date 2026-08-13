@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
@@ -104,7 +105,7 @@ class FiadoService:
             db, cliente_id
         )
 
-        saldo = 0.0
+        saldo = Decimal("0")
 
         for movimento in movimentos:
             if movimento.tipo == "COMPRA":

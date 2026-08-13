@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from sqlalchemy.orm import Session
 
 from app.models.caixa import Caixa
@@ -23,7 +25,7 @@ class CaixaOperacaoService:
         usuario_id: int,
         tipo: str,
         descricao: str,
-        valor: float,
+        valor: Decimal,
         venda_id: int | None = None,
     ):
 
@@ -49,7 +51,7 @@ class CaixaOperacaoService:
     def registrar_recebimento(
         db: Session,
         usuario_id: int,
-        valor: float,
+        valor: Decimal,
         descricao: str,
     ):
 

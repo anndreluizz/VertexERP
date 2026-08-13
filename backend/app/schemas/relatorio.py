@@ -1,36 +1,37 @@
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel
 
 
 class KpiValor(BaseModel):
-    atual: float
-    anterior: float
+    atual: Decimal
+    anterior: Decimal
     variacao_pct: float | None
 
 
 class VendaPorDia(BaseModel):
     data: str
-    total: float
+    total: Decimal
 
 
 class ProdutoMaisVendido(BaseModel):
     produto: str
     quantidade: int
-    total: float
+    total: Decimal
 
 
 class FormaPagamentoTotal(BaseModel):
     forma_pagamento: str
     quantidade: int
-    total: float
+    total: Decimal
 
 
 class VendaResumo(BaseModel):
     id: int
     data: datetime
     cliente: str | None
-    valor_total: float
+    valor_total: Decimal
     forma_pagamento: str
     status: str
 

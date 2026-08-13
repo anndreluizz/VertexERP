@@ -1,6 +1,7 @@
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import DateTime, Float, ForeignKey, String
+from sqlalchemy import DateTime, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -37,8 +38,8 @@ class ContaReceber(Base):
         nullable=True
     )
 
-    valor: Mapped[float] = mapped_column(
-        Float
+    valor: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2)
     )
 
     status: Mapped[str] = mapped_column(

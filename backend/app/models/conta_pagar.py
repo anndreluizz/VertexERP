@@ -1,10 +1,11 @@
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     DateTime,
-    Float,
     ForeignKey,
     LargeBinary,
+    Numeric,
     String,
 )
 
@@ -48,7 +49,7 @@ class ContaPagar(Base):
         nullable=True,
     )
 
-    valor: Mapped[float]
+    valor: Mapped[Decimal] = mapped_column(Numeric(12, 2))
 
     descricao: Mapped[str | None] = mapped_column(
         String(120),

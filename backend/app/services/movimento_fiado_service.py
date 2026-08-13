@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
@@ -20,7 +21,7 @@ def _ajustar_caixa_por_correcao(
     db: Session,
     usuario_id: int,
     cliente_nome: str,
-    diferenca: float,
+    diferenca: Decimal,
     forma_pagamento: str,
     motivo: str,
 ) -> bool:
@@ -179,7 +180,7 @@ class MovimentoFiadoService:
 
     @staticmethod
     def criar_compra_da_venda(
-        db: Session, venda, usuario_id: int, valor: float | None = None
+        db: Session, venda, usuario_id: int, valor: Decimal | None = None
     ):
         # 'valor' existe pra venda dividida em 2 formas de pagamento —
         # nesse caso so a parcela que foi de fato pro fiado deve virar

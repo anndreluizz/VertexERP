@@ -53,7 +53,7 @@ class ContaPagarService:
             data_emissao=datetime.utcnow(),
             data_vencimento=dados.data_vencimento,
             data_pagamento=None,
-            valor=float(dados.valor),
+            valor=dados.valor,
             descricao=dados.descricao,
             categoria=dados.categoria,
             observacao=dados.observacao,

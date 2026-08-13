@@ -1,7 +1,8 @@
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy.orm import relationship
-from sqlalchemy import DateTime, Float, ForeignKey, String
+from sqlalchemy import DateTime, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database.base import Base
@@ -25,13 +26,13 @@ class Caixa(Base):
         nullable=True
     )
 
-    saldo_inicial: Mapped[float] = mapped_column(
-        Float,
+    saldo_inicial: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
         default=0
     )
 
-    saldo_final: Mapped[float] = mapped_column(
-        Float,
+    saldo_final: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
         default=0
     )
 
@@ -40,8 +41,8 @@ class Caixa(Base):
         default="ABERTO"
     )
 
-    valor_contado: Mapped[float | None] = mapped_column(
-        Float,
+    valor_contado: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
         nullable=True
     )
 

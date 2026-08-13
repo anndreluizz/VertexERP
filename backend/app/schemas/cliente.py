@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, EmailStr
 
@@ -12,7 +13,7 @@ class ClienteCreate(BaseModel):
     cidade: str | None = None
     estado: str | None = None
     data_nascimento: date | None = None
-    limite_credito: float | None = None
+    limite_credito: Decimal | None = None
 
     # imagem em base64 (entrada apenas); None mantem a foto atual
     foto_base64: str | None = None
@@ -28,7 +29,7 @@ class ClienteUpdate(BaseModel):
     estado: str | None = None
     ativo: bool
     data_nascimento: date | None = None
-    limite_credito: float | None = None
+    limite_credito: Decimal | None = None
 
     foto_base64: str | None = None
 
@@ -45,7 +46,7 @@ class ClienteResponse(BaseModel):
     ativo: bool
     criado_em: datetime
     data_nascimento: date | None = None
-    limite_credito: float | None = None
+    limite_credito: Decimal | None = None
     tem_foto: bool = False
 
     class Config:

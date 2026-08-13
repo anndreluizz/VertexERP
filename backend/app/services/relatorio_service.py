@@ -1,4 +1,5 @@
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -150,16 +151,16 @@ class RelatorioService:
 
         if not ids:
             return {
-                "receita_total": 0.0,
-                "lucro": 0.0,
+                "receita_total": Decimal("0"),
+                "lucro": Decimal("0"),
                 "quantidade_vendas": 0,
-                "ticket_medio": 0.0,
+                "ticket_medio": Decimal("0"),
                 "clientes_atendidos": 0,
                 "produtos_vendidos": 0,
-                "margem_lucro": 0.0,
+                "margem_lucro": Decimal("0"),
             }
 
-        receita_total = float(
+        receita_total = (
             db.query(func.coalesce(func.sum(Venda.valor_total), 0))
             .filter(Venda.id.in_(ids))
             .scalar()
@@ -195,16 +196,17 @@ class RelatorioService:
         produtos_vendidos = sum(item.quantidade for item, _ in itens)
 
         ticket_medio = (
-            receita_total / quantidade_vendas if quantidade_vendas else 0.0
+            receita_total / quantidade_vendas
+            if quantidade_vendas else Decimal("0")
         )
 
         margem_lucro = (
-            (lucro / receita_total * 100) if receita_total else 0.0
+            (lucro / receita_total * 100) if receita_total else Decimal("0")
         )
 
         return {
             "receita_total": receita_total,
-            "lucro": float(lucro),
+            "lucro": lucro,
             "quantidade_vendas": quantidade_vendas,
             "ticket_medio": ticket_medio,
             "clientes_atendidos": clientes_atendidos,

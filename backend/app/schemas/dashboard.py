@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from pydantic import BaseModel
 
 
@@ -5,24 +7,24 @@ class SerieMensalItem(BaseModel):
 
     mes: str
 
-    valor: float
+    valor: Decimal
 
 
 class DashboardResponse(BaseModel):
 
-    vendas_hoje: float
+    vendas_hoje: Decimal
 
     vendas_hoje_qtd: int
 
-    vendas_mes: float
+    vendas_mes: Decimal
 
-    compras_hoje: float
+    compras_hoje: Decimal
 
-    saldo_caixa: float
+    saldo_caixa: Decimal
 
-    contas_receber: float
+    contas_receber: Decimal
 
-    contas_pagar: float
+    contas_pagar: Decimal
 
     clientes: int
 
@@ -34,21 +36,21 @@ class DashboardResponse(BaseModel):
 
     contas_vencidas_qtd: int
 
-    contas_vencidas_valor: float
+    contas_vencidas_valor: Decimal
 
     contas_vencendo_hoje_qtd: int
 
-    contas_vencendo_hoje_valor: float
+    contas_vencendo_hoje_valor: Decimal
 
     contas_pagas_hoje_qtd: int
 
-    contas_pagas_hoje_valor: float
+    contas_pagas_hoje_valor: Decimal
 
-    fiado_recebido_hoje: float
+    fiado_recebido_hoje: Decimal
 
-    contas_mes_pago: float
+    contas_mes_pago: Decimal
 
-    contas_mes_pendente: float
+    contas_mes_pendente: Decimal
 
     serie_recebimentos_mensal: list[SerieMensalItem]
 

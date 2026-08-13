@@ -1,4 +1,6 @@
-from sqlalchemy import Float, ForeignKey, Integer
+from decimal import Decimal
+
+from sqlalchemy import ForeignKey, Integer, Numeric
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -25,12 +27,12 @@ class ItemCompra(Base):
         Integer,
     )
 
-    valor_unitario: Mapped[float] = mapped_column(
-        Float,
+    valor_unitario: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
     )
 
-    subtotal: Mapped[float] = mapped_column(
-        Float,
+    subtotal: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
     )
 
     compra = relationship(

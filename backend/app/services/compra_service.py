@@ -62,18 +62,13 @@ class CompraService:
                         f"Produto {item.produto_id} não encontrado."
                     )
 
-                subtotal = (
-                    float(item.valor_unitario)
-                    * item.quantidade
-                )
+                subtotal = item.valor_unitario * item.quantidade
 
                 novo_item = ItemCompra(
                     compra_id=compra.id,
                     produto_id=item.produto_id,
                     quantidade=item.quantidade,
-                    valor_unitario=float(
-                        item.valor_unitario
-                    ),
+                    valor_unitario=item.valor_unitario,
                     subtotal=subtotal,
                 )
 

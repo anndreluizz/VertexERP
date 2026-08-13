@@ -1,9 +1,10 @@
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     String,
     Boolean,
-    Float,
+    Numeric,
     Integer,
     DateTime,
     LargeBinary,
@@ -46,13 +47,13 @@ class Produto(Base):
         nullable=True
     )
 
-    preco_custo: Mapped[float] = mapped_column(
-        Float,
+    preco_custo: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
         default=0
     )
 
-    preco_venda: Mapped[float] = mapped_column(
-        Float,
+    preco_venda: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
         default=0
     )
 

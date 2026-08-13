@@ -25,6 +25,7 @@ import base64
 from services.ean_lookup import buscar_produto_externo
 from services.categoria_service import listar_categorias, criar_categoria
 from services.produto_service import obter_foto_produto
+from design.responsive import tamanho_fixo_seguro
 
 
 class CadastroProdutoWindow(QDialog):
@@ -36,7 +37,7 @@ class CadastroProdutoWindow(QDialog):
         self.imagem_bytes = None
         self.modo_venda = "UN"
 
-        self.setFixedSize(920, 640)
+        tamanho_fixo_seguro(self, 920, 640)
         self.setStyleSheet("background:white;")
 
         layout = QVBoxLayout(self)

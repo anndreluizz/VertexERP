@@ -7,6 +7,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from design.responsive import tamanho_fixo_seguro
+
 
 class ProdutoCriadoDialog(QDialog):
 
@@ -17,7 +19,7 @@ class ProdutoCriadoDialog(QDialog):
         self.editar_solicitado = False
 
         self.setWindowTitle("Produto Criado")
-        self.setFixedSize(420, 500)
+        tamanho_fixo_seguro(self, 420, 500)
         self.setStyleSheet("background:white;")
 
         layout = QVBoxLayout(self)

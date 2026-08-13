@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone_pixmap
+from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoSecundario, BotaoSucesso
 
 
@@ -19,7 +20,7 @@ class CaixaBloqueadoDialog(QDialog):
         self.abrir_solicitado = False
 
         self.setWindowTitle("Caixa Fechado")
-        self.setFixedSize(400, 320)
+        tamanho_fixo_seguro(self, 400, 320)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         layout = QVBoxLayout(self)

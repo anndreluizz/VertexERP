@@ -22,6 +22,7 @@ from services.api import configuracoes
 from services.conta_pagar_service import atualizar_conta_pagar, pagar_conta_pagar
 
 from design import tokens
+from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoPerigo, BotaoSecundario, BotaoSucesso, CampoTexto
 
 
@@ -64,7 +65,7 @@ class PagamentoDespesaDialog(QDialog):
         self.comprovante_tipo_arquivo = None
 
         self.setWindowTitle("Pagamento de Despesa")
-        self.setFixedSize(480, 560)
+        tamanho_fixo_seguro(self, 480, 560)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         raiz = QVBoxLayout(self)

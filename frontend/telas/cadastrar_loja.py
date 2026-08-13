@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from services.api import atualizar_configuracoes
+from design.responsive import tamanho_fixo_seguro
 
 
 class CadastrarLojaDialog(QDialog):
@@ -20,7 +21,7 @@ class CadastrarLojaDialog(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle("Cadastrar Nova Loja")
-        self.setFixedSize(420, 320)
+        tamanho_fixo_seguro(self, 420, 320)
         self.setStyleSheet("background:white; border-radius:16px;")
 
         layout = QVBoxLayout(self)

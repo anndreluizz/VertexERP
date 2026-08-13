@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.animations import fade_in
+from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoPrimario, BotaoSecundario, BotaoSucesso
 from telas import comprovante_acoes
 from telas.comprovante_dialog import ComprovanteDialog
@@ -38,7 +39,7 @@ class VendaConcluidaDialog(QDialog):
         self.valor_forma_2 = valor_forma_2 or 0.0
 
         self.setWindowTitle("Venda Finalizada")
-        self.setFixedSize(440, 640)
+        tamanho_fixo_seguro(self, 440, 640)
         self.setStyleSheet("background:white;")
 
         layout = QVBoxLayout(self)

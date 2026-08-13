@@ -50,6 +50,7 @@ from services import cliente_analise
 
 from design import tokens
 from design.icons import icone, icone_pixmap
+from design.responsive import tamanho_fixo_seguro
 from design.widgets import (
     Avatar,
     Badge,
@@ -130,7 +131,7 @@ class LancarFiadoDialog(QDialog):
         self.cliente = cliente
 
         self.setWindowTitle("Lançar Fiado")
-        self.setFixedSize(420, 460)
+        tamanho_fixo_seguro(self, 420, 460)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         layout = QVBoxLayout(self)
@@ -310,7 +311,7 @@ class RegistrarPagamentoDialog(QDialog):
         self.forma_pagamento = "DINHEIRO"
 
         self.setWindowTitle("Registrar Pagamento")
-        self.setFixedSize(420, 560)
+        tamanho_fixo_seguro(self, 420, 560)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         layout = QVBoxLayout(self)
@@ -520,7 +521,7 @@ class LancarHaverDialog(QDialog):
         self.cliente = cliente
 
         self.setWindowTitle("Lançar Haver")
-        self.setFixedSize(420, 420)
+        tamanho_fixo_seguro(self, 420, 420)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         layout = QVBoxLayout(self)

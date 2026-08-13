@@ -19,6 +19,7 @@ from services.user_service import (
 )
 
 from design import tokens
+from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, BotaoSucesso
 
 
@@ -28,7 +29,7 @@ class NovoUsuarioDialog(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle("Novo Usuário")
-        self.setFixedSize(400, 420)
+        tamanho_fixo_seguro(self, 400, 420)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         layout = QVBoxLayout(self)

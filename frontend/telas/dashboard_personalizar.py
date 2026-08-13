@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from design import tokens
+from design.responsive import tamanho_fixo_seguro
 from design.widgets import Card, BotaoPrimario, BotaoSecundario
 from services import preferencias_service
 
@@ -45,7 +46,7 @@ class PersonalizarDashboardDialog(QDialog):
         self.registro_paineis = registro_paineis
 
         self.setWindowTitle("Personalizar Dashboard")
-        self.setFixedSize(460, 560)
+        tamanho_fixo_seguro(self, 460, 560)
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         ordem_salva, ocultos_kpis = self._preferencia_kpis()

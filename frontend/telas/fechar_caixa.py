@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 from services.caixa_service import resumo_caixa, fechar_caixa
 
 from design import tokens
+from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoPerigo, BotaoSecundario, BotaoSucesso
 
 
@@ -25,7 +26,7 @@ class FecharCaixaWindow(QDialog):
         self.valor_contado = 0.0
 
         self.setWindowTitle("Fechar Caixa")
-        self.setFixedSize(460, 640)
+        tamanho_fixo_seguro(self, 460, 640)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         raiz = QVBoxLayout(self)

@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 from services.caixa_service import historico_caixa
 
 from design import tokens
+from design.responsive import tamanho_fixo_seguro
 from design.widgets import Badge, BotaoSecundario, BotaoSucesso
 
 VALORES_RAPIDOS = [50, 100, 150, 200, 300, 500]
@@ -25,7 +26,7 @@ class AbrirCaixaWindow(QDialog):
         super().__init__()
 
         self.setWindowTitle("Abrir Caixa")
-        self.setFixedSize(460, 640)
+        tamanho_fixo_seguro(self, 460, 640)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         raiz = QVBoxLayout(self)

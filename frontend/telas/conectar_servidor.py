@@ -10,6 +10,7 @@ import requests
 
 from design import tokens
 from design.icons import icone_pixmap
+from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoPrimario, BotaoSecundario, CampoTexto
 from services import api
 from services.preferencias_service import salvar_servidor, carregar_servidor
@@ -28,7 +29,7 @@ class ConectarServidorDialog(QDialog):
         self.confirmado = False
 
         self.setWindowTitle("Conectar ao Servidor")
-        self.setFixedSize(420, 430)
+        tamanho_fixo_seguro(self, 420, 430)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         layout = QVBoxLayout(self)

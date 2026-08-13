@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from requests.exceptions import ConnectionError
 
 from services.api import cadastrar_usuario, login
+from design.responsive import tamanho_fixo_seguro
 
 
 class CadastroInicialWindow(QWidget):
@@ -23,7 +24,7 @@ class CadastroInicialWindow(QWidget):
         super().__init__()
 
         self.setWindowTitle("Vertex ERP - Primeiro Acesso")
-        self.setFixedSize(460, 620)
+        tamanho_fixo_seguro(self, 460, 620)
         self.setStyleSheet("background:#f4f5f7;")
 
         layout = QVBoxLayout(self)

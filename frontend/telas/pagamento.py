@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from design import tokens
 from design.animations import fade_in
 from design.icons import icone
+from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoSecundario, BotaoSucesso, CampoTexto
 from services.api import configuracoes
 from services.pix_utils import montar_payload_pix
@@ -78,7 +79,7 @@ class PagamentoWindow(QDialog):
         self._recebido_tocado = False
 
         self.setWindowTitle("Pagamento")
-        self.setFixedSize(1000, 780)
+        tamanho_fixo_seguro(self, 1000, 780)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         raiz = QVBoxLayout(self)

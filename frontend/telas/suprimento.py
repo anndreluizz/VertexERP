@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from design import tokens
+from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoSecundario, BotaoSucesso
 
 
@@ -19,7 +20,7 @@ class SuprimentoWindow(QDialog):
         super().__init__()
 
         self.setWindowTitle("Suprimento")
-        self.setFixedSize(420, 280)
+        tamanho_fixo_seguro(self, 420, 280)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         layout = QVBoxLayout(self)

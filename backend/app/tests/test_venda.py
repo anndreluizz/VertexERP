@@ -82,7 +82,7 @@ def test_criar_venda_com_produto_inexistente(
 
 
 def test_criar_venda_a_prazo_gera_conta_a_receber(
-    client, auth_headers, produto, cliente
+    client, auth_headers, produto, cliente, caixa_aberto
 ):
     response = client.post(
         "/vendas/",
@@ -105,13 +105,17 @@ def test_criar_venda_a_prazo_gera_conta_a_receber(
 
     venda_id = response.json()["id"]
 
-    contas = client.get("/contas-receber/", headers=auth_headers).json()
+    # Venda a prazo não gera mais ContaReceber (tabela legada) -- vira
+    # MovimentoFiado direto no caderninho do cliente.
+    movimentos = client.get(
+        f"/fiado/movimentos/cliente/{cliente.id}", headers=auth_headers
+    ).json()
 
-    conta_da_venda = [c for c in contas if c["venda_id"] == venda_id]
+    movimento_da_venda = [m for m in movimentos if m["venda_id"] == venda_id]
 
-    assert len(conta_da_venda) == 1
-    assert conta_da_venda[0]["valor"] == 40.0
-    assert conta_da_venda[0]["status"] == "PENDENTE"
+    assert len(movimento_da_venda) == 1
+    assert movimento_da_venda[0]["tipo"] == "COMPRA"
+    assert movimento_da_venda[0]["valor"] == 40.0
 
 
 def test_venda_em_dinheiro_sem_caixa_aberto_e_bloqueada(
@@ -133,7 +137,7 @@ def test_venda_em_dinheiro_sem_caixa_aberto_e_bloqueada(
     )
 
     assert response.status_code == 400
-    assert "nenhum caixa está aberto" in response.json()["detail"].lower()
+    assert "não existe caixa aberto" in response.json()["detail"].lower()
 
 
 def test_venda_em_dinheiro_com_caixa_aberto_gera_movimento(
@@ -159,11 +163,13 @@ def test_venda_em_dinheiro_com_caixa_aberto_gera_movimento(
     venda_id = response.json()["id"]
 
     movimentos = client.get(
-        "/movimentos-caixa/tipo/VENDA", headers=auth_headers
+        "/movimentos-caixa/", headers=auth_headers
     ).json()
 
     movimento_da_venda = [
-        m for m in movimentos if f"Venda #{venda_id}" in m["descricao"]
+        m
+        for m in movimentos
+        if m["tipo"] == "VENDA" and f"Venda #{venda_id}" in m["descricao"]
     ]
 
     assert len(movimento_da_venda) == 1
@@ -174,12 +180,19 @@ def test_venda_em_dinheiro_com_caixa_aberto_gera_movimento(
         "/caixa/aberto", headers=auth_headers
     ).json()
 
-    assert caixa_atualizado["saldo_final"] == caixa_aberto.saldo_inicial + 40.0
+    assert (
+        caixa_atualizado["saldo_final"]
+        == float(caixa_aberto.saldo_inicial) + 40.0
+    )
 
 
-def test_venda_a_prazo_nao_exige_caixa_aberto(
-    client, auth_headers, produto, cliente
+def test_venda_a_prazo_nao_mexe_no_saldo_do_caixa(
+    client, auth_headers, produto, cliente, caixa_aberto
 ):
+    # PRAZO ainda exige um caixa aberto (todo MovimentoCaixa fica preso
+    # a um caixa, pro fechamento do turno bater certo -- ver comentário
+    # em VendaService.criar), mas diferente de DINHEIRO, não soma nada
+    # no saldo_final: nenhum dinheiro entrou na gaveta física.
     response = client.post(
         "/vendas/",
         json={
@@ -198,6 +211,14 @@ def test_venda_a_prazo_nao_exige_caixa_aberto(
     )
 
     assert response.status_code == 201
+
+    caixa_atualizado = client.get(
+        "/caixa/aberto", headers=auth_headers
+    ).json()
+
+    assert caixa_atualizado["saldo_final"] == float(
+        caixa_aberto.saldo_inicial
+    )
 
 
 def test_cancelar_venda_devolve_estoque(
@@ -257,7 +278,7 @@ def test_cancelar_venda_com_caixa_aberto_estorna_saldo_do_caixa(
 
     assert (
         caixa_apos_venda["saldo_final"]
-        == caixa_aberto.saldo_inicial + 40.0
+        == float(caixa_aberto.saldo_inicial) + 40.0
     )
 
     response = client.delete(
@@ -275,22 +296,22 @@ def test_cancelar_venda_com_caixa_aberto_estorna_saldo_do_caixa(
         == caixa_aberto.saldo_inicial
     )
 
-    movimentos_estorno = client.get(
-        "/movimentos-caixa/tipo/ESTORNO", headers=auth_headers
+    movimentos = client.get(
+        "/movimentos-caixa/", headers=auth_headers
     ).json()
 
-    # A venda já foi apagada (hard delete) nesse ponto, então o FK
-    # venda_id do movimento de estorno foi zerado pelo ON DELETE SET
-    # NULL — a descrição é o que resta pra rastrear a origem.
+    # A venda continua no banco com status=CANCELADA (nunca é apagada
+    # de verdade -- ver VendaService.excluir); a descrição é o que
+    # identifica de qual venda veio o estorno.
     estorno_da_venda = [
         m
-        for m in movimentos_estorno
-        if f"Venda #{criada['id']}" in m["descricao"]
+        for m in movimentos
+        if m["tipo"] == "ESTORNO"
+        and f"venda #{criada['id']}" in m["descricao"]
     ]
 
     assert len(estorno_da_venda) == 1
     assert estorno_da_venda[0]["valor"] == -40.0
-    assert estorno_da_venda[0]["venda_id"] is None
 
 
 def test_cancelar_venda_com_caixa_fechado_e_bloqueada(
@@ -316,7 +337,7 @@ def test_cancelar_venda_com_caixa_fechado_e_bloqueada(
     ).json()["estoque"]
 
     fechar_response = client.post(
-        "/caixa/fechar", headers=auth_headers
+        "/caixa/fechar", json={}, headers=auth_headers
     )
     assert fechar_response.status_code == 200
 

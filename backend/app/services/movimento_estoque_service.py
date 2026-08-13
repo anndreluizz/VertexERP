@@ -46,7 +46,7 @@ class MovimentoEstoqueService:
             motivo=dados.motivo,
         )
 
-        ProdutoRepository.atualizar(db)
+        ProdutoRepository.atualizar(db, produto)
 
         return MovimentoEstoqueRepository.criar(db, movimento)
 

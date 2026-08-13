@@ -4,9 +4,12 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import get_current_user
 from app.database.session import SessionLocal
 from app.schemas.movimento_fiado import (
+    FichaFiadoResponse,
     MovimentoFiadoCreate,
     MovimentoFiadoResponse,
     MovimentoFiadoUpdate,
+    RegistrarCompraFiadoRequest,
+    RegistrarPagamentoFiadoRequest,
     SaldoFiadoResponse,
 )
 from app.services.movimento_fiado_service import MovimentoFiadoService
@@ -130,3 +133,83 @@ def saldo_cliente(
     saldo = MovimentoFiadoService.saldo_por_cliente(db, cliente_id)
 
     return SaldoFiadoResponse(cliente_id=cliente_id, saldo=saldo)
+
+
+@router.get("/saldos", response_model=dict[int, float])
+def saldos_por_cliente(
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    """Saldo devedor de todos os clientes com movimento, numa chamada
+    só -- pra listagens (ex.: tela de Clientes) não precisarem de uma
+    requisição por cliente."""
+
+    return MovimentoFiadoService.saldos_por_cliente(db)
+
+
+@router.get("/cliente/{cliente_id}", response_model=FichaFiadoResponse)
+def ficha_cliente(
+    cliente_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return MovimentoFiadoService.ficha_cliente(db, cliente_id)
+
+
+@router.post(
+    "/pagamento",
+    response_model=MovimentoFiadoResponse,
+    status_code=201,
+)
+def registrar_pagamento_avulso(
+    dados: RegistrarPagamentoFiadoRequest,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    """Atalho pra registrar um pagamento de fiado sem passar 'tipo' —
+    mesma validação e efeitos de POST /fiado/movimentos com
+    tipo=PAGAMENTO, só que sem forma_pagamento (não mexe no caixa;
+    pra recebimento com impacto no caixa físico, use o endpoint
+    genérico de movimentos informando forma_pagamento)."""
+
+    movimento = MovimentoFiadoService.criar(
+        db,
+        MovimentoFiadoCreate(
+            cliente_id=dados.cliente_id,
+            tipo="PAGAMENTO",
+            valor=dados.valor,
+            descricao=dados.descricao,
+            data=dados.data,
+        ),
+        usuario.id,
+    )
+
+    return MovimentoFiadoResponse.from_orm(movimento)
+
+
+@router.post(
+    "/compra",
+    response_model=MovimentoFiadoResponse,
+    status_code=201,
+)
+def registrar_compra_avulsa(
+    dados: RegistrarCompraFiadoRequest,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    """Atalho pra lançar uma compra manual no fiado (ex.: dívida
+    migrada da ficha física de papel) sem passar por uma venda do PDV."""
+
+    movimento = MovimentoFiadoService.criar(
+        db,
+        MovimentoFiadoCreate(
+            cliente_id=dados.cliente_id,
+            tipo="COMPRA",
+            valor=dados.valor,
+            descricao=dados.descricao,
+            data=dados.data,
+        ),
+        usuario.id,
+    )
+
+    return MovimentoFiadoResponse.from_orm(movimento)

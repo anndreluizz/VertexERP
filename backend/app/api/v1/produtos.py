@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_admin, get_current_user
 from app.database.session import SessionLocal
 from app.schemas.produto import (
     ProdutoCreate,
@@ -106,7 +106,7 @@ def atualizar(
 def excluir(
     produto_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(get_current_admin),
 ):
     ok = ProdutoService.excluir(db, produto_id)
 

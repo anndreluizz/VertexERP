@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from services.api import get, post, delete
 
 # a API nunca devolve mais que isso por chamada (ver vendas.py no
@@ -39,11 +41,18 @@ def listar_vendas_pagina(skip=0, limit=100):
     return response.json()
 
 
-def cancelar_venda(venda_id):
+def cancelar_venda(venda_id, motivo=None):
     """Cancela a venda (DELETE /vendas/{id} no backend) -- devolve o
-    estoque dos itens e estorna o pagamento no caixa/fiado."""
+    estoque dos itens, estorna o pagamento no caixa/fiado e marca a
+    venda como CANCELADA (ela continua no histórico, só não conta mais
+    como faturamento)."""
 
-    return delete(f"/vendas/{venda_id}")
+    endpoint = f"/vendas/{venda_id}"
+
+    if motivo:
+        endpoint += f"?motivo={quote(motivo)}"
+
+    return delete(endpoint)
 
 
 def finalizar_venda(

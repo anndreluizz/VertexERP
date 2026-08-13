@@ -1,5 +1,5 @@
 def test_venda_a_prazo_gera_movimento_de_compra_fiado(
-    client, auth_headers, produto, cliente
+    client, auth_headers, produto, cliente, caixa_aberto
 ):
     response = client.post(
         "/vendas/",
@@ -34,11 +34,13 @@ def test_venda_a_prazo_gera_movimento_de_compra_fiado(
     assert movimento["tipo"] == "COMPRA"
     assert movimento["valor"] == 40.0
     assert movimento["venda_id"] == venda_id
-    assert produto.nome in movimento["descricao"]
+    # a descrição referencia a venda (não lista produtos -- uma venda
+    # pode ter vários itens, o detalhe fica em GET /vendas/{id}/itens)
+    assert str(venda_id) in movimento["descricao"]
 
 
 def test_registrar_pagamento_abate_saldo(
-    client, auth_headers, produto, cliente
+    client, auth_headers, produto, cliente, caixa_aberto
 ):
     client.post(
         "/vendas/",
@@ -79,7 +81,7 @@ def test_registrar_pagamento_abate_saldo(
 
 
 def test_varias_compras_e_pagamentos_ate_quitar(
-    client, auth_headers, produto, cliente
+    client, auth_headers, produto, cliente, caixa_aberto
 ):
     for _ in range(2):
         client.post(

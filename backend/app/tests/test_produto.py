@@ -72,10 +72,15 @@ def test_atualizar_produto_inexistente(client, auth_headers):
 
 
 def test_excluir_produto(client, auth_headers, produto):
+    # Exclusão é soft-delete (ativo=False) -- um produto já vendido tem
+    # itens_venda apontando pra ele, então apagar de vez quebraria a
+    # integridade referencial (ver ProdutoService.excluir). O registro
+    # continua existindo e buscável por id, só marcado como inativo.
     response = client.delete(f"/produtos/{produto.id}", headers=auth_headers)
 
     assert response.status_code == 200
 
     depois = client.get(f"/produtos/{produto.id}", headers=auth_headers)
 
-    assert depois.status_code == 404
+    assert depois.status_code == 200
+    assert depois.json()["ativo"] is False

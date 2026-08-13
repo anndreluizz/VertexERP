@@ -3,7 +3,7 @@ import base64
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_admin, get_current_user
 from app.database.session import SessionLocal
 from app.models.cliente import Cliente
 from app.schemas.venda import (
@@ -75,11 +75,15 @@ def criar(
 @router.delete("/{venda_id}")
 def excluir(
     venda_id: int,
+    motivo: str | None = Query(None, max_length=255),
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(get_current_admin),
 ):
 
-    ok = VendaService.excluir(db, venda_id, usuario.id)
+    try:
+        ok = VendaService.excluir(db, venda_id, usuario.id, motivo)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     if not ok:
         raise HTTPException(

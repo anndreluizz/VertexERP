@@ -70,12 +70,10 @@ def test_atualizar_configuracoes_exige_admin(client, auth_headers_comum):
     assert response.status_code == 403
 
 
-def test_upload_logo_e_busca(client, auth_headers, tmp_path, monkeypatch):
-    import app.services.configuracao_service as configuracao_service
-
-    monkeypatch.setattr(
-        configuracao_service, "DIRETORIO_UPLOADS", str(tmp_path)
-    )
+def test_upload_logo_e_busca(client, auth_headers):
+    # Logo é salvo via base64 no PUT genérico, mesmo padrão de
+    # Cliente.foto_base64 -- não existe upload multipart dedicado.
+    import base64
 
     conteudo_png = (
         b"\x89PNG\r\n\x1a\n"
@@ -85,14 +83,18 @@ def test_upload_logo_e_busca(client, auth_headers, tmp_path, monkeypatch):
         b"\x1c\xe7\x93\xa1\x00\x00\x00\x00IEND\xaeB`\x82"
     )
 
-    response = client.post(
-        "/configuracoes/logo",
-        files={"arquivo": ("logo.png", conteudo_png, "image/png")},
+    response = client.put(
+        "/configuracoes/",
+        json={
+            "logo_filename": "logo.png",
+            "logo_base64": base64.b64encode(conteudo_png).decode("ascii"),
+        },
         headers=auth_headers,
     )
 
     assert response.status_code == 200
     assert response.json()["logo_filename"] == "logo.png"
+    assert response.json()["tem_logo"] is True
 
     busca = client.get("/configuracoes/logo", headers=auth_headers)
 
@@ -100,35 +102,7 @@ def test_upload_logo_e_busca(client, auth_headers, tmp_path, monkeypatch):
     assert busca.content == conteudo_png
 
 
-def test_upload_logo_formato_invalido(
-    client, auth_headers, tmp_path, monkeypatch
-):
-    import app.services.configuracao_service as configuracao_service
-
-    monkeypatch.setattr(
-        configuracao_service, "DIRETORIO_UPLOADS", str(tmp_path)
-    )
-
-    response = client.post(
-        "/configuracoes/logo",
-        files={"arquivo": ("logo.gif", b"conteudo", "image/gif")},
-        headers=auth_headers,
-    )
-
-    assert response.status_code == 400
-
-
-def test_upload_logo_exige_admin(client, auth_headers_comum):
-    response = client.post(
-        "/configuracoes/logo",
-        files={"arquivo": ("logo.png", b"conteudo", "image/png")},
-        headers=auth_headers_comum,
-    )
-
-    assert response.status_code == 403
-
-
 def test_buscar_logo_sem_logo_cadastrada(client, auth_headers):
     response = client.get("/configuracoes/logo", headers=auth_headers)
 
-    assert response.status_code == 400
+    assert response.status_code == 404

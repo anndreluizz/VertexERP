@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -13,6 +13,7 @@ from app.models.produto import Produto
 from app.models.venda import Venda
 
 from app.enums.status_conta_pagar import StatusContaPagar
+from app.enums.status_venda import StatusVenda
 from app.services.movimento_fiado_service import MovimentoFiadoService
 
 # quantos meses (incluindo o atual) entram nos graficos de serie mensal
@@ -79,21 +80,80 @@ class DashboardService:
 
         vendas_hoje = (
             db.query(func.coalesce(func.sum(Venda.valor_total), 0))
-            .filter(func.date(Venda.data) == hoje)
+            .filter(
+                func.date(Venda.data) == hoje,
+                Venda.status == StatusVenda.FINALIZADA.value,
+            )
             .scalar()
         )
 
         vendas_hoje_qtd = (
             db.query(Venda)
-            .filter(func.date(Venda.data) == hoje)
+            .filter(
+                func.date(Venda.data) == hoje,
+                Venda.status == StatusVenda.FINALIZADA.value,
+            )
             .count()
         )
+
+        ontem = hoje - timedelta(days=1)
+
+        vendas_ontem = (
+            db.query(func.coalesce(func.sum(Venda.valor_total), 0))
+            .filter(
+                func.date(Venda.data) == ontem,
+                Venda.status == StatusVenda.FINALIZADA.value,
+            )
+            .scalar()
+        )
+
+        # total vendido por dia nos ultimos 7 dias (incluindo hoje),
+        # do mais antigo pro mais novo -- pro grafico de tendencia
+        # curta do dashboard, complementar a serie_recebimentos_mensal
+        # (que e por mes, nao por dia).
+        inicio_7_dias = hoje - timedelta(days=6)
+
+        linhas_7_dias = (
+            db.query(
+                func.date(Venda.data).label("dia"),
+                func.coalesce(func.sum(Venda.valor_total), 0).label(
+                    "total"
+                ),
+            )
+            .filter(
+                func.date(Venda.data) >= inicio_7_dias,
+                func.date(Venda.data) <= hoje,
+                Venda.status == StatusVenda.FINALIZADA.value,
+            )
+            .group_by("dia")
+            .all()
+        )
+
+        totais_por_dia = {
+            (
+                linha.dia
+                if isinstance(linha.dia, date)
+                else datetime.strptime(linha.dia, "%Y-%m-%d").date()
+            ): float(linha.total)
+            for linha in linhas_7_dias
+        }
+
+        vendas_ultimos_7_dias = [
+            {
+                "data": (inicio_7_dias + timedelta(days=i)).isoformat(),
+                "total": totais_por_dia.get(
+                    inicio_7_dias + timedelta(days=i), 0.0
+                ),
+            }
+            for i in range(7)
+        ]
 
         vendas_mes = (
             db.query(func.coalesce(func.sum(Venda.valor_total), 0))
             .filter(
                 func.extract("year", Venda.data) == hoje.year,
                 func.extract("month", Venda.data) == hoje.month,
+                Venda.status == StatusVenda.FINALIZADA.value,
             )
             .scalar()
         )
@@ -218,7 +278,10 @@ class DashboardService:
         )
 
         serie_recebimentos_mensal = DashboardService._serie_mensal(
-            db, Venda.data, Venda.valor_total, filtros=[],
+            db,
+            Venda.data,
+            Venda.valor_total,
+            filtros=[Venda.status == StatusVenda.FINALIZADA.value],
         )
 
         serie_pagamentos_mensal = DashboardService._serie_mensal(
@@ -231,10 +294,13 @@ class DashboardService:
         return {
             "vendas_hoje": float(vendas_hoje),
             "vendas_hoje_qtd": vendas_hoje_qtd,
+            "vendas_ontem": float(vendas_ontem),
+            "vendas_ultimos_7_dias": vendas_ultimos_7_dias,
             "vendas_mes": float(vendas_mes),
             "compras_hoje": float(compras_hoje),
             "saldo_caixa": float(saldo_caixa),
             "contas_receber": float(contas_receber),
+            "total_fiado_devedor": float(contas_receber),
             "contas_pagar": float(contas_pagar),
             "clientes": clientes,
             "fornecedores": fornecedores,

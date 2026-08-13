@@ -1,15 +1,15 @@
 def test_usuario_comum_nao_pode_excluir_cliente(
     client, auth_headers_comum, cliente
 ):
+    # Excluir cliente não é um bloqueio seco (403) -- usuário comum só
+    # consegue pedir, um admin precisa aprovar depois (ver
+    # AprovacaoService / api/v1/clientes.py::excluir_cliente).
     response = client.delete(
         f"/clientes/{cliente.id}", headers=auth_headers_comum
     )
 
-    assert response.status_code == 403
-    assert (
-        response.json()["detail"]
-        == "Apenas administradores podem realizar esta ação."
-    )
+    assert response.status_code == 200
+    assert response.json()["aprovacao_pendente"] is True
 
 
 def test_usuario_comum_nao_pode_excluir_fornecedor(
@@ -110,6 +110,11 @@ def test_usuario_comum_nao_pode_fechar_caixa(
 def test_usuario_comum_nao_pode_cancelar_conta_pagar(
     client, auth_headers, auth_headers_comum, fornecedor
 ):
+    # Conta PENDENTE (nenhum dinheiro saiu ainda) é baixo risco -- pode
+    # ser cancelada direto por qualquer usuário autenticado (ver
+    # docstring de api/v1/contas_pagar.py::cancelar). O bloqueio de
+    # verdade pra usuário comum é numa conta JÁ PAGA: aí ele só
+    # consegue pedir aprovação, não cancela na hora.
     conta = client.post(
         "/contas-pagar/",
         json={
@@ -120,12 +125,20 @@ def test_usuario_comum_nao_pode_cancelar_conta_pagar(
         headers=auth_headers,
     ).json()
 
+    client.post(f"/contas-pagar/{conta['id']}/pagar", headers=auth_headers)
+
     response = client.post(
         f"/contas-pagar/{conta['id']}/cancelar",
         headers=auth_headers_comum,
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert response.json()["aprovacao_pendente"] is True
+
+    # a conta continua PAGA -- usuário comum só pediu, não cancelou
+    pagas = client.get("/contas-pagar/pagas", headers=auth_headers).json()
+
+    assert any(c["id"] == conta["id"] for c in pagas)
 
 
 def test_usuario_comum_nao_pode_cancelar_conta_receber(
@@ -159,7 +172,7 @@ def test_usuario_comum_nao_pode_promover_outro_usuario(
     client, auth_headers_comum, usuario
 ):
     response = client.put(
-        f"/users/{usuario.id}/admin",
+        f"/users/{usuario.id}",
         json={"admin": True},
         headers=auth_headers_comum,
     )
@@ -171,7 +184,7 @@ def test_admin_pode_promover_usuario_a_admin(
     client, auth_headers, usuario_comum, fornecedor
 ):
     response = client.put(
-        f"/users/{usuario_comum.id}/admin",
+        f"/users/{usuario_comum.id}",
         json={"admin": True},
         headers=auth_headers,
     )

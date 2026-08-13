@@ -61,7 +61,7 @@ def test_receber_conta_com_caixa_aberto(
 
     caixa = client.get("/caixa/aberto", headers=auth_headers).json()
 
-    assert caixa["saldo_final"] == caixa_aberto.saldo_inicial + 200.0
+    assert caixa["saldo_final"] == float(caixa_aberto.saldo_inicial) + 200.0
 
     movimentos = client.get("/movimentos-caixa/", headers=auth_headers).json()
 

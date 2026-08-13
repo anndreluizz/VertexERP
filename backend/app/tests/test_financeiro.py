@@ -64,6 +64,6 @@ def test_fluxo_caixa_considera_apenas_o_periodo(
     assert dados["total_a_receber"] == 100.0
     assert dados["total_a_pagar"] == 40.0
     assert dados["saldo_projetado"] == (
-        caixa_aberto.saldo_inicial + 100.0 - 40.0
+        float(caixa_aberto.saldo_inicial) + 100.0 - 40.0
     )
     assert len(dados["itens"]) == 2

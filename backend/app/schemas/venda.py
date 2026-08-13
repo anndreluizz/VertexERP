@@ -70,6 +70,11 @@ class VendaResponse(BaseModel):
 
     data_vencimento: datetime | None = None
 
+    cancelado_em: datetime | None = None
+    cancelado_por_id: int | None = None
+    cancelado_por_nome: str | None = None
+    motivo_cancelamento: str | None = None
+
     itens: list[ItemVendaResponse]
 
     class Config:

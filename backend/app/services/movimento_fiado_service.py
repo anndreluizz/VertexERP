@@ -105,6 +105,16 @@ class MovimentoFiadoService:
         if tipo not in ("COMPRA", "PAGAMENTO", "HAVER"):
             raise Exception("Tipo de movimento inválido.")
 
+        if dados.valor <= 0:
+            _rotulo = {
+                "COMPRA": "compra",
+                "PAGAMENTO": "pagamento",
+                "HAVER": "lançamento",
+            }[tipo]
+            raise Exception(
+                f"Informe um valor de {_rotulo} maior que zero."
+            )
+
         if tipo in ("PAGAMENTO", "HAVER"):
 
             saldo_atual = MovimentoFiadoRepository.saldo_por_cliente(
@@ -301,3 +311,28 @@ class MovimentoFiadoService:
     @staticmethod
     def saldo_total(db: Session):
         return MovimentoFiadoRepository.saldo_total(db)
+
+    @staticmethod
+    def ficha_cliente(db: Session, cliente_id: int):
+        """Saldo + histórico completo de um cliente numa chamada só --
+        usado pela tela de ficha do cliente."""
+
+        cliente = ClienteRepository.buscar_por_id(db, cliente_id)
+
+        if not cliente:
+            raise Exception("Cliente não encontrado.")
+
+        return {
+            "cliente_id": cliente.id,
+            "nome": cliente.nome,
+            "saldo_devedor": MovimentoFiadoRepository.saldo_por_cliente(
+                db, cliente_id,
+            ),
+            "movimentos": MovimentoFiadoRepository.listar_por_cliente(
+                db, cliente_id,
+            ),
+        }
+
+    @staticmethod
+    def saldos_por_cliente(db: Session):
+        return MovimentoFiadoRepository.saldos_por_cliente(db)

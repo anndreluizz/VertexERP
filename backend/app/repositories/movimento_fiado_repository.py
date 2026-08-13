@@ -101,6 +101,30 @@ class MovimentoFiadoRepository:
         )
 
     @staticmethod
+    def saldos_por_cliente(db: Session) -> dict:
+        """Saldo devedor de cada cliente que já teve pelo menos um
+        movimento, numa única query agrupada -- evita fazer uma
+        consulta por cliente (N+1) quando a tela precisa listar vários
+        de uma vez. Cliente sem nenhum movimento simplesmente não
+        aparece no dicionário."""
+
+        valor_assinado = case(
+            (MovimentoFiado.tipo == "COMPRA", MovimentoFiado.valor),
+            else_=-MovimentoFiado.valor,
+        )
+
+        linhas = (
+            db.query(
+                MovimentoFiado.cliente_id,
+                func.sum(valor_assinado).label("saldo"),
+            )
+            .group_by(MovimentoFiado.cliente_id)
+            .all()
+        )
+
+        return {linha.cliente_id: linha.saldo for linha in linhas}
+
+    @staticmethod
     def saldo_total(db: Session) -> Decimal:
         """Soma o fiado em aberto de TODOS os clientes numa unica query
         -- mesmo criterio de saldo_por_cliente, so sem o filtro de

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_admin, get_current_user
 from app.database.session import SessionLocal
 from app.schemas.configuracao import ConfiguracaoResponse, ConfiguracaoUpdate
 from app.services.configuracao_service import ConfiguracaoService
@@ -33,7 +33,7 @@ def buscar_configuracao(
 def atualizar_configuracao(
     dados: ConfiguracaoUpdate,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user)
+    usuario=Depends(get_current_admin)
 ):
     return ConfiguracaoService.atualizar(db, dados)
 

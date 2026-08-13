@@ -56,7 +56,7 @@ from app.api.v1 import (
     pdv as pdv_router,
     estoque as estoque_router,
     financeiro as financeiro_router,
-    fiado as fiado_router,
+    financeiro_fluxo_caixa as financeiro_fluxo_caixa_router,
     configuracoes as configuracoes_router,
     relatorios as relatorios_router,
 )
@@ -81,7 +81,7 @@ MODULOS_COM_GET_DB = [
     pdv_router,
     estoque_router,
     financeiro_router,
-    fiado_router,
+    financeiro_fluxo_caixa_router,
     configuracoes_router,
     relatorios_router,
     auth_dependencies,
@@ -289,13 +289,14 @@ def fornecedor(db):
 
 
 @pytest.fixture()
-def caixa_aberto(db):
+def caixa_aberto(db, usuario):
     from app.models.caixa import Caixa
 
     novo = Caixa(
         saldo_inicial=100.0,
         saldo_final=100.0,
         status="ABERTO",
+        usuario_id=usuario.id,
     )
     db.add(novo)
     db.commit()

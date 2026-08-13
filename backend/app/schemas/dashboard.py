@@ -10,11 +10,22 @@ class SerieMensalItem(BaseModel):
     valor: Decimal
 
 
+class VendaDiariaItem(BaseModel):
+
+    data: str
+
+    total: Decimal
+
+
 class DashboardResponse(BaseModel):
 
     vendas_hoje: Decimal
 
     vendas_hoje_qtd: int
+
+    vendas_ontem: Decimal
+
+    vendas_ultimos_7_dias: list[VendaDiariaItem]
 
     vendas_mes: Decimal
 
@@ -23,6 +34,8 @@ class DashboardResponse(BaseModel):
     saldo_caixa: Decimal
 
     contas_receber: Decimal
+
+    total_fiado_devedor: Decimal
 
     contas_pagar: Decimal
 

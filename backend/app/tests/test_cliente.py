@@ -56,7 +56,7 @@ def test_buscar_cliente_por_id(client, auth_headers, cliente):
 def test_buscar_cliente_inexistente(client, auth_headers):
     response = client.get("/clientes/9999", headers=auth_headers)
 
-    assert response.status_code == 400
+    assert response.status_code == 404
 
 
 def test_atualizar_cliente(client, auth_headers, cliente):

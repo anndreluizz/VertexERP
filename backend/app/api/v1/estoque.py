@@ -23,7 +23,11 @@ def get_db():
         db.close()
 
 
-@router.post("/movimentos", response_model=MovimentoEstoqueResponse)
+@router.post(
+    "/movimentos",
+    response_model=MovimentoEstoqueResponse,
+    status_code=201,
+)
 def criar_movimento(
     dados: MovimentoEstoqueCreate,
     db: Session = Depends(get_db),

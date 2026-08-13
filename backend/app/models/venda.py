@@ -83,6 +83,25 @@ class Venda(Base):
         nullable=True
     )
 
+    # trilha de auditoria do cancelamento (status="CANCELADA") -- a
+    # venda em si NUNCA e apagada (ver VendaService.excluir/cancelar),
+    # entao esses campos ficam None pra sempre em vendas nunca
+    # canceladas e preenchidos quando alguem cancela uma.
+    cancelado_em: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True
+    )
+
+    cancelado_por_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=True
+    )
+
+    motivo_cancelamento: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True
+    )
+
     cliente = relationship(
         "Cliente",
         back_populates="vendas"
@@ -94,7 +113,13 @@ class Venda(Base):
         cascade="all, delete-orphan"
     )
 
-    usuario = relationship("User")
+    usuario = relationship("User", foreign_keys=[usuario_id])
+
+    cancelado_por = relationship("User", foreign_keys=[cancelado_por_id])
+
+    @property
+    def cancelado_por_nome(self) -> str | None:
+        return self.cancelado_por.nome if self.cancelado_por else None
 
     @property
     def usuario_nome(self) -> str | None:

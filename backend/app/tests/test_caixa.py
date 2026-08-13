@@ -22,11 +22,13 @@ def test_abrir_caixa_ja_existe_um_aberto(client, auth_headers, caixa_aberto):
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Já existe um caixa aberto."
+    assert response.json()["detail"] == "Você já tem um caixa aberto."
 
 
 def test_fechar_caixa(client, auth_headers, caixa_aberto):
-    response = client.post("/caixa/fechar", headers=auth_headers)
+    response = client.post(
+        "/caixa/fechar", json={}, headers=auth_headers
+    )
 
     assert response.status_code == 200
 
@@ -37,7 +39,9 @@ def test_fechar_caixa(client, auth_headers, caixa_aberto):
 
 
 def test_fechar_caixa_sem_caixa_aberto(client, auth_headers):
-    response = client.post("/caixa/fechar", headers=auth_headers)
+    response = client.post(
+        "/caixa/fechar", json={}, headers=auth_headers
+    )
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Nenhum caixa aberto."

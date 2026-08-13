@@ -34,7 +34,12 @@ def test_criar_usuario_com_email_duplicado(client, auth_headers, usuario):
     assert response.json()["detail"] == "E-mail já cadastrado."
 
 
-def test_criar_usuario_sem_login_e_negado(client):
+def test_criar_usuario_sem_login_e_negado(client, usuario):
+    # Sem NENHUM usuário cadastrado ainda, o cadastro fica aberto sem
+    # login (bootstrap do primeiro acesso -- ver
+    # exigir_admin_apos_primeiro_usuario). Por isso esse teste depende
+    # da fixture `usuario`: só a partir do segundo usuário em diante
+    # que o cadastro sem login volta a ser negado.
     response = client.post(
         "/users/",
         json={
@@ -73,7 +78,7 @@ def test_definir_ativo_desativa_usuario(client, auth_headers):
     ).json()["data"]
 
     response = client.put(
-        f"/users/{criado['id']}/ativo",
+        f"/users/{criado['id']}",
         json={"ativo": False},
         headers=auth_headers,
     )
@@ -84,7 +89,7 @@ def test_definir_ativo_desativa_usuario(client, auth_headers):
 
 def test_definir_ativo_exige_admin(client, auth_headers_comum, usuario):
     response = client.put(
-        f"/users/{usuario.id}/ativo",
+        f"/users/{usuario.id}",
         json={"ativo": False},
         headers=auth_headers_comum,
     )
@@ -103,14 +108,16 @@ def test_listar_usuarios(client, auth_headers, usuario):
 
 
 def test_meu_perfil_admin(client, auth_headers, usuario):
-    response = client.get("/users/me", headers=auth_headers)
+    # "Meu perfil" é servido por /auth/me (não tem /users/me) e devolve
+    # o UserResponse direto, sem o wrapper {data: ...} do ApiResponse.
+    response = client.get("/auth/me", headers=auth_headers)
 
     assert response.status_code == 200
-    assert response.json()["data"]["admin"] is True
+    assert response.json()["admin"] is True
 
 
 def test_meu_perfil_usuario_comum(client, auth_headers_comum, usuario_comum):
-    response = client.get("/users/me", headers=auth_headers_comum)
+    response = client.get("/auth/me", headers=auth_headers_comum)
 
     assert response.status_code == 200
-    assert response.json()["data"]["admin"] is False
+    assert response.json()["admin"] is False

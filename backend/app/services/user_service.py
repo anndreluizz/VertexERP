@@ -1,11 +1,9 @@
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
 
+from app.auth.hash import gerar_hash
 from app.models.user import User
 from app.schemas.user import UserCreate
 from app.repositories.user_repository import UserRepository
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class UserService:
@@ -22,7 +20,7 @@ class UserService:
         # os demais (cadastrados depois, por um admin) nascem comuns
         eh_primeiro_usuario = len(UserRepository.listar(db)) == 0
 
-        senha_hash = pwd_context.hash(dados.senha)
+        senha_hash = gerar_hash(dados.senha)
 
         novo_usuario = User(
             nome=dados.nome,

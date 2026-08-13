@@ -6,6 +6,10 @@ pwd_context = CryptContext(
 )
 
 
+def gerar_hash(senha: str) -> str:
+    return pwd_context.hash(senha)
+
+
 def verificar_hash(
     senha: str,
     senha_hash: str

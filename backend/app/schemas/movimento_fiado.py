@@ -37,3 +37,31 @@ class MovimentoFiadoResponse(MovimentoFiadoBase):
 class SaldoFiadoResponse(BaseModel):
     cliente_id: int
     saldo: Decimal
+
+
+class FichaFiadoResponse(BaseModel):
+    """Visão completa do fiado de um cliente -- saldo já calculado +
+    histórico de movimentos, tudo numa chamada só (evita a tela de
+    ficha do cliente ter que buscar saldo e movimentos separado)."""
+
+    cliente_id: int
+    nome: str
+    saldo_devedor: Decimal
+    movimentos: list[MovimentoFiadoResponse]
+
+    class Config:
+        orm_mode = True
+
+
+class RegistrarPagamentoFiadoRequest(BaseModel):
+    cliente_id: int
+    valor: Decimal
+    descricao: str | None = None
+    data: datetime | None = None
+
+
+class RegistrarCompraFiadoRequest(BaseModel):
+    cliente_id: int
+    valor: Decimal
+    descricao: str | None = None
+    data: datetime | None = None

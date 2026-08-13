@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta
+from decimal import Decimal
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.repositories.caixa_repository import CaixaRepository
+from app.models.caixa import Caixa
 from app.repositories.conta_pagar_repository import ContaPagarRepository
 from app.repositories.conta_receber_repository import (
     ContaReceberRepository,
@@ -14,8 +16,14 @@ class FinanceiroService:
     @staticmethod
     def fluxo_caixa(db: Session, dias: int = 30):
 
-        caixa = CaixaRepository.buscar_aberto(db)
-        saldo_atual = caixa.saldo_final if caixa else 0.0
+        # soma TODOS os caixas abertos no momento -- fluxo de caixa e
+        # uma visao financeira geral da loja, nao de um operador so
+        # (mesmo criterio do KPI 'saldo_caixa' do dashboard).
+        saldo_atual = (
+            db.query(func.coalesce(func.sum(Caixa.saldo_final), 0))
+            .filter(Caixa.status == "ABERTO")
+            .scalar()
+        ) or Decimal("0")
 
         limite = datetime.utcnow() + timedelta(days=dias)
 
@@ -31,8 +39,12 @@ class FinanceiroService:
             if conta.data_vencimento <= limite
         ]
 
-        total_a_receber = sum(conta.valor for conta in receber)
-        total_a_pagar = sum(conta.valor for conta in pagar)
+        total_a_receber = sum(
+            (conta.valor for conta in receber), Decimal("0")
+        )
+        total_a_pagar = sum(
+            (conta.valor for conta in pagar), Decimal("0")
+        )
 
         itens = [
             {

@@ -1,5 +1,8 @@
+from datetime import datetime
+
 from sqlalchemy.orm import Session
 
+from app.enums.status_venda import StatusVenda
 from app.models.venda import Venda
 from app.models.item_venda import ItemVenda
 from app.models.produto import Produto
@@ -193,6 +196,11 @@ class VendaService:
         usuario_id: int,
     ):
 
+        # Toda venda (qualquer forma de pagamento) precisa de um caixa
+        # aberto -- mesmo parcela que nao mexe fisicamente na gaveta
+        # (pix/cartao/prazo) gera um MovimentoCaixa preso a esse caixa,
+        # pra aparecer certinho no fechamento do turno (ver loop de
+        # _parcelas_pagamento logo abaixo).
         caixa = CaixaRepository.buscar_aberto(db, usuario_id)
 
         if not caixa:
@@ -415,6 +423,7 @@ class VendaService:
         db: Session,
         venda_id: int,
         usuario_id: int,
+        motivo: str | None = None,
     ):
 
         venda = VendaRepository.buscar_por_id(
@@ -424,6 +433,26 @@ class VendaService:
 
         if venda is None:
             return False
+
+        if venda.status == StatusVenda.CANCELADA.value:
+            raise Exception("Essa venda já está cancelada.")
+
+        # Se a venda teve parcela em dinheiro, o estorno precisa de um
+        # caixa aberto pra tirar o valor da gaveta -- sem isso o
+        # dinheiro fica "no ar" (venda cancelada mas o valor continua
+        # contado no fechamento de caixa que já aconteceu).
+        tem_parcela_dinheiro = "DINHEIRO" in (
+            venda.forma_pagamento, venda.forma_pagamento_2
+        )
+
+        if tem_parcela_dinheiro and not CaixaRepository.buscar_aberto(
+            db, usuario_id
+        ):
+            raise Exception(
+                "O caixa já está fechado. Abra um caixa antes de "
+                "cancelar essa venda para que o estorno seja "
+                "registrado corretamente."
+            )
 
         # Devolve o estoque (automatico, registrado no historico)
         for item in venda.itens:
@@ -512,16 +541,16 @@ class VendaService:
                         )
                     )
 
-        # Garante que nenhum lancamento antigo do fiado fique
-        # apontando pra essa venda antes de apaga-la
-        db.query(MovimentoFiado).filter(
-            MovimentoFiado.venda_id == venda_id
-        ).update({"venda_id": None})
+        # A venda NUNCA e apagada -- so muda de status. Fica no banco
+        # pra sempre com a trilha de quem cancelou, quando e por que,
+        # preservando historico do cliente e rastreabilidade dos
+        # lancamentos de fiado/caixa que ja referenciam essa venda.
+        venda.status = StatusVenda.CANCELADA.value
+        venda.cancelado_em = datetime.utcnow()
+        venda.cancelado_por_id = usuario_id
+        venda.motivo_cancelamento = motivo
 
-        VendaRepository.excluir(
-            db,
-            venda,
-        )
+        db.add(venda)
 
         db.commit()
 

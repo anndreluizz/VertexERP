@@ -8,7 +8,7 @@ from app.schemas.categoria import (
     CategoriaResponse
 )
 from app.services.categoria_service import CategoriaService
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_admin, get_current_user
 
 router = APIRouter(
     prefix="/categorias",
@@ -79,7 +79,7 @@ def atualizar_categoria(
 def excluir_categoria(
     categoria_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user)
+    usuario=Depends(get_current_admin)
 ):
     return CategoriaService.excluir(
         db,

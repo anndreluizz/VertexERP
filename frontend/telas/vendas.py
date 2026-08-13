@@ -2,7 +2,12 @@ from datetime import datetime
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QShortcut, QKeySequence
-from PySide6.QtWidgets import QMessageBox, QPushButton, QTableWidgetItem
+from PySide6.QtWidgets import (
+    QInputDialog,
+    QMessageBox,
+    QPushButton,
+    QTableWidgetItem,
+)
 
 from services.venda_service import listar_vendas_pagina, cancelar_venda
 from services.cliente_service import listar_clientes
@@ -179,6 +184,10 @@ class Vendas(BaseCRUDWindow):
 
         venda = self.vendas[linha]
 
+        if venda["status"] == "CANCELADA":
+            QMessageBox.warning(self, "Aviso", "Essa venda já está cancelada.")
+            return
+
         resposta = QMessageBox.question(
             self,
             "Cancelar Venda",
@@ -189,7 +198,16 @@ class Vendas(BaseCRUDWindow):
         if resposta != QMessageBox.Yes:
             return
 
-        response = cancelar_venda(venda["id"])
+        motivo, confirmou = QInputDialog.getText(
+            self,
+            "Motivo do Cancelamento",
+            "Descreva o motivo do cancelamento (opcional):",
+        )
+
+        if not confirmou:
+            return
+
+        response = cancelar_venda(venda["id"], motivo.strip() or None)
 
         if response.status_code == 200:
             QMessageBox.information(self, "Sucesso", "Venda cancelada com sucesso.")

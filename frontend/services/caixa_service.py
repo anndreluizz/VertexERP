@@ -60,14 +60,36 @@ def historico_caixa():
 # MOVIMENTAÇÕES
 # ==========================================
 
+_TAMANHO_PAGINA = 500
+
+
 def listar_movimentacoes():
+    """Busca TODAS as movimentações de caixa, varrendo as páginas por
+    baixo dos panos -- essa lista alimenta cálculos agregados (Visão
+    Geral), então não pode truncar silenciosamente no limite padrão
+    da API."""
 
-    response = get("/movimentos-caixa/")
+    movimentos = []
+    skip = 0
 
-    if response.status_code != 200:
-        return []
+    while True:
 
-    return response.json()
+        response = get(
+            f"/movimentos-caixa/?skip={skip}&limit={_TAMANHO_PAGINA}"
+        )
+
+        if response.status_code != 200:
+            break
+
+        lote = response.json()
+        movimentos.extend(lote)
+
+        if len(lote) < _TAMANHO_PAGINA:
+            break
+
+        skip += _TAMANHO_PAGINA
+
+    return movimentos
 
 
 def listar_movimentos_caixa(caixa_id):

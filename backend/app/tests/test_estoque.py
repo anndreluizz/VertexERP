@@ -2,7 +2,7 @@ def test_ajuste_entrada_aumenta_estoque(client, auth_headers, produto):
     estoque_inicial = produto.estoque
 
     response = client.post(
-        "/estoque/ajuste",
+        "/estoque/movimentos",
         json={
             "produto_id": produto.id,
             "tipo": "ENTRADA",
@@ -26,7 +26,7 @@ def test_ajuste_saida_diminui_estoque(client, auth_headers, produto):
     estoque_inicial = produto.estoque
 
     response = client.post(
-        "/estoque/ajuste",
+        "/estoque/movimentos",
         json={
             "produto_id": produto.id,
             "tipo": "SAIDA",
@@ -47,7 +47,7 @@ def test_ajuste_saida_diminui_estoque(client, auth_headers, produto):
 
 def test_ajuste_saida_com_estoque_insuficiente(client, auth_headers, produto):
     response = client.post(
-        "/estoque/ajuste",
+        "/estoque/movimentos",
         json={
             "produto_id": produto.id,
             "tipo": "SAIDA",
@@ -63,7 +63,7 @@ def test_ajuste_saida_com_estoque_insuficiente(client, auth_headers, produto):
 
 def test_ajuste_produto_inexistente(client, auth_headers):
     response = client.post(
-        "/estoque/ajuste",
+        "/estoque/movimentos",
         json={
             "produto_id": 9999,
             "tipo": "ENTRADA",
@@ -78,7 +78,7 @@ def test_ajuste_produto_inexistente(client, auth_headers):
 
 def test_listar_movimentos_de_estoque(client, auth_headers, produto):
     client.post(
-        "/estoque/ajuste",
+        "/estoque/movimentos",
         json={"produto_id": produto.id, "tipo": "ENTRADA", "quantidade": 10},
         headers=auth_headers,
     )
@@ -91,13 +91,13 @@ def test_listar_movimentos_de_estoque(client, auth_headers, produto):
 
 def test_listar_movimentos_por_produto(client, auth_headers, produto):
     client.post(
-        "/estoque/ajuste",
+        "/estoque/movimentos",
         json={"produto_id": produto.id, "tipo": "ENTRADA", "quantidade": 10},
         headers=auth_headers,
     )
 
     response = client.get(
-        f"/estoque/movimentos/{produto.id}", headers=auth_headers
+        f"/estoque/movimentos/produto/{produto.id}", headers=auth_headers
     )
 
     assert response.status_code == 200

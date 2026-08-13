@@ -20,7 +20,7 @@ def test_movimento_suprimento_aumenta_saldo(client, auth_headers, caixa_aberto):
 
     caixa = client.get("/caixa/aberto", headers=auth_headers).json()
 
-    assert caixa["saldo_final"] == caixa_aberto.saldo_inicial + 50.0
+    assert caixa["saldo_final"] == float(caixa_aberto.saldo_inicial) + 50.0
 
 
 def test_movimento_sangria_diminui_saldo(client, auth_headers, caixa_aberto):
@@ -34,7 +34,7 @@ def test_movimento_sangria_diminui_saldo(client, auth_headers, caixa_aberto):
 
     caixa = client.get("/caixa/aberto", headers=auth_headers).json()
 
-    assert caixa["saldo_final"] == caixa_aberto.saldo_inicial - 30.0
+    assert caixa["saldo_final"] == float(caixa_aberto.saldo_inicial) - 30.0
 
 
 def test_listar_movimentos(client, auth_headers, caixa_aberto):

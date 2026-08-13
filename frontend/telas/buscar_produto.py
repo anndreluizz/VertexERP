@@ -56,12 +56,25 @@ class ItemResultado(QWidget):
 
         codigo_ref = produto.get("codigo_barras") or produto["codigo"]
 
+        sem_estoque = produto["estoque"] <= 0
+        texto_estoque = (
+            "SEM ESTOQUE" if sem_estoque else f"Estoque: {produto['estoque']}"
+        )
+
         subtitulo = QLabel(
-            f"UN · Estoque: {produto['estoque']} · Cód: {codigo_ref}"
+            f"UN · {texto_estoque} · Cód: {codigo_ref}"
         )
         subtitulo.setStyleSheet(
-            "font-size:11px; color:gray; background:transparent;"
+            f"font-size:11px; background:transparent; "
+            f"color:{'#C62828' if sem_estoque else 'gray'}; "
+            f"font-weight:{'bold' if sem_estoque else 'normal'};"
         )
+
+        if sem_estoque:
+            nome.setStyleSheet(
+                "font-weight:bold; font-size:13px; background:transparent; "
+                "color:#9E9E9E;"
+            )
 
         col_texto.addWidget(nome)
         col_texto.addWidget(subtitulo)

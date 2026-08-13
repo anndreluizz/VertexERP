@@ -523,6 +523,7 @@ class PDV(QWidget):
                         "codigo": p["codigo"],
                         "nome": p["nome"],
                         "preco": float(p["preco_venda"]),
+                        "estoque": p["estoque"],
                     },
                     1,
                 )
@@ -808,20 +809,37 @@ class PDV(QWidget):
 
     def adicionar_produto_ao_carrinho(self, produto, quantidade):
 
-        encontrou = False
+        item_existente = next(
+            (item for item in self.itens if item["id"] == produto["id"]),
+            None,
+        )
 
-        for item in self.itens:
+        no_carrinho = item_existente["quantidade"] if item_existente else 0
+        estoque = produto.get("estoque")
 
-            if item["id"] == produto["id"]:
+        # estoque None = dado nao veio junto (nao deveria acontecer,
+        # mas nao trava a venda por causa disso - so pula a checagem)
+        if estoque is not None and no_carrinho + quantidade > estoque:
 
-                item["quantidade"] += quantidade
+            if estoque <= 0:
+                mensagem = f"{produto['nome']} está sem estoque disponível."
+            elif no_carrinho > 0:
+                mensagem = (
+                    f"Estoque insuficiente de {produto['nome']} — "
+                    f"disponível: {estoque}, já no carrinho: {no_carrinho}."
+                )
+            else:
+                mensagem = (
+                    f"Estoque insuficiente de {produto['nome']} — "
+                    f"disponível: {estoque}."
+                )
 
-                encontrou = True
+            self._mostrar_status_busca(mensagem, erro=True)
+            return
 
-                break
-
-        if not encontrou:
-
+        if item_existente:
+            item_existente["quantidade"] += quantidade
+        else:
             self.itens.append(
                 {
                     "id": produto["id"],
@@ -829,6 +847,7 @@ class PDV(QWidget):
                     "nome": produto["nome"],
                     "preco": float(produto["preco"]),
                     "quantidade": quantidade,
+                    "estoque": estoque,
                 }
             )
 
@@ -1073,13 +1092,24 @@ class PDV(QWidget):
         if linha >= len(self.itens):
             return
 
-        nova_quantidade = self.itens[linha]["quantidade"] + delta
+        item = self.itens[linha]
+        nova_quantidade = item["quantidade"] + delta
 
         if nova_quantidade <= 0:
             self.remover_item(linha)
             return
 
-        self.itens[linha]["quantidade"] = nova_quantidade
+        estoque = item.get("estoque")
+
+        if delta > 0 and estoque is not None and nova_quantidade > estoque:
+            self._mostrar_status_busca(
+                f"Estoque insuficiente de {item['nome']} — "
+                f"disponível: {estoque}.",
+                erro=True,
+            )
+            return
+
+        item["quantidade"] = nova_quantidade
 
         self.atualizar_tabela()
 

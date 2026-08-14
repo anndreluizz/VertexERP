@@ -27,6 +27,7 @@ _CLARO = {
 
     "ALERTA": "#F59E0B",
     "ALERTA_CLARO": "#FFFBEB",
+    "ALERTA_TEXTO": "#B45309",
 
     "ERRO": "#DC2626",
     "ERRO_HOVER": "#B91C1C",
@@ -73,6 +74,7 @@ _ESCURO = {
 
     "ALERTA": "#FBBF24",
     "ALERTA_CLARO": "#451A03",
+    "ALERTA_TEXTO": "#FBBF24",
 
     "ERRO": "#EF4444",
     "ERRO_HOVER": "#F87171",

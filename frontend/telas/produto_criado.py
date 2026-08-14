@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from design import tokens
 from design.responsive import tamanho_fixo_seguro
 from utils.formatacao import formatar_moeda
 
@@ -21,7 +22,7 @@ class ProdutoCriadoDialog(QDialog):
 
         self.setWindowTitle("Produto Criado")
         tamanho_fixo_seguro(self, 420, 500)
-        self.setStyleSheet("background:white;")
+        self.setStyleSheet(f"background:{tokens.CARD};")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(36, 30, 36, 30)
@@ -32,13 +33,13 @@ class ProdutoCriadoDialog(QDialog):
         titulo.setAlignment(Qt.AlignCenter)
         titulo.setStyleSheet(
             "background:transparent; font-size:22px; "
-            "font-weight:bold; color:#202225;"
+            f"font-weight:bold; color:{tokens.TEXTO};"
         )
 
         subtitulo = QLabel("O item já está disponível no estoque")
         subtitulo.setAlignment(Qt.AlignCenter)
         subtitulo.setStyleSheet(
-            "background:transparent; font-size:11px; color:gray;"
+            f"background:transparent; font-size:11px; color:{tokens.TEXTO_SECUNDARIO};"
         )
 
         layout.addWidget(titulo)
@@ -48,9 +49,9 @@ class ProdutoCriadoDialog(QDialog):
         selo = QLabel("✨")
         selo.setFixedSize(48, 48)
         selo.setAlignment(Qt.AlignCenter)
-        selo.setStyleSheet("""
-            background:#2E7D32;
-            color:white;
+        selo.setStyleSheet(f"""
+            background:{tokens.SECUNDARIA};
+            color:{tokens.TEXTO_CLARO};
             font-size:20px;
             border-radius:24px;
         """)
@@ -59,8 +60,8 @@ class ProdutoCriadoDialog(QDialog):
         self.lbl_imagem = QLabel("📦")
         self.lbl_imagem.setFixedSize(140, 140)
         self.lbl_imagem.setAlignment(Qt.AlignCenter)
-        self.lbl_imagem.setStyleSheet("""
-            background:#eef0f3;
+        self.lbl_imagem.setStyleSheet(f"""
+            background:{tokens.FUNDO};
             border-radius:16px;
             font-size:48px;
         """)
@@ -85,14 +86,14 @@ class ProdutoCriadoDialog(QDialog):
         lbl_nome.setWordWrap(True)
         lbl_nome.setStyleSheet(
             "background:transparent; font-size:16px; "
-            "font-weight:bold; color:#202225;"
+            f"font-weight:bold; color:{tokens.TEXTO};"
         )
 
         lbl_preco = QLabel(formatar_moeda(preco_venda))
         lbl_preco.setAlignment(Qt.AlignCenter)
-        lbl_preco.setStyleSheet("""
-            background:#e8f5e9;
-            color:#2E7D32;
+        lbl_preco.setStyleSheet(f"""
+            background:{tokens.SUCESSO_CLARO};
+            color:{tokens.SECUNDARIA_HOVER};
             font-size:14px;
             font-weight:bold;
             border-radius:12px;
@@ -105,31 +106,31 @@ class ProdutoCriadoDialog(QDialog):
 
         bt_concluir = QPushButton("Concluir")
         bt_concluir.setMinimumHeight(46)
-        bt_concluir.setStyleSheet("""
-            QPushButton {
-                background:#2E7D32;
-                color:white;
+        bt_concluir.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.SECUNDARIA};
+                color:{tokens.TEXTO_CLARO};
                 font-weight:bold;
                 border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#1B5E20;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.SECUNDARIA_HOVER};
+            }}
         """)
         bt_concluir.clicked.connect(self.accept)
 
         bt_editar = QPushButton("Editar Detalhes")
         bt_editar.setMinimumHeight(46)
-        bt_editar.setStyleSheet("""
-            QPushButton {
-                background:white;
-                color:#202225;
-                border:1px solid #cccccc;
+        bt_editar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD};
+                color:{tokens.TEXTO};
+                border:1px solid {tokens.BORDA};
                 border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#f4f5f7;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.FUNDO};
+            }}
         """)
         bt_editar.clicked.connect(self.editar)
 

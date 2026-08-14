@@ -442,7 +442,7 @@ class Produtos(QWidget):
             botao.setStyleSheet(f"""
                 QPushButton {{
                     background: {tokens.SIDEBAR if selecionado else tokens.CARD};
-                    color: {"white" if selecionado else tokens.TEXTO};
+                    color: {tokens.TEXTO_CLARO if selecionado else tokens.TEXTO};
                     border: 1px solid {tokens.SIDEBAR if selecionado else tokens.BORDA};
                     border-radius: {tokens.RADIUS_PILL}px;
                     padding: 0 14px;
@@ -450,7 +450,7 @@ class Produtos(QWidget):
                     font-size: {tokens.TAMANHO_SM}px;
                 }}
                 QPushButton:hover {{
-                    background: {"#33363b" if selecionado else tokens.FUNDO};
+                    background: {tokens.SIDEBAR_HOVER if selecionado else tokens.FUNDO};
                 }}
             """)
 

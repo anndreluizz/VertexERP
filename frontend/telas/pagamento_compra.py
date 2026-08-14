@@ -12,6 +12,9 @@ from PySide6.QtWidgets import (
 )
 
 
+from design import tokens
+
+
 FORMAS_PAGAMENTO = [
     "DINHEIRO",
     "PIX",
@@ -90,15 +93,15 @@ class PagamentoCompraWindow(QDialog):
 
         self.bt_confirmar = QPushButton("Confirmar")
 
-        self.bt_confirmar.setStyleSheet("""
-            QPushButton{
-                background:#2E7D32;
-                color:white;
+        self.bt_confirmar.setStyleSheet(f"""
+            QPushButton{{
+                background:{tokens.SECUNDARIA};
+                color:{tokens.TEXTO_CLARO};
                 font-weight:bold;
-            }
-            QPushButton:hover{
-                background:#1B5E20;
-            }
+            }}
+            QPushButton:hover{{
+                background:{tokens.SECUNDARIA_HOVER};
+            }}
         """)
 
         botoes.addStretch()

@@ -36,6 +36,8 @@ from services.compra_service import (
 
 from services.produto_service import listar_produtos
 
+from design import tokens
+
 
 class Compras(QWidget):
 
@@ -167,38 +169,38 @@ class Compras(QWidget):
 
         self.total = QLabel("TOTAL: R$ 0,00")
 
-        self.total.setStyleSheet("""
+        self.total.setStyleSheet(f"""
             font-size:24px;
             font-weight:bold;
-            color:#1565C0;
+            color:{tokens.PRIMARIA};
         """)
 
         self.bt_cancelar = QPushButton("Cancelar Compra")
 
-        self.bt_cancelar.setStyleSheet("""
-            QPushButton{
-                background:#C62828;
-                color:white;
+        self.bt_cancelar.setStyleSheet(f"""
+            QPushButton{{
+                background:{tokens.ERRO};
+                color:{tokens.TEXTO_CLARO};
                 font-size:15px;
                 font-weight:bold;
-            }
-            QPushButton:hover{
-                background:#B71C1C;
-            }
+            }}
+            QPushButton:hover{{
+                background:{tokens.ERRO_HOVER};
+            }}
         """)
 
         self.bt_finalizar = QPushButton("Finalizar Compra")
 
-        self.bt_finalizar.setStyleSheet("""
-            QPushButton{
-                background:#2E7D32;
-                color:white;
+        self.bt_finalizar.setStyleSheet(f"""
+            QPushButton{{
+                background:{tokens.SECUNDARIA};
+                color:{tokens.TEXTO_CLARO};
                 font-size:15px;
                 font-weight:bold;
-            }
-            QPushButton:hover{
-                background:#1B5E20;
-            }
+            }}
+            QPushButton:hover{{
+                background:{tokens.SECUNDARIA_HOVER};
+            }}
         """)
 
         rodape.addWidget(self.bt_cancelar)

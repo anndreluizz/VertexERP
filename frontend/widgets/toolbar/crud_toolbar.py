@@ -5,6 +5,8 @@ from PySide6.QtWidgets import (
     QPushButton,
 )
 
+from design import tokens
+
 
 class CrudToolbar(QWidget):
 
@@ -27,26 +29,26 @@ class CrudToolbar(QWidget):
 
         self._configurar_botao(
             self.bt_novo,
-            "#2E7D32",
-            "#1B5E20"
+            tokens.SECUNDARIA,
+            tokens.SECUNDARIA_HOVER,
         )
 
         self._configurar_botao(
             self.bt_editar,
-            "#1565C0",
-            "#0D47A1"
+            tokens.PRIMARIA,
+            tokens.PRIMARIA_HOVER,
         )
 
         self._configurar_botao(
             self.bt_excluir,
-            "#C62828",
-            "#B71C1C"
+            tokens.ERRO,
+            tokens.ERRO_HOVER,
         )
 
         self._configurar_botao(
             self.bt_atualizar,
-            "#616161",
-            "#424242"
+            tokens.SIDEBAR,
+            tokens.SIDEBAR_HOVER,
         )
 
         layout.addWidget(self.bt_novo)

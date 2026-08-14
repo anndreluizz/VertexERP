@@ -41,7 +41,7 @@ class VendaConcluidaDialog(QDialog):
 
         self.setWindowTitle("Venda Finalizada")
         tamanho_fixo_seguro(self, 440, 640)
-        self.setStyleSheet("background:white;")
+        self.setStyleSheet(f"background:{tokens.CARD};")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 32, 40, 32)
@@ -51,9 +51,9 @@ class VendaConcluidaDialog(QDialog):
         selo = QLabel("✓")
         selo.setFixedSize(80, 80)
         selo.setAlignment(Qt.AlignCenter)
-        selo.setStyleSheet("""
-            background:#2E7D32;
-            color:white;
+        selo.setStyleSheet(f"""
+            background:{tokens.SECUNDARIA};
+            color:{tokens.TEXTO_CLARO};
             font-size:40px;
             font-weight:bold;
             border-radius:40px;
@@ -63,13 +63,13 @@ class VendaConcluidaDialog(QDialog):
         titulo.setAlignment(Qt.AlignCenter)
         titulo.setStyleSheet(
             "background:transparent; font-size:24px; font-weight:bold; "
-            "color:#202225;"
+            f"color:{tokens.TEXTO};"
         )
 
         subtitulo = QLabel(f"VENDA #{venda_id} FINALIZADA")
         subtitulo.setAlignment(Qt.AlignCenter)
         subtitulo.setStyleSheet(
-            "background:transparent; font-size:11px; color:gray; "
+            f"background:transparent; font-size:11px; color:{tokens.TEXTO_SECUNDARIO}; "
             "font-weight:bold;"
         )
 
@@ -77,7 +77,7 @@ class VendaConcluidaDialog(QDialog):
         valor.setAlignment(Qt.AlignCenter)
         valor.setStyleSheet(
             "background:transparent; font-size:30px; font-weight:bold; "
-            "color:#2E7D32;"
+            f"color:{tokens.SECUNDARIA};"
         )
 
         layout.addWidget(selo, alignment=Qt.AlignHCenter)
@@ -106,9 +106,9 @@ class VendaConcluidaDialog(QDialog):
             lbl_fiado = QLabel(texto_fiado)
             lbl_fiado.setAlignment(Qt.AlignCenter)
             lbl_fiado.setWordWrap(True)
-            lbl_fiado.setStyleSheet("""
-                background:#FFF3E0;
-                color:#E65100;
+            lbl_fiado.setStyleSheet(f"""
+                background:{tokens.ALERTA_CLARO};
+                color:{tokens.ALERTA_TEXTO};
                 font-size:13px;
                 font-weight:bold;
                 border-radius:8px;

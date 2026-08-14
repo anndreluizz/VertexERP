@@ -341,21 +341,28 @@ class BotaoSecundario(_BotaoAnimado):
 
 class Badge(QLabel):
 
-    VARIANTES = {
-        "sucesso": (tokens.SUCESSO_CLARO, tokens.SECUNDARIA_HOVER),
-        "alerta": (tokens.ALERTA_CLARO, "#B45309"),
-        "erro": (tokens.ERRO_CLARO, tokens.ERRO_HOVER),
-        "info": (tokens.PRIMARIA_CLARA, tokens.PRIMARIA_HOVER),
-        "neutro": ("#F1F5F9", tokens.TEXTO_SECUNDARIO),
-    }
+    @staticmethod
+    def variantes():
+        # funcao (nao dict de classe) de proposito: os valores de
+        # tokens.* soh ficam corretos se forem lidos depois que
+        # tokens.aplicar() rodou -- um dict fixo no corpo da classe
+        # travaria a paleta clara pra sempre, calculado no momento em
+        # que este modulo e' importado (que acontece antes do tema
+        # escuro ser aplicado, ver app.py)
+        return {
+            "sucesso": (tokens.SUCESSO_CLARO, tokens.SECUNDARIA_HOVER),
+            "alerta": (tokens.ALERTA_CLARO, tokens.ALERTA_TEXTO),
+            "erro": (tokens.ERRO_CLARO, tokens.ERRO_HOVER),
+            "info": (tokens.PRIMARIA_CLARA, tokens.PRIMARIA_HOVER),
+            "neutro": (tokens.FUNDO, tokens.TEXTO_SECUNDARIO),
+        }
 
     def __init__(self, texto, variante="neutro", parent=None):
 
         super().__init__(texto, parent)
 
-        fundo, cor_texto = self.VARIANTES.get(
-            variante, self.VARIANTES["neutro"]
-        )
+        variantes = Badge.variantes()
+        fundo, cor_texto = variantes.get(variante, variantes["neutro"])
 
         self.setAlignment(Qt.AlignCenter)
         self.setStyleSheet(f"""
@@ -437,7 +444,7 @@ class CampoTexto(QLineEdit):
                 border: 1.5px solid {tokens.PRIMARIA};
             }}
             QLineEdit:disabled {{
-                background: #F1F5F9;
+                background: {tokens.FUNDO};
                 color: {tokens.TEXTO_TERCIARIO};
             }}
         """)

@@ -452,7 +452,7 @@ class RegistrarPagamentoDialog(QDialog):
             botao.setStyleSheet(f"""
                 QPushButton {{
                     background: {tokens.SECUNDARIA if selecionado else tokens.FUNDO};
-                    color: {"white" if selecionado else tokens.TEXTO};
+                    color: {tokens.TEXTO_CLARO if selecionado else tokens.TEXTO};
                     border-radius: {tokens.RADIUS_SM}px;
                     font-weight: 700;
                 }}
@@ -719,7 +719,7 @@ class FichaClienteDialog(QDialog):
 
         self.lbl_titulo = QLabel(self.cliente["nome"])
         self.lbl_titulo.setStyleSheet(f"""
-            background:transparent; color:white;
+            background:transparent; color:{tokens.TEXTO_CLARO};
             font-size:{tokens.TAMANHO_LG}px; font-weight:800;
         """)
 
@@ -1559,7 +1559,7 @@ class FichaClienteDialog(QDialog):
                 }}
                 QPushButton:checked {{
                     background:{tokens.PRIMARIA}; border-color:{tokens.PRIMARIA};
-                    color:white;
+                    color:{tokens.TEXTO_CLARO};
                 }}
                 QPushButton:hover {{ border-color:{tokens.PRIMARIA}; }}
             """)
@@ -2021,7 +2021,7 @@ class FichaClienteDialog(QDialog):
         ativo = cliente.get("ativo", True)
         self.badge_ativo.setText("Ativo" if ativo else "Inativo")
         variante = "sucesso" if ativo else "erro"
-        fundo, cor_texto = Badge.VARIANTES[variante]
+        fundo, cor_texto = Badge.variantes()[variante]
         self.badge_ativo.setStyleSheet(f"""
             background: {fundo}; color: {cor_texto};
             border-radius: {tokens.RADIUS_PILL}px; font-size: {tokens.TAMANHO_XS}px;

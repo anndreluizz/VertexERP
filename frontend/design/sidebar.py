@@ -98,7 +98,7 @@ class ItemMenuLateral(QPushButton):
             painter.drawRoundedRect(barra, 1.5, 1.5)
 
         cor_icone = (
-            "#FFFFFF" if self.isChecked() else tokens.TEXTO_SIDEBAR
+            tokens.TEXTO_CLARO if self.isChecked() else tokens.TEXTO_SIDEBAR
         )
 
         pixmap = icone_pixmap(self.icone_nome, cor=cor_icone, tamanho=20)
@@ -106,7 +106,7 @@ class ItemMenuLateral(QPushButton):
 
         if not self.recolhido:
             cor_texto = QColor(
-                "#FFFFFF" if self.isChecked() else tokens.TEXTO_SIDEBAR
+                tokens.TEXTO_CLARO if self.isChecked() else tokens.TEXTO_SIDEBAR
             )
             painter.setPen(cor_texto)
             painter.setFont(self.font())

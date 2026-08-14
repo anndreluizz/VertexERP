@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from services.pdv_service import pesquisar_produtos
 from services.produto_service import obter_foto_produto
 from utils.formatacao import formatar_moeda
+from design import tokens
 
 
 class ItemResultado(QWidget):
@@ -30,8 +31,8 @@ class ItemResultado(QWidget):
         icone = QLabel()
         icone.setFixedSize(38, 38)
         icone.setAlignment(Qt.AlignCenter)
-        icone.setStyleSheet("""
-            background:#eef0f3;
+        icone.setStyleSheet(f"""
+            background:{tokens.FUNDO};
             border-radius:8px;
             font-size:18px;
         """)
@@ -67,14 +68,14 @@ class ItemResultado(QWidget):
         )
         subtitulo.setStyleSheet(
             f"font-size:11px; background:transparent; "
-            f"color:{'#C62828' if sem_estoque else 'gray'}; "
+            f"color:{tokens.ERRO if sem_estoque else tokens.TEXTO_SECUNDARIO}; "
             f"font-weight:{'bold' if sem_estoque else 'normal'};"
         )
 
         if sem_estoque:
             nome.setStyleSheet(
                 "font-weight:bold; font-size:13px; background:transparent; "
-                "color:#9E9E9E;"
+                f"color:{tokens.TEXTO_TERCIARIO};"
             )
 
         col_texto.addWidget(nome)
@@ -125,7 +126,7 @@ class BuscarProdutoDialog(QDialog):
         titulo = QLabel("Pesquisar Produto (F1)")
         titulo.setStyleSheet(
             "background:transparent; font-size:16px; "
-            "font-weight:bold; color:#202225;"
+            f"font-weight:bold; color:{tokens.TEXTO};"
         )
 
         layout.addWidget(titulo)
@@ -136,16 +137,16 @@ class BuscarProdutoDialog(QDialog):
             "(ex.: 2*7891000100103)"
         )
         self.busca.setMinimumHeight(40)
-        self.busca.setStyleSheet("""
-            QLineEdit {
-                border: 1px solid #cccccc;
+        self.busca.setStyleSheet(f"""
+            QLineEdit {{
+                border: 1px solid {tokens.BORDA};
                 border-radius: 8px;
                 padding: 0 12px;
                 font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #2E7D32;
-            }
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {tokens.SECUNDARIA};
+            }}
         """)
         self.busca.installEventFilter(self)
         self.busca.textChanged.connect(self.agendar_busca)
@@ -158,15 +159,15 @@ class BuscarProdutoDialog(QDialog):
         self.bt_favoritos.setCheckable(True)
         self.bt_favoritos.setMinimumHeight(40)
         self.bt_favoritos.setCursor(Qt.PointingHandCursor)
-        self.bt_favoritos.setStyleSheet("""
-            QPushButton {
-                background:white; color:#B45309;
-                border:1px solid #cccccc; border-radius:8px;
+        self.bt_favoritos.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD}; color:{tokens.ALERTA_TEXTO};
+                border:1px solid {tokens.BORDA}; border-radius:8px;
                 padding:0 14px; font-size:13px; font-weight:bold;
-            }
-            QPushButton:checked {
-                background:#FFFBEB; border:1px solid #B45309;
-            }
+            }}
+            QPushButton:checked {{
+                background:{tokens.ALERTA_CLARO}; border:1px solid {tokens.ALERTA_TEXTO};
+            }}
         """)
         self.bt_favoritos.toggled.connect(lambda _checked: self.executar_busca())
         linha_busca.addWidget(self.bt_favoritos)
@@ -174,14 +175,14 @@ class BuscarProdutoDialog(QDialog):
         layout.addLayout(linha_busca)
 
         self.lista = QListWidget()
-        self.lista.setStyleSheet("""
-            QListWidget {
-                border: 1px solid #e0e0e0;
+        self.lista.setStyleSheet(f"""
+            QListWidget {{
+                border: 1px solid {tokens.BORDA};
                 border-radius: 8px;
-            }
-            QListWidget::item:selected {
-                background: #1565C0;
-            }
+            }}
+            QListWidget::item:selected {{
+                background: {tokens.PRIMARIA};
+            }}
         """)
         self.lista.itemClicked.connect(self.selecionar_atual)
 
@@ -194,7 +195,7 @@ class BuscarProdutoDialog(QDialog):
         self.lbl_vazio.setAlignment(Qt.AlignCenter)
         self.lbl_vazio.setWordWrap(True)
         self.lbl_vazio.setStyleSheet(
-            "background:transparent; color:gray; font-size:13px;"
+            f"background:transparent; color:{tokens.TEXTO_SECUNDARIO}; font-size:13px;"
         )
         self.lbl_vazio.setVisible(False)
 
@@ -203,10 +204,10 @@ class BuscarProdutoDialog(QDialog):
         rodape = QHBoxLayout()
 
         dica_esquerda = QLabel("↑↓ Navegar    Enter Selecionar")
-        dica_esquerda.setStyleSheet("font-size:11px; color:gray;")
+        dica_esquerda.setStyleSheet(f"font-size:11px; color:{tokens.TEXTO_SECUNDARIO};")
 
         dica_direita = QLabel("Esc Fechar")
-        dica_direita.setStyleSheet("font-size:11px; color:gray;")
+        dica_direita.setStyleSheet(f"font-size:11px; color:{tokens.TEXTO_SECUNDARIO};")
 
         rodape.addWidget(dica_esquerda)
         rodape.addStretch()

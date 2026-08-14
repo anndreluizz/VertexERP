@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from requests.exceptions import ConnectionError
 
 from services.api import cadastrar_usuario, login
+from design import tokens
 from design.responsive import tamanho_fixo_seguro
 
 
@@ -25,7 +26,7 @@ class CadastroInicialWindow(QWidget):
 
         self.setWindowTitle("Vertex ERP - Primeiro Acesso")
         tamanho_fixo_seguro(self, 460, 620)
-        self.setStyleSheet("background:#f4f5f7;")
+        self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(50, 60, 50, 40)
@@ -35,15 +36,15 @@ class CadastroInicialWindow(QWidget):
         titulo = QLabel("Comece Agora")
         titulo.setAlignment(Qt.AlignCenter)
         titulo.setStyleSheet(
-            "background:transparent; font-size:28px; "
-            "font-weight:bold; color:#202225;"
+            f"background:transparent; font-size:28px; "
+            f"font-weight:bold; color:{tokens.TEXTO};"
         )
 
         subtitulo = QLabel("CRIE SUA CONTA NO VERTEX ERP")
         subtitulo.setAlignment(Qt.AlignCenter)
         subtitulo.setStyleSheet(
-            "background:transparent; font-size:11px; "
-            "font-weight:bold; color:#9E9E9E;"
+            f"background:transparent; font-size:11px; "
+            f"font-weight:bold; color:{tokens.TEXTO_TERCIARIO};"
         )
 
         layout.addWidget(titulo)
@@ -66,19 +67,19 @@ class CadastroInicialWindow(QWidget):
         self.termos = QCheckBox(
             "Eu aceito os Termos e Política de Privacidade"
         )
-        self.termos.setStyleSheet("""
-            QCheckBox {
-                background:transparent; font-size:12px; color:#616161;
+        self.termos.setStyleSheet(f"""
+            QCheckBox {{
+                background:transparent; font-size:12px; color:{tokens.TEXTO_SECUNDARIO};
                 spacing:8px;
-            }
-            QCheckBox::indicator {
+            }}
+            QCheckBox::indicator {{
                 width:18px; height:18px; border-radius:4px;
-                border:1.5px solid #9E9E9E; background:#ffffff;
-            }
-            QCheckBox::indicator:checked {
-                border:1.5px solid #1565C0; background:#1565C0;
+                border:1.5px solid {tokens.TEXTO_TERCIARIO}; background:{tokens.CARD};
+            }}
+            QCheckBox::indicator:checked {{
+                border:1.5px solid {tokens.PRIMARIA}; background:{tokens.PRIMARIA};
                 image: none;
-            }
+            }}
         """)
         self.termos.stateChanged.connect(self._validar)
 
@@ -98,21 +99,21 @@ class CadastroInicialWindow(QWidget):
 
         lbl_rodape = QLabel("Já tem uma conta?")
         lbl_rodape.setStyleSheet(
-            "background:transparent; font-size:12px; color:#616161;"
+            f"background:transparent; font-size:12px; color:{tokens.TEXTO_SECUNDARIO};"
         )
 
         bt_acessar = QPushButton("Acessar minha conta")
-        bt_acessar.setStyleSheet("""
-            QPushButton {
+        bt_acessar.setStyleSheet(f"""
+            QPushButton {{
                 background:transparent;
                 border:none;
-                color:#1565C0;
+                color:{tokens.PRIMARIA};
                 font-size:12px;
                 font-weight:bold;
-            }
-            QPushButton:hover {
-                color:#0D47A1;
-            }
+            }}
+            QPushButton:hover {{
+                color:{tokens.PRIMARIA_HOVER};
+            }}
         """)
         bt_acessar.clicked.connect(self.ir_para_login)
 
@@ -131,26 +132,26 @@ class CadastroInicialWindow(QWidget):
 
         lbl = QLabel(rotulo)
         lbl.setStyleSheet(
-            "background:transparent; font-size:10px; "
-            "font-weight:bold; color:#757575; margin-top:8px;"
+            f"background:transparent; font-size:10px; "
+            f"font-weight:bold; color:{tokens.TEXTO_TERCIARIO}; margin-top:8px;"
         )
 
         campo = QLineEdit()
         campo.setPlaceholderText(placeholder)
         campo.setMinimumHeight(42)
-        campo.setStyleSheet("""
-            QLineEdit {
-                background:#eef0f3;
-                border:1px solid #eef0f3;
+        campo.setStyleSheet(f"""
+            QLineEdit {{
+                background:{tokens.FUNDO};
+                border:1px solid {tokens.FUNDO};
                 border-radius:10px;
                 padding:0 14px;
                 font-size:13px;
-                color:#202225;
-            }
-            QLineEdit:focus {
-                border:1px solid #1565C0;
-                background:white;
-            }
+                color:{tokens.TEXTO};
+            }}
+            QLineEdit:focus {{
+                border:1px solid {tokens.PRIMARIA};
+                background:{tokens.CARD};
+            }}
         """)
 
         if senha:
@@ -179,25 +180,25 @@ class CadastroInicialWindow(QWidget):
     def _atualizar_estilo_botao(self):
 
         if self.bt_criar.isEnabled():
-            self.bt_criar.setStyleSheet("""
-                QPushButton {
-                    background:#202225;
-                    color:white;
+            self.bt_criar.setStyleSheet(f"""
+                QPushButton {{
+                    background:{tokens.SIDEBAR};
+                    color:{tokens.TEXTO_CLARO};
                     font-weight:bold;
                     border-radius:10px;
-                }
-                QPushButton:hover {
-                    background:#33363b;
-                }
+                }}
+                QPushButton:hover {{
+                    background:{tokens.SIDEBAR_HOVER};
+                }}
             """)
         else:
-            self.bt_criar.setStyleSheet("""
-                QPushButton {
-                    background:#c4c6c9;
-                    color:white;
+            self.bt_criar.setStyleSheet(f"""
+                QPushButton {{
+                    background:{tokens.BORDA_FORTE};
+                    color:{tokens.TEXTO_CLARO};
                     font-weight:bold;
                     border-radius:10px;
-                }
+                }}
             """)
 
     # ======================================

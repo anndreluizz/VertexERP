@@ -20,6 +20,8 @@ from services.categoria_despesa_service import (
     excluir_categoria_despesa,
 )
 
+from design import tokens
+
 
 class GerenciarCategoriasDespesaDialog(QDialog):
 
@@ -30,7 +32,7 @@ class GerenciarCategoriasDespesaDialog(QDialog):
 
         self.setWindowTitle("Gerenciar Categorias de Despesa")
         self.resize(480, 480)
-        self.setStyleSheet("background:white;")
+        self.setStyleSheet(f"background:{tokens.CARD};")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
@@ -38,8 +40,8 @@ class GerenciarCategoriasDespesaDialog(QDialog):
 
         titulo = QLabel("Categorias de Despesa")
         titulo.setStyleSheet(
-            "background:transparent; font-size:18px; "
-            "font-weight:bold; color:#202225;"
+            f"background:transparent; font-size:18px; "
+            f"font-weight:bold; color:{tokens.TEXTO};"
         )
         layout.addWidget(titulo)
 
@@ -48,34 +50,35 @@ class GerenciarCategoriasDespesaDialog(QDialog):
         self.novo_nome = QLineEdit()
         self.novo_nome.setPlaceholderText("Nova categoria...")
         self.novo_nome.setMinimumHeight(40)
-        self.novo_nome.setStyleSheet("""
-            QLineEdit {
-                border: 1px solid #cccccc;
+        self.novo_nome.setStyleSheet(f"""
+            QLineEdit {{
+                border: 1px solid {tokens.BORDA};
                 border-radius: 8px;
                 padding: 0 12px;
                 font-size: 13px;
-                color: #202225;
-            }
-            QLineEdit:focus {
-                border: 1px solid #2E7D32;
-            }
+                color: {tokens.TEXTO};
+                background: {tokens.CARD};
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {tokens.SECUNDARIA};
+            }}
         """)
         self.novo_nome.returnPressed.connect(self.adicionar)
 
         bt_adicionar = QPushButton("+ Adicionar")
         bt_adicionar.setAutoDefault(False)
         bt_adicionar.setMinimumHeight(40)
-        bt_adicionar.setStyleSheet("""
-            QPushButton {
-                background:#2E7D32;
-                color:white;
+        bt_adicionar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.SECUNDARIA};
+                color:{tokens.TEXTO_CLARO};
                 font-weight:bold;
                 border-radius:8px;
                 padding:0 16px;
-            }
-            QPushButton:hover {
-                background:#1B5E20;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.SECUNDARIA_HOVER};
+            }}
         """)
         bt_adicionar.clicked.connect(self.adicionar)
 
@@ -96,26 +99,26 @@ class GerenciarCategoriasDespesaDialog(QDialog):
         self.tabela.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabela.setSelectionMode(QTableWidget.SingleSelection)
         self.tabela.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.tabela.setStyleSheet("""
-            QTableWidget {
-                border: 1px solid #e0e0e0;
+        self.tabela.setStyleSheet(f"""
+            QTableWidget {{
+                border: 1px solid {tokens.BORDA};
                 border-radius: 8px;
-                color: #202225;
-                background: white;
-                alternate-background-color: #f8f9fb;
-            }
-            QTableWidget::item:selected {
-                background: #1565C0;
-                color: white;
-            }
-            QHeaderView::section {
-                background: #f4f5f7;
-                color: #202225;
+                color: {tokens.TEXTO};
+                background: {tokens.CARD};
+                alternate-background-color: {tokens.FUNDO};
+            }}
+            QTableWidget::item:selected {{
+                background: {tokens.PRIMARIA};
+                color: {tokens.TEXTO_CLARO};
+            }}
+            QHeaderView::section {{
+                background: {tokens.FUNDO};
+                color: {tokens.TEXTO};
                 font-weight: bold;
                 padding: 6px;
                 border: none;
-                border-bottom: 1px solid #e0e0e0;
-            }
+                border-bottom: 1px solid {tokens.BORDA};
+            }}
         """)
 
         layout.addWidget(self.tabela, stretch=1)
@@ -124,48 +127,48 @@ class GerenciarCategoriasDespesaDialog(QDialog):
 
         bt_editar = QPushButton("Editar")
         bt_editar.setAutoDefault(False)
-        bt_editar.setStyleSheet("""
-            QPushButton {
-                background:#1565C0;
-                color:white;
+        bt_editar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.PRIMARIA};
+                color:{tokens.TEXTO_CLARO};
                 font-weight:bold;
                 border-radius:8px;
                 padding:8px 16px;
-            }
-            QPushButton:hover {
-                background:#0D47A1;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.PRIMARIA_HOVER};
+            }}
         """)
         bt_editar.clicked.connect(self.editar)
 
         bt_excluir = QPushButton("Excluir")
         bt_excluir.setAutoDefault(False)
-        bt_excluir.setStyleSheet("""
-            QPushButton {
-                background:#C62828;
-                color:white;
+        bt_excluir.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.ERRO};
+                color:{tokens.TEXTO_CLARO};
                 font-weight:bold;
                 border-radius:8px;
                 padding:8px 16px;
-            }
-            QPushButton:hover {
-                background:#B71C1C;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.ERRO_HOVER};
+            }}
         """)
         bt_excluir.clicked.connect(self.excluir)
 
         bt_fechar = QPushButton("Fechar")
         bt_fechar.setAutoDefault(False)
-        bt_fechar.setStyleSheet("""
-            QPushButton {
-                background:#f4f5f7;
-                color:#202225;
+        bt_fechar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.FUNDO};
+                color:{tokens.TEXTO};
                 border-radius:8px;
                 padding:8px 20px;
-            }
-            QPushButton:hover {
-                background:#e8e8e8;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.BORDA};
+            }}
         """)
         bt_fechar.clicked.connect(self.accept)
 

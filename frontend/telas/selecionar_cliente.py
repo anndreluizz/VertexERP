@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 
 from services.cliente_service import listar_clientes
 from telas.cadastro_cliente import CadastroClienteDialog
+from design import tokens
 
 
 class ItemResultadoCliente(QWidget):
@@ -28,8 +29,8 @@ class ItemResultadoCliente(QWidget):
         icone = QLabel("👤")
         icone.setFixedSize(38, 38)
         icone.setAlignment(Qt.AlignCenter)
-        icone.setStyleSheet("""
-            background:#eef0f3;
+        icone.setStyleSheet(f"""
+            background:{tokens.FUNDO};
             border-radius:19px;
             font-size:16px;
         """)
@@ -40,7 +41,7 @@ class ItemResultadoCliente(QWidget):
         nome = QLabel(cliente["nome"])
         nome.setStyleSheet(
             "font-weight:bold; font-size:13px; "
-            "color:#202225; background:transparent;"
+            f"color:{tokens.TEXTO}; background:transparent;"
         )
 
         detalhes = " · ".join(
@@ -55,7 +56,7 @@ class ItemResultadoCliente(QWidget):
 
         subtitulo = QLabel(detalhes)
         subtitulo.setStyleSheet(
-            "font-size:11px; color:gray; background:transparent;"
+            f"font-size:11px; color:{tokens.TEXTO_SECUNDARIO}; background:transparent;"
         )
 
         col_texto.addWidget(nome)
@@ -76,7 +77,7 @@ class SelecionarClienteDialog(QDialog):
 
         self.setWindowTitle("Selecionar Cliente")
         self.resize(560, 520)
-        self.setStyleSheet("background:white;")
+        self.setStyleSheet(f"background:{tokens.CARD};")
 
         layout = QVBoxLayout(self)
         layout.setSpacing(14)
@@ -84,7 +85,7 @@ class SelecionarClienteDialog(QDialog):
         titulo = QLabel("Selecionar Cliente")
         titulo.setStyleSheet(
             "background:transparent; font-size:16px; "
-            "font-weight:bold; color:#202225;"
+            f"font-weight:bold; color:{tokens.TEXTO};"
         )
 
         layout.addWidget(titulo)
@@ -94,16 +95,16 @@ class SelecionarClienteDialog(QDialog):
             "Digite o nome, whatsapp ou CPF do cliente..."
         )
         self.busca.setMinimumHeight(40)
-        self.busca.setStyleSheet("""
-            QLineEdit {
-                border: 1px solid #cccccc;
+        self.busca.setStyleSheet(f"""
+            QLineEdit {{
+                border: 1px solid {tokens.BORDA};
                 border-radius: 8px;
                 padding: 0 12px;
                 font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #2E7D32;
-            }
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {tokens.SECUNDARIA};
+            }}
         """)
         self.busca.installEventFilter(self)
         self.busca.textChanged.connect(self.agendar_busca)
@@ -113,30 +114,30 @@ class SelecionarClienteDialog(QDialog):
         bt_novo = QPushButton("+ Novo Cliente")
         bt_novo.setMinimumHeight(40)
         bt_novo.setAutoDefault(False)
-        bt_novo.setStyleSheet("""
-            QPushButton {
-                background:#2E7D32;
-                color:white;
+        bt_novo.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.SECUNDARIA};
+                color:{tokens.TEXTO_CLARO};
                 font-weight:bold;
                 border-radius:8px;
-            }
-            QPushButton:hover {
-                background:#1B5E20;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.SECUNDARIA_HOVER};
+            }}
         """)
         bt_novo.clicked.connect(self.novo_cliente)
 
         layout.addWidget(bt_novo)
 
         self.lista = QListWidget()
-        self.lista.setStyleSheet("""
-            QListWidget {
-                border: 1px solid #e0e0e0;
+        self.lista.setStyleSheet(f"""
+            QListWidget {{
+                border: 1px solid {tokens.BORDA};
                 border-radius: 8px;
-            }
-            QListWidget::item:selected {
-                background: #1565C0;
-            }
+            }}
+            QListWidget::item:selected {{
+                background: {tokens.PRIMARIA};
+            }}
         """)
         self.lista.itemClicked.connect(self.selecionar_atual)
 
@@ -149,7 +150,7 @@ class SelecionarClienteDialog(QDialog):
         self.lbl_vazio.setAlignment(Qt.AlignCenter)
         self.lbl_vazio.setWordWrap(True)
         self.lbl_vazio.setStyleSheet(
-            "background:transparent; color:gray; font-size:13px;"
+            f"background:transparent; color:{tokens.TEXTO_SECUNDARIO}; font-size:13px;"
         )
         self.lbl_vazio.setVisible(False)
 
@@ -158,10 +159,10 @@ class SelecionarClienteDialog(QDialog):
         rodape = QHBoxLayout()
 
         dica_esquerda = QLabel("↑↓ Navegar    Enter Selecionar")
-        dica_esquerda.setStyleSheet("font-size:11px; color:gray;")
+        dica_esquerda.setStyleSheet(f"font-size:11px; color:{tokens.TEXTO_SECUNDARIO};")
 
         dica_direita = QLabel("Esc Fechar")
-        dica_direita.setStyleSheet("font-size:11px; color:gray;")
+        dica_direita.setStyleSheet(f"font-size:11px; color:{tokens.TEXTO_SECUNDARIO};")
 
         rodape.addWidget(dica_esquerda)
         rodape.addStretch()

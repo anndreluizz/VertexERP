@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (
     QGridLayout,
 )
 
+from design import tokens
+
 
 class CadastroFornecedorWindow(QDialog):
 
@@ -127,16 +129,16 @@ class CadastroFornecedorWindow(QDialog):
 
         self.bt_salvar = QPushButton("Salvar")
 
-        self.bt_salvar.setStyleSheet("""
-            QPushButton{
-                background:#2E7D32;
-                color:white;
+        self.bt_salvar.setStyleSheet(f"""
+            QPushButton{{
+                background:{tokens.SECUNDARIA};
+                color:{tokens.TEXTO_CLARO};
                 font-weight:bold;
-            }
+            }}
 
-            QPushButton:hover{
-                background:#1B5E20;
-            }
+            QPushButton:hover{{
+                background:{tokens.SECUNDARIA_HOVER};
+            }}
         """)
 
         botoes.addStretch()

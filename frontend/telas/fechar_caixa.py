@@ -90,7 +90,7 @@ class FecharCaixaWindow(QDialog):
         )
         aviso.setWordWrap(True)
         aviso.setStyleSheet(f"""
-            background:{tokens.ALERTA_CLARO}; color:#B45309;
+            background:{tokens.ALERTA_CLARO}; color:{tokens.ALERTA_TEXTO};
             font-size:{tokens.TAMANHO_SM}px; border-radius:{tokens.RADIUS_SM}px;
             padding:12px;
         """)

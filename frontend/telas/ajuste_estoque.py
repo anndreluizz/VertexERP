@@ -18,6 +18,7 @@ from services.produto_service import listar_produtos
 from services.estoque_service import listar_movimentos, ajustar_estoque
 from widgets.dialogs.pesquisa_window import PesquisaWindow
 from widgets.tables.standard_table import StandardTable
+from design import tokens
 
 
 class AjusteEstoque(QWidget):
@@ -81,16 +82,16 @@ class AjusteEstoque(QWidget):
 
         self.bt_registrar = QPushButton("Registrar Ajuste")
 
-        self.bt_registrar.setStyleSheet("""
-            QPushButton{
-                background:#2E7D32;
-                color:white;
+        self.bt_registrar.setStyleSheet(f"""
+            QPushButton{{
+                background:{tokens.SECUNDARIA};
+                color:{tokens.TEXTO_CLARO};
                 font-weight:bold;
                 padding:6px 16px;
-            }
-            QPushButton:hover{
-                background:#1B5E20;
-            }
+            }}
+            QPushButton:hover{{
+                background:{tokens.SECUNDARIA_HOVER};
+            }}
         """)
 
         dados_layout.addWidget(self.bt_registrar)

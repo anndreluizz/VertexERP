@@ -26,6 +26,7 @@ from telas.relatorios import (
     LinhaBarra,
     NOMES_FORMA_PAGAMENTO,
 )
+from design import tokens
 from utils.formatacao import formatar_moeda
 
 
@@ -77,7 +78,7 @@ class GraficoDesempenho(QWidget):
             maior_valor = 1
 
         # linhas de grade horizontais
-        pen_grade = QPen(QColor("#eeeeee"))
+        pen_grade = QPen(QColor(tokens.BORDA))
         pen_grade.setWidth(1)
         painter.setPen(pen_grade)
 
@@ -86,7 +87,7 @@ class GraficoDesempenho(QWidget):
             painter.drawLine(margem_esq, int(y), largura - margem_dir, int(y))
 
             valor_linha = maior_valor * (4 - i) / 4
-            painter.setPen(QColor("#9e9e9e"))
+            painter.setPen(QColor(tokens.TEXTO_TERCIARIO))
             painter.drawText(
                 0, int(y) - 8, margem_esq - 8, 16,
                 Qt.AlignRight | Qt.AlignVCenter,
@@ -127,19 +128,24 @@ class GraficoDesempenho(QWidget):
         caminho_area.lineTo(ultimo_x, margem_topo + area_altura)
         caminho_area.closeSubpath()
 
+        cor_area_inicio = QColor(tokens.SECUNDARIA)
+        cor_area_inicio.setAlpha(90)
+        cor_area_fim = QColor(tokens.SECUNDARIA)
+        cor_area_fim.setAlpha(0)
+
         gradiente = QLinearGradient(0, margem_topo, 0, altura - margem_baixo)
-        gradiente.setColorAt(0, QColor(46, 125, 50, 90))
-        gradiente.setColorAt(1, QColor(46, 125, 50, 0))
+        gradiente.setColorAt(0, cor_area_inicio)
+        gradiente.setColorAt(1, cor_area_fim)
 
         painter.fillPath(caminho_area, gradiente)
 
-        pen_linha = QPen(QColor("#2E7D32"))
+        pen_linha = QPen(QColor(tokens.SECUNDARIA))
         pen_linha.setWidth(2)
         painter.setPen(pen_linha)
         painter.drawPath(caminho_linha)
 
         # eixo X (rotulos)
-        painter.setPen(QColor("#9e9e9e"))
+        painter.setPen(QColor(tokens.TEXTO_TERCIARIO))
 
         passo_rotulo = max(1, n // 8)
 
@@ -170,14 +176,14 @@ class CardMetrica(QFrame):
 
         lbl_titulo = QLabel(titulo)
         lbl_titulo.setStyleSheet(
-            "background:transparent; border:none; font-size:11px; "
-            "font-weight:bold; color:#9E9E9E; letter-spacing:1px;"
+            f"background:transparent; border:none; font-size:11px; "
+            f"font-weight:bold; color:{tokens.TEXTO_TERCIARIO}; letter-spacing:1px;"
         )
 
         self.lbl_valor = QLabel("R$ 0,00")
         self.lbl_valor.setStyleSheet(
-            "background:transparent; border:none; font-size:22px; "
-            "font-weight:bold; color:white;"
+            f"background:transparent; border:none; font-size:22px; "
+            f"font-weight:bold; color:{tokens.TEXTO_CLARO};"
         )
 
         self.lbl_variacao = QLabel("")
@@ -199,7 +205,7 @@ class CardMetrica(QFrame):
             return
 
         seta = "↑" if variacao_percentual >= 0 else "↓"
-        cor = "#66BB6A" if variacao_percentual >= 0 else "#EF5350"
+        cor = tokens.SUCESSO if variacao_percentual >= 0 else tokens.ERRO
 
         self.lbl_variacao.setStyleSheet(
             f"background:transparent; border:none; font-size:11px; "
@@ -232,7 +238,7 @@ class VisaoGeral(QWidget):
         self.filtro_periodo = "Hoje"
 
         self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setStyleSheet("background:#f4f5f7;")
+        self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 16, 24, 16)
@@ -245,16 +251,16 @@ class VisaoGeral(QWidget):
         cabecalho = QHBoxLayout()
 
         self.bt_voltar = QPushButton("← Voltar")
-        self.bt_voltar.setStyleSheet("""
-            QPushButton {
+        self.bt_voltar.setStyleSheet(f"""
+            QPushButton {{
                 background:transparent;
-                color:gray;
+                color:{tokens.TEXTO_TERCIARIO};
                 border:none;
                 font-size:13px;
-            }
-            QPushButton:hover {
-                color:#202225;
-            }
+            }}
+            QPushButton:hover {{
+                color:{tokens.TEXTO};
+            }}
         """)
         self.bt_voltar.clicked.connect(self.voltar.emit)
 
@@ -266,14 +272,14 @@ class VisaoGeral(QWidget):
 
         titulo = QLabel(nome_loja)
         titulo.setStyleSheet(
-            "background:transparent; font-size:20px; "
-            "font-weight:bold; color:#202225;"
+            f"background:transparent; font-size:20px; "
+            f"font-weight:bold; color:{tokens.TEXTO};"
         )
 
         subtitulo = QLabel("LOJA OPERACIONAL")
         subtitulo.setStyleSheet(
-            "background:transparent; font-size:11px; "
-            "color:#2E7D32; font-weight:bold;"
+            f"background:transparent; font-size:11px; "
+            f"color:{tokens.SECUNDARIA}; font-weight:bold;"
         )
 
         col_titulo.addWidget(titulo)
@@ -287,32 +293,32 @@ class VisaoGeral(QWidget):
         bt_atualizar = QPushButton("🔄")
         bt_atualizar.setFixedSize(38, 38)
         bt_atualizar.setCursor(Qt.PointingHandCursor)
-        bt_atualizar.setStyleSheet("""
-            QPushButton {
-                background:white;
-                color:#202225;
-                border:1px solid #dcdcdc;
+        bt_atualizar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD};
+                color:{tokens.TEXTO};
+                border:1px solid {tokens.BORDA};
                 border-radius:8px;
                 font-size:16px;
-            }
-            QPushButton:hover {
-                border:1px solid #9e9e9e;
-            }
+            }}
+            QPushButton:hover {{
+                border:1px solid {tokens.TEXTO_TERCIARIO};
+            }}
         """)
         bt_atualizar.clicked.connect(self.carregar)
 
         bt_imprimir = QPushButton("🖨  Imprimir BI")
-        bt_imprimir.setStyleSheet("""
-            QPushButton {
-                background:#202225;
-                color:white;
+        bt_imprimir.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.SIDEBAR};
+                color:{tokens.TEXTO_CLARO};
                 border-radius:8px;
                 padding:10px 16px;
                 font-weight:bold;
-            }
-            QPushButton:hover {
-                background:#000000;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.SIDEBAR_HOVER};
+            }}
         """)
 
         cabecalho.addWidget(bt_atualizar)
@@ -357,21 +363,21 @@ class VisaoGeral(QWidget):
             botao.setCheckable(True)
             botao.setCursor(Qt.PointingHandCursor)
             botao.setMinimumHeight(34)
-            botao.setStyleSheet("""
-                QPushButton {
-                    background:white;
-                    color:#616161;
-                    border:1px solid #dcdcdc;
+            botao.setStyleSheet(f"""
+                QPushButton {{
+                    background:{tokens.CARD};
+                    color:{tokens.TEXTO_SECUNDARIO};
+                    border:1px solid {tokens.BORDA};
                     border-radius:17px;
                     padding:0 16px;
                     font-size:11px;
                     font-weight:bold;
-                }
-                QPushButton:checked {
-                    background:#2E7D32;
-                    color:white;
-                    border:1px solid #2E7D32;
-                }
+                }}
+                QPushButton:checked {{
+                    background:{tokens.SECUNDARIA};
+                    color:{tokens.TEXTO_CLARO};
+                    border:1px solid {tokens.SECUNDARIA};
+                }}
             """)
             botao.clicked.connect(
                 lambda _checked, p=periodo: self._selecionar_periodo(p)
@@ -391,11 +397,11 @@ class VisaoGeral(QWidget):
         # ======================
 
         barra_metricas = QFrame()
-        barra_metricas.setStyleSheet("""
-            QFrame {
-                background:#12151a;
+        barra_metricas.setStyleSheet(f"""
+            QFrame {{
+                background:{tokens.SIDEBAR};
                 border-radius:12px;
-            }
+            }}
         """)
 
         metricas_layout = QHBoxLayout(barra_metricas)
@@ -453,21 +459,21 @@ class VisaoGeral(QWidget):
         self.tabela_transacoes.setFocusPolicy(Qt.NoFocus)
         self.tabela_transacoes.setMinimumHeight(320)
         self.tabela_transacoes.setMaximumHeight(320)
-        self.tabela_transacoes.setStyleSheet("""
-            QTableWidget {
+        self.tabela_transacoes.setStyleSheet(f"""
+            QTableWidget {{
                 border:none;
-                color:#202225;
-                background:white;
-            }
-            QHeaderView::section {
-                background:white;
-                color:#9E9E9E;
+                color:{tokens.TEXTO};
+                background:{tokens.CARD};
+            }}
+            QHeaderView::section {{
+                background:{tokens.CARD};
+                color:{tokens.TEXTO_TERCIARIO};
                 font-weight:bold;
                 font-size:11px;
                 padding:6px;
                 border:none;
-                border-bottom:1px solid #eeeeee;
-            }
+                border-bottom:1px solid {tokens.BORDA};
+            }}
         """)
 
         self.painel_transacoes.corpo.addWidget(self.tabela_transacoes)
@@ -477,8 +483,8 @@ class VisaoGeral(QWidget):
         )
         self.lbl_transacoes_vazio.setAlignment(Qt.AlignCenter)
         self.lbl_transacoes_vazio.setStyleSheet(
-            "color:#9E9E9E; font-size:12px; background:transparent; "
-            "border:none; padding:20px;"
+            f"color:{tokens.TEXTO_TERCIARIO}; font-size:12px; background:transparent; "
+            f"border:none; padding:20px;"
         )
         self.lbl_transacoes_vazio.setVisible(False)
         self.painel_transacoes.corpo.addWidget(self.lbl_transacoes_vazio)
@@ -816,7 +822,7 @@ class VisaoGeral(QWidget):
                 None,
                 f"{quantidade} vendas",
                 percentual,
-                "#1565C0",
+                tokens.PRIMARIA,
             )
 
             self.painel_top_produtos.corpo.addWidget(linha)
@@ -858,7 +864,7 @@ class VisaoGeral(QWidget):
                 None,
                 f"{percentual:.0f}%",
                 percentual,
-                "#F9A825",
+                tokens.ALERTA,
             )
 
             self.painel_mapa_horarios.corpo.addWidget(linha)

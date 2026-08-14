@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from services.api import atualizar_configuracoes
+from design import tokens
 from design.responsive import tamanho_fixo_seguro
 
 
@@ -22,7 +23,7 @@ class CadastrarLojaDialog(QDialog):
 
         self.setWindowTitle("Cadastrar Nova Loja")
         tamanho_fixo_seguro(self, 420, 320)
-        self.setStyleSheet("background:white; border-radius:16px;")
+        self.setStyleSheet(f"background:{tokens.CARD}; border-radius:16px;")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(32, 32, 32, 28)
@@ -31,9 +32,9 @@ class CadastrarLojaDialog(QDialog):
         icone = QLabel("🏠")
         icone.setFixedSize(56, 56)
         icone.setAlignment(Qt.AlignCenter)
-        icone.setStyleSheet("""
-            background:#E3F2FD;
-            color:#1565C0;
+        icone.setStyleSheet(f"""
+            background:{tokens.PRIMARIA_CLARA};
+            color:{tokens.PRIMARIA};
             border-radius:14px;
             font-size:24px;
         """)
@@ -43,8 +44,8 @@ class CadastrarLojaDialog(QDialog):
 
         titulo = QLabel("Cadastrar Nova Loja")
         titulo.setStyleSheet(
-            "background:transparent; font-size:19px; "
-            "font-weight:bold; color:#202225;"
+            f"background:transparent; font-size:19px; "
+            f"font-weight:bold; color:{tokens.TEXTO};"
         )
 
         subtitulo = QLabel(
@@ -52,7 +53,7 @@ class CadastrarLojaDialog(QDialog):
         )
         subtitulo.setWordWrap(True)
         subtitulo.setStyleSheet(
-            "background:transparent; font-size:12px; color:gray;"
+            f"background:transparent; font-size:12px; color:{tokens.TEXTO_TERCIARIO};"
         )
 
         layout.addWidget(titulo)
@@ -61,21 +62,22 @@ class CadastrarLojaDialog(QDialog):
 
         lbl_campo = QLabel("NOME DA LOJA")
         lbl_campo.setStyleSheet(
-            "background:transparent; font-size:10px; "
-            "font-weight:bold; color:#757575;"
+            f"background:transparent; font-size:10px; "
+            f"font-weight:bold; color:{tokens.TEXTO_TERCIARIO};"
         )
 
         self.nome_loja = QLineEdit()
         self.nome_loja.setPlaceholderText("Ex: Loja do João")
         self.nome_loja.setMinimumHeight(44)
-        self.nome_loja.setStyleSheet("""
-            QLineEdit {
-                border: 2px solid #1565C0;
+        self.nome_loja.setStyleSheet(f"""
+            QLineEdit {{
+                border: 2px solid {tokens.PRIMARIA};
                 border-radius: 10px;
                 padding: 0 14px;
                 font-size: 14px;
-                color: #202225;
-            }
+                color: {tokens.TEXTO};
+                background: {tokens.CARD};
+            }}
         """)
 
         layout.addWidget(lbl_campo)
@@ -89,31 +91,31 @@ class CadastrarLojaDialog(QDialog):
         bt_cancelar = QPushButton("Cancelar")
         bt_cancelar.setMinimumHeight(46)
         bt_cancelar.setAutoDefault(False)
-        bt_cancelar.setStyleSheet("""
-            QPushButton {
-                background:#f4f5f7;
-                color:#202225;
+        bt_cancelar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.FUNDO};
+                color:{tokens.TEXTO};
                 border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#e8e8e8;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.BORDA};
+            }}
         """)
         bt_cancelar.clicked.connect(self.pular)
 
         bt_salvar = QPushButton("SALVAR LOJA  ✓")
         bt_salvar.setMinimumHeight(46)
         bt_salvar.setAutoDefault(False)
-        bt_salvar.setStyleSheet("""
-            QPushButton {
-                background:#1565C0;
-                color:white;
+        bt_salvar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.PRIMARIA};
+                color:{tokens.TEXTO_CLARO};
                 font-weight:bold;
                 border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#0D47A1;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.PRIMARIA_HOVER};
+            }}
         """)
         bt_salvar.clicked.connect(self.salvar)
 

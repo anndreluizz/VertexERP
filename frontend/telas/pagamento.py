@@ -999,12 +999,12 @@ class PagamentoWindow(QDialog):
             """)
             self.lbl_status_rotulo.setStyleSheet(
                 "background:transparent; font-size:11px; "
-                "font-weight:800; color:#B45309;"
+                f"font-weight:800; color:{tokens.ALERTA_TEXTO};"
             )
             self.lbl_status_rotulo.setText("FALTA RECEBER")
             self.lbl_status_valor.setStyleSheet(
                 "background:transparent; font-size:22px; "
-                "font-weight:800; color:#B45309;"
+                f"font-weight:800; color:{tokens.ALERTA_TEXTO};"
             )
             self.lbl_status_valor.setText(f"R$ {_fmt(restante)}")
 

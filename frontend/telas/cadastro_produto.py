@@ -26,6 +26,7 @@ from services.ean_lookup import buscar_produto_externo
 from services.categoria_service import listar_categorias, criar_categoria
 from telas.gerenciar_categorias import GerenciarCategoriasDialog
 from services.produto_service import obter_foto_produto
+from design import tokens
 from design.responsive import tamanho_fixo_seguro
 
 
@@ -39,7 +40,7 @@ class CadastroProdutoWindow(QDialog):
         self.modo_venda = "UN"
 
         tamanho_fixo_seguro(self, 920, 640)
-        self.setStyleSheet("background:white;")
+        self.setStyleSheet(f"background:{tokens.CARD};")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -55,8 +56,8 @@ class CadastroProdutoWindow(QDialog):
         icone = QLabel("🛍️")
         icone.setFixedSize(44, 44)
         icone.setAlignment(Qt.AlignCenter)
-        icone.setStyleSheet("""
-            background:#202225;
+        icone.setStyleSheet(f"""
+            background:{tokens.SIDEBAR};
             border-radius:12px;
             font-size:20px;
         """)
@@ -68,29 +69,29 @@ class CadastroProdutoWindow(QDialog):
 
         titulo = QLabel(titulo_texto)
         titulo.setStyleSheet(
-            "background:transparent; font-size:18px; "
-            "font-weight:bold; color:#202225;"
+            f"background:transparent; font-size:18px; "
+            f"font-weight:bold; color:{tokens.TEXTO};"
         )
 
         subtitulo = QLabel("Preencha os dados básicos para começar")
         subtitulo.setStyleSheet(
-            "background:transparent; font-size:11px; color:gray;"
+            f"background:transparent; font-size:11px; color:{tokens.TEXTO_TERCIARIO};"
         )
 
         col_titulo.addWidget(titulo)
         col_titulo.addWidget(subtitulo)
 
         self.bt_cancelar_topo = QPushButton("✕ Cancelar")
-        self.bt_cancelar_topo.setStyleSheet("""
-            QPushButton {
-                background:#f4f5f7;
-                color:#202225;
+        self.bt_cancelar_topo.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.FUNDO};
+                color:{tokens.TEXTO};
                 border-radius:8px;
                 padding:8px 14px;
-            }
-            QPushButton:hover {
-                background:#e8e8e8;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.BORDA};
+            }}
         """)
         self.bt_cancelar_topo.clicked.connect(self.reject)
 
@@ -98,11 +99,11 @@ class CadastroProdutoWindow(QDialog):
         self.favorito.setToolTip(
             "Produtos favoritos ficam em destaque na busca do PDV"
         )
-        self.favorito.setStyleSheet("""
-            QCheckBox {
+        self.favorito.setStyleSheet(f"""
+            QCheckBox {{
                 background:transparent; font-size:12px;
-                font-weight:bold; color:#B45309;
-            }
+                font-weight:bold; color:{tokens.ALERTA_TEXTO};
+            }}
         """)
 
         cabecalho.addWidget(icone)
@@ -129,7 +130,7 @@ class CadastroProdutoWindow(QDialog):
         esquerda.setSpacing(14)
 
         esquerda.addWidget(
-            self._titulo_secao("INFORMAÇÕES BÁSICAS", "#1565C0")
+            self._titulo_secao("INFORMAÇÕES BÁSICAS", tokens.PRIMARIA)
         )
 
         esquerda.addWidget(
@@ -156,15 +157,15 @@ class CadastroProdutoWindow(QDialog):
         self.bt_buscar = QPushButton("✨")
         self.bt_buscar.setFixedSize(42, 42)
         self.bt_buscar.setToolTip("Buscar produto pelo código")
-        self.bt_buscar.setStyleSheet("""
-            QPushButton {
-                background:#2E7D32;
+        self.bt_buscar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.SECUNDARIA};
                 border-radius:10px;
                 font-size:16px;
-            }
-            QPushButton:hover {
-                background:#1B5E20;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.SECUNDARIA_HOVER};
+            }}
         """)
         self.bt_buscar.clicked.connect(
             lambda: self.buscar_automatico(silencioso=False)
@@ -207,32 +208,32 @@ class CadastroProdutoWindow(QDialog):
         self.categoria = QComboBox()
         self.categoria.setEditable(True)
         self.categoria.setMinimumHeight(42)
-        self.categoria.setStyleSheet("""
-            QComboBox {
-                border: 1px solid #cccccc;
+        self.categoria.setStyleSheet(f"""
+            QComboBox {{
+                border: 1px solid {tokens.BORDA};
                 border-radius: 8px;
                 padding: 0 12px;
                 font-size: 14px;
-                color: #202225;
-                background: white;
-            }
+                color: {tokens.TEXTO};
+                background: {tokens.CARD};
+            }}
         """)
         self._carregar_categorias()
 
         self.bt_nova_categoria = QPushButton("+")
         self.bt_nova_categoria.setFixedSize(42, 42)
         self.bt_nova_categoria.setToolTip("Criar nova categoria")
-        self.bt_nova_categoria.setStyleSheet("""
-            QPushButton {
-                background:#f4f5f7;
-                color:#202225;
+        self.bt_nova_categoria.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.FUNDO};
+                color:{tokens.TEXTO};
                 border-radius:10px;
                 font-size:18px;
                 font-weight:bold;
-            }
-            QPushButton:hover {
-                background:#e8e8e8;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.BORDA};
+            }}
         """)
         self.bt_nova_categoria.clicked.connect(self.criar_nova_categoria)
 
@@ -241,17 +242,17 @@ class CadastroProdutoWindow(QDialog):
         self.bt_gerenciar_categorias.setToolTip(
             "Gerenciar categorias (editar/excluir)"
         )
-        self.bt_gerenciar_categorias.setStyleSheet("""
-            QPushButton {
-                background:#f4f5f7;
-                color:#202225;
+        self.bt_gerenciar_categorias.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.FUNDO};
+                color:{tokens.TEXTO};
                 border-radius:10px;
                 font-size:16px;
                 font-weight:bold;
-            }
-            QPushButton:hover {
-                background:#e8e8e8;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.BORDA};
+            }}
         """)
         self.bt_gerenciar_categorias.clicked.connect(
             self.gerenciar_categorias
@@ -271,7 +272,7 @@ class CadastroProdutoWindow(QDialog):
         direita.setSpacing(14)
 
         direita.addWidget(
-            self._titulo_secao("VALORES E DISPONIBILIDADE", "#2E7D32")
+            self._titulo_secao("VALORES E DISPONIBILIDADE", tokens.SECUNDARIA)
         )
 
         linha_preco_modo = QHBoxLayout()
@@ -360,23 +361,23 @@ class CadastroProdutoWindow(QDialog):
         self.lbl_foto = QLabel("📷")
         self.lbl_foto.setFixedSize(70, 70)
         self.lbl_foto.setAlignment(Qt.AlignCenter)
-        self.lbl_foto.setStyleSheet("""
-            background:#eef0f3;
+        self.lbl_foto.setStyleSheet(f"""
+            background:{tokens.FUNDO};
             border-radius:10px;
             font-size:26px;
         """)
 
         self.bt_adicionar_imagem = QPushButton("Adicionar Imagem")
         self.bt_adicionar_imagem.setMinimumHeight(70)
-        self.bt_adicionar_imagem.setStyleSheet("""
-            QPushButton {
-                background:#f4f5f7;
-                color:#202225;
+        self.bt_adicionar_imagem.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.FUNDO};
+                color:{tokens.TEXTO};
                 border-radius:10px;
-            }
-            QPushButton:hover {
-                background:#e8e8e8;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.BORDA};
+            }}
         """)
         self.bt_adicionar_imagem.clicked.connect(
             self.adicionar_imagem
@@ -402,16 +403,16 @@ class CadastroProdutoWindow(QDialog):
         rodape.setContentsMargins(30, 16, 30, 24)
 
         self.bt_cancelar = QPushButton("Cancelar e sair")
-        self.bt_cancelar.setStyleSheet("""
-            QPushButton {
+        self.bt_cancelar.setStyleSheet(f"""
+            QPushButton {{
                 background:transparent;
-                color:gray;
+                color:{tokens.TEXTO_TERCIARIO};
                 border:none;
                 font-size:13px;
-            }
-            QPushButton:hover {
-                color:#202225;
-            }
+            }}
+            QPushButton:hover {{
+                color:{tokens.TEXTO};
+            }}
         """)
         self.bt_cancelar.clicked.connect(self.reject)
 
@@ -422,17 +423,17 @@ class CadastroProdutoWindow(QDialog):
         self.bt_salvar = QPushButton(texto_salvar)
         self.bt_salvar.setMinimumHeight(48)
         self.bt_salvar.setMinimumWidth(220)
-        self.bt_salvar.setStyleSheet("""
-            QPushButton {
-                background:#2E7D32;
-                color:white;
+        self.bt_salvar.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.SECUNDARIA};
+                color:{tokens.TEXTO_CLARO};
                 font-weight:bold;
                 border-radius:10px;
                 padding: 0 20px;
-            }
-            QPushButton:hover {
-                background:#1B5E20;
-            }
+            }}
+            QPushButton:hover {{
+                background:{tokens.SECUNDARIA_HOVER};
+            }}
         """)
         self.bt_salvar.clicked.connect(self.salvar)
 
@@ -469,23 +470,23 @@ class CadastroProdutoWindow(QDialog):
     def _rotulo(self, texto):
         lbl = QLabel(texto)
         lbl.setStyleSheet(
-            "background:transparent; font-size:10px; "
-            "font-weight:bold; color:gray;"
+            f"background:transparent; font-size:10px; "
+            f"font-weight:bold; color:{tokens.TEXTO_TERCIARIO};"
         )
         return lbl
 
     def _estilo_input(self, widget="QLineEdit"):
         return f"""
             {widget} {{
-                border: 1px solid #cccccc;
+                border: 1px solid {tokens.BORDA};
                 border-radius: 8px;
                 padding: 0 12px;
                 font-size: 14px;
-                color: #202225;
-                background: white;
+                color: {tokens.TEXTO};
+                background: {tokens.CARD};
             }}
             {widget}:focus {{
-                border: 1px solid #2E7D32;
+                border: 1px solid {tokens.SECUNDARIA};
             }}
         """
 
@@ -565,14 +566,14 @@ class CadastroProdutoWindow(QDialog):
 
             botao.setStyleSheet(f"""
                 QPushButton {{
-                    background: {"#202225" if selecionado else "#f4f5f7"};
-                    color: {"white" if selecionado else "#202225"};
+                    background: {tokens.SIDEBAR if selecionado else tokens.FUNDO};
+                    color: {tokens.TEXTO_CLARO if selecionado else tokens.TEXTO};
                     border-radius: 8px;
                     font-weight: bold;
                     font-size: 11px;
                 }}
                 QPushButton:hover {{
-                    background: {"#33363b" if selecionado else "#e8e8e8"};
+                    background: {tokens.SIDEBAR_HOVER if selecionado else tokens.BORDA};
                 }}
             """)
 

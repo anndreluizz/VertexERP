@@ -16,6 +16,8 @@ from services.fornecedor_service import (
     listar_fornecedores,
 )
 
+from design import tokens
+
 
 class PesquisaFornecedorWindow(QDialog):
 
@@ -99,15 +101,15 @@ class PesquisaFornecedorWindow(QDialog):
 
         self.bt_selecionar = QPushButton("Selecionar")
 
-        self.bt_selecionar.setStyleSheet("""
-            QPushButton{
-                background:#1565C0;
-                color:white;
+        self.bt_selecionar.setStyleSheet(f"""
+            QPushButton{{
+                background:{tokens.PRIMARIA};
+                color:{tokens.TEXTO_CLARO};
                 font-weight:bold;
-            }
-            QPushButton:hover{
-                background:#0D47A1;
-            }
+            }}
+            QPushButton:hover{{
+                background:{tokens.PRIMARIA_HOVER};
+            }}
         """)
 
         botoes.addStretch()

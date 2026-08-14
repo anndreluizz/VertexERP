@@ -115,7 +115,11 @@ class Header(QFrame):
 
         super().__init__(parent)
 
-        self._modo_escuro = False
+        # reflete o tema que ja esta ativo (ver design.tokens.aplicar,
+        # chamado no arranque do app) -- sem isso o botao sempre
+        # nascia mostrando o icone de "mudar pra escuro" mesmo quando
+        # o escuro ja estava ligado
+        self._modo_escuro = tokens.ESCURO_ATIVO
 
         self.setFixedHeight(64)
         self.setStyleSheet(f"""
@@ -202,7 +206,9 @@ class Header(QFrame):
         # TEMA / NOTIFICAÇÕES / PERFIL
         # ======================
 
-        self.bt_tema = self._botao_icone("moon")
+        self.bt_tema = self._botao_icone(
+            "sun" if self._modo_escuro else "moon"
+        )
         self.bt_tema.setToolTip("Alternar tema claro/escuro")
         self.bt_tema.clicked.connect(self._alternar_tema)
         layout.addWidget(self.bt_tema)

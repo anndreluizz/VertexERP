@@ -52,3 +52,17 @@ def salvar_servidor(host):
 
 def carregar_servidor():
     return _settings().value("conexao/servidor_host")
+
+
+def salvar_tema_escuro(escuro):
+    _settings().setValue("aparencia/tema_escuro", escuro)
+
+
+def carregar_tema_escuro():
+    # QSettings guarda bool como string ("true"/"false") em .ini --
+    # sem o type=bool a leitura de volta pode virar string truthy
+    # sempre (mesmo "false" vira True em bool("false")), acendendo o
+    # tema escuro sozinho na primeira leitura depois de salvo
+    return _settings().value(
+        "aparencia/tema_escuro", defaultValue=False, type=bool
+    )

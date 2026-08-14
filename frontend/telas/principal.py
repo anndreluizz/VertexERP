@@ -11,8 +11,12 @@ from telas.caixa_bloqueado import CaixaBloqueadoDialog
 from telas.abrir_caixa import AbrirCaixaWindow
 from telas.trocar_senha import TrocarSenhaDialog
 
+import os
+import sys
+
 from PySide6.QtGui import QShortcut, QKeySequence
 from PySide6.QtWidgets import (
+    QApplication,
     QMainWindow,
     QWidget,
     QHBoxLayout,
@@ -27,6 +31,7 @@ from design.sidebar import Sidebar
 from design.header import Header
 from services import api
 from services.caixa_service import caixa_aberto, abrir_caixa
+from services.preferencias_service import salvar_tema_escuro
 
 
 # (chave, ícone lucide, rótulo) — única fonte de verdade pra montar tanto
@@ -94,6 +99,7 @@ class PrincipalWindow(QMainWindow):
         self.header = Header(nome_loja, nome_usuario, cargo)
         self.header.solicitou_logout.connect(self._fazer_logout)
         self.header.solicitou_trocar_senha.connect(self._abrir_trocar_senha)
+        self.header.tema_alternado.connect(self._alternar_tema)
         layout_central.addWidget(self.header)
 
         self.paginas = QStackedWidget()
@@ -238,6 +244,44 @@ class PrincipalWindow(QMainWindow):
 
         dialogo = TrocarSenhaDialog(parent=self)
         dialogo.exec()
+
+    def _alternar_tema(self, escuro):
+
+        # a paleta so e' lida uma vez, no arranque (ver
+        # design.tokens.aplicar via app.py) -- toda tela deste
+        # processo ja foi construida com as cores antigas, entao so
+        # salvar a preferencia nao muda nada visualmente ate reiniciar
+        salvar_tema_escuro(escuro)
+
+        resposta = QMessageBox.question(
+            self,
+            "Reiniciar o Vertex ERP",
+            "O tema só é aplicado depois de reiniciar o programa.\n\n"
+            "Reiniciar agora?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+
+        if resposta == QMessageBox.Yes:
+            self._reiniciar_app()
+
+    def _reiniciar_app(self):
+
+        QApplication.instance().quit()
+
+        # os.execv troca o processo atual pelo mesmo comando de novo --
+        # forma padrao de "reiniciar" um app Python sem depender de um
+        # processo externo pra relancar. Empacotado (--frozen),
+        # sys.executable JA e' o VertexERP-Frontend.exe, entao chamar
+        # ele sozinho basta; em modo dev, sys.executable e' o
+        # interpretador python -- precisa passar o caminho de app.py
+        # (sys.argv[0]) como argumento, senao o processo novo abre o
+        # python sem nenhum script pra rodar.
+        if getattr(sys, "frozen", False):
+            comando = [sys.executable] + sys.argv[1:]
+        else:
+            comando = [sys.executable, sys.argv[0]] + sys.argv[1:]
+
+        os.execv(sys.executable, comando)
 
     def atalho_f3(self):
 

@@ -4,10 +4,18 @@ from design import tokens
 from design.fonts import carregar_fonte_inter
 
 
-def aplicar_tema(app):
+def aplicar_tema(app, escuro: bool = False):
     """Aplica o tema visual do Vertex ERP na aplicação inteira: fonte,
     paleta base e stylesheet global (o que toda tela herda antes de
-    aplicar seu próprio stylesheet específico por cima)."""
+    aplicar seu próprio stylesheet específico por cima).
+
+    `escuro` troca a paleta de cores (ver design.tokens.aplicar) antes
+    de montar a QPalette/QSS abaixo, e precisa ser decidido ANTES de
+    qualquer tela ser construída -- trocar em runtime com telas já
+    abertas não re-tinge o que já foi desenhado (ver Header.
+    _alternar_tema, que reinicia o app pra aplicar de verdade)."""
+
+    tokens.aplicar(escuro)
 
     familia_fonte = carregar_fonte_inter()
 

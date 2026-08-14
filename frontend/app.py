@@ -1,18 +1,5 @@
 import os
 import sys
-import os
-
-if getattr(sys, "frozen", False):
-    # Build --noconsole: sys.stdout/stderr vêm como None (sem console
-    # anexado) — qualquer print() ou traceback não capturado tentaria
-    # escrever em None e estouraria AttributeError, matando o processo
-    # em silêncio. Precisa de um objeto de arquivo de verdade.
-    log_path = os.path.join(
-        os.path.dirname(sys.executable), "frontend_log.txt"
-    )
-    log_file = open(log_path, "a", encoding="utf-8", buffering=1)
-    sys.stdout = log_file
-    sys.stderr = log_file
 
 if getattr(sys, "frozen", False):
     os.chdir(os.path.dirname(sys.executable))
@@ -35,7 +22,7 @@ from requests.exceptions import RequestException
 from design.theme import aplicar_tema
 from services import api
 from services.api import existe_usuario
-from services.preferencias_service import carregar_servidor
+from services.preferencias_service import carregar_servidor, carregar_tema_escuro
 from telas.login import LoginWindow
 from telas.cadastro_inicial import CadastroInicialWindow
 from telas.conectar_servidor import ConectarServidorDialog
@@ -48,9 +35,14 @@ app.setOrganizationName("VertexERP")
 app.setApplicationName("VertexERP")
 
 # aplicar_tema cobre o que o setup manual antigo fazia (Fusion + paleta
-# clara, pra nao herdar o tema escuro do Windows) e adiciona a fonte
-# Inter e o QSS global do design system por cima.
-aplicar_tema(app)
+# clara/escura, pra nao herdar o tema do Windows) e adiciona a fonte
+# Inter e o QSS global do design system por cima. Precisa vir ANTES de
+# qualquer tela ser construída (LoginWindow logo abaixo já usa
+# tokens.* pra montar seu stylesheet) -- trocar a paleta depois que
+# uma tela já existe não re-tinge o que já foi desenhado (ver
+# Header._alternar_tema, que reinicia o processo pra aplicar de
+# verdade em vez de tentar isso em runtime).
+aplicar_tema(app, escuro=carregar_tema_escuro())
 
 # Se esse PC já foi configurado antes como Terminal (ver
 # ConectarServidorDialog), usa o endereço salvo em vez do localhost

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_admin, get_current_user
 from app.database.session import SessionLocal
 from app.schemas.categoria_despesa import (
     CategoriaDespesaCreate,
@@ -65,7 +65,7 @@ def atualizar(
 def excluir(
     categoria_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(get_current_admin),
 ):
     try:
         CategoriaDespesaService.excluir(db, categoria_id)

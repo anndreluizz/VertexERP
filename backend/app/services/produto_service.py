@@ -58,7 +58,11 @@ class ProdutoService:
         if not produto:
             return None
 
-        campos = dados.dict(exclude={"foto_base64"})
+        # exclude_unset: sem isso, todo campo que o formulario nao manda
+        # (ex.: "ativo", que o dialogo de edicao nunca envia) volta pro
+        # valor padrao do schema em vez de manter o que ja estava salvo
+        # -- editar um produto desativado reativava ele sem querer.
+        campos = dados.dict(exclude_unset=True, exclude={"foto_base64"})
 
         for campo, valor in campos.items():
             setattr(produto, campo, valor)

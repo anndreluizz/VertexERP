@@ -28,12 +28,16 @@ def excluir_conta_pagar(conta_id):
 
 def pagar_conta_pagar(
     conta_id,
+    forma_pagamento=None,
     comprovante_base64=None,
     comprovante_nome=None,
     comprovante_tipo=None,
 ):
 
     dados = {}
+
+    if forma_pagamento:
+        dados["forma_pagamento"] = forma_pagamento
 
     if comprovante_base64:
         dados["comprovante_base64"] = comprovante_base64

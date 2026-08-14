@@ -90,20 +90,27 @@ def test_movimentos_caixa_respeita_paginacao(
 
 
 def test_financeiro_nao_e_afetado_por_limite_de_paginacao(
-    client, auth_headers, caixa_aberto, cliente
+    client, auth_headers, db, caixa_aberto, cliente
 ):
     # cria mais contas a receber pendentes do que um "limit" pequeno
-    # permitiria, pra garantir que o fluxo de caixa soma todas mesmo assim
+    # permitiria, pra garantir que o fluxo de caixa soma todas mesmo
+    # assim -- ContaReceber nao tem mais rota propria (tabela legada,
+    # so FinanceiroService.fluxo_caixa ainda le direto do banco), cria
+    # direto pelo model.
+    from datetime import datetime
+
+    from app.models.conta_receber import ContaReceber
+
     for i in range(3):
-        client.post(
-            "/contas-receber/",
-            json={
-                "cliente_id": cliente.id,
-                "data_vencimento": "2026-08-01T00:00:00",
-                "valor": 10.0,
-            },
-            headers=auth_headers,
+        db.add(
+            ContaReceber(
+                cliente_id=cliente.id,
+                data_vencimento=datetime(2026, 8, 1),
+                valor=10.0,
+                status="PENDENTE",
+            )
         )
+    db.commit()
 
     response = client.get(
         "/financeiro/fluxo-caixa?dias=60", headers=auth_headers

@@ -39,13 +39,12 @@ NOMES_FORMA = {valor: rotulo for rotulo, valor in FORMAS_PAGAMENTO}
 
 
 class PagamentoDespesaDialog(QDialog):
-    """Confirmação antes de marcar uma despesa como paga. O endpoint
-    de pagamento do backend (`pagar_conta_pagar`) só aceita o id da
-    conta — não existe campo de forma de pagamento nem observação na
-    tabela de contas a pagar. Por isso a forma escolhida aqui vira um
+    """Confirmação antes de marcar uma despesa como paga. A forma
+    escolhida aqui vai pro backend em /pagar (só DINHEIRO mexe no
+    saldo do caixa, ver ContaPagarService.pagar) -- e também vira um
     texto legível gravado no campo `observacao` (que já existe) via um
-    PATCH logo antes de marcar a conta como paga — sem inventar coluna
-    nova no banco."""
+    PATCH logo antes, pra ficar visível no histórico da despesa sem
+    precisar abrir o extrato do caixa pra saber como foi pago."""
 
     def __init__(self, conta, parent=None):
 
@@ -349,6 +348,7 @@ class PagamentoDespesaDialog(QDialog):
 
         response = pagar_conta_pagar(
             self.conta["id"],
+            forma_pagamento=self.forma_pagamento,
             comprovante_base64=comprovante_base64,
             comprovante_nome=self.comprovante_nome_arquivo,
             comprovante_tipo=self.comprovante_tipo_arquivo,

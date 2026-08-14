@@ -1,13 +1,14 @@
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models.venda import Venda
 from app.models.item_venda import ItemVenda
 from app.models.produto import Produto
 from app.models.cliente import Cliente
+from app.services.venda_service import _parcelas_pagamento
 
 
 class RelatorioService:
@@ -112,7 +113,17 @@ class RelatorioService:
             query = query.filter(Venda.cliente_id == cliente_id)
 
         if forma_pagamento is not None:
-            query = query.filter(Venda.forma_pagamento == forma_pagamento)
+            # uma venda dividida em 2 formas (ver forma_pagamento_2)
+            # precisa aparecer no filtro pela forma que ela usou na
+            # segunda parcela tambem, senao um pagamento
+            # metade-dinheiro-metade-pix filtrado por "PIX" some do
+            # relatorio mesmo tendo recebido PIX de verdade
+            query = query.filter(
+                or_(
+                    Venda.forma_pagamento == forma_pagamento,
+                    Venda.forma_pagamento_2 == forma_pagamento,
+                )
+            )
 
         if produto_id is not None or categoria is not None:
             query = query.join(
@@ -341,26 +352,43 @@ class RelatorioService:
         if not ids:
             return []
 
-        resultados = (
-            db.query(
-                Venda.forma_pagamento,
-                func.count(Venda.id),
-                func.sum(Venda.valor_total),
-            )
+        # nao da pra so agrupar por Venda.forma_pagamento e somar
+        # valor_total: numa venda dividida em 2 formas (ver
+        # forma_pagamento_2/valor_forma_2), o total inteiro iria pra
+        # forma principal e a segunda forma ficaria de fora -- usa o
+        # mesmo _parcelas_pagamento que o resto do sistema (criar/
+        # cancelar venda) ja usa pra nao inventar uma segunda logica
+        # de split que pode divergir da de verdade
+        vendas = (
+            db.query(Venda)
             .filter(Venda.id.in_(ids))
-            .group_by(Venda.forma_pagamento)
-            .order_by(func.sum(Venda.valor_total).desc())
             .all()
         )
 
-        return [
-            {
-                "forma_pagamento": forma,
-                "quantidade": int(quantidade),
-                "total": float(total),
-            }
-            for forma, quantidade, total in resultados
-        ]
+        agregados: dict[str, dict] = {}
+
+        for venda in vendas:
+            for forma_parcela, valor_parcela in _parcelas_pagamento(
+                venda, venda.valor_total
+            ):
+                bucket = agregados.setdefault(
+                    forma_parcela, {"quantidade": 0, "total": Decimal("0")}
+                )
+                bucket["quantidade"] += 1
+                bucket["total"] += valor_parcela
+
+        return sorted(
+            (
+                {
+                    "forma_pagamento": forma,
+                    "quantidade": dados["quantidade"],
+                    "total": float(dados["total"]),
+                }
+                for forma, dados in agregados.items()
+            ),
+            key=lambda item: item["total"],
+            reverse=True,
+        )
 
     # ==================================================
     # TABELA DETALHADA (paginada)

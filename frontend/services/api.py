@@ -70,7 +70,13 @@ def logout():
 
 def existe_usuario():
 
-    response = requests.get(f"{URL}/users/existe")
+    # timeout curto de proposito -- essa chamada roda no arranque do
+    # app (ver app.py), antes de qualquer tela aparecer. Sem timeout,
+    # um PC Terminal apontando pra um servidor que nao responde (fora
+    # do ar, endereco errado, rede lenta) trava o app inteiro sem
+    # feedback nenhum em vez de cair no dialogo de reconfigurar o
+    # endereco que ja existe pra esse caso.
+    response = requests.get(f"{URL}/users/existe", timeout=5)
 
     if response.status_code != 200:
         # se o backend nao respondeu direito, assume que ja existe

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy.orm import Session
 
 from app.models.refresh_token import RefreshToken
@@ -30,11 +32,16 @@ class RefreshTokenRepository:
 
     @staticmethod
     def listar_ativos_do_usuario(db: Session, usuario_id: int):
+        # sem o filtro de expiracao, uma sessao de 90+ dias atras (ja
+        # inutilizavel -- validar_refresh_token ja rejeita) continuava
+        # aparecendo como "aberta" na tela de Sessoes, sem nunca ter
+        # sido revogada explicitamente
         return (
             db.query(RefreshToken)
             .filter(
                 RefreshToken.usuario_id == usuario_id,
                 RefreshToken.revogado.is_(False),
+                RefreshToken.expira_em > datetime.utcnow(),
             )
             .order_by(RefreshToken.ultimo_uso_em.desc())
             .all()

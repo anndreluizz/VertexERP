@@ -30,7 +30,7 @@ if getattr(sys, "frozen", False):
 
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
-from requests.exceptions import ConnectionError
+from requests.exceptions import RequestException
 
 from design.theme import aplicar_tema
 from services import api
@@ -75,18 +75,21 @@ def _servidor_offline():
 
 try:
     primeiro_acesso = not existe_usuario()
-except ConnectionError:
+except RequestException:
 
     # Ou esse PC nunca foi configurado (instalação Terminal nova, sem
     # backend local pra conversar), ou o servidor salvo não está
     # respondendo agora — nos dois casos, oferece configurar/corrigir
-    # o endereço antes de desistir.
+    # o endereço antes de desistir. RequestException (não só
+    # ConnectionError) porque existe_usuario() agora tem timeout: um
+    # servidor que nunca responde (rede lenta, endereço certo mas
+    # travado) estoura Timeout, não ConnectionError.
     dialogo = ConectarServidorDialog()
 
     if dialogo.exec() == QDialog.Accepted and dialogo.confirmado:
         try:
             primeiro_acesso = not existe_usuario()
-        except ConnectionError:
+        except RequestException:
             _servidor_offline()
     else:
         sys.exit(0)

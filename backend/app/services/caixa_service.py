@@ -104,15 +104,21 @@ class CaixaService:
 
             return query.scalar() or Decimal("0")
 
-        vendas_dinheiro = soma(
-            tipo="VENDA", forma_pagamento="DINHEIRO"
-        )
-        vendas_pix = soma(tipo="VENDA", forma_pagamento="PIX")
-        vendas_debito = soma(tipo="VENDA", forma_pagamento="DEBITO")
-        vendas_credito = soma(
-            tipo="VENDA", forma_pagamento="CREDITO"
-        )
-        vendas_prazo = soma(tipo="VENDA", forma_pagamento="PRAZO")
+        def soma_vendas(forma_pagamento):
+            # Soma VENDA + ESTORNO daquela forma de pagamento -- o
+            # ESTORNO ja fica gravado com valor negativo (ver
+            # VendaService.excluir), entao e soma direta. Sem isso,
+            # cancelar uma venda pix/cartao/prazo nao descontava o
+            # total aqui (so dinheiro mexia em saldo_final).
+            return soma(
+                tipo="VENDA", forma_pagamento=forma_pagamento
+            ) + soma(tipo="ESTORNO", forma_pagamento=forma_pagamento)
+
+        vendas_dinheiro = soma_vendas("DINHEIRO")
+        vendas_pix = soma_vendas("PIX")
+        vendas_debito = soma_vendas("DEBITO")
+        vendas_credito = soma_vendas("CREDITO")
+        vendas_prazo = soma_vendas("PRAZO")
         suprimentos = soma(tipo="SUPRIMENTO")
         sangrias = soma(tipo="SANGRIA")
 

@@ -466,17 +466,12 @@ class VendaService:
         if venda.status == StatusVenda.CANCELADA.value:
             raise Exception("Essa venda já está cancelada.")
 
-        # Se a venda teve parcela em dinheiro, o estorno precisa de um
-        # caixa aberto pra tirar o valor da gaveta -- sem isso o
-        # dinheiro fica "no ar" (venda cancelada mas o valor continua
-        # contado no fechamento de caixa que já aconteceu).
-        tem_parcela_dinheiro = "DINHEIRO" in (
-            venda.forma_pagamento, venda.forma_pagamento_2
-        )
-
-        if tem_parcela_dinheiro and not CaixaRepository.buscar_aberto(
-            db, usuario_id
-        ):
+        # Toda parcela (dinheiro ou nao) gera um MovimentoCaixa de
+        # ESTORNO -- e MovimentoCaixa.caixa_id e obrigatorio -- entao
+        # o cancelamento sempre precisa de um caixa aberto pra
+        # registrar o estorno, mesmo quando a venda foi 100% pix/
+        # cartao/prazo e nenhum dinheiro fisico esta envolvido.
+        if not CaixaRepository.buscar_aberto(db, usuario_id):
             raise Exception(
                 "O caixa já está fechado. Abra um caixa antes de "
                 "cancelar essa venda para que o estorno seja "
@@ -516,27 +511,29 @@ class VendaService:
             venda, venda.valor_total
         ):
 
-            # Estorna o valor no caixa aberto, se a parcela tiver sido
-            # em dinheiro (pix/cartao/prazo nao afetam a gaveta fisica)
-            if forma_parcela == "DINHEIRO":
+            # Toda parcela gera um MovimentoCaixa de ESTORNO -- o
+            # check no topo do metodo ja garante que existe um caixa
+            # aberto. So dinheiro fisico mexe no saldo da gaveta
+            # (pix/cartao/prazo nunca afetaram saldo_final na criacao,
+            # entao tambem nao devem afetar no estorno).
+            caixa = CaixaRepository.buscar_aberto(db, usuario_id)
 
-                caixa = CaixaRepository.buscar_aberto(db, usuario_id)
+            if caixa:
 
-                if caixa:
-
+                if forma_parcela == "DINHEIRO":
                     caixa.saldo_final -= valor_parcela
                     db.add(caixa)
 
-                    db.add(
-                        MovimentoCaixa(
-                            caixa_id=caixa.id,
-                            usuario_id=usuario_id,
-                            tipo="ESTORNO",
-                            valor=-valor_parcela,
-                            forma_pagamento=forma_parcela,
-                            descricao=f"Estorno da venda #{venda_id}",
-                        )
+                db.add(
+                    MovimentoCaixa(
+                        caixa_id=caixa.id,
+                        usuario_id=usuario_id,
+                        tipo="ESTORNO",
+                        valor=-valor_parcela,
+                        forma_pagamento=forma_parcela,
+                        descricao=f"Estorno da venda #{venda_id}",
                     )
+                )
 
             # Zera a divida do caderninho referente a essa parcela, se
             # ela tiver sido a prazo. Se o cliente ja tiver pago parte

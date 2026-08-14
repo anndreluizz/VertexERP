@@ -64,6 +64,37 @@ class ProdutoService:
         # -- editar um produto desativado reativava ele sem querer.
         campos = dados.dict(exclude_unset=True, exclude={"foto_base64"})
 
+        # mesma checagem que ja existe em criar() -- codigo_barras e'
+        # editavel na tela (o codigo em si nao, mas a API aceita
+        # qualquer chamador). Sem isso, mudar pra um valor que ja
+        # pertence a outro produto estoura um IntegrityError cru do
+        # banco (unique constraint) em vez de uma mensagem legivel.
+        for campo in ("codigo", "codigo_barras"):
+
+            valor = campos.get(campo)
+
+            if not valor or valor == getattr(produto, campo):
+                continue
+
+            existente = (
+                db.query(Produto)
+                .filter(
+                    getattr(Produto, campo) == valor,
+                    Produto.id != produto_id,
+                )
+                .first()
+            )
+
+            if existente:
+                if campo == "codigo":
+                    raise ValueError(
+                        f'Já existe um produto com o código "{valor}".'
+                    )
+                raise ValueError(
+                    f'Já existe um produto ("{existente.nome}") '
+                    f'cadastrado com esse código de barras.'
+                )
+
         for campo, valor in campos.items():
             setattr(produto, campo, valor)
 

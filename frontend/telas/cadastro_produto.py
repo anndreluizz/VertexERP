@@ -24,6 +24,7 @@ import base64
 
 from services.ean_lookup import buscar_produto_externo
 from services.categoria_service import listar_categorias, criar_categoria
+from telas.gerenciar_categorias import GerenciarCategoriasDialog
 from services.produto_service import obter_foto_produto
 from design.responsive import tamanho_fixo_seguro
 
@@ -235,8 +236,30 @@ class CadastroProdutoWindow(QDialog):
         """)
         self.bt_nova_categoria.clicked.connect(self.criar_nova_categoria)
 
+        self.bt_gerenciar_categorias = QPushButton("⚙")
+        self.bt_gerenciar_categorias.setFixedSize(42, 42)
+        self.bt_gerenciar_categorias.setToolTip(
+            "Gerenciar categorias (editar/excluir)"
+        )
+        self.bt_gerenciar_categorias.setStyleSheet("""
+            QPushButton {
+                background:#f4f5f7;
+                color:#202225;
+                border-radius:10px;
+                font-size:16px;
+                font-weight:bold;
+            }
+            QPushButton:hover {
+                background:#e8e8e8;
+            }
+        """)
+        self.bt_gerenciar_categorias.clicked.connect(
+            self.gerenciar_categorias
+        )
+
         linha_categoria.addWidget(self.categoria)
         linha_categoria.addWidget(self.bt_nova_categoria)
+        linha_categoria.addWidget(self.bt_gerenciar_categorias)
 
         esquerda.addLayout(linha_categoria)
 
@@ -472,6 +495,13 @@ class CadastroProdutoWindow(QDialog):
 
     def _carregar_categorias(self):
 
+        # preserva o que ja estava selecionado/digitado -- sem isso,
+        # recarregar a lista (ex.: depois de fechar "Gerenciar
+        # categorias") apagava a categoria que o usuario ja tinha
+        # escolhido pro produto em edicao (mesmo padrao ja usado em
+        # cadastro_despesa.py pro mesmo tipo de combobox)
+        selecionada = self.categoria.currentText()
+
         categorias = listar_categorias()
 
         self.categoria.clear()
@@ -480,7 +510,7 @@ class CadastroProdutoWindow(QDialog):
             if c.get("ativo", True):
                 self.categoria.addItem(c["nome"])
 
-        self.categoria.setCurrentText("")
+        self.categoria.setCurrentText(selecionada)
 
     def criar_nova_categoria(self):
 
@@ -512,6 +542,13 @@ class CadastroProdutoWindow(QDialog):
                 erro = response.text
 
             QMessageBox.critical(self, "Erro", str(erro))
+
+    def gerenciar_categorias(self):
+
+        dialogo = GerenciarCategoriasDialog(parent=self)
+        dialogo.exec()
+
+        self._carregar_categorias()
 
     # ==========================================
     # MODO DE VENDA (UNID / PESO / LITRO)

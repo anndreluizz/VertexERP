@@ -49,7 +49,19 @@ class CategoriaService:
         if not categoria:
             raise Exception("Categoria não encontrada.")
 
-        for campo, valor in dados.dict(exclude_unset=True).items():
+        campos = dados.dict(exclude_unset=True)
+
+        # mesma checagem que ja existe em criar() -- sem isso, renomear
+        # pra um nome que ja pertence a outra categoria estoura um
+        # IntegrityError cru do banco (unique constraint) direto pro
+        # usuario em vez de uma mensagem legivel
+        novo_nome = campos.get("nome")
+        if novo_nome and novo_nome != categoria.nome:
+            existente = CategoriaRepository.buscar_por_nome(db, novo_nome)
+            if existente and existente.id != categoria_id:
+                raise Exception("Categoria já cadastrada.")
+
+        for campo, valor in campos.items():
             setattr(categoria, campo, valor)
 
         return CategoriaRepository.atualizar(db, categoria)

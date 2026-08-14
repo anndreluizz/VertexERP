@@ -1,4 +1,4 @@
-from services.api import get, post
+from services.api import get, post, put, delete
 
 
 def listar_categorias():
@@ -17,3 +17,13 @@ def criar_categoria(nome: str):
         "/categorias/",
         {"nome": nome, "descricao": None},
     )
+
+
+def atualizar_categoria(categoria_id, nome):
+
+    return put(f"/categorias/{categoria_id}", {"nome": nome})
+
+
+def excluir_categoria(categoria_id):
+
+    return delete(f"/categorias/{categoria_id}")

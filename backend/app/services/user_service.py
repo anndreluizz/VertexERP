@@ -53,7 +53,36 @@ class UserService:
                 "Você não pode desativar a própria conta."
             )
 
-        for campo, valor in dados.dict(exclude_unset=True).items():
+        campos = dados.dict(exclude_unset=True)
+
+        # Se essa troca tira o admin (por remocao explicita da
+        # administracao ou por desativar a conta) de quem hoje e' um
+        # admin ativo, confere que sobra pelo menos mais um -- senao
+        # ninguem mais consegue fazer nada que exige admin (aprovar
+        # solicitacao, cadastrar usuario, cancelar venda, redefinir
+        # senha de outro etc.), incluindo reverter essa mesma mudanca.
+        perde_admin = usuario.admin and usuario.ativo and (
+            campos.get("admin") is False or campos.get("ativo") is False
+        )
+
+        if perde_admin:
+            outros_admins = (
+                db.query(User)
+                .filter(
+                    User.admin.is_(True),
+                    User.ativo.is_(True),
+                    User.id != usuario.id,
+                )
+                .count()
+            )
+
+            if outros_admins == 0:
+                raise Exception(
+                    "Não é possível remover o único administrador "
+                    "do sistema."
+                )
+
+        for campo, valor in campos.items():
             setattr(usuario, campo, valor)
 
         return UserRepository.atualizar(db, usuario)

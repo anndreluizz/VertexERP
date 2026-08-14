@@ -121,3 +121,72 @@ def test_meu_perfil_usuario_comum(client, auth_headers_comum, usuario_comum):
 
     assert response.status_code == 200
     assert response.json()["admin"] is False
+
+
+def test_unico_admin_nao_pode_se_autodemover(client, auth_headers, usuario):
+    # sem isso, um clique acidental em "Remover da administração" na
+    # propria conta trava o sistema inteiro: nenhuma acao que exige
+    # admin (aprovar solicitacao, cadastrar usuario, cancelar venda,
+    # redefinir senha de outro...) consegue mais ser feita por
+    # ninguem, nem reverter essa mesma mudanca
+    response = client.put(
+        f"/users/{usuario.id}",
+        json={"admin": False},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 400
+    assert "único administrador" in response.json()["detail"]
+
+
+def test_admin_pode_demover_a_si_mesmo_se_houver_outro_admin(
+    client, auth_headers, usuario, db
+):
+    from app.auth.hash import gerar_hash
+    from app.models.user import User
+
+    outro_admin = User(
+        nome="Outro Admin",
+        email="outroadmin@vertex.com",
+        senha=gerar_hash("123456"),
+        ativo=True,
+        admin=True,
+    )
+    db.add(outro_admin)
+    db.commit()
+
+    response = client.put(
+        f"/users/{usuario.id}",
+        json={"admin": False},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["admin"] is False
+
+
+def test_admin_pode_desativar_outro_admin_se_permanecer_admin(
+    client, auth_headers, usuario, db
+):
+    from app.auth.hash import gerar_hash
+    from app.models.user import User
+
+    outro_admin = User(
+        nome="Outro Admin",
+        email="outroadmin2@vertex.com",
+        senha=gerar_hash("123456"),
+        ativo=True,
+        admin=True,
+    )
+    db.add(outro_admin)
+    db.commit()
+    db.refresh(outro_admin)
+
+    response = client.put(
+        f"/users/{outro_admin.id}",
+        json={"ativo": False},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["ativo"] is False

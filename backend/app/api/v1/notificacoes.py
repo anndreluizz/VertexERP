@@ -40,7 +40,7 @@ def remover_token(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    DeviceTokenService.remover(db, token)
+    DeviceTokenService.remover(db, token, usuario.id)
 
     return {
         "success": True,

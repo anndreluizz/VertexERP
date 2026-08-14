@@ -35,9 +35,12 @@ class DeviceTokenService:
         return DeviceTokenRepository.criar(db, novo)
 
     @staticmethod
-    def remover(db: Session, token: str):
+    def remover(db: Session, token: str, usuario_id: int):
 
         existente = DeviceTokenRepository.buscar_por_token(db, token)
 
-        if existente:
+        # so remove o proprio token -- sem essa checagem, qualquer
+        # usuario autenticado que descobrisse o token de outro (ex.:
+        # log vazado) conseguiria apagar o cadastro de push dele
+        if existente and existente.usuario_id == usuario_id:
             DeviceTokenRepository.remover(db, existente)

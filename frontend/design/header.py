@@ -109,6 +109,7 @@ class Header(QFrame):
     busca_alterada = Signal(str)
     tema_alternado = Signal(bool)
     solicitou_logout = Signal()
+    solicitou_trocar_senha = Signal()
 
     def __init__(self, nome_loja, nome_usuario, cargo, parent=None):
 
@@ -333,10 +334,15 @@ class Header(QFrame):
 
         popover = _Popover(largura=200)
 
+        item_senha = _ItemMenu("Trocar Senha", icone_nome="lock")
+        item_senha.clicked.connect(popover.close)
+        item_senha.clicked.connect(self.solicitou_trocar_senha)
+
         item_sair = _ItemMenu("Sair", icone_nome="log-out", perigo=True)
         item_sair.clicked.connect(popover.close)
         item_sair.clicked.connect(self.solicitou_logout)
 
+        popover.layout_corpo.addWidget(item_senha)
         popover.layout_corpo.addWidget(item_sair)
 
         self._popover_perfil = popover

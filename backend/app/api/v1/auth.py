@@ -2,13 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database.session import SessionLocal
-from app.schemas.user import UserLogin, UserResponse
+from app.schemas.user import TrocarSenhaRequest, UserLogin, UserResponse
 from app.schemas.refresh_token import RefreshRequest, SessaoResponse
 from app.repositories.user_repository import UserRepository
 from app.auth.hash import verificar_hash
 from app.auth.jwt import criar_token
 from app.auth.dependencies import get_current_user
 from app.services.auth_service import AuthService
+from app.services.user_service import UserService
 
 router = APIRouter(
     prefix="/auth",
@@ -142,3 +143,22 @@ def me(
     usuario=Depends(get_current_user),
 ):
     return UserResponse.from_orm(usuario)
+
+
+@router.put("/senha")
+def trocar_senha(
+    dados: TrocarSenhaRequest,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        UserService.trocar_senha(
+            db, usuario, dados.senha_atual, dados.senha_nova
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "success": True,
+        "message": "Senha alterada com sucesso.",
+    }

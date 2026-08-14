@@ -30,6 +30,20 @@ class UserAtivoUpdate(BaseModel):
     ativo: bool
 
 
+class TrocarSenhaRequest(BaseModel):
+    """Usuário trocando a própria senha -- precisa confirmar a senha
+    atual (ver /auth/senha)."""
+    senha_atual: str
+    senha_nova: str
+
+
+class RedefinirSenhaRequest(BaseModel):
+    """Admin redefinindo a senha de outro usuário (ex.: funcionário
+    esqueceu a senha) -- não precisa da senha atual (ver
+    /users/{user_id}/senha)."""
+    senha_nova: str
+
+
 class UserResponse(BaseModel):
     id: int
     nome: str

@@ -26,3 +26,11 @@ def criar_usuario(nome, email, senha):
             "senha": senha,
         },
     )
+
+
+def redefinir_senha(user_id, senha_nova):
+
+    return put(
+        f"/users/{user_id}/senha",
+        {"senha_nova": senha_nova},
+    )

@@ -16,6 +16,7 @@ from services.user_service import (
     listar_usuarios,
     atualizar_usuario,
     criar_usuario,
+    redefinir_senha,
 )
 
 from design import tokens
@@ -149,6 +150,112 @@ class NovoUsuarioDialog(QDialog):
             QMessageBox.critical(self, "Erro", str(erro))
 
 
+class RedefinirSenhaDialog(QDialog):
+    """Admin redefinindo a senha de outro usuário (ex.: funcionário
+    esqueceu a senha) -- ao contrário de TrocarSenhaDialog (self
+    service, em telas/trocar_senha.py), aqui não precisa saber a
+    senha antiga: quem autoriza é o admin logado."""
+
+    def __init__(self, nome_usuario, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle("Redefinir Senha")
+        tamanho_fixo_seguro(self, 400, 320)
+        self.setStyleSheet(f"background:{tokens.CARD};")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(10)
+
+        titulo = QLabel("Redefinir Senha")
+        titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XL}px;
+            font-weight:800; color:{tokens.TEXTO};
+        """)
+
+        subtitulo = QLabel(f"Defina uma nova senha para {nome_usuario}.")
+        subtitulo.setWordWrap(True)
+        subtitulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
+
+        layout.addWidget(titulo)
+        layout.addWidget(subtitulo)
+        layout.addSpacing(10)
+
+        self.senha_nova = self._campo(layout, "NOVA SENHA")
+        self.confirmar = self._campo(layout, "CONFIRMAR NOVA SENHA")
+
+        layout.addStretch()
+
+        botoes = QHBoxLayout()
+        botoes.setSpacing(10)
+
+        bt_cancelar = BotaoSecundario("Cancelar")
+        bt_cancelar.setMinimumHeight(44)
+        bt_cancelar.setAutoDefault(False)
+        bt_cancelar.clicked.connect(self.reject)
+
+        bt_salvar = BotaoSucesso("Salvar")
+        bt_salvar.setMinimumHeight(44)
+        bt_salvar.setAutoDefault(False)
+        bt_salvar.clicked.connect(self.salvar)
+
+        botoes.addWidget(bt_cancelar)
+        botoes.addWidget(bt_salvar)
+
+        layout.addLayout(botoes)
+
+        self.senha_nova.setFocus()
+
+    def _campo(self, layout, rotulo):
+
+        lbl = QLabel(rotulo)
+        lbl.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
+
+        campo = QLineEdit()
+        campo.setPlaceholderText("••••••")
+        campo.setEchoMode(QLineEdit.Password)
+        campo.setMinimumHeight(40)
+        campo.setStyleSheet(f"""
+            QLineEdit {{
+                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
+                background: {tokens.CARD};
+            }}
+            QLineEdit:focus {{ border: 1.5px solid {tokens.PRIMARIA}; }}
+        """)
+
+        layout.addWidget(lbl)
+        layout.addWidget(campo)
+
+        return campo
+
+    def salvar(self):
+
+        senha_nova = self.senha_nova.text()
+        confirmar = self.confirmar.text()
+
+        if not senha_nova:
+            QMessageBox.warning(
+                self, "Atenção", "Informe a nova senha."
+            )
+            return
+
+        if senha_nova != confirmar:
+            QMessageBox.warning(
+                self, "Atenção", "A nova senha e a confirmação não coincidem."
+            )
+            return
+
+        self.senha_nova_confirmada = senha_nova
+        self.accept()
+
+
 class GerenciarUsuariosDialog(QDialog):
 
     def __init__(self, parent=None):
@@ -236,12 +343,17 @@ class GerenciarUsuariosDialog(QDialog):
         self.bt_admin.setAutoDefault(False)
         self.bt_admin.clicked.connect(self.alternar_admin)
 
+        self.bt_redefinir_senha = BotaoSecundario("Redefinir Senha")
+        self.bt_redefinir_senha.setAutoDefault(False)
+        self.bt_redefinir_senha.clicked.connect(self.redefinir_senha_usuario)
+
         bt_fechar = BotaoSecundario("Fechar")
         bt_fechar.setAutoDefault(False)
         bt_fechar.clicked.connect(self.accept)
 
         rodape.addWidget(self.bt_ativar_desativar)
         rodape.addWidget(self.bt_admin)
+        rodape.addWidget(self.bt_redefinir_senha)
         rodape.addStretch()
         rodape.addWidget(bt_fechar)
 
@@ -370,6 +482,36 @@ class GerenciarUsuariosDialog(QDialog):
 
         if response.status_code == 200:
             self.carregar()
+        else:
+            try:
+                erro = response.json().get("detail") or str(
+                    response.json()
+                )
+            except Exception:
+                erro = response.text
+
+            QMessageBox.critical(self, "Erro", str(erro))
+
+    def redefinir_senha_usuario(self):
+
+        usuario = self._usuario_selecionado()
+
+        if usuario is None:
+            return
+
+        dialogo = RedefinirSenhaDialog(usuario["nome"], parent=self)
+
+        if dialogo.exec() != QDialog.Accepted:
+            return
+
+        response = redefinir_senha(
+            usuario["id"], dialogo.senha_nova_confirmada
+        )
+
+        if response.status_code == 200:
+            QMessageBox.information(
+                self, "Sucesso", f"Senha de {usuario['nome']} redefinida."
+            )
         else:
             try:
                 erro = response.json().get("detail") or str(

@@ -9,6 +9,7 @@ from telas.visao_geral import VisaoGeral
 from telas.configuracoes import Configuracoes
 from telas.caixa_bloqueado import CaixaBloqueadoDialog
 from telas.abrir_caixa import AbrirCaixaWindow
+from telas.trocar_senha import TrocarSenhaDialog
 
 from PySide6.QtGui import QShortcut, QKeySequence
 from PySide6.QtWidgets import (
@@ -92,6 +93,7 @@ class PrincipalWindow(QMainWindow):
 
         self.header = Header(nome_loja, nome_usuario, cargo)
         self.header.solicitou_logout.connect(self._fazer_logout)
+        self.header.solicitou_trocar_senha.connect(self._abrir_trocar_senha)
         layout_central.addWidget(self.header)
 
         self.paginas = QStackedWidget()
@@ -231,6 +233,11 @@ class PrincipalWindow(QMainWindow):
         self.login_window = LoginWindow()
         self.login_window.show()
         self.close()
+
+    def _abrir_trocar_senha(self):
+
+        dialogo = TrocarSenhaDialog(parent=self)
+        dialogo.exec()
 
     def atalho_f3(self):
 

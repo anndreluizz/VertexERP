@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.auth.hash import gerar_hash
+from app.auth.hash import gerar_hash, verificar_hash
 from app.models.user import User
 from app.schemas.user import UserCreate
 from app.repositories.user_repository import UserRepository
@@ -55,5 +55,45 @@ class UserService:
 
         for campo, valor in dados.dict(exclude_unset=True).items():
             setattr(usuario, campo, valor)
+
+        return UserRepository.atualizar(db, usuario)
+
+    @staticmethod
+    def trocar_senha(
+        db: Session,
+        usuario: User,
+        senha_atual: str,
+        senha_nova: str,
+    ):
+        """Usuário trocando a própria senha -- exige confirmar a senha
+        atual antes, pra alguém que pegou uma sessão já aberta (token
+        ainda válido) não conseguir travar o dono de fora só trocando
+        a senha sem saber a antiga."""
+
+        if not verificar_hash(senha_atual, usuario.senha):
+            raise Exception("Senha atual incorreta.")
+
+        if not senha_nova:
+            raise Exception("Informe a nova senha.")
+
+        usuario.senha = gerar_hash(senha_nova)
+
+        return UserRepository.atualizar(db, usuario)
+
+    @staticmethod
+    def redefinir_senha(db: Session, user_id: int, senha_nova: str):
+        """Admin redefinindo a senha de outro usuário (esqueceu a
+        senha) -- não exige a senha atual, só o admin autenticado
+        (ver get_current_admin na rota)."""
+
+        usuario = UserRepository.buscar_por_id(db, user_id)
+
+        if not usuario:
+            raise Exception("Usuário não encontrado.")
+
+        if not senha_nova:
+            raise Exception("Informe a nova senha.")
+
+        usuario.senha = gerar_hash(senha_nova)
 
         return UserRepository.atualizar(db, usuario)

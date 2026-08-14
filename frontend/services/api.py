@@ -188,3 +188,14 @@ def configuracoes():
 def atualizar_configuracoes(dados):
 
     return put("/configuracoes/", dados)
+
+
+def trocar_senha(senha_atual, senha_nova):
+
+    return put(
+        "/auth/senha",
+        {
+            "senha_atual": senha_atual,
+            "senha_nova": senha_nova,
+        },
+    )

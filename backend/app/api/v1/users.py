@@ -8,7 +8,12 @@ from app.auth.dependencies import (
 )
 from app.core.responses import ApiResponse
 from app.database.session import SessionLocal
-from app.schemas.user import UserCreate, UserUpdate, UserResponse
+from app.schemas.user import (
+    RedefinirSenhaRequest,
+    UserCreate,
+    UserUpdate,
+    UserResponse,
+)
 from app.services.user_service import UserService
 
 router = APIRouter(
@@ -83,4 +88,21 @@ def atualizar_usuario(
     return ApiResponse.success(
         data=UserResponse.from_orm(atualizado).dict(),
         message="Usuário atualizado com sucesso.",
+    )
+
+
+@router.put("/{user_id}/senha")
+def redefinir_senha(
+    user_id: int,
+    dados: RedefinirSenhaRequest,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_admin),
+):
+    try:
+        UserService.redefinir_senha(db, user_id, dados.senha_nova)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return ApiResponse.success(
+        message="Senha redefinida com sucesso.",
     )

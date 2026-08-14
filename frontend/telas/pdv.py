@@ -16,9 +16,10 @@ from services import preferencias_service
 ATALHOS_PADRAO = {"busca": "F1", "cadastro_rapido": "F4", "cancelar": "Esc"}
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QShortcut, QKeySequence, QFont, QTextDocument
+from PySide6.QtGui import QShortcut, QKeySequence, QFont, QTextDocument, QCursor
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (
+    QApplication,
     QWidget,
     QDialog,
     QVBoxLayout,
@@ -181,6 +182,7 @@ class PDV(QWidget):
         self.desconto_valor = 0.0
         self.acrescimo_valor = 0.0
         self.vendas_suspensas = []
+        self._finalizando_venda = False
 
         self._usuario_id = (me() or {}).get("id")
         self.atalhos = self._carregar_atalhos()
@@ -1610,6 +1612,15 @@ class PDV(QWidget):
 
     def finalizar_venda(self):
 
+        # Trava de reentrância: bloqueia clique duplo no botão e F3
+        # repetido (o atalho global em principal.py chama este mesmo
+        # método) enquanto uma venda já está em andamento -- sem isso,
+        # um duplo clique durante a resposta lenta do servidor (ex.:
+        # modo Terminal, multi-dispositivo) podia disparar duas vendas
+        # pro mesmo carrinho.
+        if self._finalizando_venda:
+            return
+
         if not self.itens:
             QMessageBox.warning(
                 self,
@@ -1629,32 +1640,40 @@ class PDV(QWidget):
             )
             return
 
-        tela = PagamentoWindow(
-            total,
-            self.itens,
-            cliente_id=self.cliente_id,
-            cliente_nome=self.cliente_nome,
-        )
-
-        if tela.exec() != QDialog.Accepted:
-            return
-
-        desconto_liquido = self.desconto_valor - self.acrescimo_valor
+        self._finalizando_venda = True
+        self.bt_pagar.setEnabled(False)
 
         try:
 
-            response = enviar_venda(
-                itens=self.itens,
-                forma_pagamento=tela.forma_pagamento,
-                cliente_id=tela.cliente_id,
-                desconto=desconto_liquido,
-                observacao=tela.observacao.text().strip() or None,
-                data_vencimento=None,
-                forma_pagamento_2=tela.forma_pagamento_2,
-                valor_forma_2=(
-                    tela.valor_forma_2 if tela.forma_pagamento_2 else None
-                ),
+            tela = PagamentoWindow(
+                total,
+                self.itens,
+                cliente_id=self.cliente_id,
+                cliente_nome=self.cliente_nome,
             )
+
+            if tela.exec() != QDialog.Accepted:
+                return
+
+            desconto_liquido = self.desconto_valor - self.acrescimo_valor
+
+            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+            try:
+                response = enviar_venda(
+                    itens=self.itens,
+                    forma_pagamento=tela.forma_pagamento,
+                    cliente_id=tela.cliente_id,
+                    desconto=desconto_liquido,
+                    observacao=tela.observacao.text().strip() or None,
+                    data_vencimento=None,
+                    forma_pagamento_2=tela.forma_pagamento_2,
+                    valor_forma_2=(
+                        tela.valor_forma_2 if tela.forma_pagamento_2 else None
+                    ),
+                )
+            finally:
+                QApplication.restoreOverrideCursor()
 
             if response.status_code == 201:
 
@@ -1701,3 +1720,7 @@ class PDV(QWidget):
                 "Erro",
                 str(e)
             )
+
+        finally:
+            self._finalizando_venda = False
+            self.bt_pagar.setEnabled(True)

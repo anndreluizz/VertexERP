@@ -39,7 +39,12 @@ class ConfiguracaoResponse(BaseModel):
     logo_filename: str | None
     tem_logo: bool = False
     whatsapp_instance_id: str | None
-    whatsapp_token: str | None
+    # whatsapp_token nao volta aqui por segurança -- e' a credencial
+    # que autentica direto na Z-API (quem tiver o valor consegue
+    # mandar mensagem como se fosse a loja), mesmo criterio ja usado
+    # pro smtp_senha. Qualquer usuario autenticado pode chamar esse
+    # GET (a tela principal e a ficha do cliente usam pra pegar
+    # nome/logo/pix), entao o token nunca deve estar na resposta.
     whatsapp_ativo: bool
     whatsapp_lembrete_fiado_ativo: bool
     whatsapp_lembrete_fiado_dias: int

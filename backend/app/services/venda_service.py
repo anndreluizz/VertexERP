@@ -1,3 +1,4 @@
+import threading
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -79,6 +80,33 @@ def _enviar_comprovante_whatsapp(db: Session, venda: Venda) -> None:
     )
 
     WhatsappService.enviar_mensagem(db, cliente.telefone, texto)
+
+
+def _enviar_comprovante_whatsapp_em_segundo_plano(venda_id: int) -> None:
+    """Roda _enviar_comprovante_whatsapp numa thread separada, fora do
+    caminho critico da finalizacao da venda -- o Z-API pode demorar
+    ate 10s pra responder (timeout de proposito, ver
+    WhatsappService._TIMEOUT_SEGUNDOS), e isso nao pode virar 10s a
+    mais de espera no PDV toda vez que uma venda com cliente+telefone
+    fecha. Abre sua propria sessao de banco porque a sessao da
+    requisicao original ja fecha (ver get_db) antes dessa thread
+    rodar de verdade -- mesmo motivo do whatsapp_lembrete_service.py."""
+
+    from app.database.session import SessionLocal
+
+    db = SessionLocal()
+
+    try:
+        venda = VendaRepository.buscar_por_id(db, venda_id)
+
+        if venda:
+            _enviar_comprovante_whatsapp(db, venda)
+
+    except Exception:
+        pass
+
+    finally:
+        db.close()
 
 
 def _parcelas_pagamento(venda_ou_dados, valor_total):
@@ -387,10 +415,11 @@ class VendaService:
                 _verificar_limite_credito(db, venda.cliente_id)
 
             if venda.cliente_id:
-                try:
-                    _enviar_comprovante_whatsapp(db, venda)
-                except Exception:
-                    pass
+                threading.Thread(
+                    target=_enviar_comprovante_whatsapp_em_segundo_plano,
+                    args=(venda.id,),
+                    daemon=True,
+                ).start()
 
             nome_cliente = None
 

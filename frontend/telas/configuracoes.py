@@ -408,8 +408,9 @@ class Configuracoes(QWidget):
             layout, "INSTANCE ID", "Ex: 3D9F2A1B8C7E6..."
         )
         self.whatsapp_token = self._campo(
-            layout, "TOKEN", "Token da instância"
+            layout, "TOKEN", "Deixe em branco pra manter o token atual"
         )
+        self.whatsapp_token.setEchoMode(QLineEdit.Password)
 
         self.whatsapp_ativo = QCheckBox("Ativar integração com WhatsApp")
         self.whatsapp_ativo.setStyleSheet(self._estilo_checkbox())
@@ -680,7 +681,10 @@ class Configuracoes(QWidget):
         self.pix_cidade.setText(dados.get("pix_cidade") or "")
 
         self.whatsapp_instance_id.setText(dados.get("whatsapp_instance_id") or "")
-        self.whatsapp_token.setText(dados.get("whatsapp_token") or "")
+        # token nunca volta do backend por segurança -- fica em branco;
+        # so e enviado de novo se o usuario digitar um novo aqui
+        # (mesmo padrao do smtp_senha logo abaixo)
+        self.whatsapp_token.setText("")
         self.whatsapp_ativo.setChecked(bool(dados.get("whatsapp_ativo")))
         self.whatsapp_lembrete_fiado_ativo.setChecked(
             bool(dados.get("whatsapp_lembrete_fiado_ativo"))
@@ -724,7 +728,6 @@ class Configuracoes(QWidget):
             "pix_nome": self.pix_nome.text().strip() or None,
             "pix_cidade": self.pix_cidade.text().strip() or None,
             "whatsapp_instance_id": self.whatsapp_instance_id.text().strip() or None,
-            "whatsapp_token": self.whatsapp_token.text().strip() or None,
             "whatsapp_ativo": self.whatsapp_ativo.isChecked(),
             "whatsapp_lembrete_fiado_ativo": self.whatsapp_lembrete_fiado_ativo.isChecked(),
             "whatsapp_lembrete_fiado_dias": self.whatsapp_lembrete_fiado_dias.value(),
@@ -742,6 +745,12 @@ class Configuracoes(QWidget):
         senha_digitada = self.smtp_senha.text().strip()
         if senha_digitada:
             dados["smtp_senha"] = senha_digitada
+
+        # mesmo raciocinio pro token do WhatsApp -- so manda se o
+        # usuario digitou um novo, senao nao inclui no payload
+        token_digitado = self.whatsapp_token.text().strip()
+        if token_digitado:
+            dados["whatsapp_token"] = token_digitado
 
         if self.logo_bytes:
             dados["logo_base64"] = base64.b64encode(self.logo_bytes).decode("ascii")

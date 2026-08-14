@@ -267,6 +267,28 @@ class FecharCaixaWindow(QDialog):
 
         layout.addWidget(bloco_contado)
 
+        lbl_obs_titulo = QLabel("OBSERVAÇÕES (OPCIONAL)")
+        lbl_obs_titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
+        layout.addWidget(lbl_obs_titulo)
+
+        self.observacoes_input = QLineEdit()
+        self.observacoes_input.setPlaceholderText(
+            "Ex.: diferença por troco errado, sangria não registrada..."
+        )
+        self.observacoes_input.setMinimumHeight(40)
+        self.observacoes_input.setStyleSheet(f"""
+            QLineEdit {{
+                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                padding: 0 12px; font-size: {tokens.TAMANHO_SM}px; color: {tokens.TEXTO};
+                background: {tokens.CARD};
+            }}
+            QLineEdit:focus {{ border: 1.5px solid {tokens.PRIMARIA}; }}
+        """)
+        layout.addWidget(self.observacoes_input)
+
         bloco_outros = QFrame()
         bloco_outros.setStyleSheet(f"""
             background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px;
@@ -369,7 +391,7 @@ class FecharCaixaWindow(QDialog):
 
         response = fechar_caixa(
             valor_contado=self.valor_contado,
-            observacoes=None,
+            observacoes=self.observacoes_input.text().strip() or None,
         )
 
         if response.status_code == 200:

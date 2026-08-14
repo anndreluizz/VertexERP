@@ -1163,7 +1163,16 @@ class PDV(QWidget):
         self.desconto_valor = _parse_valor(self.campo_desconto.text())
         self.acrescimo_valor = _parse_valor(self.campo_acrescimo.text())
 
-        total = max(0.0, subtotal - self.desconto_valor + self.acrescimo_valor)
+        # guarda o valor sem o "piso" em zero -- e' o que de fato vai
+        # pro backend (ver finalizar_venda); o max(0, ...) abaixo e' so
+        # pra exibicao, senao um desconto digitado errado por engano
+        # mostraria "R$ 0,00" como se fosse valido e a venda seria
+        # recusada so depois de abrir a tela de pagamento inteira
+        self._total_bruto = (
+            subtotal - self.desconto_valor + self.acrescimo_valor
+        )
+
+        total = max(0.0, self._total_bruto)
 
         self.lbl_itens_valor.setText(str(len(self.itens)))
         self.lbl_itens_tabela.setText(
@@ -1611,6 +1620,14 @@ class PDV(QWidget):
             return
 
         total = self._recalcular_totais()
+
+        if self._total_bruto < 0:
+            QMessageBox.warning(
+                self,
+                "Aviso",
+                "O desconto não pode ser maior que o total da venda."
+            )
+            return
 
         tela = PagamentoWindow(
             total,

@@ -347,6 +347,18 @@ class VendaService:
                 - dados.desconto
             )
 
+            # desconto (positivo) maior que o subtotal deixaria a
+            # venda com total negativo -- isso "vira" um estorno
+            # disfarcado de venda normal (dreno o saldo_final do caixa
+            # sem passar pelo fluxo de cancelamento/estorno de
+            # verdade). Acrescimo (desconto negativo) nao tem esse
+            # risco, so aumenta o total.
+            if venda.valor_total < 0:
+                raise Exception(
+                    "O desconto não pode ser maior que o valor "
+                    "total da venda."
+                )
+
             if (
                 venda.valor_forma_2 is not None
                 and not (0 < venda.valor_forma_2 < venda.valor_total)

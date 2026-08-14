@@ -154,7 +154,7 @@ def excluir_observacao(
     usuario=Depends(get_current_user),
 ):
     try:
-        return ClienteObservacaoService.excluir(db, observacao_id)
+        return ClienteObservacaoService.excluir(db, cliente_id, observacao_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

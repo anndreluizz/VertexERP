@@ -40,10 +40,13 @@ class ClienteObservacaoService:
         return observacao
 
     @staticmethod
-    def excluir(db: Session, observacao_id: int):
+    def excluir(db: Session, cliente_id: int, observacao_id: int):
         observacao = (
             db.query(ClienteObservacao)
-            .filter(ClienteObservacao.id == observacao_id)
+            .filter(
+                ClienteObservacao.id == observacao_id,
+                ClienteObservacao.cliente_id == cliente_id,
+            )
             .first()
         )
 

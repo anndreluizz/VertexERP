@@ -20,6 +20,7 @@ from PySide6.QtGui import (
     QPixmap,
     QPainter,
     QPainterPath,
+    QColor,
 )
 
 from PySide6.QtWidgets import (
@@ -559,13 +560,18 @@ class Produtos(QWidget):
                 )
             )
 
-            self.tabela.setItem(
-                linha,
-                4,
-                QTableWidgetItem(
-                    str(produto["estoque"])
-                )
-            )
+            estoque = produto["estoque"]
+            estoque_item = QTableWidgetItem(str(estoque))
+            estoque_minimo = produto.get("estoque_minimo", 0)
+
+            if estoque <= 0:
+                estoque_item.setForeground(QColor(tokens.ERRO))
+                estoque_item.setToolTip("Sem estoque disponível")
+            elif estoque <= estoque_minimo:
+                estoque_item.setForeground(QColor(tokens.ALERTA))
+                estoque_item.setToolTip("Estoque abaixo ou no nível de alerta")
+
+            self.tabela.setItem(linha, 4, estoque_item)
 
             self.tabela.setItem(
                 linha,

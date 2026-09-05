@@ -2,6 +2,7 @@ from telas.dashboard import Dashboard
 from telas.pdv import PDV
 from telas.caixa import Caixa
 from telas.produtos import Produtos
+from telas.ajuste_estoque import AjusteEstoque
 from telas.clientes import Clientes
 from telas.relatorios import Relatorios
 from telas.contas_pagar import ContasPagar
@@ -40,6 +41,7 @@ ITENS_MENU = [
     ("dashboard", "home", "Início"),
     ("pdv", "shopping-cart", "PDV"),
     ("produtos", "package", "Produtos"),
+    ("ajuste_estoque", "refresh-cw", "Ajuste de Estoque"),
     ("clientes", "users", "Clientes"),
     ("caixa", "wallet", "Caixa"),
     ("contas_pagar", "file-text", "Contas a Pagar"),
@@ -111,6 +113,7 @@ class PrincipalWindow(QMainWindow):
         self.dashboard = Dashboard()
         self.pdv = PDV()
         self.produtos = Produtos()
+        self.ajuste_estoque = AjusteEstoque()
 
         self.clientes = Clientes()
 
@@ -127,6 +130,7 @@ class PrincipalWindow(QMainWindow):
         self.paginas.addWidget(self.dashboard)
         self.paginas.addWidget(self.pdv)
         self.paginas.addWidget(self.produtos)
+        self.paginas.addWidget(self.ajuste_estoque)
         self.paginas.addWidget(self.clientes)
         self.paginas.addWidget(self.caixa)
         self.paginas.addWidget(self.contas_pagar)
@@ -195,6 +199,8 @@ class PrincipalWindow(QMainWindow):
             self.dashboard.carregar()
         elif chave == "clientes":
             self.clientes.carregar()
+        elif chave == "ajuste_estoque":
+            self.ajuste_estoque.carregar()
 
         self.paginas.setCurrentWidget(pagina)
         self.header.definir_titulo(self._titulos.get(chave, ""))
@@ -216,6 +222,7 @@ class PrincipalWindow(QMainWindow):
         paginas = {
             "dashboard": self.dashboard,
             "produtos": self.produtos,
+            "ajuste_estoque": self.ajuste_estoque,
             "clientes": self.clientes,
             "caixa": self.caixa,
             "config": self.config,

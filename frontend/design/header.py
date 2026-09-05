@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -13,7 +14,20 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone
-from design.widgets import Avatar
+from design.widgets import Avatar, BotaoPerigo, BotaoSucesso
+from services.aprovacao_service import aprovar, listar_pendentes, rejeitar
+
+# intervalo do polling silencioso do sininho (so pra admin) -- nao
+# precisa ser em tempo real, e so um numero no canto do icone ate o
+# admin abrir o popover e ver a lista de verdade
+_INTERVALO_POLL_APROVACOES_MS = 60_000
+
+
+def _formatar_data_hora(texto_iso):
+    try:
+        return datetime.fromisoformat(texto_iso).strftime("%d/%m %H:%M")
+    except (ValueError, TypeError):
+        return ""
 
 
 class _Popover(QWidget):
@@ -104,6 +118,93 @@ class _ItemMenu(QPushButton):
         """)
 
 
+class _CartaoAprovacao(QFrame):
+    """Um pedido de aprovação pendente dentro do popover do sino --
+    descrição + Aprovar/Rejeitar, cada um chamando a API na hora e
+    avisando o Header (via on_resolvido) pra tirar o card da lista e
+    atualizar o badge de contagem."""
+
+    def __init__(self, solicitacao, on_resolvido, parent=None):
+
+        super().__init__(parent)
+
+        self._solicitacao_id = solicitacao["id"]
+        self._on_resolvido = on_resolvido
+
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {tokens.FUNDO};
+                border-radius: {tokens.RADIUS_SM}px;
+            }}
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(6)
+
+        lbl_data = QLabel(_formatar_data_hora(solicitacao.get("criado_em", "")))
+        lbl_data.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px;
+        """)
+        layout.addWidget(lbl_data)
+
+        lbl_desc = QLabel(solicitacao.get("descricao", ""))
+        lbl_desc.setWordWrap(True)
+        lbl_desc.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
+        layout.addWidget(lbl_desc)
+
+        botoes = QHBoxLayout()
+        botoes.setSpacing(6)
+
+        self.bt_rejeitar = BotaoPerigo("Rejeitar")
+        self.bt_rejeitar.setMinimumHeight(30)
+        self.bt_rejeitar.clicked.connect(lambda: self._responder(False))
+
+        self.bt_aprovar = BotaoSucesso("Aprovar")
+        self.bt_aprovar.setMinimumHeight(30)
+        self.bt_aprovar.clicked.connect(lambda: self._responder(True))
+
+        botoes.addWidget(self.bt_rejeitar)
+        botoes.addWidget(self.bt_aprovar)
+
+        layout.addLayout(botoes)
+
+    def _responder(self, deve_aprovar):
+
+        self.bt_aprovar.setEnabled(False)
+        self.bt_rejeitar.setEnabled(False)
+
+        try:
+            response = (
+                aprovar(self._solicitacao_id)
+                if deve_aprovar
+                else rejeitar(self._solicitacao_id)
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", str(e))
+            self.bt_aprovar.setEnabled(True)
+            self.bt_rejeitar.setEnabled(True)
+            return
+
+        if response.status_code != 200:
+
+            try:
+                erro = response.json().get("detail") or str(response.json())
+            except Exception:
+                erro = response.text
+
+            QMessageBox.critical(self, "Erro", str(erro))
+            self.bt_aprovar.setEnabled(True)
+            self.bt_rejeitar.setEnabled(True)
+            return
+
+        self._on_resolvido(self)
+
+
 class Header(QFrame):
 
     busca_alterada = Signal(str)
@@ -111,7 +212,7 @@ class Header(QFrame):
     solicitou_logout = Signal()
     solicitou_trocar_senha = Signal()
 
-    def __init__(self, nome_loja, nome_usuario, cargo, parent=None):
+    def __init__(self, nome_loja, nome_usuario, cargo, admin=False, parent=None):
 
         super().__init__(parent)
 
@@ -120,6 +221,11 @@ class Header(QFrame):
         # nascia mostrando o icone de "mudar pra escuro" mesmo quando
         # o escuro ja estava ligado
         self._modo_escuro = tokens.ESCURO_ATIVO
+
+        # so admin pode ver/agir em aprovacoes pendentes (a API bloqueia
+        # com 403 pra qualquer outro usuario) -- pra quem nao e admin,
+        # o sino continua so um enfeite sem nada pra mostrar
+        self._admin = admin
 
         self.setFixedHeight(64)
         self.setStyleSheet(f"""
@@ -218,6 +324,32 @@ class Header(QFrame):
         self.bt_notificacoes.clicked.connect(self._abrir_notificacoes)
         layout.addWidget(self.bt_notificacoes)
 
+        # bolinha vermelha com a contagem, sobreposta no canto do sino
+        # -- filha do proprio botao pra nao precisar de layout proprio,
+        # so uma geometria fixa (o botao tem tamanho fixo 38x38)
+        self._badge_aprovacoes = QLabel(self.bt_notificacoes)
+        self._badge_aprovacoes.setGeometry(22, 1, 17, 17)
+        self._badge_aprovacoes.setAlignment(Qt.AlignCenter)
+        self._badge_aprovacoes.setStyleSheet(f"""
+            background: {tokens.ERRO};
+            color: {tokens.TEXTO_CLARO};
+            border-radius: 8px;
+            font-size: 9px;
+            font-weight: 700;
+        """)
+        self._badge_aprovacoes.hide()
+
+        self._timer_aprovacoes = None
+
+        if self._admin:
+            self._atualizar_contagem_aprovacoes()
+
+            self._timer_aprovacoes = QTimer(self)
+            self._timer_aprovacoes.timeout.connect(
+                self._atualizar_contagem_aprovacoes
+            )
+            self._timer_aprovacoes.start(_INTERVALO_POLL_APROVACOES_MS)
+
         divisor = QFrame()
         divisor.setFixedSize(1, 32)
         divisor.setStyleSheet(f"background:{tokens.BORDA};")
@@ -313,9 +445,26 @@ class Header(QFrame):
         )
         self.tema_alternado.emit(self._modo_escuro)
 
+    def _atualizar_contagem_aprovacoes(self):
+
+        try:
+            pendentes = listar_pendentes()
+        except Exception:
+            # sem servidor/rede -- so deixa o badge como estava, nao
+            # vale a pena incomodar o usuario por causa do polling
+            return
+
+        total = len(pendentes)
+
+        if total:
+            self._badge_aprovacoes.setText(str(total) if total <= 9 else "9+")
+            self._badge_aprovacoes.show()
+        else:
+            self._badge_aprovacoes.hide()
+
     def _abrir_notificacoes(self):
 
-        popover = _Popover(largura=300)
+        popover = _Popover(largura=320)
 
         titulo = QLabel("Notificações")
         titulo.setStyleSheet(f"""
@@ -325,16 +474,66 @@ class Header(QFrame):
         """)
         popover.layout_corpo.addWidget(titulo)
 
-        vazio = QLabel("Nenhuma notificação por enquanto.")
-        vazio.setWordWrap(True)
-        vazio.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_SM}px; padding: 4px 10px 12px 10px;
-        """)
-        popover.layout_corpo.addWidget(vazio)
-
         self._popover_notificacoes = popover
+
+        if not self._admin:
+
+            vazio = QLabel("Nenhuma notificação por enquanto.")
+            vazio.setWordWrap(True)
+            vazio.setStyleSheet(f"""
+                background:transparent; color:{tokens.TEXTO_TERCIARIO};
+                font-size:{tokens.TAMANHO_SM}px; padding: 4px 10px 12px 10px;
+            """)
+            popover.layout_corpo.addWidget(vazio)
+
+            popover.abrir_sob(self.bt_notificacoes)
+            return
+
+        subtitulo = QLabel("Aprovações pendentes")
+        subtitulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+            padding: 0 10px 6px 10px;
+        """)
+        popover.layout_corpo.addWidget(subtitulo)
+
+        try:
+            pendentes = listar_pendentes()
+        except Exception:
+            pendentes = None
+
+        if pendentes is None:
+            erro = QLabel("Não foi possível carregar as aprovações.")
+            erro.setWordWrap(True)
+            erro.setStyleSheet(f"""
+                background:transparent; color:{tokens.ERRO};
+                font-size:{tokens.TAMANHO_SM}px; padding: 4px 10px 12px 10px;
+            """)
+            popover.layout_corpo.addWidget(erro)
+        elif not pendentes:
+            vazio = QLabel("Nenhuma aprovação pendente no momento.")
+            vazio.setWordWrap(True)
+            vazio.setStyleSheet(f"""
+                background:transparent; color:{tokens.TEXTO_TERCIARIO};
+                font-size:{tokens.TAMANHO_SM}px; padding: 4px 10px 12px 10px;
+            """)
+            popover.layout_corpo.addWidget(vazio)
+        else:
+            for solicitacao in pendentes:
+                popover.layout_corpo.addWidget(
+                    _CartaoAprovacao(solicitacao, on_resolvido=self._ao_resolver_aprovacao)
+                )
+
         popover.abrir_sob(self.bt_notificacoes)
+
+    def _ao_resolver_aprovacao(self, cartao):
+        """Chamado por um _CartaoAprovacao depois de aprovar/rejeitar
+        com sucesso -- tira o card do popover e atualiza o badge."""
+
+        cartao.setParent(None)
+        cartao.deleteLater()
+
+        self._atualizar_contagem_aprovacoes()
 
     def _abrir_menu_perfil(self):
 

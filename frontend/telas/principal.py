@@ -96,7 +96,10 @@ class PrincipalWindow(QMainWindow):
         layout_central.setContentsMargins(0, 0, 0, 0)
         layout_central.setSpacing(0)
 
-        self.header = Header(nome_loja, nome_usuario, cargo)
+        self.header = Header(
+            nome_loja, nome_usuario, cargo,
+            admin=info_usuario.get("admin", False),
+        )
         self.header.solicitou_logout.connect(self._fazer_logout)
         self.header.solicitou_trocar_senha.connect(self._abrir_trocar_senha)
         self.header.tema_alternado.connect(self._alternar_tema)

@@ -1,8 +1,7 @@
-def _criar_conta(client, auth_headers, fornecedor):
+def _criar_conta(client, auth_headers):
     response = client.post(
         "/contas-pagar/",
         json={
-            "fornecedor_id": fornecedor.id,
             "data_vencimento": "2026-12-31T00:00:00",
             "valor": "150.00",
             "observacao": "Conta de teste",
@@ -12,20 +11,18 @@ def _criar_conta(client, auth_headers, fornecedor):
     return response.json()
 
 
-def test_criar_conta_pagar(client, auth_headers, fornecedor):
-    conta = _criar_conta(client, auth_headers, fornecedor)
+def test_criar_conta_pagar(client, auth_headers):
+    conta = _criar_conta(client, auth_headers)
 
     assert conta["status"] == "PENDENTE"
     assert float(conta["valor"]) == 150.0
 
 
-def test_pagar_sem_forma_pagamento_nao_exige_caixa(
-    client, auth_headers, fornecedor
-):
+def test_pagar_sem_forma_pagamento_nao_exige_caixa(client, auth_headers):
     # Despesa paga via PIX/transferência (ou sem forma informada) não
     # sai da gaveta física do caixa do PDV -- não precisa de um caixa
     # aberto pra ser marcada como paga.
-    conta = _criar_conta(client, auth_headers, fornecedor)
+    conta = _criar_conta(client, auth_headers)
 
     response = client.post(
         f"/contas-pagar/{conta['id']}/pagar",
@@ -36,8 +33,8 @@ def test_pagar_sem_forma_pagamento_nao_exige_caixa(
     assert response.json()["status"] == "PAGO"
 
 
-def test_pagar_em_dinheiro_sem_caixa_aberto(client, auth_headers, fornecedor):
-    conta = _criar_conta(client, auth_headers, fornecedor)
+def test_pagar_em_dinheiro_sem_caixa_aberto(client, auth_headers):
+    conta = _criar_conta(client, auth_headers)
 
     response = client.post(
         f"/contas-pagar/{conta['id']}/pagar",
@@ -50,9 +47,9 @@ def test_pagar_em_dinheiro_sem_caixa_aberto(client, auth_headers, fornecedor):
 
 
 def test_pagar_em_dinheiro_com_caixa_aberto_estorna_saldo(
-    client, auth_headers, fornecedor, caixa_aberto
+    client, auth_headers, caixa_aberto
 ):
-    conta = _criar_conta(client, auth_headers, fornecedor)
+    conta = _criar_conta(client, auth_headers)
 
     response = client.post(
         f"/contas-pagar/{conta['id']}/pagar",
@@ -75,8 +72,8 @@ def test_pagar_em_dinheiro_com_caixa_aberto_estorna_saldo(
     assert pagamento[0]["valor"] == -150.0
 
 
-def test_pagar_conta_ja_paga(client, auth_headers, fornecedor, caixa_aberto):
-    conta = _criar_conta(client, auth_headers, fornecedor)
+def test_pagar_conta_ja_paga(client, auth_headers, caixa_aberto):
+    conta = _criar_conta(client, auth_headers)
 
     client.post(f"/contas-pagar/{conta['id']}/pagar", headers=auth_headers)
 
@@ -89,8 +86,8 @@ def test_pagar_conta_ja_paga(client, auth_headers, fornecedor, caixa_aberto):
     assert response.json()["detail"] == "Conta já foi paga."
 
 
-def test_cancelar_conta_pagar(client, auth_headers, fornecedor):
-    conta = _criar_conta(client, auth_headers, fornecedor)
+def test_cancelar_conta_pagar(client, auth_headers):
+    conta = _criar_conta(client, auth_headers)
 
     response = client.post(
         f"/contas-pagar/{conta['id']}/cancelar",
@@ -101,10 +98,10 @@ def test_cancelar_conta_pagar(client, auth_headers, fornecedor):
     assert response.json()["status"] == "CANCELADO"
 
 
-def test_cancelar_conta_ja_paga(client, auth_headers, fornecedor, caixa_aberto):
+def test_cancelar_conta_ja_paga(client, auth_headers, caixa_aberto):
     # Admin cancela uma conta já paga direto (sem fluxo de aprovação --
     # esse é reservado pra quem NÃO é admin, ver test_authorization.py).
-    conta = _criar_conta(client, auth_headers, fornecedor)
+    conta = _criar_conta(client, auth_headers)
 
     client.post(f"/contas-pagar/{conta['id']}/pagar", headers=auth_headers)
 
@@ -117,13 +114,10 @@ def test_cancelar_conta_ja_paga(client, auth_headers, fornecedor, caixa_aberto):
     assert response.json()["status"] == "CANCELADO"
 
 
-def test_criar_conta_pagar_com_numero_boleto(
-    client, auth_headers, fornecedor
-):
+def test_criar_conta_pagar_com_numero_boleto(client, auth_headers):
     response = client.post(
         "/contas-pagar/",
         json={
-            "fornecedor_id": fornecedor.id,
             "data_vencimento": "2026-12-31T00:00:00",
             "valor": "150.00",
             "numero_boleto": "34191.79001 01043.510047 91020.150008 1 96380000015000",
@@ -140,7 +134,7 @@ def test_criar_conta_pagar_com_numero_boleto(
     )
 
 
-def test_criar_conta_pagar_avulsa_sem_fornecedor(client, auth_headers):
+def test_criar_conta_pagar_sem_numero_boleto(client, auth_headers):
     response = client.post(
         "/contas-pagar/",
         json={
@@ -155,12 +149,11 @@ def test_criar_conta_pagar_avulsa_sem_fornecedor(client, auth_headers):
 
     conta = response.json()
 
-    assert conta["fornecedor_id"] is None
     assert conta["numero_boleto"] is None
 
 
-def test_atualizar_numero_boleto(client, auth_headers, fornecedor):
-    conta = _criar_conta(client, auth_headers, fornecedor)
+def test_atualizar_numero_boleto(client, auth_headers):
+    conta = _criar_conta(client, auth_headers)
 
     response = client.put(
         f"/contas-pagar/{conta['id']}",

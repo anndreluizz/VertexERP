@@ -5,8 +5,6 @@ from pydantic import BaseModel
 
 
 class ContaPagarBase(BaseModel):
-    fornecedor_id: int | None = None
-    compra_id: int | None = None
     data_vencimento: datetime
     valor: Decimal
     descricao: str | None = None
@@ -40,10 +38,6 @@ class ContaPagarUpdate(BaseModel):
 
 class ContaPagarResponse(BaseModel):
     id: int
-
-    fornecedor_id: int | None
-
-    compra_id: int | None
 
     data_emissao: datetime
 

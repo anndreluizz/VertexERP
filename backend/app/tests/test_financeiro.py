@@ -34,7 +34,7 @@ def test_fluxo_caixa_sem_caixa_aberto(client, auth_headers):
 
 
 def test_fluxo_caixa_considera_apenas_o_periodo(
-    client, auth_headers, db, caixa_aberto, cliente, fornecedor
+    client, auth_headers, db, caixa_aberto, cliente
 ):
     dentro_do_periodo = datetime.utcnow() + timedelta(days=10)
     fora_do_periodo = datetime.utcnow() + timedelta(days=90)
@@ -45,7 +45,6 @@ def test_fluxo_caixa_considera_apenas_o_periodo(
     client.post(
         "/contas-pagar/",
         json={
-            "fornecedor_id": fornecedor.id,
             "data_vencimento": dentro_do_periodo.isoformat(),
             "valor": "40.00",
         },

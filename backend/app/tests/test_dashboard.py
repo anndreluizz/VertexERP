@@ -1,5 +1,5 @@
 def test_resumo_dashboard(
-    client, auth_headers, produto, cliente, fornecedor, caixa_aberto
+    client, auth_headers, produto, cliente, caixa_aberto
 ):
     # venda hoje
     client.post(
@@ -11,23 +11,6 @@ def test_resumo_dashboard(
                     "produto_id": produto.id,
                     "quantidade": 2,
                     "valor_unitario": "20.00",
-                }
-            ],
-        },
-        headers=auth_headers,
-    )
-
-    # compra hoje
-    client.post(
-        "/compras/",
-        json={
-            "fornecedor_id": fornecedor.id,
-            "forma_pagamento": "DINHEIRO",
-            "itens": [
-                {
-                    "produto_id": produto.id,
-                    "quantidade": 5,
-                    "valor_unitario": "8.00",
                 }
             ],
         },
@@ -49,7 +32,6 @@ def test_resumo_dashboard(
     client.post(
         "/contas-pagar/",
         json={
-            "fornecedor_id": fornecedor.id,
             "data_vencimento": "2026-12-31T00:00:00",
             "valor": "60.00",
         },
@@ -77,7 +59,13 @@ def test_resumo_dashboard(
     dados = response.json()
 
     assert dados["vendas_hoje"] == 40.0
-    assert dados["compras_hoje"] == 40.0
+    # Compras/Fornecedores nao tem mais tela nem API propria (feature
+    # removida a pedido do usuario) mas o campo continua existindo na
+    # resposta do dashboard -- o app mobile ainda le esses dois campos
+    # como obrigatorios (ver mobile/lib/models/dashboard_resumo.dart).
+    # Sem nenhuma Compra/Fornecedor criado neste teste, ficam zerados.
+    assert dados["compras_hoje"] == 0.0
+    assert dados["fornecedores"] == 0
     # a venda em dinheiro gera um lançamento automático no caixa aberto
     assert dados["saldo_caixa"] == float(caixa_aberto.saldo_inicial) + 40.0
     # ContaReceber e uma tabela legada que nao alimenta mais esse KPI
@@ -87,7 +75,6 @@ def test_resumo_dashboard(
     assert dados["contas_pagar"] == 60.0
     assert dados["total_fiado_devedor"] == 0.0
     assert dados["clientes"] == 1
-    assert dados["fornecedores"] == 1
     assert dados["produtos"] == 2
     assert dados["estoque_baixo"] == 1
     assert dados["vendas_ontem"] == 0.0

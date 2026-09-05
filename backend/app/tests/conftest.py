@@ -17,7 +17,10 @@ from app.auth.hash import gerar_hash
 
 # Garante que todos os models estejam registrados em Base.metadata
 # antes do create_all/drop_all (mesmo motivo do import manual em
-# migrations/env.py).
+# migrations/env.py). compra/fornecedor/item_compra nao tem mais rota
+# propria (feature removida a pedido do usuario) mas o model continua
+# existindo so pra nao quebrar o FK de ContaPagar.fornecedor_id/
+# compra_id, que ficam null/sem uso dai em diante.
 from app.models import (  # noqa: F401
     caixa,
     categoria,
@@ -46,8 +49,6 @@ from app.api.v1 import (
     clientes as clientes_router,
     categorias as categorias_router,
     produtos as produtos_router,
-    fornecedores as fornecedores_router,
-    compras as compras_router,
     vendas as vendas_router,
     caixa as caixa_router,
     movimento_caixa as movimento_caixa_router,
@@ -70,8 +71,6 @@ MODULOS_COM_GET_DB = [
     clientes_router,
     categorias_router,
     produtos_router,
-    fornecedores_router,
-    compras_router,
     vendas_router,
     caixa_router,
     movimento_caixa_router,
@@ -262,22 +261,6 @@ def cliente(db):
         cpf_cnpj="12345678900",
         email="cliente@teste.com",
         telefone="11999999999",
-        ativo=True,
-    )
-    db.add(novo)
-    db.commit()
-    db.refresh(novo)
-    return novo
-
-
-@pytest.fixture()
-def fornecedor(db):
-    from app.models.fornecedor import Fornecedor
-
-    novo = Fornecedor(
-        razao_social="Fornecedor Teste LTDA",
-        nome_fantasia="Fornecedor Teste",
-        cnpj="12345678000199",
         ativo=True,
     )
     db.add(novo)

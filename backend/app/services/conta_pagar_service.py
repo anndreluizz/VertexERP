@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from app.enums.status_conta_pagar import StatusContaPagar
 
-from app.models.compra import Compra
 from app.models.conta_pagar import ContaPagar
 
 from app.repositories.conta_pagar_repository import (
@@ -49,8 +48,6 @@ class ContaPagarService:
     ):
 
         conta = ContaPagar(
-            fornecedor_id=dados.fornecedor_id,
-            compra_id=dados.compra_id,
             data_emissao=datetime.utcnow(),
             data_vencimento=dados.data_vencimento,
             data_pagamento=None,
@@ -401,39 +398,3 @@ class ContaPagarService:
             )
 
         ContaPagarRepository.excluir(db, conta)
-
-    @staticmethod
-    def criar_compra_prazo(
-        db: Session,
-        compra: Compra,
-    ):
-
-        if compra.fornecedor_id is None:
-            raise Exception(
-                "Compra a prazo exige um fornecedor."
-            )
-
-        if compra.data_vencimento is None:
-            raise Exception(
-                "Informe a data de vencimento."
-            )
-
-        conta = ContaPagar(
-            fornecedor_id=compra.fornecedor_id,
-            compra_id=compra.id,
-            data_emissao=datetime.utcnow(),
-            data_vencimento=compra.data_vencimento,
-            data_pagamento=None,
-            valor=compra.valor_total,
-            observacao="Gerada automaticamente pela compra.",
-            status=StatusContaPagar.PENDENTE.value,
-        )
-
-        conta = ContaPagarRepository.criar(
-            db,
-            conta,
-        )
-
-        ContaPagarEventoService.registrar(db, conta.id, "CRIADA")
-
-        return conta

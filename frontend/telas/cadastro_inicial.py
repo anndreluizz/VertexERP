@@ -17,6 +17,7 @@ from requests.exceptions import ConnectionError
 from services.api import cadastrar_usuario, login
 from design import tokens
 from design.responsive import tamanho_fixo_seguro
+from utils.validacao import email_valido
 
 
 class CadastroInicialWindow(QWidget):
@@ -169,6 +170,7 @@ class CadastroInicialWindow(QWidget):
         valido = (
             bool(self.nome.text().strip())
             and bool(self.email.text().strip())
+            and email_valido(self.email.text())
             and bool(self.senha.text())
             and self.senha.text() == self.confirmar.text()
             and self.termos.isChecked()

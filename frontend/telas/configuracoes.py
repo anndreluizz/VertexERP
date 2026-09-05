@@ -27,6 +27,7 @@ from telas.gerenciar_usuarios import GerenciarUsuariosDialog
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import BotaoSecundario, BotaoSucesso
+from utils.validacao import email_valido
 
 
 class ItemMenuConfig(QPushButton):
@@ -718,6 +719,15 @@ class Configuracoes(QWidget):
                 )
 
     def salvar(self):
+
+        if not email_valido(self.smtp_usuario.text()):
+            QMessageBox.warning(
+                self,
+                "Atenção",
+                "Informe um e-mail válido no campo Usuário (E-mail) do SMTP.",
+            )
+            self._selecionar_aba(4)
+            return
 
         dados = {
             "nome_loja": self.nome_loja.text().strip() or None,

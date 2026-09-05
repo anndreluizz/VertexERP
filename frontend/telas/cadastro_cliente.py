@@ -23,6 +23,7 @@ from services.cliente_service import (
     atualizar_cliente,
     obter_foto_cliente,
 )
+from utils.validacao import email_valido
 
 
 def _parse_valor_opcional(texto):
@@ -326,6 +327,12 @@ class CadastroClienteDialog(QDialog):
 
         if not nome:
             QMessageBox.warning(self, "Atenção", "Informe o nome do cliente.")
+            return
+
+        if not email_valido(self.email.text()):
+            QMessageBox.warning(
+                self, "Atenção", "Informe um e-mail válido (ex.: nome@exemplo.com)."
+            )
             return
 
         dados = {

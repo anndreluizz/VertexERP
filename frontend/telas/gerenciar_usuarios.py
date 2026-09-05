@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
+from utils.validacao import email_valido
 from services.user_service import (
     listar_usuarios,
     atualizar_usuario,
@@ -126,6 +127,12 @@ class NovoUsuarioDialog(QDialog):
         if not nome or not email or not senha:
             QMessageBox.warning(
                 self, "Atenção", "Preencha todos os campos."
+            )
+            return
+
+        if not email_valido(email):
+            QMessageBox.warning(
+                self, "Atenção", "Informe um e-mail válido (ex.: nome@exemplo.com)."
             )
             return
 

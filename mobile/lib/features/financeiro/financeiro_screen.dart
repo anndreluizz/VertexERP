@@ -691,17 +691,7 @@ class _CartaoContaReceber extends ConsumerWidget {
               Align(
                 alignment: Alignment.centerRight,
                 child: OutlinedButton(
-                  onPressed: () async {
-                    final erro = await ref
-                        .read(financeiroActionsProvider)
-                        .receberConta(conta.id);
-
-                    if (erro != null && context.mounted) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text(erro)));
-                    }
-                  },
+                  onPressed: () => _confirmarRecebimento(context, ref),
                   child: const Text('Marcar como recebida'),
                 ),
               ),
@@ -710,5 +700,42 @@ class _CartaoContaReceber extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmarRecebimento(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Marcar como recebida?'),
+        content: Text(
+          'Confirma o recebimento de ${formatarMoeda(conta.valor)} do '
+          'Cliente #${conta.clienteId}? Essa ação não pode ser desfeita '
+          'pelo app.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Voltar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Marcar como recebida'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true || !context.mounted) return;
+
+    final erro = await ref.read(financeiroActionsProvider).receberConta(conta.id);
+
+    if (erro != null && context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(erro)));
+    }
   }
 }

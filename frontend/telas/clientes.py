@@ -1,3 +1,5 @@
+import csv
+
 from PySide6.QtWidgets import QMessageBox
 
 from telas.cadastro_cliente import CadastroClienteDialog
@@ -23,6 +25,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QDialog,
     QComboBox,
+    QFileDialog,
 )
 
 from design import tokens
@@ -204,6 +207,7 @@ class Clientes(QWidget):
         super().__init__()
 
         self.clientes = []
+        self._clientes_filtrados = []
         self.vendas_por_cliente = {}
         self.agregados_por_cliente = {}
         self.filtro_status = "TODOS"
@@ -265,8 +269,8 @@ class Clientes(QWidget):
         col_titulo.addWidget(titulo)
         col_titulo.addWidget(subtitulo)
 
-        self.bt_exportar = BotaoSecundario("Exportar Planilha", icone_nome="download")
-        self.bt_exportar.clicked.connect(self.exportar_em_breve)
+        self.bt_exportar = BotaoSecundario("Exportar CSV", icone_nome="download")
+        self.bt_exportar.clicked.connect(self.exportar_csv)
 
         self.bt_novo = BotaoPrimario("Novo Cliente", icone_nome="plus")
         self.bt_novo.clicked.connect(self.novo_cliente)
@@ -644,6 +648,10 @@ class Clientes(QWidget):
 
         clientes = self._ordenar(clientes)
 
+        # guardado pra exportar exatamente o que esta na tela (filtro
+        # + busca + ordenacao aplicados), nao a lista inteira sem filtro
+        self._clientes_filtrados = clientes
+
         self.preencher_grid(clientes)
 
     def _ordenar(self, clientes):
@@ -779,9 +787,62 @@ class Clientes(QWidget):
 
         self.carregar()
 
-    def exportar_em_breve(self):
-        QMessageBox.information(
+    def exportar_csv(self):
+
+        # exporta exatamente o que esta na tela agora (filtro + busca +
+        # ordenacao aplicados), nao a base de clientes inteira
+        if not self._clientes_filtrados:
+            QMessageBox.information(
+                self,
+                "Nada para exportar",
+                "Não há clientes na lista atual pra exportar.",
+            )
+            return
+
+        caminho, _ = QFileDialog.getSaveFileName(
             self,
-            "Em breve",
-            "A exportação de planilha ainda está em desenvolvimento.",
+            "Exportar Clientes (CSV)",
+            "clientes.csv",
+            "Arquivo CSV (*.csv)",
         )
+
+        if not caminho:
+            return
+
+        if not caminho.lower().endswith(".csv"):
+            caminho += ".csv"
+
+        try:
+            with open(caminho, "w", newline="", encoding="utf-8-sig") as arquivo:
+
+                escritor = csv.writer(arquivo, delimiter=";")
+                escritor.writerow([
+                    "Nome", "Telefone", "CPF/CNPJ", "E-mail",
+                    "Saldo Devedor", "Última Movimentação", "Status",
+                ])
+
+                for cliente in self._clientes_filtrados:
+
+                    agr = self.agregados_por_cliente.get(cliente["id"], {})
+
+                    ultima_mov = agr.get("ultima_movimentacao")
+                    texto_ultima_mov = (
+                        ultima_mov.strftime("%d/%m/%Y") if ultima_mov else ""
+                    )
+
+                    escritor.writerow([
+                        cliente.get("nome", ""),
+                        cliente.get("telefone", "") or "",
+                        cliente.get("cpf_cnpj", "") or "",
+                        cliente.get("email", "") or "",
+                        f"{float(cliente.get('saldo_fiado', 0) or 0):.2f}",
+                        texto_ultima_mov,
+                        "Ativo" if cliente.get("ativo", True) else "Inativo",
+                    ])
+
+            QMessageBox.information(
+                self, "Sucesso", "Lista de clientes exportada com sucesso."
+            )
+
+        except OSError as erro:
+            QMessageBox.critical(self, "Erro", str(erro))

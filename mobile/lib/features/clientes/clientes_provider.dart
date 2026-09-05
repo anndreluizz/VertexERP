@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../models/cliente.dart';
 import '../../models/movimento_fiado.dart';
@@ -124,8 +125,11 @@ class ClientesActions {
       _ref.invalidate(saldoFiadoProvider(clienteId));
       _ref.invalidate(historicoFiadoProvider(clienteId));
       return null;
-    } catch (_) {
-      return 'Não foi possível registrar o recebimento.';
+    } catch (e) {
+      return mensagemDeErro(
+        e,
+        fallback: 'Não foi possível registrar o recebimento.',
+      );
     }
   }
 

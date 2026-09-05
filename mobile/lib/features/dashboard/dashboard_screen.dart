@@ -202,6 +202,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return 'Boa noite';
   }
 
+  Future<void> _confirmarLogout(BuildContext context) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sair da conta?'),
+        content: const Text(
+          'Você vai precisar fazer login de novo pra acessar a conta '
+          'neste aparelho.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Sair'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true || !context.mounted) return;
+
+    ref.read(sessaoControllerProvider.notifier).logout();
+  }
+
   @override
   Widget build(BuildContext context) {
     final sessao = ref.watch(sessaoControllerProvider);
@@ -255,9 +282,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                       IconButton(
                         tooltip: 'Sair',
-                        onPressed: () => ref
-                            .read(sessaoControllerProvider.notifier)
-                            .logout(),
+                        onPressed: () => _confirmarLogout(context),
                         icon: const Icon(Icons.logout),
                       ),
                     ],

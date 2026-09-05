@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../models/sessao.dart';
 
@@ -23,8 +24,11 @@ class SessoesActions {
       await api.dio.delete('/auth/sessoes/$sessaoId');
       _ref.invalidate(sessoesProvider);
       return null;
-    } catch (_) {
-      return 'Não foi possível encerrar essa sessão.';
+    } catch (e) {
+      return mensagemDeErro(
+        e,
+        fallback: 'Não foi possível encerrar essa sessão.',
+      );
     }
   }
 }

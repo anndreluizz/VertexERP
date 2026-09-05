@@ -4,6 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers.dart';
 import '../../theme/vertex_colors.dart';
 
+/// Checagem de formato simples (não verifica se o domínio existe de
+/// verdade) -- só o suficiente pra pegar erro de digitação óbvio antes
+/// de gastar uma ida à rede, mesmo critério usado no Desktop
+/// (frontend/utils/validacao.py::email_valido).
+final _regexEmail = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -33,6 +39,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     if (email.isEmpty || senha.isEmpty) {
       setState(() => _erro = 'Informe o e-mail e a senha.');
+      return;
+    }
+
+    if (!_regexEmail.hasMatch(email)) {
+      setState(() => _erro = 'Informe um e-mail válido (ex.: nome@exemplo.com).');
       return;
     }
 

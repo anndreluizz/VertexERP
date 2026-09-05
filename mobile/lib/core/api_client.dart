@@ -121,3 +121,19 @@ class ApiClient {
     }
   }
 }
+
+/// Extrai o motivo real de uma falha de API pra mostrar ao usuario --
+/// um "detail" vindo do backend (permissao negada, regra de negocio
+/// violada, sessao expirada etc.) sempre diz mais que um texto fixo
+/// generico tipo "Não foi possível fazer X" igual pra qualquer causa
+/// (mesmo criterio ja usado em SessaoController._mensagemDeErro).
+String mensagemDeErro(Object erro, {required String fallback}) {
+  if (erro is DioException) {
+    final dados = erro.response?.data;
+    if (dados is Map && dados['detail'] is String) {
+      return dados['detail'] as String;
+    }
+  }
+
+  return fallback;
+}

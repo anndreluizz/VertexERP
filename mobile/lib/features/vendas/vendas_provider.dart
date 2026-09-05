@@ -114,11 +114,21 @@ final atividadeVendasProvider = FutureProvider.autoDispose<
       .where((m) => m.tipo == 'PAGAMENTO')
       .toList();
 
-  final respostaClientes = await api.dio.get('/clientes/');
-  final nomesClientes = {
-    for (final json in respostaClientes.data as List<dynamic>)
-      (json as Map<String, dynamic>)['id'] as int: json['nome'] as String,
-  };
+  // so usado pra mostrar o nome do cliente no recebimento de fiado --
+  // se falhar (rede, permissao, etc.), cai pro fallback "Cliente" logo
+  // abaixo em vez de derrubar a lista de vendas inteira por causa de
+  // uma busca secundaria (mesmo criterio de operadoresLookupProvider,
+  // em caixas_provider.dart).
+  Map<int, String> nomesClientes = {};
+  try {
+    final respostaClientes = await api.dio.get('/clientes/');
+    nomesClientes = {
+      for (final json in respostaClientes.data as List<dynamic>)
+        (json as Map<String, dynamic>)['id'] as int: json['nome'] as String,
+    };
+  } catch (_) {
+    // mantem nomesClientes vazio -- ver fallback "Cliente" abaixo
+  }
 
   final itens = <ItemAtividadeVendas>[
     ...vendas.map(AtividadeVenda.new),

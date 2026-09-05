@@ -19,7 +19,10 @@ class Caixa {
           : null,
       saldoInicial: (json['saldo_inicial'] as num).toDouble(),
       saldoFinal: (json['saldo_final'] as num).toDouble(),
-      status: json['status'] as String,
+      // opcional na leitura -- um caixa sem status nao pode derrubar a
+      // lista inteira; sem status reconhecido, "aberto" abaixo cai
+      // pro lado seguro (false), nunca mostra como aberto por engano.
+      status: json['status'] as String? ?? 'DESCONHECIDO',
       usuarioId: json['usuario_id'] as int?,
     );
   }

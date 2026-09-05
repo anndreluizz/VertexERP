@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../models/solicitacao_aprovacao.dart';
 
@@ -28,8 +29,11 @@ class AprovacoesActions {
       await api.dio.post('/aprovacoes/$solicitacaoId/aprovar');
       _ref.invalidate(aprovacoesPendentesProvider);
       return null;
-    } catch (_) {
-      return 'Não foi possível aprovar esse pedido.';
+    } catch (e) {
+      return mensagemDeErro(
+        e,
+        fallback: 'Não foi possível aprovar esse pedido.',
+      );
     }
   }
 
@@ -39,8 +43,11 @@ class AprovacoesActions {
       await api.dio.post('/aprovacoes/$solicitacaoId/rejeitar');
       _ref.invalidate(aprovacoesPendentesProvider);
       return null;
-    } catch (_) {
-      return 'Não foi possível rejeitar esse pedido.';
+    } catch (e) {
+      return mensagemDeErro(
+        e,
+        fallback: 'Não foi possível rejeitar esse pedido.',
+      );
     }
   }
 }

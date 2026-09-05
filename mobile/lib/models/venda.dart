@@ -54,11 +54,15 @@ class Venda {
       valorTotal: (json['valor_total'] as num).toDouble(),
       desconto: (json['desconto'] as num).toDouble(),
       observacao: json['observacao'] as String?,
-      status: json['status'] as String,
-      formaPagamento: json['forma_pagamento'] as String,
+      // status/forma_pagamento/itens tratados como opcionais na
+      // leitura (mesmo se o backend sempre manda) -- um unico registro
+      // com campo ausente nao pode derrubar a lista de vendas inteira
+      // com um TypeError de cast.
+      status: json['status'] as String? ?? 'DESCONHECIDO',
+      formaPagamento: json['forma_pagamento'] as String? ?? '',
       formaPagamento2: json['forma_pagamento_2'] as String?,
       valorForma2: (json['valor_forma_2'] as num?)?.toDouble(),
-      itens: (json['itens'] as List<dynamic>)
+      itens: (json['itens'] as List<dynamic>? ?? const <dynamic>[])
           .map((item) => ItemVenda.fromJson(item as Map<String, dynamic>))
           .toList(),
     );

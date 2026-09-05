@@ -133,11 +133,38 @@ class MaisScreen extends ConsumerWidget {
             titulo: 'Sair',
             subtitulo: 'Encerrar sessão neste aparelho',
             perigo: true,
-            aoTocar: () => ref.read(sessaoControllerProvider.notifier).logout(),
+            aoTocar: () => _confirmarLogout(context, ref),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmarLogout(BuildContext context, WidgetRef ref) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sair da conta?'),
+        content: const Text(
+          'Você vai precisar fazer login de novo pra acessar a conta '
+          'neste aparelho.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Sair'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
+    ref.read(sessaoControllerProvider.notifier).logout();
   }
 
   void _abrir(BuildContext context, Widget tela) {

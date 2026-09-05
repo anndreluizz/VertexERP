@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../models/conta_pagar.dart';
 import '../../models/conta_pagar_evento.dart';
@@ -111,8 +112,11 @@ class FinanceiroActions {
       );
       _ref.invalidate(contasPagarProvider);
       return null;
-    } catch (_) {
-      return 'Não foi possível marcar essa conta como paga.';
+    } catch (e) {
+      return mensagemDeErro(
+        e,
+        fallback: 'Não foi possível marcar essa conta como paga.',
+      );
     }
   }
 
@@ -128,8 +132,11 @@ class FinanceiroActions {
         data: {'observacao': observacao},
       );
       return null;
-    } catch (_) {
-      return 'Não foi possível salvar a observação.';
+    } catch (e) {
+      return mensagemDeErro(
+        e,
+        fallback: 'Não foi possível salvar a observação.',
+      );
     }
   }
 
@@ -152,8 +159,11 @@ class FinanceiroActions {
       );
       _ref.invalidate(contasPagarProvider);
       return null;
-    } catch (_) {
-      return 'Não foi possível trocar o comprovante.';
+    } catch (e) {
+      return mensagemDeErro(
+        e,
+        fallback: 'Não foi possível trocar o comprovante.',
+      );
     }
   }
 
@@ -177,10 +187,13 @@ class FinanceiroActions {
           false;
 
       return (aprovacaoPendente: aprovacaoPendente, erro: null);
-    } catch (_) {
+    } catch (e) {
       return (
         aprovacaoPendente: false,
-        erro: 'Não foi possível cancelar essa despesa.',
+        erro: mensagemDeErro(
+          e,
+          fallback: 'Não foi possível cancelar essa despesa.',
+        ),
       );
     }
   }
@@ -191,8 +204,11 @@ class FinanceiroActions {
       await api.dio.post('/contas-receber/$contaId/receber');
       _ref.invalidate(contasReceberProvider);
       return null;
-    } catch (_) {
-      return 'Não foi possível marcar essa conta como recebida.';
+    } catch (e) {
+      return mensagemDeErro(
+        e,
+        fallback: 'Não foi possível marcar essa conta como recebida.',
+      );
     }
   }
 
@@ -217,8 +233,14 @@ class FinanceiroActions {
       await arquivo.writeAsBytes(resposta.data!);
 
       return (caminho: arquivo.path, erro: null);
-    } catch (_) {
-      return (caminho: null, erro: 'Não foi possível baixar o arquivo.');
+    } catch (e) {
+      return (
+        caminho: null,
+        erro: mensagemDeErro(
+          e,
+          fallback: 'Não foi possível baixar o arquivo.',
+        ),
+      );
     }
   }
 

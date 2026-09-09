@@ -19,6 +19,7 @@ if getattr(sys, "frozen", False):
 
 import uvicorn
 
+from app.core.tls import garantir_certificado
 from main import app
 
 
@@ -38,4 +39,21 @@ if __name__ == "__main__":
     # no .env — por padrão continua só-localhost, igual sempre foi.
     host = os.getenv("VERTEXERP_HOST", "127.0.0.1")
 
-    uvicorn.run(app, host=host, port=porta, log_level="info")
+    # VERTEXERP_INSTALL_DIR (setado pelo launcher.py) aponta pra raiz de
+    # verdade da instalação (o backend empacotado roda de dentro da
+    # subpasta VertexERP-Backend/) -- sem isso, o certificado nasceria
+    # solto dentro da subpasta, difícil de achar. Em dev, cai pro
+    # diretório atual mesmo.
+    pasta_certs = os.path.join(
+        os.getenv("VERTEXERP_INSTALL_DIR", os.getcwd()), "certs"
+    )
+    caminho_cert, caminho_chave = garantir_certificado(pasta_certs)
+
+    uvicorn.run(
+        app,
+        host=host,
+        port=porta,
+        log_level="info",
+        ssl_certfile=caminho_cert,
+        ssl_keyfile=caminho_chave,
+    )

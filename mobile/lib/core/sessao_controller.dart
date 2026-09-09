@@ -69,7 +69,7 @@ class SessaoController extends StateNotifier<SessaoState> {
       return;
     }
 
-    _api.definirServidor(endereco);
+    await _api.definirServidor(endereco);
 
     final token = await _storage.lerToken();
 
@@ -199,7 +199,7 @@ class SessaoController extends StateNotifier<SessaoState> {
     // Permite salvar mesmo se o teste falhar agora — o servidor pode
     // simplesmente ainda nao estar ligado (mesmo criterio do Desktop).
     await _storage.salvarServidor(endereco);
-    _api.definirServidor(endereco);
+    await _api.definirServidor(endereco);
 
     state = SessaoState(
       status: StatusSessao.deslogado,

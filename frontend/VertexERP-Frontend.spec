@@ -6,7 +6,12 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[('assets', 'assets')],
-    hiddenimports=[],
+    # win32print/win32api -- usados pra impressao termica direta (ver
+    # services/impressora_termica_service.py); o PyInstaller as vezes
+    # nao detecta esses modulos sozinho porque sao importados so dentro
+    # de funcoes (import tardio de proposito, pra nao quebrar quem nao
+    # tem pywin32 instalado e nunca usa o caminho USB)
+    hiddenimports=['win32print', 'win32api', 'win32con', 'win32timezone'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

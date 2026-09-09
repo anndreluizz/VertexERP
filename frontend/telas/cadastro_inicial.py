@@ -244,7 +244,9 @@ class CadastroInicialWindow(QWidget):
                 response.json().get("data", {}).get("admin", False)
             )
 
-            if not login(email, senha):
+            ok, _erro_login = login(email, senha)
+
+            if not ok:
 
                 QApplication.restoreOverrideCursor()
 

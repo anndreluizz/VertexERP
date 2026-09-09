@@ -4,9 +4,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
 )
-
-import requests
 
 from design import tokens
 from design.icons import icone_pixmap
@@ -123,11 +122,12 @@ class ConectarServidorDialog(QDialog):
             self._status("Informe um endereço.", tokens.ALERTA)
             return
 
-        api.definir_url(endereco)
-
         try:
-            resposta = requests.get(f"{api.URL}/", timeout=3)
+            resposta = api.testar_conexao(endereco)
             ok = resposta.status_code == 200
+        except api.CertificadoServidorMudou:
+            self._perguntar_confiar_de_novo()
+            return
         except Exception:
             ok = False
 
@@ -140,6 +140,37 @@ class ConectarServidorDialog(QDialog):
                 "tentar de novo depois.",
                 tokens.ALERTA,
             )
+
+    def _perguntar_confiar_de_novo(self):
+        """O certificado salvo pra esse servidor não bate mais com o
+        que ele está apresentando agora -- normal depois de reinstalar
+        o Servidor (ver services/tls_confianca.py), mas também o sinal
+        de segurança que justifica não confiar automaticamente sem
+        perguntar, diferente do primeiro contato."""
+
+        resposta = QMessageBox.question(
+            self,
+            "Certificado do servidor mudou",
+            "O certificado deste servidor é diferente do que estava "
+            "salvo como confiável.\n\n"
+            "Isso é esperado se o Servidor foi reinstalado ou trocou "
+            "de computador recentemente. Se você não fez nenhuma "
+            "mudança assim, pode ser um problema de segurança na "
+            "rede.\n\n"
+            "Confiar no certificado atual mesmo assim?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+
+        if resposta != QMessageBox.Yes:
+            self._status(
+                "Conexão não confirmada — o certificado salvo "
+                "anteriormente continua sendo exigido.",
+                tokens.ALERTA,
+            )
+            return
+
+        api.confiar_de_novo_no_servidor_atual()
+        self.testar()
 
     def salvar(self):
 

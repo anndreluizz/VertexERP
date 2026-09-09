@@ -38,3 +38,9 @@ postgres-portable/
 # Credencial da conta de serviço do Firebase (chave privada) — nunca
 # deve ir pro repositório, cada instalação/ambiente tem a sua própria.
 firebase-credentials.json
+
+# Certificado autoassinado do HTTPS local (ver backend/app/core/tls.py)
+# — gerado sozinho na primeira execução, específico de cada instalação/
+# máquina, nunca deve ir pro repositório.
+certs/
+backend/certs/

@@ -159,8 +159,16 @@ escrita.
 
 ## Backup automático
 
-Isso é configurado à parte, no PC-Servidor — se quiser o backup automático
-rodando nessa máquina nova também, é só pedir.
+Já vem ligado por padrão no PC-Servidor, sem precisar configurar nada. Um
+backup completo do banco é salvo todo dia em
+`Documentos\VertexERP\Backups\` (dentro dos Documentos do Windows do
+usuário que abriu o sistema) enquanto o Vertex ERP estiver aberto — o
+primeiro roda logo na abertura, os seguintes a cada 24h. Backups com mais
+de 30 dias são apagados automaticamente pra não acumular espaço em disco
+sem limite.
+
+Terminais não guardam nada localmente, então esse backup só existe (e só
+faz sentido) no PC-Servidor.
 
 ## Independência entre lojas diferentes
 

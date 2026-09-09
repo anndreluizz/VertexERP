@@ -47,6 +47,7 @@ from services.cliente_service import (
 )
 from telas import comprovante_acoes
 from services import cliente_analise
+from services import impressora_termica_service, preferencias_service
 
 from design import tokens
 from design.icons import icone, icone_pixmap
@@ -2408,7 +2409,61 @@ class FichaClienteDialog(QDialog):
 
         return documento
 
+    def _montar_movimentos_extrato_termico(self):
+        """Mesma lista usada no HTML (ver _montar_html_extrato), só que
+        como dicts simples -- formato que impressora_termica_service
+        espera, sem acoplar esse serviço ao formato interno de `mov`."""
+
+        movimentos = []
+
+        for mov, saldo_apos in reversed(self._movimentos):
+
+            data = str(mov.get("data", ""))
+            if "T" in data:
+                data = data.replace("T", " ")[:16]
+
+            movimentos.append({
+                "data": data,
+                "descricao": self._descricao_com_itens(mov),
+                "tipo": mov.get("tipo"),
+                "valor": mov.get("valor", 0),
+                "saldo_apos": saldo_apos,
+            })
+
+        return movimentos
+
     def imprimir_extrato(self):
+
+        config_impressora = preferencias_service.carregar_impressora_termica()
+
+        if config_impressora and config_impressora.get("ativa"):
+
+            saldo = saldo_cliente(self.cliente["id"])
+            usuario = api.me()
+            responsavel = usuario.get("nome") or "—"
+            observacoes = listar_observacoes_cliente(self.cliente["id"])
+
+            ok, erro = impressora_termica_service.imprimir_extrato(
+                self.cliente,
+                self._montar_movimentos_extrato_termico(),
+                observacoes,
+                saldo,
+                responsavel,
+                api.configuracoes(),
+                config_impressora,
+            )
+
+            if ok:
+                return
+
+            resposta = QMessageBox.question(
+                self,
+                "Falha na impressora térmica",
+                f"{erro}\n\nQuer tentar imprimir pela janela normal do Windows?",
+            )
+
+            if resposta != QMessageBox.Yes:
+                return
 
         printer = QPrinter(QPrinter.HighResolution)
 

@@ -1,4 +1,10 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
+
+import 'tls_confianca.dart';
 
 /// Porta padrao do backend empacotado do Vertex ERP — mesma usada pelo
 /// Desktop em modo Servidor/Terminal (ver backend/backend_entry.py e
@@ -17,8 +23,25 @@ typedef AoDeslogar = void Function();
 /// guardado ou ele ja nao vale mais (expirado/revogado).
 typedef AoRenovarToken = Future<String?> Function();
 
+/// Guardado quando o certificado do servidor mudou desde o último pin
+/// confiável -- a tela de configurar servidor usa isso pra oferecer o
+/// "confiar de novo?" (ver ApiClient.confiarNoCertificadoQueFalhou).
+class FalhaCertificado {
+  const FalhaCertificado(this.host, this.porta, this.pemNovo);
+
+  final String host;
+  final int porta;
+  final String pemNovo;
+}
+
 class ApiClient {
-  ApiClient() : _dio = Dio() {
+  ApiClient() : _dio = Dio(), _tls = TlsConfianca() {
+    (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
+      final client = HttpClient();
+      client.badCertificateCallback = _validarCertificado;
+      return client;
+    };
+
     _dio.interceptors.add(
       InterceptorsWrapper(
         onError: (erro, handler) async {
@@ -61,6 +84,7 @@ class ApiClient {
   }
 
   final Dio _dio;
+  final TlsConfianca _tls;
 
   /// Preenchidos de fora (ver core/providers.dart) — o ApiClient nao
   /// conhece o SessaoController pra evitar dependencia circular na
@@ -68,7 +92,54 @@ class ApiClient {
   AoDeslogar? aoReceber401;
   AoRenovarToken? aoRenovarToken;
 
+  /// Setado pelo badCertificateCallback quando um certificado ja
+  /// pinado nao bate mais com o que o servidor apresenta agora --
+  /// null quando nao ha nenhuma falha desse tipo pendente. A tela de
+  /// configurar servidor le isso pra oferecer "confiar de novo?".
+  FalhaCertificado? ultimaFalhaCertificado;
+
   Dio get dio => _dio;
+
+  /// Confia no certificado autoassinado do servidor via TOFU (trust on
+  /// first use, mesmo modelo do SSH) -- sem CA de verdade (servidor
+  /// local, so IP na rede da loja), aprende a confiar no primeiro
+  /// contato e passa a EXIGIR esse mesmo certificado dali pra frente.
+  /// Em localhost, reconfia sozinho se mudar (nao ha rede de verdade
+  /// no meio pra desconfiar). Em host remoto, rejeita a conexao e
+  /// guarda em ultimaFalhaCertificado pra tela decidir o que fazer.
+  bool _validarCertificado(X509Certificate cert, String host, int port) {
+    final pinado = _tls.certificadoEmMemoria(host, port);
+
+    if (pinado == null) {
+      // primeiro contato -- fire-and-forget: o callback e sincrono,
+      // nao da pra esperar o storage persistir antes de responder
+      unawaited(_tls.confiar(host, port, cert.pem));
+      return true;
+    }
+
+    if (pinado == cert.pem) {
+      return true;
+    }
+
+    if (TlsConfianca.ehEnderecoLocal(host)) {
+      unawaited(_tls.confiar(host, port, cert.pem));
+      return true;
+    }
+
+    ultimaFalhaCertificado = FalhaCertificado(host, port, cert.pem);
+    return false;
+  }
+
+  /// Depois que o usuario confirma "sim, confio nesse certificado
+  /// novo" (ver features/server/server_setup_screen.dart) -- grava o
+  /// certificado que causou a ultima falha como confiavel.
+  Future<void> confiarNoCertificadoQueFalhou() async {
+    final falha = ultimaFalhaCertificado;
+    if (falha == null) return;
+
+    await _tls.confiar(falha.host, falha.porta, falha.pemNovo);
+    ultimaFalhaCertificado = null;
+  }
 
   /// Aceita so o IP (usa a porta padrao), IP:porta, ou uma URL
   /// completa com http(s):// — mesma tolerancia que o Desktop ja tem
@@ -78,7 +149,7 @@ class ApiClient {
     var endereco = bruto.trim();
 
     if (!endereco.startsWith('http://') && !endereco.startsWith('https://')) {
-      endereco = 'http://$endereco';
+      endereco = 'https://$endereco';
     }
 
     final uri = Uri.parse(endereco);
@@ -90,8 +161,13 @@ class ApiClient {
     return '$endereco:$_portaPadrao';
   }
 
-  void definirServidor(String enderecoBruto) {
-    _dio.options.baseUrl = normalizarEndereco(enderecoBruto);
+  Future<void> definirServidor(String enderecoBruto) async {
+    final endereco = normalizarEndereco(enderecoBruto);
+    final uri = Uri.parse(endereco);
+
+    await _tls.prepararConfianca(uri.host, uri.port);
+
+    _dio.options.baseUrl = endereco;
     _dio.options.connectTimeout = const Duration(seconds: 6);
     _dio.options.receiveTimeout = const Duration(seconds: 10);
   }
@@ -105,11 +181,27 @@ class ApiClient {
   }
 
   /// GET "/" e o endpoint publico de handshake (backend/main.py) —
-  /// usado so pra confirmar que da pra alcancar o servidor.
+  /// usado so pra confirmar que da pra alcancar o servidor. Usa o
+  /// mesmo tratamento de certificado (TOFU) que qualquer outra
+  /// chamada -- deixa CertificadoServidorMudou (ultimaFalhaCertificado)
+  /// setado pra quem chamou decidir, em vez de engolir a causa.
   Future<bool> testarConexao(String enderecoBruto) async {
+    final endereco = normalizarEndereco(enderecoBruto);
+    final uri = Uri.parse(endereco);
+
+    await _tls.prepararConfianca(uri.host, uri.port);
+
+    final clientTeste = HttpClient()
+      ..badCertificateCallback = _validarCertificado;
+
+    final dioTeste = Dio()
+      ..httpClientAdapter = IOHttpClientAdapter(
+        createHttpClient: () => clientTeste,
+      );
+
     try {
-      final resposta = await Dio().get(
-        normalizarEndereco(enderecoBruto),
+      final resposta = await dioTeste.get(
+        endereco,
         options: Options(
           sendTimeout: const Duration(seconds: 5),
           receiveTimeout: const Duration(seconds: 5),
@@ -118,6 +210,8 @@ class ApiClient {
       return resposta.statusCode == 200;
     } catch (_) {
       return false;
+    } finally {
+      dioTeste.close();
     }
   }
 }

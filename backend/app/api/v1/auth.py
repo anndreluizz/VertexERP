@@ -8,6 +8,7 @@ from app.repositories.user_repository import UserRepository
 from app.auth.hash import verificar_hash
 from app.auth.jwt import criar_token
 from app.auth.dependencies import get_current_user
+from app.auth import rate_limit
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
 
@@ -31,12 +32,27 @@ def login(
     db: Session = Depends(get_db)
 ):
 
+    # checa o bloqueio ANTES de tocar no banco/hash -- nem vale a pena
+    # gastar o custo do bcrypt numa tentativa que já vai ser recusada
+    espera = rate_limit.segundos_ate_desbloquear(dados.email)
+
+    if espera:
+        minutos = max(1, espera // 60)
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Muitas tentativas com senha errada. "
+                f"Tente novamente em {minutos} minuto(s)."
+            ),
+        )
+
     usuario = UserRepository.buscar_por_email(
         db,
         dados.email
     )
 
     if not usuario:
+        rate_limit.registrar_falha(dados.email)
         raise HTTPException(
             status_code=401,
             detail="Usuário inválido."
@@ -46,6 +62,7 @@ def login(
         dados.senha,
         usuario.senha
     ):
+        rate_limit.registrar_falha(dados.email)
         raise HTTPException(
             status_code=401,
             detail="Senha inválida."
@@ -56,6 +73,8 @@ def login(
             status_code=403,
             detail="Usuário desativado. Fale com um administrador.",
         )
+
+    rate_limit.limpar(dados.email)
 
     token = criar_token(
         {

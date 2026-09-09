@@ -40,12 +40,65 @@ class _ServerSetupScreenState extends ConsumerState<ServerSetupScreen> {
     if (!mounted) return;
     setState(() => _testando = false);
 
+    if (!ok) {
+      final falha = ref.read(apiClientProvider).ultimaFalhaCertificado;
+
+      if (falha != null) {
+        await _perguntarConfiarDeNovo();
+        return;
+      }
+    }
+
     _mostrar(
       ok
           ? 'Conectado com sucesso!'
           : 'Não foi possível conectar agora — confira se o servidor está ligado e na mesma rede.',
       ok ? VertexColors.secundaria : VertexColors.alerta,
     );
+  }
+
+  /// O certificado salvo pra esse servidor não bate mais com o que
+  /// ele está apresentando agora -- normal depois de reinstalar o
+  /// Servidor (ver core/tls_confianca.dart), mas também o sinal de
+  /// segurança que justifica não confiar automaticamente sem
+  /// perguntar, diferente do primeiro contato.
+  Future<void> _perguntarConfiarDeNovo() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Certificado do servidor mudou'),
+        content: const Text(
+          'O certificado deste servidor é diferente do que estava '
+          'salvo como confiável.\n\n'
+          'Isso é esperado se o Servidor foi reinstalado ou trocou de '
+          'computador recentemente. Se você não fez nenhuma mudança '
+          'assim, pode ser um problema de segurança na rede.\n\n'
+          'Confiar no certificado atual mesmo assim?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Não'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Confiar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true || !mounted) {
+      _mostrar(
+        'Conexão não confirmada — o certificado salvo anteriormente '
+        'continua sendo exigido.',
+        VertexColors.alerta,
+      );
+      return;
+    }
+
+    await ref.read(apiClientProvider).confiarNoCertificadoQueFalhou();
+    await _testar();
   }
 
   Future<void> _salvar() async {

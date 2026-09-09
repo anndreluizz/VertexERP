@@ -66,3 +66,23 @@ def carregar_tema_escuro():
     return _settings().value(
         "aparencia/tema_escuro", defaultValue=False, type=bool
     )
+
+
+def salvar_impressora_termica(configuracao):
+    """Configuração da impressora térmica (ESC/POS) -- é da máquina,
+    não da loja nem do usuário: cada terminal pode ter uma impressora
+    física diferente conectada (ver services/impressora_termica_service.py).
+    Guardada como JSON (mesmo padrão de salvar/carregar acima)."""
+    _settings().setValue("impressora_termica/configuracao", json.dumps(configuracao))
+
+
+def carregar_impressora_termica():
+    bruto = _settings().value("impressora_termica/configuracao")
+
+    if bruto is None:
+        return None
+
+    try:
+        return json.loads(bruto)
+    except (TypeError, ValueError):
+        return None

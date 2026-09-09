@@ -4,7 +4,7 @@ from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QInputDialog, QMessageBox
 
-from services import comprovante_service
+from services import comprovante_service, impressora_termica_service, preferencias_service
 from services.api import configuracoes
 
 # ==================================================
@@ -49,7 +49,29 @@ def imprimir(venda_id, parent):
         )
         return
 
-    _dados, _config, html = preparado
+    dados, config, html = preparado
+
+    config_impressora = preferencias_service.carregar_impressora_termica()
+
+    if config_impressora and config_impressora.get("ativa"):
+
+        logo = comprovante_service.obter_logo_loja() if config.get("tem_logo") else None
+
+        ok, erro = impressora_termica_service.imprimir_comprovante(
+            dados, config, logo, config_impressora
+        )
+
+        if ok:
+            return
+
+        resposta = QMessageBox.question(
+            parent,
+            "Falha na impressora térmica",
+            f"{erro}\n\nQuer tentar imprimir pela janela normal do Windows?",
+        )
+
+        if resposta != QMessageBox.Yes:
+            return
 
     comprovante_service.imprimir(html, parent)
 

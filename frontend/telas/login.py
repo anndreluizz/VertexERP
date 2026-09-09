@@ -424,7 +424,7 @@ class LoginWindow(QWidget):
 
         try:
 
-            ok = login(
+            ok, erro = login(
                 self.usuario.text().strip(),
                 self.senha.text(),
             )
@@ -442,7 +442,7 @@ class LoginWindow(QWidget):
                 QMessageBox.warning(
                     self,
                     "Erro",
-                    "Usuário ou senha inválidos.",
+                    erro,
                 )
 
         except ConnectionError:

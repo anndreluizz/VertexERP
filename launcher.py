@@ -1,10 +1,13 @@
 import ctypes
+import ctypes.wintypes
 import os
 import secrets
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+from datetime import datetime, timedelta
 
 if getattr(sys, "frozen", False):
     # Empacotado pelo PyInstaller: __file__ aponta pra uma pasta temporária
@@ -331,6 +334,7 @@ def garantir_env():
 # ==========================================
 
 def backend_pronto():
+    import ssl
     import urllib.request
 
     # Tem que bater com o padrao de backend/backend_entry.py e
@@ -338,9 +342,17 @@ def backend_pronto():
     # por que nao pode ser 8000.
     porta = os.getenv("VERTEXERP_PORT", "58734")
 
+    # o backend agora serve HTTPS com certificado autoassinado (ver
+    # app/core/tls.py) -- essa checagem roda na mesma maquina que
+    # acabou de subir o proprio backend, entao nao ha nada a ganhar
+    # verificando a identidade dele contra si mesmo aqui.
+    contexto = ssl.create_default_context()
+    contexto.check_hostname = False
+    contexto.verify_mode = ssl.CERT_NONE
+
     try:
         urllib.request.urlopen(
-            f"http://127.0.0.1:{porta}/docs", timeout=3
+            f"https://127.0.0.1:{porta}/docs", timeout=3, context=contexto
         )
         return True
     except Exception:
@@ -405,6 +417,115 @@ def encerrar_processo(caminho_exe):
     )
 
 
+# ==========================================
+# BACKUP AUTOMÁTICO
+# ==========================================
+
+DIAS_PARA_MANTER_BACKUP = 30
+
+# 24h -- roda uma vez por dia (a primeira já quase na hora de abrir),
+# nao precisa de nada mais fino que isso pra um backup de loja.
+_INTERVALO_BACKUP_SEGUNDOS = 24 * 60 * 60
+
+
+def _pasta_documentos():
+    """Resolve a pasta Documentos de verdade -- no Windows ela costuma
+    estar redirecionada pro OneDrive, entao nao da pra so concatenar
+    o caminho do usuario na mao."""
+
+    CSIDL_PERSONAL = 5
+    SHGFP_TYPE_CURRENT = 0
+
+    buffer = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
+
+    ctypes.windll.shell32.SHGetFolderPathW(
+        None, CSIDL_PERSONAL, None, SHGFP_TYPE_CURRENT, buffer
+    )
+
+    return buffer.value
+
+
+def _pasta_backups():
+    caminho = os.path.join(_pasta_documentos(), "VertexERP", "Backups")
+    os.makedirs(caminho, exist_ok=True)
+    return caminho
+
+
+def _fazer_backup():
+    """pg_dump do banco portatil que o proprio launcher gerencia -- os
+    caminhos e credenciais (PG_BIN/PG_PORT/PG_SUPERUSER/PG_SUPERSENHA/
+    PG_BANCO) ja sao conhecidos com certeza aqui, sem precisar adivinhar
+    onde o backend empacotado ficou nem ler nenhum .env."""
+
+    destino = _pasta_backups()
+
+    agora = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    arquivo = os.path.join(destino, f"vertexerp_{agora}.sql")
+
+    ambiente = os.environ.copy()
+    ambiente["PGPASSWORD"] = PG_SUPERSENHA
+
+    resultado = subprocess.run(
+        [
+            os.path.join(PG_BIN, "pg_dump.exe"),
+            "-h", "127.0.0.1",
+            "-p", PG_PORT,
+            "-U", PG_SUPERUSER,
+            "-F", "p",
+            "-f", arquivo,
+            PG_BANCO,
+        ],
+        capture_output=True,
+        text=True,
+        env=ambiente,
+        creationflags=CREATE_NO_WINDOW,
+    )
+
+    if resultado.returncode != 0:
+        raise RuntimeError(f"pg_dump falhou:\n{resultado.stderr}")
+
+    return arquivo
+
+
+def _limpar_backups_antigos():
+    destino = _pasta_backups()
+    limite = datetime.now() - timedelta(days=DIAS_PARA_MANTER_BACKUP)
+
+    for nome in os.listdir(destino):
+        if not nome.endswith(".sql"):
+            continue
+
+        caminho = os.path.join(destino, nome)
+        modificado = datetime.fromtimestamp(os.path.getmtime(caminho))
+
+        if modificado < limite:
+            os.remove(caminho)
+
+
+def _loop_backup_diario():
+    while True:
+        try:
+            _fazer_backup()
+            _limpar_backups_antigos()
+        except Exception:
+            # backup automatico e complemento, nunca pode derrubar o
+            # launcher nem travar a abertura do sistema -- se falhar
+            # (disco cheio, pg_dump nao encontrado etc.), so tenta de
+            # novo no proximo ciclo.
+            pass
+
+        time.sleep(_INTERVALO_BACKUP_SEGUNDOS)
+
+
+def iniciar_backup_diario():
+    """Chamado uma vez, depois que o backend confirma que subiu (ver
+    main()) -- dispara o primeiro backup quase na hora, depois repete
+    a cada 24h numa thread em segundo plano (daemon: nao impede o
+    launcher de fechar normalmente quando o usuario sai do sistema)."""
+
+    threading.Thread(target=_loop_backup_diario, daemon=True).start()
+
+
 def _mostrar_erro(titulo, mensagem):
     ctypes.windll.user32.MessageBoxW(None, mensagem, titulo, 0x10)
 
@@ -450,6 +571,8 @@ def main():
                 "o arquivo pgdata_log.txt na pasta do sistema.",
             )
             return
+
+        iniciar_backup_diario()
 
         frontend = iniciar_frontend()
         frontend.wait()

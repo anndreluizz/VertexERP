@@ -140,6 +140,20 @@ def _limpar_tabelas():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _limpar_rate_limit_login():
+    # app/auth/rate_limit.py guarda o historico de tentativas de login
+    # em memoria (nao no banco) -- sem isso, um teste que provoca
+    # bloqueio deixaria o mesmo e-mail (o fixture "usuario" sempre usa
+    # teste@vertex.com) bloqueado pros testes seguintes na mesma sessao
+    # do pytest.
+    from app.auth import rate_limit
+
+    rate_limit._falhas.clear()
+    rate_limit._bloqueados.clear()
+    yield
+
+
 @pytest.fixture()
 def db():
     session = TestingSessionLocal()

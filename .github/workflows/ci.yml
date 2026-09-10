@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vertexerp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Rodar testes
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+        run: pytest app/tests/ --ignore=app/tests/test_relatorios.py
+
+  frontend:
+    name: Frontend (pytest, offscreen)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            frontend/requirements.txt
+            frontend/tests/requirements-dev.txt
+
+      - name: Instalar dependências
+        working-directory: frontend
+        run: |
+          pip install -r requirements.txt
+          pip install -r tests/requirements-dev.txt
+
+      - name: Rodar testes
+        working-directory: frontend
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pytest tests/
+
+  mobile:
+    name: Mobile (analyze + test)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.0"
+          channel: stable
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: mobile/test/fixtures/requirements.txt
+
+      - name: Instalar dependências Python dos testes (servidor HTTPS de teste)
+        run: pip install -r mobile/test/fixtures/requirements.txt
+
+      - name: flutter pub get
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: flutter analyze
+        working-directory: mobile
+        run: flutter analyze lib/ test/
+
+      - name: flutter test
+        working-directory: mobile
+        run: flutter test

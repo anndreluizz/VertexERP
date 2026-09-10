@@ -52,16 +52,87 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _erro = null;
     });
 
-    final erro = await ref
+    final resultado = await ref
         .read(sessaoControllerProvider.notifier)
         .login(email, senha, lembrar: _lembrar);
 
     if (!mounted) return;
 
+    if (resultado.verificacaoId != null) {
+      // senha certa, falta o segundo fator (2FA) -- o codigo ja foi
+      // mandado por e-mail nesse momento (ver SessaoController.login)
+      setState(() => _entrando = false);
+
+      final codigo = await _pedirCodigo2fa(email);
+
+      if (codigo == null || codigo.isEmpty || !mounted) return;
+
+      setState(() => _entrando = true);
+
+      final erroVerificacao = await ref
+          .read(sessaoControllerProvider.notifier)
+          .verificarCodigo2fa(
+            resultado.verificacaoId!,
+            codigo,
+            lembrar: _lembrar,
+          );
+
+      if (!mounted) return;
+
+      setState(() {
+        _entrando = false;
+        _erro = erroVerificacao;
+      });
+
+      return;
+    }
+
     setState(() {
       _entrando = false;
-      _erro = erro;
+      _erro = resultado.erro;
     });
+  }
+
+  /// Pede o codigo de 6 digitos mandado por e-mail -- devolve o texto
+  /// digitado, ou null se o usuario cancelou.
+  Future<String?> _pedirCodigo2fa(String email) {
+    final controlador = TextEditingController();
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Verificação em duas etapas'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Mandamos um código de 6 dígitos para $email.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controlador,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Código'),
+              onSubmitted: (valor) =>
+                  Navigator.of(dialogContext).pop(valor.trim()),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(null),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controlador.text.trim()),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _esqueceuSenha() {

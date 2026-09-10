@@ -1,11 +1,17 @@
 // Verifica o fluxo TOFU (trust on first use) do ApiClient contra um
-// servidor HTTPS real (o mesmo backend de teste usado na verificação
+// servidor HTTPS real (o mesmo tipo de teste usado na verificação
 // equivalente do Desktop) -- primeiro contato confia sozinho, segunda
 // chamada reusa o pin, e um certificado trocado se comporta diferente
 // em host local (127.0.0.1, reconfia sozinho) vs host "remoto"
 // (127.0.0.2 -- endereço de loopback real do Windows, mas fora da
 // lista eh_endereco_local, dá pra simular "outra máquina" sem
 // precisar de uma de verdade).
+//
+// O servidor de teste (test/fixtures/servidor_teste.py) gera um
+// certificado autoassinado NOVO a cada vez que inicia -- por isso
+// "derrubar e subir de novo" já simula sozinho um servidor
+// reinstalado com certificado diferente, sem precisar de arquivos de
+// certificado fixos no repositório.
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -13,33 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/api_client.dart';
 import 'package:mobile/core/tls_confianca.dart';
 
-const _pythonExe = 'C:/vtest/venv/Scripts/python.exe';
-const _servidorScript =
-    'C:/Users/lopes/AppData/Local/Temp/claude/'
-    'C--projetos-VertexERP--claude-worktrees-project-status-check-81f1b7/'
-    '6e962d8b-57fe-4c60-b96f-157fdfa99edb/scratchpad/'
-    'servidor_teste_tls_desktop.py';
-
-const _cert1 =
-    'C:/Users/lopes/AppData/Local/Temp/claude/'
-    'C--projetos-VertexERP--claude-worktrees-project-status-check-81f1b7/'
-    '6e962d8b-57fe-4c60-b96f-157fdfa99edb/scratchpad/'
-    'certs_mobile_teste_1/servidor.crt';
-const _chave1 =
-    'C:/Users/lopes/AppData/Local/Temp/claude/'
-    'C--projetos-VertexERP--claude-worktrees-project-status-check-81f1b7/'
-    '6e962d8b-57fe-4c60-b96f-157fdfa99edb/scratchpad/'
-    'certs_mobile_teste_1/servidor.key';
-const _cert2 =
-    'C:/Users/lopes/AppData/Local/Temp/claude/'
-    'C--projetos-VertexERP--claude-worktrees-project-status-check-81f1b7/'
-    '6e962d8b-57fe-4c60-b96f-157fdfa99edb/scratchpad/'
-    'certs_mobile_teste_2/servidor.crt';
-const _chave2 =
-    'C:/Users/lopes/AppData/Local/Temp/claude/'
-    'C--projetos-VertexERP--claude-worktrees-project-status-check-81f1b7/'
-    '6e962d8b-57fe-4c60-b96f-157fdfa99edb/scratchpad/'
-    'certs_mobile_teste_2/servidor.key';
+import 'fixtures/servidor_teste.dart';
 
 const _porta = 58797;
 
@@ -79,51 +59,6 @@ class _ArmazenamentoFalso {
   }
 }
 
-Future<Process> _subirServidor(String cert, String chave, int porta) async {
-  final processo = await Process.start(_pythonExe, [
-    _servidorScript,
-    cert,
-    chave,
-    porta.toString(),
-  ]);
-
-  // espera a porta responder de verdade antes de seguir
-  for (var i = 0; i < 50; i++) {
-    try {
-      final socket = await Socket.connect(
-        '127.0.0.1',
-        porta,
-        timeout: const Duration(milliseconds: 300),
-      );
-      await socket.close();
-      return processo;
-    } catch (_) {
-      await Future.delayed(const Duration(milliseconds: 200));
-    }
-  }
-
-  throw StateError('servidor de teste não subiu a tempo');
-}
-
-Future<void> _derrubarServidor(Process processo, int porta) async {
-  processo.kill();
-  await processo.exitCode;
-
-  for (var i = 0; i < 30; i++) {
-    try {
-      final socket = await Socket.connect(
-        '127.0.0.1',
-        porta,
-        timeout: const Duration(milliseconds: 200),
-      );
-      await socket.close();
-      await Future.delayed(const Duration(milliseconds: 200));
-    } catch (_) {
-      return; // porta livre
-    }
-  }
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -139,7 +74,7 @@ void main() {
     () async {
       _ArmazenamentoFalso().instalar();
 
-      Process? processo;
+      ServidorTeste? servidor;
 
       try {
         // -----------------------------------------------------------
@@ -147,7 +82,7 @@ void main() {
         // confia sozinho, sem pin previo
         // -----------------------------------------------------------
 
-        processo = await _subirServidor(_cert1, _chave1, _porta);
+        servidor = await ServidorTeste.subir(_porta);
 
         final api = ApiClient();
 
@@ -167,31 +102,33 @@ void main() {
         );
 
         // -----------------------------------------------------------
-        // 3) "servidor reinstalado": derruba, sobe de novo com outro
-        // certificado na MESMA porta, mas em 127.0.0.2 -- endereço de
-        // loopback real do Windows, então da pra conectar de verdade,
-        // só que TlsConfianca.ehEnderecoLocal não reconhece como
-        // "local" (só 127.0.0.1/localhost/::1) -- simula "servidor
-        // numa rede remota" sem precisar de uma segunda máquina.
+        // 3) "servidor reinstalado": derruba, sobe de novo na MESMA
+        // porta (o script gera um certificado novo sozinho a cada
+        // vez que inicia) mas em 127.0.0.2 -- endereço de loopback
+        // real do Windows, então dá pra conectar de verdade, só que
+        // TlsConfianca.ehEnderecoLocal não reconhece como "local" (só
+        // 127.0.0.1/localhost/::1) -- simula "servidor numa rede
+        // remota" sem precisar de uma segunda máquina.
         // -----------------------------------------------------------
 
-        await _derrubarServidor(processo, _porta);
+        await servidor.derrubar();
 
-        processo = await _subirServidor(_cert2, _chave2, _porta);
+        servidor = await ServidorTeste.subir(_porta);
 
         final apiRemoto = ApiClient();
-        // primeiro contato em "127.0.0.2" -- TOFU confia no cert2 (é
-        // a primeira vez que esse host:porta é visto)
+        // primeiro contato em "127.0.0.2" -- TOFU confia no certificado
+        // atual (é a primeira vez que esse host:porta é visto)
         final okRemoto1 = await apiRemoto.testarConexao(
           '127.0.0.2:$_porta',
         );
         expect(okRemoto1, isTrue);
 
-        await _derrubarServidor(processo, _porta);
+        await servidor.derrubar();
 
-        // sobe de novo com um certificado DIFERENTE (cert1) na mesma
-        // porta -- simula o servidor remoto tendo sido reinstalado
-        processo = await _subirServidor(_cert1, _chave1, _porta);
+        // sobe de novo com um certificado DIFERENTE (gerado do zero)
+        // na mesma porta -- simula o servidor remoto tendo sido
+        // reinstalado
+        servidor = await ServidorTeste.subir(_porta);
 
         final okRemoto2 = await apiRemoto.testarConexao(
           '127.0.0.2:$_porta',
@@ -224,9 +161,7 @@ void main() {
           reason: 'depois de confiar de novo, a conexao deveria funcionar',
         );
       } finally {
-        if (processo != null) {
-          await _derrubarServidor(processo, _porta);
-        }
+        await servidor?.derrubar();
       }
     },
     timeout: const Timeout(Duration(seconds: 60)),

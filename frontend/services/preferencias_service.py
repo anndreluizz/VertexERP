@@ -7,6 +7,7 @@ fica na máquina, não precisa sincronizar com o servidor. Chaveado por
 usuario_id pra não embaralhar quando dois caixas usam o mesmo PC.
 """
 
+import base64
 import json
 
 from PySide6.QtCore import QSettings
@@ -86,3 +87,55 @@ def carregar_impressora_termica():
         return json.loads(bruto)
     except (TypeError, ValueError):
         return None
+
+
+def _proteger(texto):
+    """Criptografa usando o DPAPI do Windows (win32crypt) -- a chave
+    fica atrelada à conta do Windows que gravou, então o resultado só
+    pode ser lido de volta pelo mesmo usuário do Windows na mesma
+    máquina (copiar o .ini pra outro PC/usuário não adianta nada).
+    Usado pro refresh_token da sessão lembrada ("Manter conectado"),
+    que fica válido por 90 dias -- não faz sentido guardar isso em
+    texto puro no .ini como o resto das preferências aqui."""
+    import win32crypt
+
+    protegido = win32crypt.CryptProtectData(
+        texto.encode("utf-8"), "VertexERP", None, None, None, 0
+    )
+    return base64.b64encode(protegido).decode("ascii")
+
+
+def _desproteger(texto_b64):
+    import win32crypt
+
+    dados = base64.b64decode(texto_b64)
+    _descricao, original = win32crypt.CryptUnprotectData(dados, None, None, None, 0)
+    return original.decode("utf-8")
+
+
+def salvar_sessao(refresh_token):
+    """"Manter conectado" marcado no login -- guarda só o refresh_token
+    (não o access_token, que expira em minutos e não serve de nada
+    guardado; o access_token novo é sempre pedido de novo na abertura
+    seguinte, ver services/api.py: retomar_sessao())."""
+    _settings().setValue("sessao/refresh_token", _proteger(refresh_token))
+
+
+def carregar_sessao():
+    """Devolve o refresh_token guardado, ou None se não tinha nenhum
+    (ou se não deu pra descriptografar -- ex.: arquivo .ini copiado
+    de outra máquina/usuário, o que é esperado falhar de propósito)."""
+
+    protegido = _settings().value("sessao/refresh_token")
+
+    if not protegido:
+        return None
+
+    try:
+        return _desproteger(protegido)
+    except Exception:
+        return None
+
+
+def limpar_sessao():
+    _settings().remove("sessao/refresh_token")

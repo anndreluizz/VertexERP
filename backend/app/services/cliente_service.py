@@ -6,6 +6,7 @@ from app.schemas.cliente import ClienteUpdate
 from app.models.cliente import Cliente
 from app.schemas.cliente import ClienteCreate
 from app.repositories.cliente_repository import ClienteRepository
+from app.repositories.movimento_fiado_repository import MovimentoFiadoRepository
 
 
 class ClienteService:
@@ -117,4 +118,95 @@ class ClienteService:
 
         return {
             "mensagem": "Cliente reativado com sucesso."
+        }
+
+    # ==================================================
+    # LGPD -- direito de acesso (exportar) e ao esquecimento (anonimizar)
+    # ==================================================
+
+    @staticmethod
+    def exportar_dados_lgpd(db: Session, cliente_id: int):
+        """Todos os dados pessoais guardados sobre um cliente, numa
+        chamada só -- atende o direito de acesso/portabilidade da
+        LGPD (Lei 13.709/2018, art. 18, II)."""
+
+        cliente = ClienteRepository.buscar_por_id(db, cliente_id)
+
+        if not cliente:
+            raise Exception("Cliente não encontrado.")
+
+        return {
+            "cliente_id": cliente.id,
+            "nome": cliente.nome,
+            "cpf_cnpj": cliente.cpf_cnpj,
+            "telefone": cliente.telefone,
+            "email": cliente.email,
+            "endereco": cliente.endereco,
+            "cidade": cliente.cidade,
+            "estado": cliente.estado,
+            "data_nascimento": cliente.data_nascimento,
+            "limite_credito": cliente.limite_credito,
+            "tem_foto": cliente.tem_foto,
+            "cadastrado_em": cliente.criado_em,
+            "saldo_devedor_fiado": MovimentoFiadoRepository.saldo_por_cliente(
+                db, cliente_id
+            ),
+            "movimentos_fiado": MovimentoFiadoRepository.listar_por_cliente(
+                db, cliente_id
+            ),
+            "vendas": cliente.vendas,
+            "observacoes": cliente.observacoes,
+        }
+
+    @staticmethod
+    def anonimizar_dados_lgpd(db: Session, cliente_id: int):
+        """Direito ao esquecimento (LGPD, art. 18, VI) -- apaga os
+        dados PESSOAIS do cliente (nome, CPF/CNPJ, telefone, e-mail,
+        endereço, data de nascimento, foto) e as observações
+        escritas sobre ele, mas mantém o registro (id) e o histórico
+        de vendas/movimentos de fiado intactos -- a loja tem uma
+        razão legítima pra manter esses registros contábeis (LGPD
+        art. 16, I: cumprimento de obrigação legal/regulatória). Sem
+        os dados pessoais, esse histórico já deixa de identificar a
+        pessoa por conta própria.
+
+        Recusa enquanto houver saldo devedor em aberto: a loja ainda
+        precisa saber quem deve, pra poder cobrar -- é a mesma lógica
+        de exceção (art. 16, I/II) aplicada a uma dívida em aberto."""
+
+        cliente = ClienteRepository.buscar_por_id(db, cliente_id)
+
+        if not cliente:
+            raise Exception("Cliente não encontrado.")
+
+        saldo = MovimentoFiadoRepository.saldo_por_cliente(db, cliente_id)
+
+        if saldo and saldo > 0:
+            raise Exception(
+                "Não é possível remover os dados: o cliente tem um "
+                f"saldo devedor de R$ {saldo:.2f} em aberto. Quite o "
+                "saldo (ou registre a perda) antes de remover os "
+                "dados pessoais."
+            )
+
+        cliente.nome = "Cliente removido (LGPD)"
+        cliente.cpf_cnpj = None
+        cliente.telefone = None
+        cliente.email = None
+        cliente.endereco = None
+        cliente.cidade = None
+        cliente.estado = None
+        cliente.data_nascimento = None
+        cliente.limite_credito = None
+        cliente.foto = None
+        cliente.ativo = False
+
+        for observacao in list(cliente.observacoes):
+            db.delete(observacao)
+
+        ClienteRepository.atualizar(db, cliente)
+
+        return {
+            "cliente_id": cliente.id,
+            "mensagem": "Dados pessoais removidos com sucesso.",
         }

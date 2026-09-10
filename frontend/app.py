@@ -26,6 +26,7 @@ from services.preferencias_service import carregar_servidor, carregar_tema_escur
 from telas.login import LoginWindow
 from telas.cadastro_inicial import CadastroInicialWindow
 from telas.conectar_servidor import ConectarServidorDialog
+from telas.principal import PrincipalWindow
 
 app = QApplication(sys.argv)
 
@@ -88,6 +89,10 @@ except RequestException:
 
 if primeiro_acesso:
     janela = CadastroInicialWindow()
+elif api.retomar_sessao():
+    # "Manter conectado" marcado num login anterior -- pula a tela de
+    # login direto (ver services/api.py: retomar_sessao/login()).
+    janela = PrincipalWindow()
 else:
     janela = LoginWindow()
 

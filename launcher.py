@@ -2,6 +2,7 @@ import ctypes
 import ctypes.wintypes
 import os
 import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -451,6 +452,48 @@ def _pasta_backups():
     return caminho
 
 
+def _ler_env(chave):
+    """Le uma variavel do .env que o proprio launcher.py escreve (ver
+    garantir_env()) -- launcher.py nunca carrega o .env pro proprio
+    os.environ (só o backend consome ele, no subprocess dele), entao
+    pra ler uma configuracao opcional aqui precisa parsear o arquivo
+    na mao. Devolve None se o arquivo nao existir ou a chave nao
+    estiver la (ou estiver vazia)."""
+
+    caminho_env = os.path.join(BASE_DIR, ".env")
+
+    if not os.path.exists(caminho_env):
+        return None
+
+    with open(caminho_env, encoding="utf-8") as arquivo:
+        for linha in arquivo:
+            linha = linha.strip()
+            if linha.startswith(f"{chave}="):
+                return linha.split("=", 1)[1].strip() or None
+
+    return None
+
+
+def _pasta_backup_extra():
+    """Pasta opcional de backup externo (ver INSTALAR.md, secao
+    "Backup fora da loja") -- tipicamente uma pasta sincronizada com
+    OneDrive/Google Drive/Dropbox, configurada via
+    VERTEXERP_BACKUP_EXTRA no .env. O backup local (Documentos)
+    continua acontecendo do mesmo jeito de sempre -- essa e so uma
+    SEGUNDA copia, opcional, que o app do serviço de nuvem instalado
+    no Windows se encarrega de levar pra fora da loja sozinho, sem o
+    Vertex precisar falar com nenhuma nuvem diretamente. Devolve None
+    se nao configurado."""
+
+    caminho = _ler_env("VERTEXERP_BACKUP_EXTRA")
+
+    if not caminho:
+        return None
+
+    os.makedirs(caminho, exist_ok=True)
+    return caminho
+
+
 def _fazer_backup():
     """pg_dump do banco portatil que o proprio launcher gerencia -- os
     caminhos e credenciais (PG_BIN/PG_PORT/PG_SUPERUSER/PG_SUPERSENHA/
@@ -484,22 +527,48 @@ def _fazer_backup():
     if resultado.returncode != 0:
         raise RuntimeError(f"pg_dump falhou:\n{resultado.stderr}")
 
+    pasta_extra = _pasta_backup_extra()
+
+    if pasta_extra:
+        try:
+            shutil.copy2(arquivo, os.path.join(pasta_extra, os.path.basename(arquivo)))
+        except OSError:
+            # a copia externa e um extra -- se a pasta sincronizada
+            # estiver temporariamente inacessivel (OneDrive pausado,
+            # pendrive desconectado etc.), o backup local (que ja deu
+            # certo acima) nao pode ser perdido por causa disso
+            pass
+
     return arquivo
 
 
 def _limpar_backups_antigos():
-    destino = _pasta_backups()
     limite = datetime.now() - timedelta(days=DIAS_PARA_MANTER_BACKUP)
 
-    for nome in os.listdir(destino):
-        if not nome.endswith(".sql"):
+    pastas = [_pasta_backups()]
+
+    pasta_extra = _pasta_backup_extra()
+    if pasta_extra:
+        pastas.append(pasta_extra)
+
+    for destino in pastas:
+        try:
+            nomes = os.listdir(destino)
+        except OSError:
             continue
 
-        caminho = os.path.join(destino, nome)
-        modificado = datetime.fromtimestamp(os.path.getmtime(caminho))
+        for nome in nomes:
+            if not nome.endswith(".sql"):
+                continue
 
-        if modificado < limite:
-            os.remove(caminho)
+            caminho = os.path.join(destino, nome)
+
+            try:
+                modificado = datetime.fromtimestamp(os.path.getmtime(caminho))
+                if modificado < limite:
+                    os.remove(caminho)
+            except OSError:
+                continue
 
 
 def _loop_backup_diario():

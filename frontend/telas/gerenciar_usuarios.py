@@ -297,9 +297,9 @@ class GerenciarUsuariosDialog(QDialog):
         layout.addLayout(cabecalho)
 
         self.tabela = QTableWidget()
-        self.tabela.setColumnCount(4)
+        self.tabela.setColumnCount(5)
         self.tabela.setHorizontalHeaderLabels(
-            ["Nome", "E-mail", "Status", "Admin"]
+            ["Nome", "E-mail", "Status", "Admin", "2FA"]
         )
         self.tabela.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch
@@ -354,6 +354,10 @@ class GerenciarUsuariosDialog(QDialog):
         self.bt_redefinir_senha.setAutoDefault(False)
         self.bt_redefinir_senha.clicked.connect(self.redefinir_senha_usuario)
 
+        self.bt_2fa = BotaoSecundario("Ativar / Desativar 2FA")
+        self.bt_2fa.setAutoDefault(False)
+        self.bt_2fa.clicked.connect(self.alternar_2fa)
+
         bt_fechar = BotaoSecundario("Fechar")
         bt_fechar.setAutoDefault(False)
         bt_fechar.clicked.connect(self.accept)
@@ -361,6 +365,7 @@ class GerenciarUsuariosDialog(QDialog):
         rodape.addWidget(self.bt_ativar_desativar)
         rodape.addWidget(self.bt_admin)
         rodape.addWidget(self.bt_redefinir_senha)
+        rodape.addWidget(self.bt_2fa)
         rodape.addStretch()
         rodape.addWidget(bt_fechar)
 
@@ -398,6 +403,13 @@ class GerenciarUsuariosDialog(QDialog):
                 QColor(tokens.PRIMARIA if admin else tokens.TEXTO_TERCIARIO)
             )
             self.tabela.setItem(linha, 3, item_admin)
+
+            dois_fatores = usuario.get("dois_fatores_ativo")
+            item_2fa = QTableWidgetItem("Ativo" if dois_fatores else "Desativado")
+            item_2fa.setForeground(
+                QColor(tokens.SECUNDARIA_HOVER if dois_fatores else tokens.TEXTO_TERCIARIO)
+            )
+            self.tabela.setItem(linha, 4, item_2fa)
 
         self.tabela.setCurrentCell(-1, -1)
         self.tabela.clearSelection()
@@ -485,6 +497,47 @@ class GerenciarUsuariosDialog(QDialog):
 
         response = atualizar_usuario(
             usuario["id"], {"admin": novo_admin}
+        )
+
+        if response.status_code == 200:
+            self.carregar()
+        else:
+            try:
+                erro = response.json().get("detail") or str(
+                    response.json()
+                )
+            except Exception:
+                erro = response.text
+
+            QMessageBox.critical(self, "Erro", str(erro))
+
+    def alternar_2fa(self):
+
+        usuario = self._usuario_selecionado()
+
+        if usuario is None:
+            return
+
+        novo_valor = not usuario.get("dois_fatores_ativo", False)
+
+        resposta = QMessageBox.question(
+            self,
+            "Confirmar",
+            (
+                f"Ativar a verificação em duas etapas (2FA) pra "
+                f"{usuario['nome']}? Um código será enviado por "
+                "e-mail em todo login a partir de agora."
+                if novo_valor
+                else f"Desativar a verificação em duas etapas (2FA) "
+                f"de {usuario['nome']}?"
+            ),
+        )
+
+        if resposta != QMessageBox.Yes:
+            return
+
+        response = atualizar_usuario(
+            usuario["id"], {"dois_fatores_ativo": novo_valor}
         )
 
         if response.status_code == 200:

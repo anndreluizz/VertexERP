@@ -170,6 +170,67 @@ sem limite.
 Terminais não guardam nada localmente, então esse backup só existe (e só
 faz sentido) no PC-Servidor.
 
+### Backup fora da loja (recomendado)
+
+O backup automático acima só existe **dentro do mesmo computador** da loja
+-- se o PC quebrar, for roubado ou pegar fogo, o backup vai junto. Pra ter
+uma cópia fora da loja, configure o Vertex pra salvar uma segunda cópia
+dentro de uma pasta sincronizada com OneDrive, Google Drive, Dropbox ou
+qualquer serviço parecido (o Vertex não fala com a nuvem diretamente --
+só escreve na pasta local, e o programa de sincronização instalado no
+Windows leva pra nuvem sozinho, do jeito que ele já faz com qualquer
+outro arquivo).
+
+1. Instale e configure o app do OneDrive/Google Drive/Dropbox no
+   PC-Servidor, se ainda não tiver.
+2. Anote o caminho da pasta sincronizada localmente (ex.:
+   `C:\Users\SeuNome\OneDrive\VertexERP-Backups`).
+3. Abra o arquivo `.env` (na pasta do Servidor, do lado do
+   `VertexERP.exe`) num editor de texto e acrescente uma linha:
+   ```
+   VERTEXERP_BACKUP_EXTRA=C:\Users\SeuNome\OneDrive\VertexERP-Backups
+   ```
+4. Salve e reabra o Vertex ERP.
+
+Da próxima vez que o backup diário rodar, uma cópia extra vai pra essa
+pasta também (mesma regra dos últimos 30 dias) -- o backup local continua
+existindo do mesmo jeito de sempre, essa é só uma cópia a mais.
+
+## Acesso remoto (ver a loja de fora)
+
+Por padrão, o app (desktop ou celular) só consegue se conectar ao Servidor
+estando na mesma rede da loja (mesmo Wi-Fi). Pra acessar de casa, ou de
+qualquer lugar com internet, use uma **VPN privada** — recomendamos o
+[Tailscale](https://tailscale.com) (gratuito pra uso pessoal/loja pequena,
+até 100 aparelhos). Ele cria uma rede privada só entre os seus aparelhos,
+sem expor o Servidor direto na internet pública (bem mais seguro que abrir
+porta no roteador).
+
+**Passo a passo:**
+
+1. **Pré-requisito**: o PC-Servidor precisa ter respondido **Sim** na
+   pergunta "Este PC vai funcionar como Servidor pros outros caixas da
+   loja?" (ver A.2) — mesmo que a loja tenha só 1 PC. Se respondeu Não
+   na instalação, abra o arquivo `.env` (na pasta do Servidor) num editor
+   de texto, troque a linha `VERTEXERP_HOST=127.0.0.1` por
+   `VERTEXERP_HOST=0.0.0.0`, salve e reabra o Vertex ERP.
+2. Instale o Tailscale no PC-Servidor ([tailscale.com/download](https://tailscale.com/download))
+   e entre com uma conta (Google, Microsoft etc.) — a mesma conta vai ser
+   usada em todos os aparelhos que devem ter acesso.
+3. Instale o Tailscale no celular (ou notebook) que vai acessar de fora,
+   entrando com a **mesma conta**.
+4. No PC-Servidor, abra o Tailscale e anote o endereço mostrado ali (algo
+   como `100.x.y.z`, ou um nome tipo `nome-do-pc.suaconta.ts.net`).
+5. No app (fora da rede da loja), use esse endereço em "Configurar
+   servidor" (desktop) ou na tela de conectar (celular) — exatamente do
+   mesmo jeito que usaria o IP local da rede da loja.
+
+Detalhe de segurança: como esse endereço não é da rede local da loja, se o
+certificado do Servidor mudar (por exemplo, depois de reinstalar o
+Servidor) o app vai pedir confirmação explícita antes de confiar de novo,
+em vez de confiar sozinho — é esperado, funciona como um alerta de
+segurança extra pra conexões de fora.
+
 ## Independência entre lojas diferentes
 
 Cada Servidor é uma loja independente — o login criado num Servidor não

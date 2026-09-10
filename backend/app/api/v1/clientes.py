@@ -9,12 +9,14 @@ from app.schemas.cliente import (
     ClienteEnviarWhatsappRequest,
     ClienteObservacaoCreate,
     ClienteObservacaoResponse,
+    ClienteDadosLgpdResponse,
+    ClienteAnonimizadoResponse,
 )
 from app.services.cliente_service import ClienteService
 from app.services.cliente_observacao_service import ClienteObservacaoService
 from app.services.aprovacao_service import AprovacaoService
 from app.services.whatsapp_service import WhatsappService
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, get_current_admin
 
 router = APIRouter(
     prefix="/clientes",
@@ -226,5 +228,40 @@ def reativar_cliente(
     # do fluxo de aprovacao, qualquer usuario autenticado resolve.
     try:
         return ClienteService.reativar(db, cliente_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+
+@router.get("/{cliente_id}/dados-lgpd", response_model=ClienteDadosLgpdResponse)
+def exportar_dados_lgpd(
+    cliente_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_admin),
+):
+    """Todos os dados pessoais guardados sobre o cliente, numa
+    resposta só -- atende um pedido de acesso/portabilidade (LGPD,
+    Lei 13.709/2018, art. 18, II). Só admin, é um relatório completo
+    de dados pessoais sensíveis."""
+
+    try:
+        return ClienteService.exportar_dados_lgpd(db, cliente_id)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/{cliente_id}/dados-lgpd", response_model=ClienteAnonimizadoResponse)
+def remover_dados_lgpd(
+    cliente_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_admin),
+):
+    """Direito ao esquecimento (LGPD, art. 18, VI) -- apaga os dados
+    pessoais do cliente, mantendo vendas/fiado no histórico contábil
+    (ver ClienteService.anonimizar_dados_lgpd pro porquê). Ação
+    irreversível, por isso só admin."""
+
+    try:
+        return ClienteService.anonimizar_dados_lgpd(db, cliente_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

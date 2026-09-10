@@ -151,10 +151,10 @@ class Configuracoes(QWidget):
         self.bt_whatsapp = ItemMenuConfig("message-circle", "WhatsApp")
         self.bt_email_config = ItemMenuConfig("mail", "E-mail (SMTP)")
         self.bt_impressora = ItemMenuConfig("printer", "Impressora / Cupom")
+        self.bt_hardware = ItemMenuConfig("settings", "Hardware / Scanner")
 
         itens_futuros = [
             ItemMenuConfig("truck", "Lojas e Filiais", habilitado=False),
-            ItemMenuConfig("settings", "Hardware / Scanner", habilitado=False),
             ItemMenuConfig("gift", "Fidelidade e Marketing", habilitado=False),
             ItemMenuConfig("refresh-cw", "Integrações (TEF/POS)", habilitado=False),
             ItemMenuConfig("lock", "Privacidade & LGPD", habilitado=False),
@@ -166,6 +166,7 @@ class Configuracoes(QWidget):
         submenu_layout.addWidget(self.bt_whatsapp)
         submenu_layout.addWidget(self.bt_email_config)
         submenu_layout.addWidget(self.bt_impressora)
+        submenu_layout.addWidget(self.bt_hardware)
 
         for item in itens_futuros:
             submenu_layout.addWidget(item)
@@ -180,6 +181,7 @@ class Configuracoes(QWidget):
         self.bt_whatsapp.clicked.connect(lambda: self._selecionar_aba(3))
         self.bt_email_config.clicked.connect(lambda: self._selecionar_aba(4))
         self.bt_impressora.clicked.connect(lambda: self._selecionar_aba(5))
+        self.bt_hardware.clicked.connect(lambda: self._selecionar_aba(6))
 
         corpo.addWidget(submenu_frame)
 
@@ -193,6 +195,7 @@ class Configuracoes(QWidget):
         self.paginas.addWidget(self._criar_pagina_whatsapp())
         self.paginas.addWidget(self._criar_pagina_email())
         self.paginas.addWidget(self._criar_pagina_impressora())
+        self.paginas.addWidget(self._criar_pagina_hardware())
 
         corpo.addWidget(self.paginas, stretch=1)
 
@@ -227,6 +230,7 @@ class Configuracoes(QWidget):
         self.bt_whatsapp.setChecked(indice == 3)
         self.bt_email_config.setChecked(indice == 4)
         self.bt_impressora.setChecked(indice == 5)
+        self.bt_hardware.setChecked(indice == 6)
 
         self.paginas.setCurrentIndex(indice)
 
@@ -704,6 +708,110 @@ class Configuracoes(QWidget):
         self._carregar_impressoras_usb()
         self._carregar_impressora_termica_ui()
         self._atualizar_visibilidade_impressora()
+
+        return self._envolver_com_rolagem(pagina)
+
+    def _criar_pagina_hardware(self):
+
+        pagina = QWidget()
+        layout = QVBoxLayout(pagina)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(14)
+
+        lbl_secao = QLabel("LEITOR DE CÓDIGO DE BARRAS")
+        lbl_secao.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.PRIMARIA};
+        """)
+        layout.addWidget(lbl_secao)
+
+        dica_usb = QLabel(
+            "Leitores USB ou Bluetooth do tipo \"pistola\" (a grande "
+            "maioria vendida hoje) já funcionam com o Vertex sem "
+            "precisar instalar nada nem configurar aqui — eles se "
+            "comportam como um teclado: ao bipar, o código aparece "
+            "digitado sozinho onde o cursor estiver."
+        )
+        dica_usb.setWordWrap(True)
+        dica_usb.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_SECUNDARIO}; line-height:1.5;
+        """)
+        layout.addWidget(dica_usb)
+
+        lbl_onde = QLabel("ONDE USAR")
+        lbl_onde.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
+        layout.addWidget(lbl_onde)
+
+        dica_onde = QLabel(
+            "• PDV: clique no campo de código de barras (o campo "
+            "grande no topo da tela de vendas) e bipe — o produto é "
+            "adicionado ao carrinho automaticamente.\n\n"
+            "• Cadastro de Produto: o campo \"Código de barras\" já "
+            "vem com o foco pronto para bipar — a busca acontece "
+            "sozinha enquanto o código é digitado/bipado."
+        )
+        dica_onde.setWordWrap(True)
+        dica_onde.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_SECUNDARIO}; line-height:1.5;
+        """)
+        layout.addWidget(dica_onde)
+
+        linha_divisoria = QFrame()
+        linha_divisoria.setFixedHeight(1)
+        linha_divisoria.setStyleSheet(f"background:{tokens.BORDA};")
+        layout.addWidget(linha_divisoria)
+
+        lbl_problema = QLabel("SE O LEITOR NÃO FUNCIONAR")
+        lbl_problema.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
+        layout.addWidget(lbl_problema)
+
+        dica_problema = QLabel(
+            "Abra o Bloco de Notas do Windows e bipe um código lá — "
+            "se os números não aparecerem digitados, o problema é do "
+            "leitor/Windows, não do Vertex (confira o manual do "
+            "leitor: a maioria tem um modo \"USB HID\"/\"teclado\" que "
+            "precisa estar ativo, geralmente configurado bipando um "
+            "código especial que vem no manual)."
+        )
+        dica_problema.setWordWrap(True)
+        dica_problema.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_SECUNDARIO}; line-height:1.5;
+        """)
+        layout.addWidget(dica_problema)
+
+        linha_divisoria2 = QFrame()
+        linha_divisoria2.setFixedHeight(1)
+        linha_divisoria2.setStyleSheet(f"background:{tokens.BORDA};")
+        layout.addWidget(linha_divisoria2)
+
+        lbl_camera = QLabel("LEITURA PELA CÂMERA")
+        lbl_camera.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
+        layout.addWidget(lbl_camera)
+
+        dica_camera = QLabel(
+            "Ainda não disponível — por enquanto, use um leitor "
+            "USB/Bluetooth ou digite o código manualmente."
+        )
+        dica_camera.setWordWrap(True)
+        dica_camera.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
+        layout.addWidget(dica_camera)
+
+        layout.addStretch()
 
         return self._envolver_com_rolagem(pagina)
 

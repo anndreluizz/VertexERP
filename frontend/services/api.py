@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from services import tls_confianca
+from services import tls_confianca, preferencias_service
 
 # Esse mesmo arquivo roda em dois contextos com portas padrao diferentes:
 # o frontend de dev puro (python app.py, sys.frozen=False) fala com
@@ -132,12 +132,21 @@ def confiar_de_novo_no_servidor_atual():
     tls_confianca.confiar(partes.hostname, partes.port or 443)
 
 
-def login(usuario: str, senha: str):
-    """Devolve (True, None) no sucesso, ou (False, mensagem) na falha
-    -- a mensagem vem do "detail" que o backend manda (senha errada,
-    usuário desativado, bloqueio por excesso de tentativas etc.), pra
-    quem chamou poder mostrar o motivo real em vez de um aviso
-    genérico igual pra qualquer causa."""
+def login(usuario: str, senha: str, lembrar: bool = False):
+    """Devolve (True, None, None) no sucesso, (False, mensagem, None)
+    na falha, ou (False, None, verificacao_id) quando o usuario tem
+    2FA ativo -- nesse caso o login ainda nao terminou, quem chamou
+    precisa pedir o codigo (mandado por e-mail) e chamar
+    verificar_codigo_2fa() com o verificacao_id devolvido aqui (e o
+    mesmo "lembrar") pra completar. A mensagem de erro vem do "detail"
+    que o backend manda (senha errada, usuario desativado, bloqueio
+    por excesso de tentativas etc.), pra quem chamou poder mostrar o
+    motivo real em vez de um aviso generico igual pra qualquer causa.
+
+    lembrar=True ("Manter conectado" marcado na tela) guarda o
+    refresh_token localmente (protegido por DPAPI, ver
+    preferencias_service.salvar_sessao) -- na proxima vez que o app
+    abrir, retomar_sessao() usa isso pra pular a tela de login."""
 
     global TOKEN
 
@@ -152,14 +161,58 @@ def login(usuario: str, senha: str):
 
     if response.status_code == 200:
 
-        TOKEN = response.json()["access_token"]
+        dados = response.json()
 
-        return True, None
+        if dados.get("requer_2fa"):
+            return False, None, dados["verificacao_id"]
+
+        TOKEN = dados["access_token"]
+
+        if lembrar and dados.get("refresh_token"):
+            preferencias_service.salvar_sessao(dados["refresh_token"])
+
+        return True, None, None
 
     try:
         mensagem = response.json().get("detail") or "Usuário ou senha inválidos."
     except Exception:
         mensagem = "Usuário ou senha inválidos."
+
+    return False, mensagem, None
+
+
+def verificar_codigo_2fa(verificacao_id: str, codigo: str, lembrar: bool = False):
+    """2o passo do login pra quem tem 2FA ativo (ver login() acima) --
+    devolve (True, None) no sucesso ou (False, mensagem) se o codigo
+    estiver errado/expirado. lembrar tem o mesmo efeito que em
+    login()."""
+
+    global TOKEN
+
+    response = _requisitar(
+        requests.post,
+        f"{URL}/auth/verificar-2fa",
+        json={
+            "verificacao_id": verificacao_id,
+            "codigo": codigo,
+        },
+    )
+
+    if response.status_code == 200:
+
+        dados = response.json()
+
+        TOKEN = dados["access_token"]
+
+        if lembrar and dados.get("refresh_token"):
+            preferencias_service.salvar_sessao(dados["refresh_token"])
+
+        return True, None
+
+    try:
+        mensagem = response.json().get("detail") or "Código inválido."
+    except Exception:
+        mensagem = "Código inválido."
 
     return False, mensagem
 
@@ -169,6 +222,42 @@ def logout():
     global TOKEN
 
     TOKEN = None
+    preferencias_service.limpar_sessao()
+
+
+def retomar_sessao():
+    """Tenta retomar uma sessao lembrada ("Manter conectado" marcado
+    num login anterior) sem pedir senha de novo -- troca o
+    refresh_token guardado localmente por um access_token novo (ver
+    /auth/refresh no backend). Devolve True se conseguiu (TOKEN ja
+    fica setado), False se nao tinha sessao guardada ou ela nao vale
+    mais (expirou depois de 90 dias, foi revogada em Sessoes, ou o
+    servidor mudou) -- nesse caso quem chamou deve mostrar a tela de
+    login normal."""
+
+    global TOKEN
+
+    refresh_token = preferencias_service.carregar_sessao()
+
+    if not refresh_token:
+        return False
+
+    try:
+        response = _requisitar(
+            requests.post,
+            f"{URL}/auth/refresh",
+            json={"refresh_token": refresh_token},
+        )
+    except Exception:
+        return False
+
+    if response.status_code != 200:
+        preferencias_service.limpar_sessao()
+        return False
+
+    TOKEN = response.json()["access_token"]
+
+    return True
 
 
 def existe_usuario():

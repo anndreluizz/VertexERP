@@ -1,4 +1,5 @@
 import csv
+import json
 from datetime import date, datetime
 from urllib.parse import quote
 
@@ -1999,6 +2000,16 @@ class FichaClienteDialog(QDialog):
         bt_excluir.setAutoDefault(False)
         bt_excluir.clicked.connect(self.excluir_cliente_atual)
 
+        bt_lgpd_exportar = BotaoSecundario("Exportar dados (LGPD)", icone_nome="download")
+        bt_lgpd_exportar.setMinimumHeight(42)
+        bt_lgpd_exportar.setAutoDefault(False)
+        bt_lgpd_exportar.clicked.connect(self.exportar_dados_lgpd_atual)
+
+        bt_lgpd_remover = BotaoPerigo("Remover dados (LGPD)", icone_nome="lock")
+        bt_lgpd_remover.setMinimumHeight(42)
+        bt_lgpd_remover.setAutoDefault(False)
+        bt_lgpd_remover.clicked.connect(self.remover_dados_lgpd_atual)
+
         bt_fechar = BotaoSecundario("Fechar")
         bt_fechar.setMinimumHeight(42)
         bt_fechar.setAutoDefault(False)
@@ -2006,6 +2017,8 @@ class FichaClienteDialog(QDialog):
 
         layout.addWidget(bt_editar)
         layout.addWidget(bt_excluir)
+        layout.addWidget(bt_lgpd_exportar)
+        layout.addWidget(bt_lgpd_remover)
         layout.addStretch()
         layout.addWidget(bt_fechar)
 
@@ -2103,6 +2116,80 @@ class FichaClienteDialog(QDialog):
             except Exception:
                 erro = response.text
 
+            QMessageBox.critical(self, "Erro", str(erro))
+
+    def exportar_dados_lgpd_atual(self):
+
+        from services.cliente_service import exportar_dados_lgpd
+
+        response = exportar_dados_lgpd(self.cliente["id"])
+
+        if response.status_code != 200:
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+            QMessageBox.critical(self, "Erro", str(erro))
+            return
+
+        nome_arquivo = f"dados_lgpd_{self.cliente['nome'].replace(' ', '_')}.json"
+
+        caminho, _ = QFileDialog.getSaveFileName(
+            self,
+            "Exportar Dados do Cliente (LGPD)",
+            nome_arquivo,
+            "Arquivo JSON (*.json)",
+        )
+
+        if not caminho:
+            return
+
+        if not caminho.lower().endswith(".json"):
+            caminho += ".json"
+
+        with open(caminho, "w", encoding="utf-8") as arquivo:
+            json.dump(response.json(), arquivo, ensure_ascii=False, indent=2)
+
+        QMessageBox.information(
+            self,
+            "Sucesso",
+            "Dados do cliente exportados com sucesso.",
+        )
+
+    def remover_dados_lgpd_atual(self):
+
+        from services.cliente_service import remover_dados_lgpd
+
+        resposta = QMessageBox.question(
+            self,
+            "Remover dados pessoais (LGPD)",
+            "Isso vai apagar PERMANENTEMENTE os dados pessoais de "
+            f"{self.cliente['nome']} (nome, CPF/CNPJ, telefone, "
+            "e-mail, endereço, foto e observações) -- essa ação não "
+            "pode ser desfeita.\n\n"
+            "O histórico de vendas e fiado continua guardado (sem "
+            "identificar mais a pessoa), pra manter os registros "
+            "contábeis da loja.\n\n"
+            "Tem certeza que quer continuar?",
+        )
+
+        if resposta != QMessageBox.Yes:
+            return
+
+        response = remover_dados_lgpd(self.cliente["id"])
+
+        if response.status_code == 200:
+            QMessageBox.information(
+                self,
+                "Sucesso",
+                response.json().get("mensagem") or "Dados removidos com sucesso.",
+            )
+            self.accept()
+        else:
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
             QMessageBox.critical(self, "Erro", str(erro))
 
     def _descricao_com_itens(self, mov):

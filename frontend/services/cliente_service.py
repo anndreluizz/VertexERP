@@ -89,3 +89,19 @@ def criar_observacao_cliente(cliente_id, texto):
 def excluir_observacao_cliente(cliente_id, observacao_id):
 
     return delete(f"/clientes/{cliente_id}/observacoes/{observacao_id}")
+
+
+def exportar_dados_lgpd(cliente_id):
+    """Todos os dados pessoais guardados sobre o cliente, numa
+    resposta só -- atende um pedido de acesso/portabilidade da LGPD
+    (só admin, ver backend/app/api/v1/clientes.py)."""
+
+    return get(f"/clientes/{cliente_id}/dados-lgpd")
+
+
+def remover_dados_lgpd(cliente_id):
+    """Direito ao esquecimento da LGPD -- apaga os dados pessoais do
+    cliente, mantendo o histórico de vendas/fiado (só admin, ação
+    irreversível)."""
+
+    return delete(f"/clientes/{cliente_id}/dados-lgpd")

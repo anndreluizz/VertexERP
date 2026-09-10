@@ -244,7 +244,7 @@ class CadastroInicialWindow(QWidget):
                 response.json().get("data", {}).get("admin", False)
             )
 
-            ok, _erro_login = login(email, senha)
+            ok, _erro_login, _verificacao_id = login(email, senha)
 
             if not ok:
 

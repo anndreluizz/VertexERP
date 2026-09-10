@@ -209,7 +209,14 @@ class SessaoController extends StateNotifier<SessaoState> {
     return alcancavel;
   }
 
-  Future<String?> login(
+  /// sucesso == false + verificacaoId != null significa que a senha
+  /// bateu mas falta o segundo fator (2FA) -- a tela deve pedir o
+  /// codigo (mandado por e-mail) e chamar verificarCodigo2fa() com
+  /// esse verificacaoId pra completar o login (ver
+  /// features/auth/login_screen.dart).
+  Future<
+    ({bool sucesso, String? erro, String? verificacaoId})
+  > login(
     String email,
     String senha, {
     required bool lembrar,
@@ -220,24 +227,70 @@ class SessaoController extends StateNotifier<SessaoState> {
         data: {'email': email, 'senha': senha},
       );
 
-      final token = resposta.data['access_token'] as String;
-      final refreshToken = resposta.data['refresh_token'] as String?;
-      _api.definirToken(token);
-      _refreshToken = refreshToken;
-
-      if (lembrar) {
-        await _storage.salvarToken(token);
-        if (refreshToken != null) {
-          await _storage.salvarRefreshToken(refreshToken);
-        }
+      if (resposta.data['requer_2fa'] == true) {
+        return (
+          sucesso: false,
+          erro: null,
+          verificacaoId: resposta.data['verificacao_id'] as String,
+        );
       }
 
-      final ok = await _carregarUsuarioLogado();
+      final token = resposta.data['access_token'] as String;
+      final refreshToken = resposta.data['refresh_token'] as String?;
 
-      return ok ? null : 'Não foi possível carregar os dados da conta.';
+      final erro = await _concluirLogin(token, refreshToken, lembrar);
+
+      return (sucesso: erro == null, erro: erro, verificacaoId: null);
+    } catch (e) {
+      return (sucesso: false, erro: _mensagemDeErro(e), verificacaoId: null);
+    }
+  }
+
+  /// 2o passo do login pra quem tem 2FA ativo (ver login() acima) --
+  /// troca o verificacaoId + codigo (recebido por e-mail) pelos
+  /// tokens de verdade, do mesmo jeito que login() faria sem 2FA.
+  Future<String?> verificarCodigo2fa(
+    String verificacaoId,
+    String codigo, {
+    required bool lembrar,
+  }) async {
+    try {
+      final resposta = await _api.dio.post(
+        '/auth/verificar-2fa',
+        data: {'verificacao_id': verificacaoId, 'codigo': codigo},
+      );
+
+      final token = resposta.data['access_token'] as String;
+      final refreshToken = resposta.data['refresh_token'] as String?;
+
+      return await _concluirLogin(token, refreshToken, lembrar);
     } catch (e) {
       return _mensagemDeErro(e);
     }
+  }
+
+  /// Guarda o token (memoria + storage se lembrar) e carrega os dados
+  /// do usuario logado -- parte final comum entre login() sem 2FA e
+  /// verificarCodigo2fa(). Devolve null no sucesso, ou a mensagem de
+  /// erro se nao conseguir carregar os dados da conta.
+  Future<String?> _concluirLogin(
+    String token,
+    String? refreshToken,
+    bool lembrar,
+  ) async {
+    _api.definirToken(token);
+    _refreshToken = refreshToken;
+
+    if (lembrar) {
+      await _storage.salvarToken(token);
+      if (refreshToken != null) {
+        await _storage.salvarRefreshToken(refreshToken);
+      }
+    }
+
+    final ok = await _carregarUsuarioLogado();
+
+    return ok ? null : 'Não foi possível carregar os dados da conta.';
   }
 
   String _mensagemDeErro(Object erro) {

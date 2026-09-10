@@ -20,6 +20,7 @@ class UserUpdate(BaseModel):
     nome: str | None = None
     ativo: bool | None = None
     admin: bool | None = None
+    dois_fatores_ativo: bool | None = None
 
 
 class UserAdminUpdate(BaseModel):
@@ -28,6 +29,16 @@ class UserAdminUpdate(BaseModel):
 
 class UserAtivoUpdate(BaseModel):
     ativo: bool
+
+
+class Verificar2FARequest(BaseModel):
+    """Segundo passo do login quando o usuario tem 2FA ativo (ver
+    POST /auth/verificar-2fa) -- verificacao_id e o que voltou do
+    primeiro passo (POST /auth/login), codigo e o numero de 6 digitos
+    que chegou por e-mail."""
+    verificacao_id: str
+    codigo: str
+    dispositivo: str | None = None
 
 
 class TrocarSenhaRequest(BaseModel):

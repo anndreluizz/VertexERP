@@ -20,6 +20,7 @@ from design.animations import fade_in
 from design.icons import icone, icone_pixmap
 from design.widgets import BotaoPrimario, CampoTexto
 from services.api import login
+from telas.verificar_2fa import Verificar2FADialog
 from telas.principal import PrincipalWindow
 
 
@@ -424,9 +425,10 @@ class LoginWindow(QWidget):
 
         try:
 
-            ok, erro = login(
+            ok, erro, verificacao_id = login(
                 self.usuario.text().strip(),
                 self.senha.text(),
+                lembrar=self.manter_conectado.isChecked(),
             )
 
             QApplication.restoreOverrideCursor()
@@ -436,6 +438,23 @@ class LoginWindow(QWidget):
                 self.principal = PrincipalWindow()
                 self.principal.show()
                 self.close()
+
+            elif verificacao_id:
+
+                # senha certa, mas falta o segundo fator (2FA) -- o
+                # codigo ja foi mandado por e-mail nesse momento (ver
+                # services/api.py: login())
+                dialogo = Verificar2FADialog(
+                    verificacao_id,
+                    self.usuario.text().strip(),
+                    lembrar=self.manter_conectado.isChecked(),
+                    parent=self,
+                )
+
+                if dialogo.exec() == Verificar2FADialog.Accepted:
+                    self.principal = PrincipalWindow()
+                    self.principal.show()
+                    self.close()
 
             else:
 

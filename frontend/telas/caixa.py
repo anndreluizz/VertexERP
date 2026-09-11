@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from telas.suprimento import SuprimentoWindow
 from telas.sangria import SangriaWindow
 from telas.abrir_caixa import AbrirCaixaWindow
@@ -34,9 +36,93 @@ from services.movimento_caixa_service import (
 )
 
 from design import tokens
-from design.icons import icone_pixmap
-from design.widgets import BotaoSecundario, CardKPI
+from design.icons import icone, icone_pixmap
+from design.widgets import Badge, BotaoPerigo, BotaoSecundario, BotaoSucesso, CardKPI
 from utils.formatacao import formatar_moeda
+
+
+_INFO_TIPO_MOVIMENTO = {
+    "VENDA": ("Venda", "info"),
+    "SUPRIMENTO": ("Suprimento", "sucesso"),
+    "SANGRIA": ("Sangria", "erro"),
+    "RECEBIMENTO_FIADO": ("Recebimento fiado", "sucesso"),
+    "ESTORNO": ("Estorno", "alerta"),
+}
+
+
+def _formatar_data_movimento(texto):
+    """"YYYY-MM-DDTHH:MM:SS" (ou variação com espaço) -> "dd/mm/yyyy
+    HH:MM" -- mais rápido de ler numa lista comprida do que o ISO cru."""
+
+    texto = str(texto or "")
+
+    try:
+        limpo = texto.replace("T", " ")[:16]
+        dt = datetime.strptime(limpo, "%Y-%m-%d %H:%M")
+        return dt.strftime("%d/%m/%Y %H:%M")
+    except ValueError:
+        return texto[:19]
+
+
+def _cor_valor_movimento(tipo):
+    if tipo in ("SUPRIMENTO", "VENDA", "RECEBIMENTO_FIADO"):
+        return tokens.SECUNDARIA_HOVER
+    if tipo in ("SANGRIA", "ESTORNO"):
+        return tokens.ERRO
+    return tokens.TEXTO
+
+
+def _celula_valor_movimento(tipo, texto_valor):
+    """QLabel colorido pro valor do movimento -- precisa ser um cell
+    widget (não um QTableWidgetItem comum) porque o QSS da tabela
+    ("QTableWidget::item { color: ... }") tem prioridade sobre
+    setForeground(), então colorir o item direto não teria efeito."""
+
+    container = QWidget()
+    container.setStyleSheet("background:transparent;")
+    layout = QHBoxLayout(container)
+    layout.setContentsMargins(12, 0, 12, 0)
+    layout.setSpacing(0)
+
+    lbl = QLabel(texto_valor)
+    lbl.setStyleSheet(f"""
+        background:transparent; color:{_cor_valor_movimento(tipo)};
+        font-weight:700; font-size:{tokens.TAMANHO_BASE}px;
+    """)
+    layout.addWidget(lbl)
+    layout.addStretch()
+
+    return container
+
+
+def _pill_tipo_movimento(tipo):
+    """Etiqueta colorida (pill) pra cada tipo de movimento no histórico
+    do caixa -- mesma linguagem visual das pills de tipo usadas na
+    timeline da ficha do cliente."""
+
+    rotulo, variante = _INFO_TIPO_MOVIMENTO.get(
+        tipo, (tipo.replace("_", " ").title() if tipo else "—", "neutro")
+    )
+
+    fundo, cor_texto = Badge.variantes()[variante]
+
+    container = QWidget()
+    container.setStyleSheet("background:transparent;")
+    layout = QHBoxLayout(container)
+    layout.setContentsMargins(10, 0, 0, 0)
+    layout.setSpacing(0)
+
+    pill = QLabel(rotulo)
+    pill.setStyleSheet(f"""
+        background:{fundo}; color:{cor_texto};
+        border-radius:{tokens.RADIUS_PILL}px;
+        font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+        padding:3px 10px;
+    """)
+    layout.addWidget(pill)
+    layout.addStretch()
+
+    return container
 
 
 class Caixa(QWidget):
@@ -99,17 +185,9 @@ class Caixa(QWidget):
         """)
         subtitulo.setFixedWidth(360)
 
-        bt_abrir = QPushButton("Abrir Caixa")
-        bt_abrir.setCursor(Qt.PointingHandCursor)
+        bt_abrir = BotaoSucesso("Abrir Caixa", icone_nome="wallet")
         bt_abrir.setFixedWidth(200)
         bt_abrir.setMinimumHeight(46)
-        bt_abrir.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.SECUNDARIA}; color:white;
-                font-weight:700; border-radius:{tokens.RADIUS_SM}px;
-            }}
-            QPushButton:hover {{ background:{tokens.SECUNDARIA_HOVER}; }}
-        """)
         bt_abrir.clicked.connect(self.abrir_caixa)
 
         layout.addWidget(icone, alignment=Qt.AlignHCenter)
@@ -144,6 +222,16 @@ class Caixa(QWidget):
 
         status_layout = QHBoxLayout(status_frame)
         status_layout.setContentsMargins(24, 18, 24, 18)
+        status_layout.setSpacing(16)
+
+        icone_status = QLabel()
+        icone_status.setFixedSize(44, 44)
+        icone_status.setAlignment(Qt.AlignCenter)
+        icone_status.setStyleSheet(
+            "background:rgba(255, 255, 255, 0.12); border-radius:22px;"
+        )
+        icone_status.setPixmap(icone_pixmap("wallet", cor="white", tamanho=20))
+        status_layout.addWidget(icone_status)
 
         col_status = QVBoxLayout()
         col_status.setSpacing(4)
@@ -235,7 +323,6 @@ class Caixa(QWidget):
         self.card_recebimentos_fiado = CardKPI(
             "Recebimentos fiado", "check", tokens.SECUNDARIA
         )
-        self.card_total_geral = CardKPI("Total geral do turno", "trending-up", tokens.PRIMARIA)
 
         cards_layout.addWidget(self.card_troco, 0, 0)
         cards_layout.addWidget(self.card_dinheiro, 0, 1)
@@ -245,47 +332,66 @@ class Caixa(QWidget):
         cards_layout.addWidget(self.card_sangrias, 1, 1)
         cards_layout.addWidget(self.card_prazo, 1, 2)
         cards_layout.addWidget(self.card_recebimentos_fiado, 1, 3)
-        cards_layout.addWidget(self.card_total_geral, 2, 0)
 
         for coluna in range(4):
             cards_layout.setColumnStretch(coluna, 1)
 
         conteudo_layout.addLayout(cards_layout)
 
+        # ---- total geral do turno -- destacado à parte dos demais
+        # cards porque é a soma de tudo, não mais um indicador entre
+        # iguais ----
+
+        total_frame = QFrame()
+        total_frame.setStyleSheet(f"""
+            background:{tokens.PRIMARIA_CLARA}; border-radius:{tokens.RADIUS_MD}px;
+        """)
+
+        total_layout = QHBoxLayout(total_frame)
+        total_layout.setContentsMargins(20, 16, 20, 16)
+        total_layout.setSpacing(14)
+
+        icone_total = QLabel()
+        icone_total.setFixedSize(40, 40)
+        icone_total.setAlignment(Qt.AlignCenter)
+        icone_total.setStyleSheet(f"background:{tokens.CARD}; border-radius:20px;")
+        icone_total.setPixmap(icone_pixmap("trending-up", cor=tokens.PRIMARIA, tamanho=18))
+        total_layout.addWidget(icone_total)
+
+        lbl_total_rotulo = QLabel("TOTAL GERAL DO TURNO")
+        lbl_total_rotulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.PRIMARIA_HOVER};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+        """)
+        total_layout.addWidget(lbl_total_rotulo)
+        total_layout.addStretch()
+
+        self.lbl_total_geral = QLabel("R$ 0,00")
+        self.lbl_total_geral.setStyleSheet(f"""
+            background:transparent; color:{tokens.PRIMARIA};
+            font-size:{tokens.TAMANHO_XXL}px; font-weight:800;
+        """)
+        total_layout.addWidget(self.lbl_total_geral)
+
+        conteudo_layout.addWidget(total_frame)
+
         # ---- ações ----
 
         acoes_layout = QHBoxLayout()
         acoes_layout.setSpacing(10)
 
-        self.bt_suprimento = QPushButton("+ Suprimento")
-        self.bt_suprimento.setCursor(Qt.PointingHandCursor)
+        self.bt_suprimento = BotaoSucesso("+ Suprimento", icone_nome="arrow-up")
         self.bt_suprimento.setMinimumHeight(46)
-        self.bt_suprimento.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.CARD}; color:{tokens.SECUNDARIA_HOVER};
-                border:1.5px solid {tokens.SECUNDARIA}; border-radius:{tokens.RADIUS_SM}px;
-                font-weight:700; padding:0 18px;
-            }}
-            QPushButton:hover {{ background:{tokens.SUCESSO_CLARO}; }}
-        """)
         self.bt_suprimento.clicked.connect(self.suprimento)
 
-        self.bt_sangria = QPushButton("- Sangria")
-        self.bt_sangria.setCursor(Qt.PointingHandCursor)
+        self.bt_sangria = BotaoPerigo("- Sangria", icone_nome="arrow-down")
         self.bt_sangria.setMinimumHeight(46)
-        self.bt_sangria.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.CARD}; color:{tokens.ERRO};
-                border:1.5px solid {tokens.ERRO}; border-radius:{tokens.RADIUS_SM}px;
-                font-weight:700; padding:0 18px;
-            }}
-            QPushButton:hover {{ background:{tokens.ERRO_CLARO}; }}
-        """)
         self.bt_sangria.clicked.connect(self.sangria)
 
         self.bt_encerrar = QPushButton("Encerrar Caixa")
         self.bt_encerrar.setCursor(Qt.PointingHandCursor)
         self.bt_encerrar.setMinimumHeight(46)
+        self.bt_encerrar.setIcon(icone("log-out", cor="white", tamanho=16))
         self.bt_encerrar.setStyleSheet(f"""
             QPushButton {{
                 background:{tokens.SIDEBAR}; color:white;
@@ -416,7 +522,7 @@ class Caixa(QWidget):
         self.card_recebimentos_fiado.definir_valor(
             formatar_moeda(resumo.get("recebimentos_fiado", 0))
         )
-        self.card_total_geral.definir_valor(
+        self.lbl_total_geral.setText(
             formatar_moeda(resumo.get("total_geral", 0))
         )
 
@@ -438,23 +544,24 @@ class Caixa(QWidget):
 
         for linha, mov in enumerate(movimentos):
 
-            data = str(mov.get("data", ""))
-            if "T" in data:
-                data = data.replace("T", " ")
+            tipo = mov.get("tipo", "")
 
             self.tabela_movimentos.setItem(
-                linha, 0, QTableWidgetItem(data[:19])
+                linha,
+                0,
+                QTableWidgetItem(_formatar_data_movimento(mov.get("data", ""))),
             )
-            self.tabela_movimentos.setItem(
-                linha, 1, QTableWidgetItem(mov.get("tipo", ""))
+
+            self.tabela_movimentos.setCellWidget(
+                linha, 1, _pill_tipo_movimento(tipo)
             )
-            self.tabela_movimentos.setItem(
+
+            self.tabela_movimentos.setCellWidget(
                 linha,
                 2,
-                QTableWidgetItem(
-                    formatar_moeda(mov.get("valor", 0))
-                ),
+                _celula_valor_movimento(tipo, formatar_moeda(mov.get("valor", 0))),
             )
+
             self.tabela_movimentos.setItem(
                 linha,
                 3,

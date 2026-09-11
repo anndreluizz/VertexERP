@@ -53,6 +53,10 @@ from utils.formatacao import formatar_moeda
 
 LARGURA_PAINEL_RESUMO = 340
 
+_CORES_MONOGRAMA = [
+    "#2563EB", "#16A34A", "#D97706", "#DB2777", "#7C3AED", "#0891B2",
+]
+
 
 def _parse_data(texto):
     try:
@@ -251,6 +255,8 @@ class PDV(QWidget):
 
         layout.addLayout(corpo, stretch=1)
 
+        layout.addWidget(self._construir_barra_atalhos())
+
         # ======================
         # ATALHOS DE TECLADO
         # ======================
@@ -279,6 +285,10 @@ class PDV(QWidget):
         self.atalho_f6 = QShortcut(QKeySequence("F6"), self)
         self.atalho_f6.setContext(contexto)
         self.atalho_f6.activated.connect(self._alternar_bloco_ajuste)
+
+        self.atalho_f7 = QShortcut(QKeySequence("F7"), self)
+        self.atalho_f7.setContext(contexto)
+        self.atalho_f7.activated.connect(self._abrir_ajuste_acrescimo)
 
         fade_in(self, duracao=200)
 
@@ -309,6 +319,9 @@ class PDV(QWidget):
 
         self.bt_buscar.setText(f"Buscar ({self.atalhos['busca']})")
         self.bt_adicionar.setText(f"Novo Produto ({self.atalhos['cadastro_rapido']})")
+
+        self.lbl_atalho_busca_tecla.setText(self.atalhos["busca"])
+        self.lbl_atalho_produto_tecla.setText(self.atalhos["cadastro_rapido"])
 
     # ==================================================
     # CONSTRUÇÃO DA INTERFACE
@@ -382,6 +395,89 @@ class PDV(QWidget):
 
         return cabecalho
 
+    def _construir_barra_atalhos(self):
+
+        barra = QFrame()
+        barra.setFixedHeight(42)
+        barra.setStyleSheet(f"""
+            QFrame {{
+                background: {tokens.CARD};
+                border-top: 1px solid {tokens.BORDA};
+            }}
+        """)
+
+        layout = QHBoxLayout(barra)
+        layout.setContentsMargins(24, 0, 24, 0)
+        layout.setSpacing(22)
+
+        lbl_titulo = QLabel("ATALHOS DO TECLADO")
+        lbl_titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:800; letter-spacing: 0.5px;
+        """)
+        layout.addWidget(lbl_titulo)
+
+        self.lbl_atalho_busca_tecla, item_busca = self._item_atalho(
+            self.atalhos["busca"], "Buscar produto"
+        )
+        self.lbl_atalho_produto_tecla, item_produto = self._item_atalho(
+            self.atalhos["cadastro_rapido"], "Novo produto"
+        )
+        _, item_cliente = self._item_atalho("F2", "Selecionar cliente")
+        _, item_finalizar = self._item_atalho("F3", "Finalizar venda")
+        _, item_desconto = self._item_atalho("F6", "Desconto")
+        _, item_acrescimo = self._item_atalho("F7", "Acréscimo")
+
+        for item in (
+            item_busca, item_cliente, item_finalizar,
+            item_produto, item_desconto, item_acrescimo,
+        ):
+            layout.addLayout(item)
+
+        layout.addStretch()
+
+        self.lbl_relogio_pdv = QLabel()
+        self.lbl_relogio_pdv.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:600;
+        """)
+        layout.addWidget(self.lbl_relogio_pdv)
+
+        self._timer_relogio_pdv = QTimer(self)
+        self._timer_relogio_pdv.timeout.connect(self._atualizar_relogio_pdv)
+        self._timer_relogio_pdv.start(1000)
+        self._atualizar_relogio_pdv()
+
+        return barra
+
+    def _item_atalho(self, tecla, rotulo):
+
+        item = QHBoxLayout()
+        item.setSpacing(6)
+
+        badge_tecla = QLabel(tecla)
+        badge_tecla.setAlignment(Qt.AlignCenter)
+        badge_tecla.setFixedHeight(20)
+        badge_tecla.setStyleSheet(f"""
+            background:{tokens.FUNDO}; color:{tokens.TEXTO_SECUNDARIO};
+            border:1px solid {tokens.BORDA}; border-radius:4px;
+            font-size:{tokens.TAMANHO_XS}px; font-weight:700; padding: 0 6px;
+        """)
+
+        lbl_rotulo = QLabel(rotulo)
+        lbl_rotulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px;
+        """)
+
+        item.addWidget(badge_tecla)
+        item.addWidget(lbl_rotulo)
+
+        return badge_tecla, item
+
+    def _atualizar_relogio_pdv(self):
+        self.lbl_relogio_pdv.setText(datetime.now().strftime("%d/%m/%Y  ·  %H:%M"))
+
     def _construir_campo_codigo(self):
 
         container = QFrame()
@@ -447,7 +543,7 @@ class PDV(QWidget):
         linha = QHBoxLayout()
         linha.setSpacing(10)
 
-        self.bt_buscar = BotaoSecundario(
+        self.bt_buscar = BotaoPrimario(
             f"Buscar ({self.atalhos['busca']})", icone_nome="search"
         )
         self.bt_buscar.clicked.connect(self.abrir_busca)
@@ -649,6 +745,23 @@ class PDV(QWidget):
         """)
         cabecalho_tabela.addWidget(self.lbl_itens_tabela)
 
+        self.bt_limpar_carrinho = QPushButton("Limpar carrinho")
+        self.bt_limpar_carrinho.setCursor(Qt.PointingHandCursor)
+        self.bt_limpar_carrinho.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; border:none;
+                color:{tokens.ERRO}; font-size:{tokens.TAMANHO_SM}px;
+                font-weight:600; margin-left: 14px;
+            }}
+            QPushButton:hover {{ color:{tokens.ERRO_HOVER}; }}
+        """)
+        # reaproveita cancelar_venda -- mesma confirmacao, mesmo efeito
+        # de esvaziar o carrinho; so' um atalho visual mais perto de
+        # onde o operador esta' olhando (o contador de itens)
+        self.bt_limpar_carrinho.clicked.connect(self.cancelar_venda)
+        self.bt_limpar_carrinho.setVisible(False)
+        cabecalho_tabela.addWidget(self.bt_limpar_carrinho)
+
         layout.addLayout(cabecalho_tabela)
 
         divisor_topo = QFrame()
@@ -678,7 +791,7 @@ class PDV(QWidget):
         self.tabela.setSelectionMode(QTableWidget.NoSelection)
         self.tabela.setEditTriggers(QTableWidget.NoEditTriggers)
         self.tabela.setShowGrid(False)
-        self.tabela.verticalHeader().setDefaultSectionSize(48)
+        self.tabela.verticalHeader().setDefaultSectionSize(58)
 
         self.tabela.horizontalHeader().setStretchLastSection(False)
         self.tabela.setColumnWidth(2, 120)
@@ -786,8 +899,9 @@ class PDV(QWidget):
     def _construir_cartao_resumo(self):
 
         cartao = QFrame()
+        cartao.setObjectName("cartaoResumoVenda")
         cartao.setStyleSheet(f"""
-            QFrame {{
+            QFrame#cartaoResumoVenda {{
                 background: {tokens.CARD};
                 border: 1px solid {tokens.BORDA};
                 border-radius: {tokens.RADIUS_LG}px;
@@ -814,17 +928,32 @@ class PDV(QWidget):
 
         # ------ desconto / acréscimo (recolhido por padrão) ------
 
-        self.bt_alternar_ajuste = QPushButton("+ Desconto ou acréscimo (F6)")
-        self.bt_alternar_ajuste.setCursor(Qt.PointingHandCursor)
-        self.bt_alternar_ajuste.setStyleSheet(f"""
+        linha_ajuste_botoes = QHBoxLayout()
+        linha_ajuste_botoes.setSpacing(18)
+
+        estilo_bt_ajuste = f"""
             QPushButton {{
                 background:transparent; border:none; text-align:left;
                 color:{tokens.PRIMARIA}; font-size:{tokens.TAMANHO_SM}px;
                 font-weight:600; padding: 2px 0;
             }}
-        """)
+        """
+
+        self.bt_alternar_ajuste = QPushButton("+ Desconto (F6)")
+        self.bt_alternar_ajuste.setCursor(Qt.PointingHandCursor)
+        self.bt_alternar_ajuste.setStyleSheet(estilo_bt_ajuste)
         self.bt_alternar_ajuste.clicked.connect(self._alternar_bloco_ajuste)
-        layout.addWidget(self.bt_alternar_ajuste)
+
+        self.bt_alternar_acrescimo = QPushButton("+ Acréscimo (F7)")
+        self.bt_alternar_acrescimo.setCursor(Qt.PointingHandCursor)
+        self.bt_alternar_acrescimo.setStyleSheet(estilo_bt_ajuste)
+        self.bt_alternar_acrescimo.clicked.connect(self._abrir_ajuste_acrescimo)
+
+        linha_ajuste_botoes.addWidget(self.bt_alternar_ajuste)
+        linha_ajuste_botoes.addWidget(self.bt_alternar_acrescimo)
+        linha_ajuste_botoes.addStretch()
+
+        layout.addLayout(linha_ajuste_botoes)
 
         self.bloco_ajuste = QFrame()
         self.bloco_ajuste.setVisible(False)
@@ -878,12 +1007,24 @@ class PDV(QWidget):
         divisor.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
         layout.addWidget(divisor)
 
+        caixa_total = QFrame()
+        caixa_total.setStyleSheet(f"""
+            QFrame {{
+                background: {tokens.SUCESSO_CLARO};
+                border-radius: {tokens.RADIUS_SM}px;
+            }}
+        """)
+
+        layout_caixa_total = QVBoxLayout(caixa_total)
+        layout_caixa_total.setContentsMargins(14, 12, 14, 12)
+        layout_caixa_total.setSpacing(2)
+
         lbl_total_rotulo = QLabel("TOTAL")
         lbl_total_rotulo.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO_TERCIARIO};
             font-size:{tokens.TAMANHO_XS}px; font-weight:800; letter-spacing: 0.5px;
         """)
-        layout.addWidget(lbl_total_rotulo)
+        layout_caixa_total.addWidget(lbl_total_rotulo)
 
         self.total = QLabel("R$ 0,00")
         self.total.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -891,7 +1032,9 @@ class PDV(QWidget):
             background:transparent; font-size: 34px; font-weight: 800;
             color: {tokens.SECUNDARIA};
         """)
-        layout.addWidget(self.total)
+        layout_caixa_total.addWidget(self.total)
+
+        layout.addWidget(caixa_total)
 
         # o card acompanha a altura do carrinho ao lado (ver stretch=1
         # em __init__) — o conteúdo fica ancorado no topo, o resto do
@@ -902,7 +1045,7 @@ class PDV(QWidget):
 
     def _construir_botao_pagar(self):
 
-        self.bt_pagar = BotaoSucesso("Pagar (F3)", icone_nome="credit-card")
+        self.bt_pagar = BotaoSucesso("Finalizar Venda (F3)", icone_nome="credit-card")
         self.bt_pagar.setMinimumHeight(58)
         self.bt_pagar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.bt_pagar.clicked.connect(self.finalizar_venda)
@@ -1115,6 +1258,16 @@ class PDV(QWidget):
 
     def _alternar_bloco_ajuste(self):
         self.bloco_ajuste.setVisible(not self.bloco_ajuste.isVisible())
+        if self.bloco_ajuste.isVisible():
+            self.campo_desconto.setFocus()
+            self.campo_desconto.selectAll()
+
+    def _abrir_ajuste_acrescimo(self):
+        # sempre abre (nao alterna) -- F7 e' "eu quero mexer no
+        # acrescimo agora", nao "esconde se ja tiver aberto"
+        self.bloco_ajuste.setVisible(True)
+        self.campo_acrescimo.setFocus()
+        self.campo_acrescimo.selectAll()
 
     # ==================================================
     # ATUALIZAR TABELA / TOTAIS
@@ -1131,9 +1284,7 @@ class PDV(QWidget):
                 linha, 0, QTableWidgetItem(item["codigo"])
             )
 
-            item_nome = QTableWidgetItem(item["nome"])
-            item_nome.setFont(QFont(tokens.FONTE_FAMILIA_PADRAO, tokens.TAMANHO_MD, QFont.DemiBold))
-            self.tabela.setItem(linha, 1, item_nome)
+            self.tabela.setCellWidget(linha, 1, self.criar_widget_produto(item))
 
             self.tabela.setCellWidget(
                 linha, 2, self.criar_widget_qtde(linha, item["quantidade"])
@@ -1154,6 +1305,7 @@ class PDV(QWidget):
         self.pilha_carrinho.setCurrentWidget(
             self.tabela if self.itens else self.pilha_carrinho.widget(0)
         )
+        self.bt_limpar_carrinho.setVisible(bool(self.itens))
 
         self._recalcular_totais()
         self.campo_codigo.setFocus()
@@ -1207,6 +1359,59 @@ class PDV(QWidget):
     # ==================================================
     # WIDGETS DE QUANTIDADE / EXCLUIR (por linha)
     # ==================================================
+
+    def criar_widget_produto(self, item):
+        """Selo colorido com a inicial do produto + nome + estoque
+        disponível, no lugar de só o nome puro -- não temos foto de
+        produto cadastrada no sistema, então um monograma colorido (o
+        mesmo princípio já usado nos avatares de Clientes Recentes do
+        Dashboard) é o que dá pra fazer sem inventar uma imagem que
+        não existe."""
+
+        widget = QWidget()
+        widget.setStyleSheet("background:transparent;")
+
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(10)
+
+        inicial = (item["nome"][:1] or "?").upper()
+        cor_indice = sum(ord(c) for c in item["nome"]) % len(_CORES_MONOGRAMA)
+        cor = _CORES_MONOGRAMA[cor_indice]
+
+        selo = QLabel(inicial)
+        selo.setFixedSize(34, 34)
+        selo.setAlignment(Qt.AlignCenter)
+        selo.setStyleSheet(f"""
+            background: {cor}; color: white; border-radius: 9px;
+            font-size: 14px; font-weight: 800;
+        """)
+
+        col_texto = QVBoxLayout()
+        col_texto.setSpacing(1)
+
+        lbl_nome = QLabel(item["nome"])
+        lbl_nome.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_MD}px; font-weight:700;
+        """)
+
+        estoque = item.get("estoque")
+        texto_estoque = f"Estoque: {estoque} un" if estoque is not None else "Estoque: —"
+
+        lbl_estoque = QLabel(texto_estoque)
+        lbl_estoque.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px;
+        """)
+
+        col_texto.addWidget(lbl_nome)
+        col_texto.addWidget(lbl_estoque)
+
+        layout.addWidget(selo)
+        layout.addLayout(col_texto, 1)
+
+        return widget
 
     def criar_widget_qtde(self, linha, quantidade):
 
@@ -1650,6 +1855,8 @@ class PDV(QWidget):
                 self.itens,
                 cliente_id=self.cliente_id,
                 cliente_nome=self.cliente_nome,
+                desconto=self.desconto_valor,
+                acrescimo=self.acrescimo_valor,
             )
 
             if tela.exec() != QDialog.Accepted:

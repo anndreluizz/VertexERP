@@ -2,7 +2,7 @@ from io import BytesIO
 
 import qrcode
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
@@ -18,12 +18,13 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.animations import fade_in
-from design.icons import icone
+from design.icons import icone, icone_pixmap
 from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoSecundario, BotaoSucesso, CampoTexto
 from services.api import configuracoes
 from services.pix_utils import montar_payload_pix
 from telas.selecionar_cliente import SelecionarClienteDialog
+from utils.formatacao import formatar_moeda
 
 # rotulo exibido, valor enviado pra API, icone (lucide) do botao
 FORMAS = [
@@ -31,12 +32,18 @@ FORMAS = [
     ("Débito", "DEBITO", "credit-card"),
     ("Crédito", "CREDITO", "credit-card"),
     ("PIX", "PIX", "refresh-cw"),
-    ("A Prazo", "PRAZO", "calendar"),
+    ("Crediário", "PRAZO", "calendar"),
 ]
 
 NOMES_FORMA = {valor: rotulo for rotulo, valor, _icone in FORMAS}
 
 VALORES_RAPIDOS = [1, 2, 5, 10, 20, 50, 100]
+
+# mesma paleta de monogramas ja usada em telas/pdv.py -- cor derivada
+# do nome, pra sempre cair na mesma cor pro mesmo produto
+_CORES_MONOGRAMA = [
+    "#2563EB", "#16A34A", "#D97706", "#DB2777", "#7C3AED", "#0891B2",
+]
 
 # tolerancia de meio-centavo pra comparacao de valores em ponto flutuante
 EPSILON = 0.005
@@ -50,17 +57,24 @@ def _texto_para_valor(texto):
 
 
 def _fmt(valor):
-    return f"{valor:.2f}"
+    """Formata valores monetários no padrão da interface brasileira."""
+    return formatar_moeda(valor, com_simbolo=False)
 
 
 class PagamentoWindow(QDialog):
 
-    def __init__(self, total, itens=None, cliente_id=None, cliente_nome=None):
+    def __init__(
+        self, total, itens=None, cliente_id=None, cliente_nome=None,
+        desconto=0.0, acrescimo=0.0,
+    ):
 
         super().__init__()
 
         self.total = total
         self.itens = itens or []
+        self.subtotal = sum(item["preco"] * item["quantidade"] for item in self.itens)
+        self.desconto = desconto or 0.0
+        self.acrescimo = acrescimo or 0.0
         self.forma_pagamento = "DINHEIRO"
         self.recebido_acumulado = 0.0
         self.cliente_id = cliente_id
@@ -97,7 +111,26 @@ class PagamentoWindow(QDialog):
 
         raiz.addLayout(corpo)
 
+        raiz.addWidget(self._construir_barra_atalhos())
+
+        # F2/F3 -- Esc ja funciona de graca (QDialog fecha com reject()
+        # no Escape por padrao, sem precisar de nada extra aqui)
+        self._atalho_cliente = QShortcut(QKeySequence("F2"), self)
+        self._atalho_cliente.activated.connect(self.abrir_selecionar_cliente)
+
+        self._atalho_confirmar = QShortcut(QKeySequence("F3"), self)
+        self._atalho_confirmar.activated.connect(self.confirmar)
+
         self.selecionar_forma("DINHEIRO")
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Dinheiro e' a forma padrao -- o operador ja entra na tela
+        # podendo digitar o valor recebido direto, sem precisar clicar
+        # no campo primeiro.
+        if self.forma_pagamento == "DINHEIRO":
+            self.recebido.setFocus()
+            self.recebido.selectAll()
 
     # ======================================
     # CONSTRUCAO DA UI
@@ -111,11 +144,24 @@ class PagamentoWindow(QDialog):
 
         cab_layout = QHBoxLayout(cabecalho)
         cab_layout.setContentsMargins(24, 0, 24, 0)
+        cab_layout.setSpacing(14)
+
+        marca = QLabel("V")
+        marca.setFixedSize(36, 36)
+        marca.setAlignment(Qt.AlignCenter)
+        marca.setStyleSheet(f"""
+            background: {tokens.PRIMARIA};
+            color: white;
+            border-radius: {tokens.RADIUS_SM}px;
+            font-size: 16px;
+            font-weight: 800;
+        """)
+        cab_layout.addWidget(marca)
 
         col_titulo = QVBoxLayout()
         col_titulo.setSpacing(0)
 
-        titulo = QLabel("PAGAMENTO")
+        titulo = QLabel("Pagamento")
         titulo.setStyleSheet(
             f"background:transparent; color:{tokens.TEXTO_CLARO}; "
             f"font-size:16px; font-weight:bold;"
@@ -129,6 +175,18 @@ class PagamentoWindow(QDialog):
 
         col_titulo.addWidget(titulo)
         col_titulo.addWidget(subtitulo)
+
+        cab_layout.addLayout(col_titulo)
+        cab_layout.addStretch()
+
+        dica_esc = QLabel("Esc")
+        dica_esc.setAlignment(Qt.AlignCenter)
+        dica_esc.setStyleSheet(f"""
+            background: {tokens.SIDEBAR_HOVER}; color:{tokens.TEXTO_SIDEBAR_APAGADO};
+            border-radius: {tokens.RADIUS_SM}px; font-size: 11px; font-weight: 700;
+            padding: 4px 10px;
+        """)
+        cab_layout.addWidget(dica_esc)
 
         self.bt_cancelar = QPushButton("✕  Cancelar Venda")
         self.bt_cancelar.setAutoDefault(False)
@@ -146,9 +204,6 @@ class PagamentoWindow(QDialog):
             }}
         """)
         self.bt_cancelar.clicked.connect(self.reject)
-
-        cab_layout.addLayout(col_titulo)
-        cab_layout.addStretch()
         cab_layout.addWidget(self.bt_cancelar)
 
         return cabecalho
@@ -156,105 +211,295 @@ class PagamentoWindow(QDialog):
     def _construir_coluna_resumo(self):
 
         esquerda = QFrame()
-        esquerda.setFixedWidth(320)
+        esquerda.setFixedWidth(340)
         esquerda.setStyleSheet(
             f"background:{tokens.FUNDO}; "
             f"border-right:1px solid {tokens.BORDA};"
         )
 
-        esq_layout = QVBoxLayout(esquerda)
-        esq_layout.setContentsMargins(24, 24, 24, 24)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet(f"background:{tokens.FUNDO}; border:none;")
+
+        conteudo = QFrame()
+        conteudo.setStyleSheet(f"background:{tokens.FUNDO};")
+
+        esq_layout = QVBoxLayout(conteudo)
+        esq_layout.setContentsMargins(20, 20, 20, 16)
         esq_layout.setSpacing(4)
+
+        cabecalho_resumo = QHBoxLayout()
+        cabecalho_resumo.setSpacing(8)
+
+        icone_resumo = QLabel()
+        icone_resumo.setPixmap(icone_pixmap("shopping-cart", cor=tokens.TEXTO, tamanho=16))
+        icone_resumo.setStyleSheet("background:transparent;")
+        cabecalho_resumo.addWidget(icone_resumo)
+
+        lbl_resumo_titulo = QLabel("Resumo da Venda")
+        lbl_resumo_titulo.setStyleSheet(
+            f"background:transparent; font-size:14px; "
+            f"font-weight:800; color:{tokens.TEXTO};"
+        )
+        cabecalho_resumo.addWidget(lbl_resumo_titulo)
+        cabecalho_resumo.addStretch()
+
+        badge_itens = QLabel(f"{len(self.itens)} itens")
+        badge_itens.setStyleSheet(f"""
+            background:{tokens.CARD}; color:{tokens.TEXTO_SECUNDARIO};
+            border-radius:{tokens.RADIUS_PILL}px;
+            font-size:11px; font-weight:700; padding:3px 10px;
+        """)
+        cabecalho_resumo.addWidget(badge_itens)
+
+        esq_layout.addLayout(cabecalho_resumo)
+        esq_layout.addSpacing(12)
+
+        for indice, item in enumerate(self.itens):
+            esq_layout.addWidget(self._linha_item_resumo(item, indice))
+            esq_layout.addSpacing(10)
+
+        esq_layout.addSpacing(16)
+
+        esq_layout.addLayout(self._linha_valor_resumo("Subtotal", self.subtotal))
+
+        if self.desconto > EPSILON:
+            esq_layout.addLayout(
+                self._linha_valor_resumo("Desconto", -self.desconto, cor=tokens.ERRO)
+            )
+
+        if self.acrescimo > EPSILON:
+            esq_layout.addLayout(
+                self._linha_valor_resumo("Acréscimo", self.acrescimo, cor=tokens.SECUNDARIA)
+            )
+
+        esq_layout.addSpacing(10)
+
+        caixa_total = QFrame()
+        caixa_total.setStyleSheet(f"""
+            QFrame {{
+                background: {tokens.PRIMARIA_CLARA};
+                border-radius: {tokens.RADIUS_SM}px;
+            }}
+        """)
+        layout_caixa_total = QVBoxLayout(caixa_total)
+        layout_caixa_total.setContentsMargins(14, 10, 14, 10)
+        layout_caixa_total.setSpacing(2)
 
         lbl_total_titulo = QLabel("TOTAL DA VENDA")
         lbl_total_titulo.setStyleSheet(
             f"background:transparent; font-size:11px; "
-            f"font-weight:bold; color:{tokens.TEXTO_SECUNDARIO};"
+            f"font-weight:bold; color:{tokens.PRIMARIA_HOVER};"
         )
+        layout_caixa_total.addWidget(lbl_total_titulo)
 
         self.lbl_total = QLabel(f"R$ {_fmt(self.total)}")
         self.lbl_total.setStyleSheet(
-            f"background:transparent; font-size:34px; "
-            f"font-weight:800; color:{tokens.TEXTO};"
+            f"background:transparent; font-size:30px; "
+            f"font-weight:800; color:{tokens.PRIMARIA_HOVER};"
         )
+        layout_caixa_total.addWidget(self.lbl_total)
 
-        esq_layout.addWidget(lbl_total_titulo)
-        esq_layout.addWidget(self.lbl_total)
-        esq_layout.addSpacing(16)
+        esq_layout.addWidget(caixa_total)
+        esq_layout.addSpacing(14)
 
-        lbl_resumo_titulo = QLabel(f"RESUMO · {len(self.itens)} ITENS")
-        lbl_resumo_titulo.setStyleSheet(
+        esq_layout.addWidget(self._construir_linha_cliente())
+        esq_layout.addSpacing(14)
+
+        lbl_obs_titulo = QLabel("OBSERVAÇÃO (OPCIONAL)")
+        lbl_obs_titulo.setStyleSheet(
             f"background:transparent; font-size:11px; "
             f"font-weight:bold; color:{tokens.TEXTO_SECUNDARIO};"
         )
+        esq_layout.addWidget(lbl_obs_titulo)
+        esq_layout.addSpacing(4)
 
-        esq_layout.addWidget(lbl_resumo_titulo)
-
-        for item in self.itens:
-
-            linha_item = QHBoxLayout()
-
-            nome = QLabel(item["nome"])
-            nome.setStyleSheet(
-                f"background:transparent; font-size:12px; color:{tokens.TEXTO};"
-            )
-
-            subtotal = item["preco"] * item["quantidade"]
-
-            valor = QLabel(f"R$ {_fmt(subtotal)}")
-            valor.setAlignment(Qt.AlignRight)
-            valor.setStyleSheet(
-                f"background:transparent; font-size:12px; color:{tokens.TEXTO};"
-            )
-
-            linha_item.addWidget(nome)
-            linha_item.addWidget(valor)
-
-            esq_layout.addLayout(linha_item)
+        self.observacao = CampoTexto(
+            "Ex.: cliente pediu embalagem pra presente"
+        )
+        esq_layout.addWidget(self.observacao)
 
         esq_layout.addStretch()
 
-        # ---- resumo do pagamento (pago / restante), sempre visivel ----
+        # ---- pago / restante -- discreto, o essencial ja esta' no
+        # banner de status e nas 3 caixinhas do bloco de dinheiro; isso
+        # aqui fica so' como registro compacto sempre visivel ----
 
-        linha_divisoria = QFrame()
-        linha_divisoria.setFixedHeight(1)
-        linha_divisoria.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
-        esq_layout.addWidget(linha_divisoria)
-        esq_layout.addSpacing(12)
+        esq_layout.addSpacing(10)
 
-        linha_pago = QHBoxLayout()
+        rodape_pago_restante = QHBoxLayout()
+
+        col_pago = QVBoxLayout()
+        col_pago.setSpacing(0)
         lbl_pago_titulo = QLabel("PAGO")
         lbl_pago_titulo.setStyleSheet(
-            f"background:transparent; font-size:12px; "
-            f"font-weight:bold; color:{tokens.TEXTO_SECUNDARIO};"
+            f"background:transparent; font-size:10px; "
+            f"font-weight:bold; color:{tokens.TEXTO_TERCIARIO};"
         )
         self.lbl_pago = QLabel(f"R$ {_fmt(0)}")
-        self.lbl_pago.setAlignment(Qt.AlignRight)
         self.lbl_pago.setStyleSheet(
-            f"background:transparent; font-size:14px; "
+            f"background:transparent; font-size:13px; "
             f"font-weight:bold; color:{tokens.TEXTO};"
         )
-        linha_pago.addWidget(lbl_pago_titulo)
-        linha_pago.addWidget(self.lbl_pago)
-        esq_layout.addLayout(linha_pago)
+        col_pago.addWidget(lbl_pago_titulo)
+        col_pago.addWidget(self.lbl_pago)
 
-        linha_restante = QHBoxLayout()
+        col_restante = QVBoxLayout()
+        col_restante.setSpacing(0)
         lbl_restante_titulo = QLabel("RESTANTE")
+        lbl_restante_titulo.setAlignment(Qt.AlignRight)
         lbl_restante_titulo.setStyleSheet(
-            f"background:transparent; font-size:12px; "
-            f"font-weight:bold; color:{tokens.TEXTO_SECUNDARIO};"
+            f"background:transparent; font-size:10px; "
+            f"font-weight:bold; color:{tokens.TEXTO_TERCIARIO};"
         )
         self.lbl_restante = QLabel(f"R$ {_fmt(self.total)}")
         self.lbl_restante.setAlignment(Qt.AlignRight)
         self.lbl_restante.setStyleSheet(
-            f"background:transparent; font-size:18px; "
+            f"background:transparent; font-size:13px; "
             f"font-weight:800; color:{tokens.ALERTA};"
         )
-        linha_restante.addWidget(lbl_restante_titulo)
-        linha_restante.addWidget(self.lbl_restante)
-        esq_layout.addLayout(linha_restante)
+        col_restante.addWidget(lbl_restante_titulo)
+        col_restante.addWidget(self.lbl_restante)
+
+        rodape_pago_restante.addLayout(col_pago)
+        rodape_pago_restante.addStretch()
+        rodape_pago_restante.addLayout(col_restante)
+
+        esq_layout.addLayout(rodape_pago_restante)
+
+        scroll.setWidget(conteudo)
+
+        layout_externo = QVBoxLayout(esquerda)
+        layout_externo.setContentsMargins(0, 0, 0, 0)
+        layout_externo.addWidget(scroll)
 
         return esquerda
+
+    def _linha_item_resumo(self, item, indice):
+
+        linha = QFrame()
+        linha.setStyleSheet("background:transparent; border:none;")
+
+        layout = QHBoxLayout(linha)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        inicial = (item["nome"][:1] or "?").upper()
+        cor = _CORES_MONOGRAMA[indice % len(_CORES_MONOGRAMA)]
+
+        selo = QLabel(inicial)
+        selo.setFixedSize(28, 28)
+        selo.setAlignment(Qt.AlignCenter)
+        selo.setStyleSheet(f"""
+            background: {cor}; color: white; border-radius: 8px;
+            font-size: 12px; font-weight: 800;
+        """)
+        layout.addWidget(selo)
+
+        col_texto = QVBoxLayout()
+        col_texto.setSpacing(0)
+
+        nome = QLabel(item["nome"])
+        nome.setStyleSheet(
+            f"background:transparent; font-size:12.5px; font-weight:700; color:{tokens.TEXTO};"
+        )
+        legenda = QLabel(f"{item['quantidade']} un × R$ {_fmt(item['preco'])}")
+        legenda.setStyleSheet(
+            f"background:transparent; font-size:11px; color:{tokens.TEXTO_TERCIARIO};"
+        )
+        col_texto.addWidget(nome)
+        col_texto.addWidget(legenda)
+
+        layout.addLayout(col_texto, 1)
+
+        subtotal = item["preco"] * item["quantidade"]
+        valor = QLabel(f"R$ {_fmt(subtotal)}")
+        valor.setAlignment(Qt.AlignRight | Qt.AlignTop)
+        valor.setStyleSheet(
+            f"background:transparent; font-size:12.5px; font-weight:700; color:{tokens.TEXTO};"
+        )
+        layout.addWidget(valor)
+
+        return linha
+
+    def _linha_valor_resumo(self, rotulo, valor, cor=None):
+
+        linha = QHBoxLayout()
+
+        lbl_rotulo = QLabel(rotulo)
+        lbl_rotulo.setStyleSheet(
+            f"background:transparent; font-size:12.5px; color:{tokens.TEXTO_SECUNDARIO};"
+        )
+
+        sinal = "- " if valor < 0 else ("+ " if cor and valor > 0 and rotulo != "Subtotal" else "")
+        lbl_valor = QLabel(f"{sinal}R$ {_fmt(abs(valor))}")
+        lbl_valor.setAlignment(Qt.AlignRight)
+        lbl_valor.setStyleSheet(
+            f"background:transparent; font-size:12.5px; font-weight:700; "
+            f"color:{cor or tokens.TEXTO};"
+        )
+
+        linha.addWidget(lbl_rotulo)
+        linha.addWidget(lbl_valor)
+
+        return linha
+
+    def _construir_linha_cliente(self):
+
+        linha = QFrame()
+        linha.setStyleSheet(f"""
+            QFrame {{
+                background: {tokens.CARD};
+                border-radius: {tokens.RADIUS_SM}px;
+            }}
+        """)
+
+        layout = QHBoxLayout(linha)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(10)
+
+        icone_cliente = QLabel()
+        icone_cliente.setPixmap(icone_pixmap("user", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        icone_cliente.setStyleSheet("background:transparent;")
+        layout.addWidget(icone_cliente)
+
+        col_cliente = QVBoxLayout()
+        col_cliente.setSpacing(0)
+
+        lbl_rotulo = QLabel("CLIENTE")
+        lbl_rotulo.setStyleSheet(
+            f"background:transparent; font-size:10px; "
+            f"font-weight:bold; color:{tokens.TEXTO_TERCIARIO};"
+        )
+        col_cliente.addWidget(lbl_rotulo)
+
+        self.lbl_cliente_selecionado = QLabel(
+            self.cliente_nome or "Não informado"
+        )
+        self.lbl_cliente_selecionado.setWordWrap(True)
+        self.lbl_cliente_selecionado.setStyleSheet(f"""
+            background:transparent; font-size:13px; font-weight:700;
+            color: {tokens.SECUNDARIA if self.cliente_nome else tokens.TEXTO_SECUNDARIO};
+        """)
+        col_cliente.addWidget(self.lbl_cliente_selecionado)
+
+        layout.addLayout(col_cliente, 1)
+
+        self.bt_selecionar_cliente = QPushButton("Selecionar (F2)")
+        self.bt_selecionar_cliente.setCursor(Qt.PointingHandCursor)
+        self.bt_selecionar_cliente.setAutoDefault(False)
+        self.bt_selecionar_cliente.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; border:none;
+                color:{tokens.PRIMARIA}; font-size:12px; font-weight:700;
+            }}
+            QPushButton:hover {{ color:{tokens.PRIMARIA_HOVER}; }}
+        """)
+        self.bt_selecionar_cliente.clicked.connect(self.abrir_selecionar_cliente)
+        layout.addWidget(self.bt_selecionar_cliente)
+
+        return linha
 
     def _construir_coluna_pagamento(self):
         """Coluna direita = area rolavel com a selecao de forma(s) +
@@ -283,11 +528,10 @@ class PagamentoWindow(QDialog):
         layout.setContentsMargins(24, 24, 24, 8)
         layout.setSpacing(16)
 
-        self.lbl_forma_titulo = QLabel("FORMA DE PAGAMENTO")
-        self.lbl_forma_titulo.setStyleSheet(
-            f"background:transparent; font-size:11px; "
-            f"font-weight:bold; color:{tokens.TEXTO_SECUNDARIO};"
-        )
+        layout.addLayout(self._titulo_passo("1", "Forma de pagamento"))
+
+        self.lbl_forma_titulo = QLabel("")
+        self.lbl_forma_titulo.setVisible(False)
         layout.addWidget(self.lbl_forma_titulo)
 
         formas_layout = QHBoxLayout()
@@ -315,7 +559,7 @@ class PagamentoWindow(QDialog):
         # ---- dividir pagamento (2ª forma) ----
 
         self.bt_dividir = BotaoSecundario(
-            "+ DIVIDIR PAGAMENTO", icone_nome="plus"
+            "DIVIDIR PAGAMENTO", icone_nome="plus"
         )
         self.bt_dividir.setAutoDefault(False)
         self.bt_dividir.setMinimumHeight(40)
@@ -325,6 +569,8 @@ class PagamentoWindow(QDialog):
         self.bloco_divisao = self._construir_bloco_divisao()
         self.bloco_divisao.setVisible(False)
         layout.addWidget(self.bloco_divisao)
+
+        layout.addLayout(self._titulo_passo("2", "Detalhes do pagamento"))
 
         # ---- entrada de valor (dinheiro / troco) ----
 
@@ -337,26 +583,6 @@ class PagamentoWindow(QDialog):
         layout.addWidget(self.bloco_pix)
 
         self.gerar_qrcode_pix()
-
-        # ---- fiado (a prazo) ----
-
-        self.bloco_prazo = self._construir_bloco_prazo()
-        layout.addWidget(self.bloco_prazo)
-
-        # ---- observação (opcional) ----
-
-        lbl_obs_titulo = QLabel("OBSERVAÇÃO (OPCIONAL)")
-        lbl_obs_titulo.setStyleSheet(
-            f"background:transparent; font-size:11px; "
-            f"font-weight:bold; color:{tokens.TEXTO_SECUNDARIO};"
-        )
-
-        self.observacao = CampoTexto(
-            "Ex.: cliente pediu embalagem pra presente"
-        )
-
-        layout.addWidget(lbl_obs_titulo)
-        layout.addWidget(self.observacao)
 
         layout.addStretch()
 
@@ -388,7 +614,7 @@ class PagamentoWindow(QDialog):
         self.lbl_hint_confirmar.setVisible(False)
         rodape_layout.addWidget(self.lbl_hint_confirmar)
 
-        self.bt_confirmar = BotaoSucesso("CONFIRMAR VENDA", icone_nome="check")
+        self.bt_confirmar = BotaoSucesso("CONFIRMAR VENDA (F3)", icone_nome="check")
         self.bt_confirmar.setMinimumHeight(52)
         self.bt_confirmar.setAutoDefault(True)
         self.bt_confirmar.setDefault(True)
@@ -400,6 +626,30 @@ class PagamentoWindow(QDialog):
 
         return direita
 
+    def _titulo_passo(self, numero, texto):
+
+        linha = QHBoxLayout()
+        linha.setSpacing(8)
+
+        selo = QLabel(numero)
+        selo.setFixedSize(22, 22)
+        selo.setAlignment(Qt.AlignCenter)
+        selo.setStyleSheet(f"""
+            background: {tokens.PRIMARIA}; color: white;
+            border-radius: 11px; font-size: 12px; font-weight: 800;
+        """)
+        linha.addWidget(selo)
+
+        lbl = QLabel(texto)
+        lbl.setStyleSheet(
+            f"background:transparent; font-size:14px; "
+            f"font-weight:800; color:{tokens.TEXTO};"
+        )
+        linha.addWidget(lbl)
+        linha.addStretch()
+
+        return linha
+
     def _construir_bloco_divisao(self):
 
         bloco = QFrame()
@@ -407,7 +657,6 @@ class PagamentoWindow(QDialog):
         bloco.setStyleSheet(f"""
             QFrame#blocoDivisao {{
                 background: {tokens.PRIMARIA_CLARA};
-                border: 1.5px solid {tokens.PRIMARIA};
                 border-radius: {tokens.RADIUS_MD}px;
             }}
         """)
@@ -515,16 +764,15 @@ class PagamentoWindow(QDialog):
         campo.setAlignment(Qt.AlignRight)
         campo.setStyleSheet(f"""
             QLineEdit {{
-                background:{tokens.CARD};
+                background:{tokens.FUNDO};
                 font-size:22px;
                 font-weight:800;
                 color:{tokens.TEXTO};
-                border:1.5px solid {tokens.BORDA_FORTE};
                 border-radius:{tokens.RADIUS_SM}px;
                 padding:6px 12px;
             }}
             QLineEdit:focus {{
-                border:1.5px solid {tokens.PRIMARIA};
+                background:{tokens.PRIMARIA_CLARA};
             }}
         """)
 
@@ -536,51 +784,71 @@ class PagamentoWindow(QDialog):
 
         bloco_layout = QVBoxLayout(bloco)
         bloco_layout.setContentsMargins(0, 0, 0, 0)
-        bloco_layout.setSpacing(10)
+        bloco_layout.setSpacing(14)
 
         lbl_entrada_titulo = QLabel("DINHEIRO RECEBIDO DO CLIENTE")
         lbl_entrada_titulo.setStyleSheet(
             f"background:transparent; font-size:11px; "
             f"font-weight:bold; color:{tokens.TEXTO_SECUNDARIO};"
         )
+        bloco_layout.addWidget(lbl_entrada_titulo)
+
+        linha_entrada = QHBoxLayout()
+        linha_entrada.setSpacing(14)
+
+        caixa_recebido = QFrame()
+        caixa_recebido.setStyleSheet(f"""
+            QFrame {{
+                background: {tokens.FUNDO};
+                border-radius: {tokens.RADIUS_SM}px;
+            }}
+        """)
+        layout_caixa_recebido = QHBoxLayout(caixa_recebido)
+        layout_caixa_recebido.setContentsMargins(14, 4, 14, 4)
+
+        lbl_prefixo = QLabel("R$")
+        lbl_prefixo.setStyleSheet(
+            f"background:transparent; font-size:20px; font-weight:700; "
+            f"color:{tokens.TEXTO_TERCIARIO};"
+        )
+        layout_caixa_recebido.addWidget(lbl_prefixo)
 
         self.recebido = QLineEdit()
-        self.recebido.setPlaceholderText("R$ 0,00")
+        self.recebido.setPlaceholderText("0,00")
         self.recebido.setAlignment(Qt.AlignRight)
         self.recebido.setStyleSheet(f"""
             QLineEdit {{
                 background:transparent;
-                font-size:32px;
+                font-size:28px;
                 font-weight:800;
                 color:{tokens.TEXTO};
                 border:none;
-                border-bottom:2px solid {tokens.BORDA};
-                padding:6px 0;
-            }}
-            QLineEdit:focus {{
-                border-bottom:2px solid {tokens.PRIMARIA};
+                padding:8px 0;
             }}
         """)
         self.recebido.textEdited.connect(self._recebido_editado)
+        layout_caixa_recebido.addWidget(self.recebido)
 
-        bloco_layout.addWidget(lbl_entrada_titulo)
-        bloco_layout.addWidget(self.recebido)
+        linha_entrada.addWidget(caixa_recebido, 1)
 
-        valores_layout = QGridLayout()
-        valores_layout.setSpacing(8)
+        grade_valores = QGridLayout()
+        grade_valores.setSpacing(6)
 
-        for indice, valor in enumerate(VALORES_RAPIDOS):
+        botoes_rapidos = [(f"R$ {v}", v) for v in VALORES_RAPIDOS[2:]]
 
-            bt = QPushButton(f"+R$ {valor}")
+        for indice, (rotulo, valor) in enumerate(botoes_rapidos):
+
+            bt = QPushButton(rotulo)
             bt.setAutoDefault(False)
             bt.setCursor(Qt.PointingHandCursor)
-            bt.setMinimumHeight(36)
+            bt.setMinimumHeight(30)
             bt.setStyleSheet(f"""
                 QPushButton {{
                     background:{tokens.FUNDO};
                     color:{tokens.TEXTO};
                     border-radius:{tokens.RADIUS_SM}px;
                     font-weight:600;
+                    font-size: 12px;
                 }}
                 QPushButton:hover {{
                     background:{tokens.BORDA};
@@ -590,19 +858,96 @@ class PagamentoWindow(QDialog):
                 lambda checked, v=valor: self.adicionar_valor(v)
             )
 
-            valores_layout.addWidget(bt, indice // 4, indice % 4)
+            grade_valores.addWidget(bt, indice // 3, indice % 3)
 
-        bloco_layout.addLayout(valores_layout)
+        bt_exato = QPushButton("Valor exato")
+        bt_exato.setAutoDefault(False)
+        bt_exato.setCursor(Qt.PointingHandCursor)
+        bt_exato.setMinimumHeight(30)
+        bt_exato.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.PRIMARIA_CLARA};
+                color:{tokens.PRIMARIA_HOVER};
+                border-radius:{tokens.RADIUS_SM}px;
+                font-weight:700;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background:{tokens.PRIMARIA};
+                color: white;
+            }}
+        """)
+        bt_exato.clicked.connect(self.definir_valor_exato)
 
-        self.troco = QLabel("Troco: R$ 0,00")
-        self.troco.setStyleSheet(
-            f"background:transparent; font-size:15px; "
-            f"font-weight:800; color:{tokens.TEXTO};"
+        posicao = len(botoes_rapidos)
+        grade_valores.addWidget(bt_exato, posicao // 3, posicao % 3)
+
+        linha_entrada.addLayout(grade_valores, 1)
+
+        bloco_layout.addLayout(linha_entrada)
+
+        # ---- 3 caixinhas: total da venda / valor recebido / troco ----
+
+        linha_caixinhas = QHBoxLayout()
+        linha_caixinhas.setSpacing(10)
+
+        self.lbl_recebido_resumo = QLabel(f"R$ {_fmt(0)}")
+        self.troco = QLabel(f"R$ {_fmt(0)}")
+
+        linha_caixinhas.addWidget(
+            self._caixinha_resumo("dollar-sign", "Total da venda", f"R$ {_fmt(self.total)}")
+        )
+        linha_caixinhas.addWidget(
+            self._caixinha_resumo("wallet", "Valor recebido", None, self.lbl_recebido_resumo)
+        )
+        linha_caixinhas.addWidget(
+            self._caixinha_resumo("refresh-cw", "Troco", None, self.troco)
         )
 
-        bloco_layout.addWidget(self.troco)
+        bloco_layout.addLayout(linha_caixinhas)
 
         return bloco
+
+    def _caixinha_resumo(self, icone_nome, rotulo, texto_fixo=None, lbl_valor=None):
+
+        caixa = QFrame()
+        caixa.setStyleSheet(f"""
+            QFrame {{
+                background: {tokens.FUNDO};
+                border-radius: {tokens.RADIUS_SM}px;
+            }}
+        """)
+
+        layout = QVBoxLayout(caixa)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(4)
+
+        topo = QHBoxLayout()
+        topo.setSpacing(6)
+
+        lbl_icone = QLabel()
+        lbl_icone.setPixmap(icone_pixmap(icone_nome, cor=tokens.TEXTO_TERCIARIO, tamanho=13))
+        lbl_icone.setStyleSheet("background:transparent;")
+        topo.addWidget(lbl_icone)
+
+        lbl_rotulo = QLabel(rotulo)
+        lbl_rotulo.setStyleSheet(
+            f"background:transparent; font-size:11px; color:{tokens.TEXTO_SECUNDARIO};"
+        )
+        topo.addWidget(lbl_rotulo)
+        topo.addStretch()
+
+        layout.addLayout(topo)
+
+        if lbl_valor is None:
+            lbl_valor = QLabel(texto_fixo or "")
+
+        lbl_valor.setStyleSheet(
+            f"background:transparent; font-size:15px; font-weight:800; color:{tokens.TEXTO};"
+        )
+        layout.addWidget(lbl_valor)
+
+        return caixa
 
     def _construir_bloco_pix(self):
 
@@ -632,44 +977,6 @@ class PagamentoWindow(QDialog):
 
         return bloco
 
-    def _construir_bloco_prazo(self):
-
-        bloco = QFrame()
-
-        prazo_layout = QVBoxLayout(bloco)
-        prazo_layout.setContentsMargins(0, 0, 0, 0)
-        prazo_layout.setSpacing(10)
-
-        lbl_prazo_titulo = QLabel("CLIENTE DO FIADO")
-        lbl_prazo_titulo.setStyleSheet(
-            f"background:transparent; font-size:11px; "
-            f"font-weight:bold; color:{tokens.TEXTO_SECUNDARIO};"
-        )
-
-        self.lbl_cliente_selecionado = QLabel(
-            self.cliente_nome or "Nenhum cliente selecionado"
-        )
-        self.lbl_cliente_selecionado.setWordWrap(True)
-        self.lbl_cliente_selecionado.setStyleSheet(f"""
-            background:transparent; font-size:16px; font-weight:bold;
-            color: {tokens.SECUNDARIA if self.cliente_nome else tokens.ERRO};
-        """)
-
-        self.bt_selecionar_cliente = BotaoSecundario(
-            "Selecionar Cliente", icone_nome="user"
-        )
-        self.bt_selecionar_cliente.setMinimumHeight(44)
-        self.bt_selecionar_cliente.setAutoDefault(False)
-        self.bt_selecionar_cliente.clicked.connect(
-            self.abrir_selecionar_cliente
-        )
-
-        prazo_layout.addWidget(lbl_prazo_titulo)
-        prazo_layout.addWidget(self.lbl_cliente_selecionado)
-        prazo_layout.addWidget(self.bt_selecionar_cliente)
-
-        return bloco
-
     def _construir_banner_status(self):
 
         banner = QFrame()
@@ -695,6 +1002,61 @@ class PagamentoWindow(QDialog):
 
         return banner
 
+    def _construir_barra_atalhos(self):
+
+        barra = QFrame()
+        barra.setFixedHeight(38)
+        barra.setStyleSheet(f"""
+            QFrame {{
+                background: {tokens.FUNDO};
+                border-top: 1px solid {tokens.BORDA};
+            }}
+        """)
+
+        layout = QHBoxLayout(barra)
+        layout.setContentsMargins(24, 0, 24, 0)
+        layout.setSpacing(20)
+
+        for tecla, rotulo in (("F3", "Confirmar"), ("F2", "Cliente"), ("Esc", "Cancelar")):
+            layout.addLayout(self._item_atalho(tecla, rotulo))
+
+        layout.addStretch()
+
+        config = configuracoes()
+        nome_loja = config.get("nome_loja") or "Vertex ERP"
+
+        lbl_loja = QLabel(nome_loja)
+        lbl_loja.setStyleSheet(
+            f"background:transparent; color:{tokens.TEXTO_SECUNDARIO}; font-size:11px;"
+        )
+        layout.addWidget(lbl_loja)
+
+        return barra
+
+    def _item_atalho(self, tecla, rotulo):
+
+        item = QHBoxLayout()
+        item.setSpacing(6)
+
+        badge_tecla = QLabel(tecla)
+        badge_tecla.setAlignment(Qt.AlignCenter)
+        badge_tecla.setFixedHeight(18)
+        badge_tecla.setStyleSheet(f"""
+            background:{tokens.CARD}; color:{tokens.TEXTO_SECUNDARIO};
+            border:1px solid {tokens.BORDA}; border-radius:4px;
+            font-size:10px; font-weight:700; padding: 0 6px;
+        """)
+
+        lbl_rotulo = QLabel(rotulo)
+        lbl_rotulo.setStyleSheet(
+            f"background:transparent; color:{tokens.TEXTO_TERCIARIO}; font-size:11px;"
+        )
+
+        item.addWidget(badge_tecla)
+        item.addWidget(lbl_rotulo)
+
+        return item
+
     # ======================================
     # SELECAO DE FORMA (1ª / 2ª)
     # ======================================
@@ -710,11 +1072,6 @@ class PagamentoWindow(QDialog):
 
             botao.setChecked(selecionado)
             self._pintar_pill(botao, icone_nome, selecionado)
-
-        self.lbl_forma_titulo.setText(
-            "1ª FORMA DE PAGAMENTO" if self.dividir_pagamento
-            else "FORMA DE PAGAMENTO"
-        )
 
         self._atualizar_visibilidade_blocos()
 
@@ -796,9 +1153,6 @@ class PagamentoWindow(QDialog):
             self.forma_pagamento == "DINHEIRO" or forma_2 == "DINHEIRO"
         )
         self.bloco_pix.setVisible(self.forma_pagamento == "PIX")
-        self.bloco_prazo.setVisible(
-            self.forma_pagamento == "PRAZO" or forma_2 == "PRAZO"
-        )
 
     # ======================================
     # DIVIDIR PAGAMENTO
@@ -812,7 +1166,6 @@ class PagamentoWindow(QDialog):
         self.bloco_divisao.setVisible(True)
         fade_in(self.bloco_divisao)
 
-        self.lbl_forma_titulo.setText("1ª FORMA DE PAGAMENTO")
         self.lbl_caption_valor_1.setText(
             f"VALOR NA 1ª FORMA — {NOMES_FORMA[self.forma_pagamento].upper()}"
         )
@@ -840,7 +1193,6 @@ class PagamentoWindow(QDialog):
 
         self.selecionar_forma_2(None)
 
-        self.lbl_forma_titulo.setText("FORMA DE PAGAMENTO")
         self.valor_forma_2 = 0.0
 
         self._atualizar_visibilidade_blocos()
@@ -949,12 +1301,12 @@ class PagamentoWindow(QDialog):
 
         if restante > EPSILON:
             self.lbl_restante.setStyleSheet(
-                f"background:transparent; font-size:18px; "
+                f"background:transparent; font-size:13px; "
                 f"font-weight:800; color:{tokens.ALERTA};"
             )
         else:
             self.lbl_restante.setStyleSheet(
-                f"background:transparent; font-size:18px; "
+                f"background:transparent; font-size:13px; "
                 f"font-weight:800; color:{tokens.SECUNDARIA};"
             )
 
@@ -973,7 +1325,6 @@ class PagamentoWindow(QDialog):
             self.banner_status.setStyleSheet(f"""
                 QFrame#bannerStatus {{
                     background:{tokens.ERRO_CLARO};
-                    border:1.5px solid {tokens.ERRO};
                     border-radius:{tokens.RADIUS_MD}px;
                 }}
             """)
@@ -993,7 +1344,6 @@ class PagamentoWindow(QDialog):
             self.banner_status.setStyleSheet(f"""
                 QFrame#bannerStatus {{
                     background:{tokens.ALERTA_CLARO};
-                    border:1.5px solid {tokens.ALERTA};
                     border-radius:{tokens.RADIUS_MD}px;
                 }}
             """)
@@ -1013,7 +1363,6 @@ class PagamentoWindow(QDialog):
             self.banner_status.setStyleSheet(f"""
                 QFrame#bannerStatus {{
                     background:{tokens.SUCESSO_CLARO};
-                    border:1.5px solid {tokens.SECUNDARIA};
                     border-radius:{tokens.RADIUS_MD}px;
                 }}
             """)
@@ -1082,7 +1431,7 @@ class PagamentoWindow(QDialog):
                 return False, "Informe o valor recebido em dinheiro."
 
         if "PRAZO" in formas_da_venda and self.cliente_id is None:
-            return False, "Selecione o cliente do fiado."
+            return False, "Selecione o cliente do crediário."
 
         return True, None
 
@@ -1091,7 +1440,8 @@ class PagamentoWindow(QDialog):
         necessario = self._valor_dinheiro_necessario()
 
         if necessario is None:
-            self.troco.setText("Troco: R$ 0,00")
+            self.troco.setText(f"R$ {_fmt(0)}")
+            self.lbl_recebido_resumo.setText(f"R$ {_fmt(0)}")
             return
 
         recebido = _texto_para_valor(self.recebido.text())
@@ -1103,7 +1453,8 @@ class PagamentoWindow(QDialog):
             f"background:transparent; font-size:15px; "
             f"font-weight:800; color:{cor};"
         )
-        self.troco.setText(f"Troco: R$ {_fmt(troco)}")
+        self.troco.setText(f"R$ {_fmt(troco)}")
+        self.lbl_recebido_resumo.setText(f"R$ {_fmt(recebido)}")
 
     # ======================================
     # CLIENTE / PIX
@@ -1122,8 +1473,8 @@ class PagamentoWindow(QDialog):
 
         self.lbl_cliente_selecionado.setText(cliente["nome"])
         self.lbl_cliente_selecionado.setStyleSheet(
-            f"background:transparent; font-size:16px; "
-            f"font-weight:bold; color:{tokens.SECUNDARIA};"
+            f"background:transparent; font-size:13px; "
+            f"font-weight:700; color:{tokens.SECUNDARIA};"
         )
 
         self._atualizar_estado_confirmar()
@@ -1181,6 +1532,18 @@ class PagamentoWindow(QDialog):
         self.recebido_acumulado += valor
 
         self.recebido.setText(_fmt(self.recebido_acumulado))
+        self._recalcular_resumo()
+
+    def definir_valor_exato(self):
+        """Preenche o campo com exatamente o que falta receber em
+        dinheiro -- o caso mais comum quando o cliente já entrega o
+        valor certo, sem precisar calcular troco."""
+
+        necessario = self._valor_dinheiro_necessario()
+        valor = necessario if necessario is not None else self.total
+
+        self.recebido_acumulado = valor
+        self.recebido.setText(_fmt(valor))
         self._recalcular_resumo()
 
     # ======================================

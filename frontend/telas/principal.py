@@ -154,6 +154,8 @@ class PrincipalWindow(QMainWindow):
             lambda: self._exibir_pagina("caixa", self.caixa)
         )
 
+        self.dashboard.navegar_relatorios.connect(self.ir_para_relatorios)
+
         self.pdv.voltar.connect(
             lambda: self._exibir_pagina("dashboard", self.dashboard)
         )

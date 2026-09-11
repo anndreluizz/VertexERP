@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from design import tokens
+from design.animations import fade_in
 from design.icons import icone_pixmap
 
 
@@ -105,8 +106,43 @@ class CardKPI(Card):
         """)
         layout.addWidget(self.lbl_valor)
 
+        # selo de variacao (ex.: "↑ 12% em relação a ontem") -- comeca
+        # oculto; so aparece quando quem usa o card tem um numero de
+        # comparacao de verdade pra mostrar (ver definir_variacao)
+        self.lbl_variacao = QLabel()
+        self.lbl_variacao.setTextFormat(Qt.RichText)
+        self.lbl_variacao.setWordWrap(True)
+        self.lbl_variacao.setStyleSheet(f"background:transparent; font-size:{tokens.TAMANHO_XS}px;")
+        self.lbl_variacao.hide()
+        layout.addWidget(self.lbl_variacao)
+
+    def definir_variacao(self, percentual, legenda="em relação a ontem"):
+        """Selo colorido de variação percentual abaixo do valor. Chamar
+        com percentual=None (o padrão quando não há base de comparação
+        confiável -- ver telas/dashboard.py) esconde o selo em vez de
+        inventar um número."""
+
+        if percentual is None:
+            self.lbl_variacao.hide()
+            return
+
+        positiva = percentual >= 0
+        cor = tokens.SUCESSO if positiva else tokens.ERRO
+        seta = "↑" if positiva else "↓"
+
+        self.lbl_variacao.setText(
+            f'<span style="color:{cor}; font-weight:700;">{seta} {abs(percentual):.0f}%</span> '
+            f'<span style="color:{tokens.TEXTO_TERCIARIO};">{legenda}</span>'
+        )
+        self.lbl_variacao.show()
+
     def definir_valor(self, texto):
+        # o fade sutil da um "respiro" visual toda vez que o numero
+        # muda (carregamento inicial ou um recarregar/filtro) -- sem
+        # ficar sub/somando digito por digito, que exigiria parsear de
+        # volta pra numero um texto ja formatado (moeda, unidade etc.)
         self.lbl_valor.setText(texto)
+        fade_in(self.lbl_valor, duracao=240)
 
 
 # ==========================================
@@ -118,7 +154,7 @@ class SecaoCard(Card):
     limpo/repopulado — base de painéis como rankings, gráficos e listas
     (ex.: Top Produtos, Formas de Pagamento, Vendas Recentes)."""
 
-    def __init__(self, titulo, icone_nome=None, parent=None):
+    def __init__(self, titulo, icone_nome=None, widget_acao=None, parent=None):
 
         super().__init__(parent)
 
@@ -144,6 +180,12 @@ class SecaoCard(Card):
         """)
         cabecalho.addWidget(lbl_titulo)
         cabecalho.addStretch()
+
+        # widget opcional na ponta direita do cabecalho -- um seletor
+        # de periodo, um link "Ver todas", etc. (ex.: Top Produtos e
+        # Formas de Pagamento no Dashboard)
+        if widget_acao is not None:
+            cabecalho.addWidget(widget_acao)
 
         layout.addLayout(cabecalho)
 

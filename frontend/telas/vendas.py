@@ -23,7 +23,7 @@ FORMAS_PAGAMENTO = {
     "DEBITO": "Débito",
     "CREDITO": "Crédito",
     "BOLETO": "Boleto",
-    "PRAZO": "A Prazo",
+    "PRAZO": "Crediário",
 }
 
 

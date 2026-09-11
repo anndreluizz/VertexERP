@@ -5,7 +5,6 @@ from PySide6.QtWidgets import QMessageBox
 from telas.cadastro_cliente import CadastroClienteDialog
 from telas.ficha_cliente import FichaClienteDialog
 
-from services.api import configuracoes
 from services.cliente_service import listar_clientes, reativar_cliente
 from services.movimento_fiado_service import listar_movimentos
 from services.venda_service import listar_vendas
@@ -44,6 +43,17 @@ FILTROS = [
     ("Novos Clientes", "NOVOS"),
 ]
 
+# icone (lucide) de cada filtro -- nao ha "clock" no pacote baixado,
+# "calendar" fica o mais proximo pra "Sem Movimento"
+_ICONES_FILTRO = {
+    "TODOS": "users",
+    "ATIVOS": "user",
+    "SEM_MOVIMENTO": "calendar",
+    "INADIMPLENTES": "alert-triangle",
+    "EM_DIA": "check",
+    "NOVOS": "user",
+}
+
 # rótulo exibido -> chave interna da ordenação, na ordem que aparece no combo
 ORDENACOES = [
     ("Último Movimento (mais recente primeiro)", "MOVIMENTO_RECENTE"),
@@ -71,7 +81,7 @@ class ClienteCard(QFrame):
     clicado = Signal(dict)
     reativar_solicitado = Signal(dict)
 
-    def __init__(self, cliente, saldo_fiado, pontuacao=""):
+    def __init__(self, cliente, saldo_fiado, pontuacao="", ultima_movimentacao=None):
 
         super().__init__()
 
@@ -91,7 +101,7 @@ class ClienteCard(QFrame):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(10)
+        layout.setSpacing(12)
 
         topo = QHBoxLayout()
         topo.setSpacing(12)
@@ -102,6 +112,7 @@ class ClienteCard(QFrame):
         col_nome.setSpacing(2)
 
         linha_nome = QHBoxLayout()
+        linha_nome.setSpacing(8)
 
         nome = QLabel(cliente.get("nome") or "")
         nome.setStyleSheet(f"""
@@ -114,12 +125,10 @@ class ClienteCard(QFrame):
         badge = Badge("Ativo" if ativo else "Inativo", "sucesso" if ativo else "erro")
 
         linha_nome.addWidget(nome)
-        linha_nome.addStretch()
         linha_nome.addWidget(badge)
+        linha_nome.addStretch()
 
-        contato = " · ".join(
-            filter(None, [cliente.get("telefone")])
-        ) or "Sem telefone"
+        contato = cliente.get("telefone") or "Sem telefone"
 
         lbl_contato = QLabel(contato)
         lbl_contato.setStyleSheet(f"""
@@ -143,46 +152,67 @@ class ClienteCard(QFrame):
         topo.addWidget(avatar)
         topo.addLayout(col_nome, stretch=1)
 
+        # menu de 3 pontos -- mesma acao de clicar no card (abrir a
+        # ficha); nao duplica nenhum menu novo, so' mais um jeito de
+        # chegar la', igual o resto do card ja permite
+        bt_menu = QPushButton()
+        bt_menu.setFixedSize(28, 28)
+        bt_menu.setCursor(Qt.PointingHandCursor)
+        bt_menu.setIcon(icone("more-vertical", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        bt_menu.setStyleSheet(f"""
+            QPushButton {{ background:transparent; border:none; border-radius:6px; }}
+            QPushButton:hover {{ background:{tokens.FUNDO}; }}
+        """)
+        bt_menu.clicked.connect(lambda: self.clicado.emit(self.cliente))
+        topo.addWidget(bt_menu, 0, Qt.AlignTop)
+
         layout.addLayout(topo)
 
         if pontuacao:
 
-            emoji = pontuacao.split(" ")[0]
+            # tira o emoji do inicio (risco de nao renderizar em toda
+            # maquina) -- a cor ja carrega o mesmo sinal visualmente
+            emoji, _, texto_pontuacao = pontuacao.partition(" ")
             cor = _CORES_PONTUACAO.get(emoji, tokens.TEXTO_SECUNDARIO)
 
-            lbl_pontuacao = QLabel(pontuacao)
+            lbl_pontuacao = QLabel(texto_pontuacao or pontuacao)
             lbl_pontuacao.setStyleSheet(f"""
                 background:transparent; border:none;
                 font-size:{tokens.TAMANHO_XS}px; font-weight:700; color:{cor};
             """)
             layout.addWidget(lbl_pontuacao)
 
-        linha = QFrame()
-        linha.setFixedHeight(1)
-        linha.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
+        linha_stats = QHBoxLayout()
+        linha_stats.setSpacing(10)
 
-        layout.addWidget(linha)
+        cor_fiado = tokens.ERRO if saldo_fiado > 0 else tokens.SECUNDARIA
+        linha_stats.addWidget(
+            self._caixinha("dollar-sign", "Fiado", formatar_moeda(saldo_fiado), cor_fiado)
+        )
 
-        rodape = QHBoxLayout()
+        texto_data = (
+            ultima_movimentacao.strftime("%d/%m/%Y") if ultima_movimentacao else "—"
+        )
+        linha_stats.addWidget(
+            self._caixinha("calendar", "Último Movimento", texto_data, tokens.TEXTO)
+        )
 
-        if saldo_fiado > 0:
-            lbl_fiado = QLabel(f"Fiado: {formatar_moeda(saldo_fiado)}")
-            lbl_fiado.setStyleSheet(f"""
-                background:transparent; border:none;
-                font-size:{tokens.TAMANHO_SM}px; font-weight:700; color:{tokens.ERRO};
-            """)
-            rodape.addWidget(lbl_fiado)
+        layout.addLayout(linha_stats)
 
-        rodape.addStretch()
+        bt_ver = BotaoSecundario("Ver cliente", icone_nome="user")
+        bt_ver.setMinimumHeight(38)
+        bt_ver.clicked.connect(lambda: self.clicado.emit(self.cliente))
+        layout.addWidget(bt_ver)
 
         if not ativo:
             bt_reativar = QPushButton("Reativar")
             bt_reativar.setCursor(Qt.PointingHandCursor)
+            bt_reativar.setMinimumHeight(34)
             bt_reativar.setStyleSheet(f"""
                 QPushButton {{
                     background:{tokens.SECUNDARIA}; color:white;
                     border:none; border-radius:{tokens.RADIUS_SM}px;
-                    padding:4px 12px; font-size:{tokens.TAMANHO_SM}px;
+                    font-size:{tokens.TAMANHO_SM}px;
                     font-weight:700;
                 }}
                 QPushButton:hover {{ background:{tokens.SECUNDARIA_HOVER}; }}
@@ -190,9 +220,45 @@ class ClienteCard(QFrame):
             bt_reativar.clicked.connect(
                 lambda: self.reativar_solicitado.emit(self.cliente)
             )
-            rodape.addWidget(bt_reativar)
+            layout.addWidget(bt_reativar)
 
-        layout.addLayout(rodape)
+    def _caixinha(self, icone_nome, rotulo, valor, cor_valor):
+
+        caixa = QFrame()
+        caixa.setStyleSheet(f"""
+            QFrame {{ background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px; }}
+        """)
+
+        cx_layout = QVBoxLayout(caixa)
+        cx_layout.setContentsMargins(10, 8, 10, 8)
+        cx_layout.setSpacing(3)
+
+        topo_caixa = QHBoxLayout()
+        topo_caixa.setSpacing(5)
+
+        lbl_icone = QLabel()
+        lbl_icone.setPixmap(icone_pixmap(icone_nome, cor=tokens.TEXTO_TERCIARIO, tamanho=12))
+        lbl_icone.setStyleSheet("background:transparent; border:none;")
+        topo_caixa.addWidget(lbl_icone)
+
+        lbl_rotulo = QLabel(rotulo)
+        lbl_rotulo.setStyleSheet(f"""
+            background:transparent; border:none;
+            font-size:10px; color:{tokens.TEXTO_TERCIARIO};
+        """)
+        topo_caixa.addWidget(lbl_rotulo)
+        topo_caixa.addStretch()
+
+        cx_layout.addLayout(topo_caixa)
+
+        lbl_valor = QLabel(valor)
+        lbl_valor.setStyleSheet(f"""
+            background:transparent; border:none;
+            font-size:13px; font-weight:800; color:{cor_valor};
+        """)
+        cx_layout.addWidget(lbl_valor)
+
+        return caixa
 
     def mousePressEvent(self, event):
         self.clicado.emit(self.cliente)
@@ -251,19 +317,19 @@ class Clientes(QWidget):
         col_titulo = QVBoxLayout()
         col_titulo.setSpacing(0)
 
-        config = configuracoes()
-        nome_loja = config.get("nome_loja") or "Vertex ERP"
-
-        titulo = QLabel(nome_loja)
+        titulo = QLabel("Clientes")
         titulo.setStyleSheet(f"""
             background:transparent; font-size:{tokens.TAMANHO_LG}px;
             font-weight:800; color:{tokens.TEXTO};
         """)
 
-        subtitulo = QLabel("LOJA OPERACIONAL")
+        subtitulo = QLabel(
+            "Gerencie seus clientes, acompanhe o fiado e mantenha um "
+            "bom relacionamento."
+        )
         subtitulo.setStyleSheet(f"""
             background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            color:{tokens.SECUNDARIA_HOVER}; font-weight:700;
+            color:{tokens.TEXTO_TERCIARIO};
         """)
 
         col_titulo.addWidget(titulo)
@@ -330,6 +396,7 @@ class Clientes(QWidget):
             bt.setCheckable(True)
             bt.setCursor(Qt.PointingHandCursor)
             bt.setMinimumHeight(44)
+            bt.setIcon(icone(_ICONES_FILTRO.get(chave, "users"), cor=tokens.TEXTO_SECUNDARIO, tamanho=15))
             bt.clicked.connect(
                 lambda checked, c=chave: self.selecionar_status(c)
             )
@@ -385,6 +452,13 @@ class Clientes(QWidget):
         barra_ordenacao.addWidget(self.combo_ordenacao)
 
         barra_ordenacao.addStretch()
+
+        self.lbl_contagem = QLabel("")
+        self.lbl_contagem.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
+        barra_ordenacao.addWidget(self.lbl_contagem)
 
         layout.addLayout(barra_ordenacao)
 
@@ -548,6 +622,11 @@ class Clientes(QWidget):
             selecionado = k == chave
 
             botao.setChecked(selecionado)
+            botao.setIcon(icone(
+                _ICONES_FILTRO.get(k, "users"),
+                cor="white" if selecionado else tokens.TEXTO_SECUNDARIO,
+                tamanho=15,
+            ))
 
             botao.setStyleSheet(f"""
                 QPushButton {{
@@ -652,6 +731,11 @@ class Clientes(QWidget):
         # + busca + ordenacao aplicados), nao a lista inteira sem filtro
         self._clientes_filtrados = clientes
 
+        self.lbl_contagem.setText(
+            "1 cliente encontrado" if len(clientes) == 1
+            else f"{len(clientes)} clientes encontrados"
+        )
+
         self.preencher_grid(clientes)
 
     def _ordenar(self, clientes):
@@ -733,6 +817,7 @@ class Clientes(QWidget):
                 cliente,
                 cliente.get("saldo_fiado", 0),
                 pontuacao=pontuacao,
+                ultima_movimentacao=agr.get("ultima_movimentacao"),
             )
             card.clicado.connect(self.ver_ficha)
             card.reativar_solicitado.connect(self.reativar_cliente)

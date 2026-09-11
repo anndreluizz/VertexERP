@@ -23,7 +23,7 @@ String formatarFormaPagamento(String? valor) {
     'DEBITO' => 'Débito',
     'CREDITO' => 'Crédito',
     'BOLETO' => 'Boleto',
-    'PRAZO' => 'A prazo',
+    'PRAZO' => 'Crediário',
     _ => valor ?? '',
   };
 }

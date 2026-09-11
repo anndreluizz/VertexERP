@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -214,6 +215,83 @@ class Sidebar(QFrame):
         self.itens = {}
 
         # ======================
+        # AJUDA + VERSÃO
+        # ======================
+
+        self.bloco_ajuda = QFrame()
+        self.bloco_ajuda.setStyleSheet("background:transparent;")
+
+        bloco_ajuda_layout = QVBoxLayout(self.bloco_ajuda)
+        bloco_ajuda_layout.setContentsMargins(16, 8, 16, 12)
+        bloco_ajuda_layout.setSpacing(10)
+
+        self.caixa_ajuda = QFrame()
+        self.caixa_ajuda.setStyleSheet(f"""
+            QFrame {{
+                background: {tokens.SIDEBAR_HOVER};
+                border-radius: {tokens.RADIUS_MD}px;
+            }}
+        """)
+
+        ajuda_layout = QVBoxLayout(self.caixa_ajuda)
+        ajuda_layout.setContentsMargins(14, 14, 14, 14)
+        ajuda_layout.setSpacing(10)
+
+        topo_ajuda = QHBoxLayout()
+        topo_ajuda.setSpacing(10)
+
+        icone_ajuda = QLabel()
+        icone_ajuda.setFixedSize(32, 32)
+        icone_ajuda.setAlignment(Qt.AlignCenter)
+        icone_ajuda.setStyleSheet(
+            "background: rgba(255, 255, 255, 0.14); border-radius: 10px;"
+        )
+        icone_ajuda.setPixmap(icone_pixmap("message-circle", cor="#FFFFFF", tamanho=16))
+        topo_ajuda.addWidget(icone_ajuda)
+
+        col_ajuda = QVBoxLayout()
+        col_ajuda.setSpacing(0)
+
+        lbl_ajuda_titulo = QLabel("Precisa de ajuda?")
+        lbl_ajuda_titulo.setStyleSheet(
+            "background:transparent; color:white; font-size:12px; font-weight:700;"
+        )
+        lbl_ajuda_sub = QLabel("Suporte Vertex")
+        lbl_ajuda_sub.setStyleSheet(
+            f"background:transparent; color:{tokens.TEXTO_SIDEBAR_APAGADO}; font-size:10.5px;"
+        )
+        col_ajuda.addWidget(lbl_ajuda_titulo)
+        col_ajuda.addWidget(lbl_ajuda_sub)
+
+        topo_ajuda.addLayout(col_ajuda, 1)
+
+        ajuda_layout.addLayout(topo_ajuda)
+
+        bt_falar_agora = QPushButton("Falar agora")
+        bt_falar_agora.setCursor(Qt.PointingHandCursor)
+        bt_falar_agora.setMinimumHeight(32)
+        bt_falar_agora.setStyleSheet(f"""
+            QPushButton {{
+                background: {tokens.PRIMARIA}; color: white; border: none;
+                border-radius: {tokens.RADIUS_SM}px; font-size: 12px; font-weight: 700;
+            }}
+            QPushButton:hover {{ background: {tokens.PRIMARIA_HOVER}; }}
+        """)
+        bt_falar_agora.clicked.connect(self._falar_com_suporte)
+        ajuda_layout.addWidget(bt_falar_agora)
+
+        bloco_ajuda_layout.addWidget(self.caixa_ajuda)
+
+        self.lbl_versao = QLabel("Vertex ERP · v1.0.0")
+        self.lbl_versao.setAlignment(Qt.AlignCenter)
+        self.lbl_versao.setStyleSheet(
+            f"background:transparent; color:{tokens.TEXTO_SIDEBAR_APAGADO}; font-size:10.5px;"
+        )
+        bloco_ajuda_layout.addWidget(self.lbl_versao)
+
+        layout.addWidget(self.bloco_ajuda)
+
+        # ======================
         # RODAPÉ / USUÁRIO
         # ======================
 
@@ -340,9 +418,22 @@ class Sidebar(QFrame):
         self.lbl_loja.setVisible(not self._recolhida)
         self.lbl_usuario.setVisible(not self._recolhida)
         self.lbl_cargo.setVisible(not self._recolhida)
+        self.bloco_ajuda.setVisible(not self._recolhida)
 
         nome_seta = "chevron-right" if self._recolhida else "chevron-left"
         self.bt_recolher.setIcon(icone(nome_seta, cor=tokens.TEXTO_SIDEBAR, tamanho=16))
 
         for item in self.itens.values():
             item.definir_recolhido(self._recolhida)
+
+    def _falar_com_suporte(self):
+
+        # nenhum canal de suporte de verdade esta configurado ainda
+        # (sem numero/whatsapp/e-mail fixo pra empresa) -- melhor essa
+        # mensagem honesta do que inventar um contato que nao existe
+        QMessageBox.information(
+            self,
+            "Precisa de ajuda?",
+            "Fale com o administrador do seu sistema pra tirar dúvidas "
+            "ou reportar um problema.",
+        )

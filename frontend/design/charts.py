@@ -1,8 +1,16 @@
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QToolTip,
+    QVBoxLayout,
+    QWidget,
+)
 
 from design import tokens
+from utils.formatacao import formatar_moeda
 
 
 class GraficoArea(QWidget):
@@ -16,16 +24,88 @@ class GraficoArea(QWidget):
         super().__init__(parent)
 
         self.setMinimumHeight(220)
+        self.setMouseTracking(True)
+
         self.pontos = []
         self.rotulos = []
+        self.rotulos_completos = []
         self.cor = cor or tokens.PRIMARIA
 
-    def definir_dados(self, rotulos, valores):
+        self._coords_tela = []
+        self._indice_hover = None
+
+        # estiliza o proprio tooltip do Qt (QToolTip e' global por padrao
+        # -- setar no stylesheet DESTE widget o limita a quando o
+        # tooltip nasce a partir dele, sem vazar pro resto do app)
+        self.setStyleSheet(f"""
+            QToolTip {{
+                background: {tokens.TEXTO};
+                color: {tokens.TEXTO_CLARO};
+                border: none;
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-size: {tokens.TAMANHO_XS}px;
+            }}
+        """)
+
+    def definir_dados(self, rotulos, valores, rotulos_completos=None):
+        """rotulos_completos e' opcional -- rótulo mais descritivo
+        (ex.: "Terça-feira") mostrado só no tooltip do hover; sem ele,
+        cai no mesmo rótulo curto do eixo."""
 
         self.rotulos = rotulos
         self.pontos = valores
+        self.rotulos_completos = rotulos_completos or rotulos
+        self._indice_hover = None
 
         self.update()
+
+    def mouseMoveEvent(self, event):
+
+        if not self._coords_tela:
+            return super().mouseMoveEvent(event)
+
+        pos = event.position()
+        x = pos.x()
+
+        indice = min(
+            range(len(self._coords_tela)),
+            key=lambda i: abs(self._coords_tela[i][0] - x),
+        )
+
+        if abs(self._coords_tela[indice][0] - x) > 40:
+            if self._indice_hover is not None:
+                self._indice_hover = None
+                self.update()
+            QToolTip.hideText()
+            return super().mouseMoveEvent(event)
+
+        if indice != self._indice_hover:
+            self._indice_hover = indice
+            self.update()
+
+        rotulo = (
+            self.rotulos_completos[indice]
+            if indice < len(self.rotulos_completos)
+            else self.rotulos[indice]
+        )
+        valor = formatar_moeda(self.pontos[indice])
+
+        QToolTip.showText(
+            event.globalPosition().toPoint(),
+            f"{rotulo}\n{valor}",
+            self,
+        )
+
+        return super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event):
+
+        if self._indice_hover is not None:
+            self._indice_hover = None
+            self.update()
+
+        super().leaveEvent(event)
 
     def paintEvent(self, event):
 
@@ -84,9 +164,12 @@ class GraficoArea(QWidget):
         caminho_area = QPainterPath()
         caminho_linha = QPainterPath()
 
+        self._coords_tela = []
+
         for i, valor in enumerate(self.pontos):
 
             x, y = coord(i, valor)
+            self._coords_tela.append((x, y))
 
             if i == 0:
                 caminho_area.moveTo(x, margem_topo + area_altura)
@@ -128,6 +211,28 @@ class GraficoArea(QWidget):
                 Qt.AlignCenter,
                 rotulo,
             )
+
+        # linha-guia + ponto destacado no indice em hover -- desenhado
+        # por cima de tudo, so' quando o mouse esta' perto o bastante
+        # de um ponto (ver mouseMoveEvent)
+        if self._indice_hover is not None and self._indice_hover < len(self._coords_tela):
+
+            x_hover, y_hover = self._coords_tela[self._indice_hover]
+
+            pen_guia = QPen(QColor(tokens.BORDA_FORTE))
+            pen_guia.setWidth(1)
+            pen_guia.setStyle(Qt.DashLine)
+            painter.setPen(pen_guia)
+            painter.drawLine(
+                int(x_hover), margem_topo, int(x_hover), margem_topo + area_altura,
+            )
+
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(tokens.CARD))
+            painter.drawEllipse(x_hover - 6, y_hover - 6, 12, 12)
+
+            painter.setBrush(cor_linha)
+            painter.drawEllipse(x_hover - 4, y_hover - 4, 8, 8)
 
         painter.end()
 

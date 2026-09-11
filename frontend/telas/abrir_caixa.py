@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 from services.caixa_service import historico_caixa
 
 from design import tokens
+from design.icons import icone, icone_pixmap
 from design.responsive import tamanho_fixo_seguro
 from design.widgets import Badge, BotaoSecundario, BotaoSucesso
 from utils.formatacao import formatar_moeda
@@ -35,41 +36,62 @@ class AbrirCaixaWindow(QDialog):
         raiz.setSpacing(0)
 
         # ======================
-        # CABEÇALHO
-        # ======================
-
-        cabecalho = QFrame()
-        cabecalho.setStyleSheet(f"background:{tokens.SIDEBAR};")
-        cabecalho.setFixedHeight(70)
-
-        cab_layout = QVBoxLayout(cabecalho)
-        cab_layout.setContentsMargins(24, 12, 24, 12)
-        cab_layout.setSpacing(2)
-
-        titulo = QLabel("ABRIR CAIXA")
-        titulo.setStyleSheet(f"""
-            background:transparent; color:white;
-            font-size:{tokens.TAMANHO_LG}px; font-weight:800;
-        """)
-
-        subtitulo = QLabel("Informe o troco inicial para liberar o caixa")
-        subtitulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SIDEBAR};
-            font-size:{tokens.TAMANHO_XS}px;
-        """)
-
-        cab_layout.addWidget(titulo)
-        cab_layout.addWidget(subtitulo)
-
-        raiz.addWidget(cabecalho)
-
-        # ======================
-        # CORPO
+        # CORPO (com cabeçalho embutido -- ícone + título + fechar,
+        # mesmo padrão dos diálogos da ficha do cliente)
         # ======================
 
         corpo = QVBoxLayout()
-        corpo.setContentsMargins(24, 20, 24, 20)
+        corpo.setContentsMargins(24, 22, 24, 20)
         corpo.setSpacing(14)
+
+        linha_cabecalho = QHBoxLayout()
+        linha_cabecalho.setSpacing(14)
+
+        icone_circulo = QLabel()
+        icone_circulo.setFixedSize(48, 48)
+        icone_circulo.setAlignment(Qt.AlignCenter)
+        icone_circulo.setStyleSheet(f"""
+            background:{tokens.SUCESSO_CLARO}; border-radius:24px;
+        """)
+        icone_circulo.setPixmap(
+            icone_pixmap("wallet", cor=tokens.SECUNDARIA_HOVER, tamanho=20)
+        )
+        linha_cabecalho.addWidget(icone_circulo)
+
+        col_titulo = QVBoxLayout()
+        col_titulo.setSpacing(2)
+
+        titulo = QLabel("Abrir Caixa")
+        titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XL}px;
+            font-weight:800; color:{tokens.TEXTO};
+        """)
+
+        subtitulo = QLabel("Informe o troco inicial para liberar o caixa")
+        subtitulo.setWordWrap(True)
+        subtitulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
+
+        col_titulo.addWidget(titulo)
+        col_titulo.addWidget(subtitulo)
+
+        linha_cabecalho.addLayout(col_titulo, 1)
+
+        bt_fechar = QPushButton()
+        bt_fechar.setFixedSize(30, 30)
+        bt_fechar.setCursor(Qt.PointingHandCursor)
+        bt_fechar.setAutoDefault(False)
+        bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        bt_fechar.setStyleSheet(f"""
+            QPushButton {{ background:transparent; border:none; border-radius:6px; }}
+            QPushButton:hover {{ background:{tokens.FUNDO}; }}
+        """)
+        bt_fechar.clicked.connect(self.reject)
+        linha_cabecalho.addWidget(bt_fechar, 0, Qt.AlignTop)
+
+        corpo.addLayout(linha_cabecalho)
 
         lbl_valor_titulo = QLabel("VALOR INICIAL (TROCO)")
         lbl_valor_titulo.setStyleSheet(f"""

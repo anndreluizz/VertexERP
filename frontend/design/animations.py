@@ -24,8 +24,22 @@ def fade_in(widget, duracao=220, ao_terminar=None):
     animacao.setEndValue(1.0)
     animacao.setEasingCurve(QEasingCurve.OutCubic)
 
-    if ao_terminar:
-        animacao.finished.connect(ao_terminar)
+    def _ao_completar():
+        # tira o efeito assim que a animação termina. Parado em
+        # opacity=1.0 ele é um no-op visualmente, mas deixá-lo preso
+        # no widget pra sempre força todo repaint dali em diante a
+        # passar pelo caminho de composição em cache do efeito (em vez
+        # de pintura direta) -- confirmado que isso corrompe a
+        # renderização de certos widgets (texto em negrito no tema
+        # escuro, visto no cabeçalho do PDV) numa captura offscreen.
+        # O "is efeito" evita apagar um efeito diferente que algo mais
+        # já tenha colocado no widget nesse meio-tempo.
+        if widget.graphicsEffect() is efeito:
+            widget.setGraphicsEffect(None)
+        if ao_terminar:
+            ao_terminar()
+
+    animacao.finished.connect(_ao_completar)
 
     widget._fade_in_anim = animacao
     animacao.start()

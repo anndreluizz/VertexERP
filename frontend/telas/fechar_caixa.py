@@ -8,11 +8,13 @@ from PySide6.QtWidgets import (
     QFrame,
     QStackedWidget,
     QMessageBox,
+    QPushButton,
 )
 
 from services.caixa_service import resumo_caixa, fechar_caixa
 
 from design import tokens
+from design.icons import icone, icone_pixmap
 from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoPerigo, BotaoSecundario, BotaoSucesso
 from utils.formatacao import formatar_moeda
@@ -27,39 +29,80 @@ class FecharCaixaWindow(QDialog):
         self.valor_contado = 0.0
 
         self.setWindowTitle("Fechar Caixa")
-        tamanho_fixo_seguro(self, 460, 640)
+        tamanho_fixo_seguro(self, 460, 680)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
         raiz.setSpacing(0)
 
-        cabecalho = QFrame()
-        cabecalho.setStyleSheet(f"background:{tokens.SIDEBAR};")
-        cabecalho.setFixedHeight(70)
+        cabecalho_linha = QHBoxLayout()
+        cabecalho_linha.setContentsMargins(24, 20, 24, 0)
+        cabecalho_linha.setSpacing(14)
 
-        cab_layout = QVBoxLayout(cabecalho)
-        cab_layout.setContentsMargins(24, 12, 24, 12)
-        cab_layout.setSpacing(2)
+        icone_circulo = QLabel()
+        icone_circulo.setFixedSize(48, 48)
+        icone_circulo.setAlignment(Qt.AlignCenter)
+        icone_circulo.setStyleSheet(f"""
+            background:{tokens.ALERTA_CLARO}; border-radius:24px;
+        """)
+        icone_circulo.setPixmap(icone_pixmap("lock", cor=tokens.ALERTA, tamanho=20))
+        cabecalho_linha.addWidget(icone_circulo)
 
-        self.lbl_titulo = QLabel("CONFERÊNCIA DE CAIXA")
+        col_titulo = QVBoxLayout()
+        col_titulo.setSpacing(2)
+
+        self.lbl_titulo = QLabel("Conferência de Caixa")
         self.lbl_titulo.setStyleSheet(f"""
-            background:transparent; color:white;
-            font-size:{tokens.TAMANHO_LG}px; font-weight:800;
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_XL}px; font-weight:800;
         """)
 
         self.lbl_subtitulo = QLabel(
             "Conte o dinheiro em espécie na gaveta"
         )
+        self.lbl_subtitulo.setWordWrap(True)
         self.lbl_subtitulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SIDEBAR};
-            font-size:{tokens.TAMANHO_XS}px;
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px;
         """)
 
-        cab_layout.addWidget(self.lbl_titulo)
-        cab_layout.addWidget(self.lbl_subtitulo)
+        col_titulo.addWidget(self.lbl_titulo)
+        col_titulo.addWidget(self.lbl_subtitulo)
 
-        raiz.addWidget(cabecalho)
+        cabecalho_linha.addLayout(col_titulo, 1)
+
+        bt_fechar = QPushButton()
+        bt_fechar.setFixedSize(30, 30)
+        bt_fechar.setCursor(Qt.PointingHandCursor)
+        bt_fechar.setAutoDefault(False)
+        bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        bt_fechar.setStyleSheet(f"""
+            QPushButton {{ background:transparent; border:none; border-radius:6px; }}
+            QPushButton:hover {{ background:{tokens.FUNDO}; }}
+        """)
+        bt_fechar.clicked.connect(self.reject)
+        cabecalho_linha.addWidget(bt_fechar, 0, Qt.AlignTop)
+
+        raiz.addLayout(cabecalho_linha)
+
+        # ---- indicador de etapa (1. Contagem / 2. Conferência) ----
+
+        linha_passos = QHBoxLayout()
+        linha_passos.setContentsMargins(24, 14, 24, 0)
+        linha_passos.setSpacing(8)
+
+        self.lbl_passo_1 = QLabel("1. Contagem")
+        self.lbl_passo_2 = QLabel("2. Conferência")
+        self.lbl_passo_1.setAlignment(Qt.AlignCenter)
+        self.lbl_passo_2.setAlignment(Qt.AlignCenter)
+
+        linha_passos.addWidget(self.lbl_passo_1, 1)
+        linha_passos.addWidget(self.lbl_passo_2, 1)
+
+        raiz.addLayout(linha_passos)
+
+        self._marcar_passo_ativo(1)
 
         self.paginas = QStackedWidget()
 
@@ -70,6 +113,24 @@ class FecharCaixaWindow(QDialog):
         self.paginas.addWidget(self.pagina_conferencia)
 
         raiz.addWidget(self.paginas, stretch=1)
+
+    def _marcar_passo_ativo(self, numero):
+        """Realça o passo atual (1 ou 2) no indicador de etapa no topo
+        do diálogo -- deixa claro em que ponto do fluxo (contagem cega
+        vs. conferência final) a pessoa está."""
+
+        for n, lbl in ((1, self.lbl_passo_1), (2, self.lbl_passo_2)):
+            if n == numero:
+                lbl.setStyleSheet(f"""
+                    background:{tokens.PRIMARIA_CLARA}; color:{tokens.PRIMARIA};
+                    border-radius:{tokens.RADIUS_PILL}px; font-weight:700;
+                    font-size:{tokens.TAMANHO_XS}px; padding:6px 0;
+                """)
+            else:
+                lbl.setStyleSheet(f"""
+                    background:transparent; color:{tokens.TEXTO_TERCIARIO};
+                    font-weight:600; font-size:{tokens.TAMANHO_XS}px; padding:6px 0;
+                """)
 
     # ======================================
     # PÁGINA 1 · CONTAGEM CEGA
@@ -161,10 +222,11 @@ class FecharCaixaWindow(QDialog):
 
         self.preencher_conferencia()
 
-        self.lbl_titulo.setText("RESUMO DO FECHAMENTO")
+        self.lbl_titulo.setText("Resumo do Fechamento")
         self.lbl_subtitulo.setText(
             "Confira os valores antes de encerrar o caixa"
         )
+        self._marcar_passo_ativo(2)
 
         self.paginas.setCurrentWidget(self.pagina_conferencia)
 
@@ -319,9 +381,7 @@ class FecharCaixaWindow(QDialog):
 
         bt_voltar = BotaoSecundario("Voltar")
         bt_voltar.setMinimumHeight(46)
-        bt_voltar.clicked.connect(
-            lambda: self.paginas.setCurrentWidget(self.pagina_contagem)
-        )
+        bt_voltar.clicked.connect(self.voltar_para_contagem)
 
         bt_confirmar = BotaoPerigo("Confirmar Fechamento")
         bt_confirmar.setMinimumHeight(46)
@@ -376,6 +436,14 @@ class FecharCaixaWindow(QDialog):
         self.lbl_vendas_pix.setText(formatar_moeda(vendas_pix))
         self.lbl_vendas_cartao.setText(formatar_moeda(vendas_cartao))
         self.lbl_total_geral.setText(formatar_moeda(total_geral))
+
+    def voltar_para_contagem(self):
+
+        self.lbl_titulo.setText("Conferência de Caixa")
+        self.lbl_subtitulo.setText("Conte o dinheiro em espécie na gaveta")
+        self._marcar_passo_ativo(1)
+
+        self.paginas.setCurrentWidget(self.pagina_contagem)
 
     def confirmar_fechamento(self):
 

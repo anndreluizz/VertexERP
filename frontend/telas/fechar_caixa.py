@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
@@ -11,7 +13,8 @@ from PySide6.QtWidgets import (
     QPushButton,
 )
 
-from services.caixa_service import resumo_caixa, fechar_caixa
+from services.caixa_service import caixa_aberto, resumo_caixa, fechar_caixa, listar_movimentos_caixa
+from services import api, comprovante_service, impressora_termica_service, preferencias_service
 
 from design import tokens
 from design.icons import icone, icone_pixmap
@@ -20,11 +23,32 @@ from design.widgets import BotaoPerigo, BotaoSecundario, BotaoSucesso
 from utils.formatacao import formatar_moeda
 
 
+# rotulos de tipo de movimento em texto puro pro extrato do dia --
+# mesmos usados na tela de caixa (ver telas/caixa.py), so' que sem
+# cor aqui (cupom termico e' texto puro, e o HTML do extrato usa uma
+# tabela simples, sem as pills coloridas da tela)
+_ROTULOS_TIPO_MOVIMENTO = {
+    "VENDA": "Venda",
+    "SUPRIMENTO": "Suprimento",
+    "SANGRIA": "Sangria",
+    "RECEBIMENTO_FIADO": "Recebimento fiado",
+    "ESTORNO": "Estorno",
+}
+
+
+def _formatar_data_curta(texto):
+    texto = str(texto or "")
+    if "T" in texto:
+        texto = texto.replace("T", " ")
+    return texto[:16]
+
+
 class FecharCaixaWindow(QDialog):
 
     def __init__(self):
         super().__init__()
 
+        self.caixa = caixa_aberto() or {}
         self.resumo = resumo_caixa() or {}
         self.valor_contado = 0.0
 
@@ -462,12 +486,163 @@ class FecharCaixaWindow(QDialog):
             observacoes=self.observacoes_input.text().strip() or None,
         )
 
-        if response.status_code == 200:
-            self.accept()
-        else:
+        if response.status_code != 200:
             try:
                 erro = response.json()["detail"]
             except Exception:
                 erro = response.text
 
             QMessageBox.critical(self, "Erro", erro)
+            return
+
+        self.imprimir_extrato_dia()
+
+        self.accept()
+
+    # ======================================
+    # EXTRATO COMPLETO DO DIA -- impresso automaticamente ao
+    # confirmar o fechamento, pra conferência em papel do turno
+    # inteiro (mesmo padrão de impressora térmica com fallback pro
+    # diálogo normal do Windows usado no extrato do cliente, ver
+    # ficha_cliente.py)
+    # ======================================
+
+    def _buscar_movimentos_do_dia(self):
+
+        caixa_id = self.caixa.get("id")
+
+        if not caixa_id:
+            return []
+
+        return sorted(
+            listar_movimentos_caixa(caixa_id),
+            key=lambda m: m.get("data", ""),
+        )
+
+    def _montar_html_extrato_dia(self, movimentos):
+
+        config = api.configuracoes()
+        nome_loja = config.get("nome_loja") or "Vertex ERP"
+        telefone_loja = config.get("telefone") or ""
+
+        responsavel = (api.me() or {}).get("nome") or "—"
+        agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+        total_previsto = float(self.resumo.get("total_previsto", 0) or 0)
+        diferenca = self.valor_contado - total_previsto
+
+        if abs(diferenca) < 0.01:
+            cor_diferenca, texto_diferenca = "#16A34A", "R$ 0,00 (confere)"
+        elif diferenca > 0:
+            cor_diferenca = "#2563EB"
+            texto_diferenca = f"+ {formatar_moeda(diferenca)} (sobra)"
+        else:
+            cor_diferenca = "#DC2626"
+            texto_diferenca = f"- {formatar_moeda(abs(diferenca))} (falta)"
+
+        linhas_resumo = "".join(
+            f"<tr><td>{rotulo}</td>"
+            f"<td align='right'>{formatar_moeda(valor)}</td></tr>"
+            for rotulo, valor in (
+                ("Troco inicial", self.resumo.get("saldo_inicial", 0)),
+                ("Vendas em dinheiro", self.resumo.get("vendas_dinheiro", 0)),
+                ("Vendas PIX", self.resumo.get("vendas_pix", 0)),
+                ("Vendas cartão", self.resumo.get("vendas_cartao", 0)),
+                ("Vendas a prazo", self.resumo.get("vendas_prazo", 0)),
+                ("Suprimentos", self.resumo.get("suprimentos", 0)),
+                ("Sangrias", self.resumo.get("sangrias", 0)),
+                ("Recebimentos fiado", self.resumo.get("recebimentos_fiado", 0)),
+            )
+        )
+
+        linhas_movimentos = "".join(
+            f"<tr>"
+            f"<td>{_formatar_data_curta(mov.get('data'))}</td>"
+            f"<td>{_ROTULOS_TIPO_MOVIMENTO.get(mov.get('tipo'), mov.get('tipo') or '—')}</td>"
+            f"<td>{mov.get('descricao') or ''}</td>"
+            f"<td align='right'>{formatar_moeda(mov.get('valor', 0))}</td>"
+            f"</tr>"
+            for mov in movimentos
+        ) or (
+            "<tr><td colspan='4' align='center'>"
+            "Nenhuma movimentação registrada.</td></tr>"
+        )
+
+        texto_obs = self.observacoes_input.text().strip()
+        bloco_observacoes = (
+            f"<h3>Observações</h3><p>{texto_obs}</p>" if texto_obs else ""
+        )
+
+        return f"""
+        <div style="text-align:center;">
+            <h2 style="margin-bottom:0;">{nome_loja}</h2>
+            <div style="color:#666;">{telefone_loja}</div>
+        </div>
+        <hr>
+        <h3 style="text-align:center; margin-bottom:4px;">
+            Extrato de Fechamento de Caixa
+        </h3>
+        <table width="100%" cellspacing="4">
+            <tr><td><b>Aberto em:</b></td>
+                <td>{_formatar_data_curta(self.caixa.get('data_abertura'))}</td></tr>
+            <tr><td><b>Fechado em:</b></td><td>{agora}</td></tr>
+            <tr><td><b>Responsável:</b></td><td>{responsavel}</td></tr>
+        </table>
+        <h3>Resumo do Turno</h3>
+        <table width="100%" cellspacing="4">
+            {linhas_resumo}
+            <tr><td><b>Total previsto</b></td>
+                <td align="right"><b>{formatar_moeda(total_previsto)}</b></td></tr>
+            <tr><td>Valor contado</td>
+                <td align="right">{formatar_moeda(self.valor_contado)}</td></tr>
+            <tr><td>Diferença</td>
+                <td align="right" style="color:{cor_diferenca};">
+                    <b>{texto_diferenca}</b></td></tr>
+        </table>
+        <h3 style="text-align:right;">
+            Total geral: {formatar_moeda(self.resumo.get('total_geral', 0))}
+        </h3>
+        <h3>Movimentações do Dia</h3>
+        <table width="100%" border="1" cellspacing="0" cellpadding="6">
+            <tr style="background:#f0f0f0;">
+                <th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th>
+            </tr>
+            {linhas_movimentos}
+        </table>
+        {bloco_observacoes}
+        """
+
+    def imprimir_extrato_dia(self):
+
+        movimentos = self._buscar_movimentos_do_dia()
+        config_impressora = preferencias_service.carregar_impressora_termica()
+
+        if config_impressora and config_impressora.get("ativa"):
+
+            responsavel = (api.me() or {}).get("nome") or "—"
+
+            ok, erro = impressora_termica_service.imprimir_fechamento_caixa(
+                self.caixa,
+                self.resumo,
+                movimentos,
+                self.valor_contado,
+                self.observacoes_input.text().strip(),
+                responsavel,
+                datetime.now().isoformat(),
+                api.configuracoes(),
+                config_impressora,
+            )
+
+            if ok:
+                return
+
+            resposta = QMessageBox.question(
+                self,
+                "Falha na impressora térmica",
+                f"{erro}\n\nQuer tentar imprimir pela janela normal do Windows?",
+            )
+
+            if resposta != QMessageBox.Yes:
+                return
+
+        comprovante_service.imprimir(self._montar_html_extrato_dia(movimentos), self)

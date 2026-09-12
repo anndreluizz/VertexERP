@@ -208,6 +208,20 @@ def _gerar_qrcode_png(texto):
 
 
 # ==================================================
+# FECHAMENTO DE CAIXA -- rotulos de tipo de movimento em texto puro
+# (mesma ideia da pill colorida da tela, sem cor no cupom termico)
+# ==================================================
+
+_ROTULOS_TIPO_MOVIMENTO = {
+    "VENDA": "Venda",
+    "SUPRIMENTO": "Suprimento",
+    "SANGRIA": "Sangria",
+    "RECEBIMENTO_FIADO": "Receb. fiado",
+    "ESTORNO": "Estorno",
+}
+
+
+# ==================================================
 # CUPOM DE VENDA (comprovante)
 # ==================================================
 
@@ -407,6 +421,133 @@ def gerar_comandos_extrato(
 
 
 # ==================================================
+# EXTRATO DE FECHAMENTO DE CAIXA -- impresso ao confirmar o
+# fechamento do turno (ver telas/fechar_caixa.py), com o resumo por
+# categoria (igual ao card da tela) e a lista crua de cada
+# movimentação do dia, pra conferência posterior em papel.
+# ==================================================
+
+
+def gerar_comandos_fechamento_caixa(
+    caixa, resumo, movimentos, valor_contado, observacoes, responsavel,
+    fechado_em, config_loja, largura_papel_mm=80,
+):
+
+    largura = _colunas(largura_papel_mm)
+
+    partes = [_INICIALIZAR, _SELECIONAR_PAGINA_CODIGO]
+
+    partes.append(_alinhar(1))
+    partes.append(_negrito(True))
+    partes.append(_tamanho_fonte(2, 2))
+    partes.append(_linha(config_loja.get("nome_loja") or "Vertex ERP"))
+    partes.append(_tamanho_fonte(1, 1))
+    partes.append(_negrito(False))
+
+    if config_loja.get("telefone"):
+        partes.append(_linha(config_loja["telefone"]))
+
+    partes.append(_divisoria(largura))
+    partes.append(_alinhar(0))
+
+    partes.append(_negrito(True))
+    partes.append(_linha("Extrato de Fechamento de Caixa"))
+    partes.append(_negrito(False))
+    partes.append(_linha(f"Aberto em: {_data(caixa.get('data_abertura'))}"))
+    partes.append(_linha(f"Fechado em: {_data(fechado_em)}"))
+    partes.append(_linha(f"Responsavel: {responsavel}"))
+
+    partes.append(_divisoria(largura))
+    partes.append(_negrito(True))
+    partes.append(_linha("Resumo do Turno"))
+    partes.append(_negrito(False))
+
+    resumo_linhas = (
+        ("Troco inicial", resumo.get("saldo_inicial", 0)),
+        ("Vendas em dinheiro", resumo.get("vendas_dinheiro", 0)),
+        ("Vendas PIX", resumo.get("vendas_pix", 0)),
+        ("Vendas cartao", resumo.get("vendas_cartao", 0)),
+        ("Vendas a prazo", resumo.get("vendas_prazo", 0)),
+        ("Suprimentos", resumo.get("suprimentos", 0)),
+        ("Sangrias", resumo.get("sangrias", 0)),
+        ("Recebimentos fiado", resumo.get("recebimentos_fiado", 0)),
+    )
+
+    for rotulo, valor in resumo_linhas:
+        partes.append(_linha_dupla_coluna(rotulo, _moeda(valor), largura))
+
+    total_previsto = float(resumo.get("total_previsto", 0) or 0)
+
+    partes.append(_divisoria(largura))
+    partes.append(_negrito(True))
+    partes.append(_linha_dupla_coluna("Total previsto", _moeda(total_previsto), largura))
+    partes.append(_negrito(False))
+    partes.append(
+        _linha_dupla_coluna("Valor contado", _moeda(valor_contado), largura)
+    )
+
+    diferenca = float(valor_contado or 0) - total_previsto
+
+    if abs(diferenca) < 0.01:
+        texto_diferenca = "R$ 0,00 (confere)"
+    elif diferenca > 0:
+        texto_diferenca = f"+ {_moeda(diferenca)} (sobra)"
+    else:
+        texto_diferenca = f"- {_moeda(abs(diferenca))} (falta)"
+
+    partes.append(_negrito(True))
+    partes.append(_linha_dupla_coluna("Diferenca", texto_diferenca, largura))
+    partes.append(_negrito(False))
+
+    partes.append(_tamanho_fonte(1, 2))
+    partes.append(
+        _linha_dupla_coluna(
+            "TOTAL GERAL", _moeda(resumo.get("total_geral", 0)), largura
+        )
+    )
+    partes.append(_tamanho_fonte(1, 1))
+
+    partes.append(_divisoria(largura))
+    partes.append(_negrito(True))
+    partes.append(_linha(f"Movimentacoes do Dia ({len(movimentos)})"))
+    partes.append(_negrito(False))
+
+    if not movimentos:
+        partes.append(_linha("Nenhuma movimentacao registrada."))
+
+    for mov in movimentos:
+
+        tipo = mov.get("tipo")
+        rotulo_tipo = _ROTULOS_TIPO_MOVIMENTO.get(tipo, tipo or "-")
+
+        partes.append(_linha(f"{_data(mov.get('data'))}  {rotulo_tipo}"))
+
+        descricao = mov.get("descricao")
+        if descricao:
+            partes.append(_linhas_quebradas(f"  {descricao}", largura))
+
+        partes.append(
+            _linha_dupla_coluna("", _moeda(mov.get("valor", 0)), largura)
+        )
+
+    if observacoes:
+        partes.append(_divisoria(largura))
+        partes.append(_negrito(True))
+        partes.append(_linha("Observacoes do Fechamento"))
+        partes.append(_negrito(False))
+        partes.append(_linhas_quebradas(observacoes, largura))
+
+    partes.append(_divisoria(largura))
+    partes.append(_alinhar(1))
+    partes.append(_linha("Este extrato nao tem valor fiscal."))
+    partes.append(_linha("Documento gerado pelo Vertex ERP."))
+
+    partes.append(_cortar_papel())
+
+    return b"".join(partes)
+
+
+# ==================================================
 # TESTE
 # ==================================================
 
@@ -555,6 +696,18 @@ def imprimir_extrato(
     largura_papel_mm = (config_impressora or {}).get("largura_papel") or 80
     comandos = gerar_comandos_extrato(
         cliente, movimentos, observacoes, saldo, responsavel, config_loja, largura_papel_mm,
+    )
+    return enviar(comandos, config_impressora)
+
+
+def imprimir_fechamento_caixa(
+    caixa, resumo, movimentos, valor_contado, observacoes, responsavel,
+    fechado_em, config_loja, config_impressora,
+):
+    largura_papel_mm = (config_impressora or {}).get("largura_papel") or 80
+    comandos = gerar_comandos_fechamento_caixa(
+        caixa, resumo, movimentos, valor_contado, observacoes, responsavel,
+        fechado_em, config_loja, largura_papel_mm,
     )
     return enviar(comandos, config_impressora)
 

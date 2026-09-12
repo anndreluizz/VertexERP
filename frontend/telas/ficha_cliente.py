@@ -49,7 +49,7 @@ from services.cliente_service import (
 )
 from telas import comprovante_acoes
 from services import cliente_analise
-from services import impressora_termica_service, preferencias_service
+from services import comprovante_service, impressora_termica_service, preferencias_service
 
 from design import tokens
 from design.icons import icone, icone_pixmap
@@ -1086,15 +1086,128 @@ class RegistrarPagamentoDialog(QDialog):
             data=data_iso,
         )
 
-        if response.status_code in (200, 201):
-            self.accept()
-        else:
+        if response.status_code not in (200, 201):
             try:
                 erro = response.json()["detail"]
             except Exception:
                 erro = response.text
 
             QMessageBox.critical(self, "Erro", str(erro))
+            return
+
+        self._imprimir_recibo_pagamento(valor)
+
+        self.accept()
+
+    # ======================================
+    # RECIBO DE PAGAMENTO -- impresso automaticamente ao confirmar,
+    # mesmo padrão de impressora térmica com fallback pro diálogo
+    # normal do Windows usado no extrato de fechamento de caixa (ver
+    # telas/fechar_caixa.py).
+    # ======================================
+
+    def _imprimir_recibo_pagamento(self, valor):
+
+        saldo_depois = saldo_cliente(self.cliente["id"])
+        responsavel = (api.me() or {}).get("nome") or "—"
+
+        # a data escolhida no dialogo (Hoje/Ontem) nao tem hora -- usa
+        # o horario atual (momento em que o recibo esta sendo gerado)
+        # junto com o dia selecionado, pra nao imprimir "as 00:00"
+        data_qt = self.data.date()
+        agora = datetime.now()
+        momento = datetime(
+            data_qt.year(), data_qt.month(), data_qt.day(),
+            agora.hour, agora.minute,
+        ).isoformat()
+
+        config_loja = api.configuracoes()
+        config_impressora = preferencias_service.carregar_impressora_termica()
+
+        if config_impressora and config_impressora.get("ativa"):
+
+            ok, erro = impressora_termica_service.imprimir_recibo_pagamento(
+                self.cliente.get("nome", ""),
+                valor,
+                self.forma_pagamento,
+                self._saldo_devedor,
+                saldo_depois,
+                responsavel,
+                momento,
+                config_loja,
+                config_impressora,
+            )
+
+            if ok:
+                return
+
+            resposta = QMessageBox.question(
+                self,
+                "Falha na impressora térmica",
+                f"{erro}\n\nQuer tentar imprimir pela janela normal do Windows?",
+            )
+
+            if resposta != QMessageBox.Yes:
+                return
+
+        html = self._montar_html_recibo_pagamento(
+            valor, saldo_depois, responsavel, momento, config_loja
+        )
+        comprovante_service.imprimir(html, self)
+
+    def _montar_html_recibo_pagamento(
+        self, valor, saldo_depois, responsavel, momento, config_loja
+    ):
+
+        nome_loja = config_loja.get("nome_loja") or "Vertex ERP"
+        telefone_loja = config_loja.get("telefone") or ""
+
+        data_texto = datetime.fromisoformat(momento).strftime("%d/%m/%Y às %H:%M")
+
+        quitado = saldo_depois <= 0.009
+        situacao_texto = "Quitado" if quitado else "Saldo em aberto"
+        cor_situacao = "#16A34A" if quitado else "#DC2626"
+
+        return f"""
+        <div style="text-align:center;">
+            <h2 style="margin-bottom:0;">{nome_loja}</h2>
+            {f"<div style='color:#666;'>WhatsApp: {telefone_loja}</div>" if telefone_loja else ""}
+        </div>
+        <hr>
+        <h3 style="text-align:center; margin:8px 0;">RECIBO DE PAGAMENTO</h3>
+        <hr>
+        <table width="100%" cellspacing="4">
+            <tr><td><b>Cliente:</b></td><td>{self.cliente.get('nome', '')}</td></tr>
+            <tr><td><b>Data:</b></td><td>{data_texto}</td></tr>
+            <tr><td><b>Atendente:</b></td><td>{responsavel}</td></tr>
+        </table>
+        <h4 style="margin:14px 0 4px;">PAGAMENTO RECEBIDO</h4>
+        <table width="100%" cellspacing="4">
+            <tr><td>Forma de pagamento:</td><td align="right">{self.forma_pagamento}</td></tr>
+            <tr><td>Valor recebido:</td>
+                <td align="right"><b>{formatar_moeda(valor)}</b></td></tr>
+        </table>
+        <h4 style="margin:14px 0 4px;">RESUMO DO CADASTRO</h4>
+        <table width="100%" cellspacing="4">
+            <tr><td>Saldo antes do pagamento:</td>
+                <td align="right">{formatar_moeda(self._saldo_devedor)}</td></tr>
+            <tr><td>Pagamento registrado:</td>
+                <td align="right">-{formatar_moeda(valor)}</td></tr>
+            <tr><td><b>Saldo atual:</b></td>
+                <td align="right"><b>{formatar_moeda(saldo_depois)}</b></td></tr>
+        </table>
+        <p style="margin-top:8px;">
+            Situação:
+            <span style="color:{cor_situacao}; font-weight:bold;">
+                {situacao_texto}
+            </span>
+        </p>
+        <hr>
+        <p style="text-align:center;">Obrigado pelo pagamento e pela preferência!</p>
+        <p style="color:#94A3B8; font-size:8pt; text-align:center;">
+            Este comprovante não possui valor fiscal.
+        </p>
+        """
 
 
 class LancarHaverDialog(QDialog):
@@ -1395,12 +1508,9 @@ class FichaClienteDialog(QDialog):
 
         menu = QMenu(self)
 
-        menu.addAction("Enviar Extrato Completo", self.enviar_extrato_whatsapp)
         menu.addAction("Enviar Último Comprovante", self.enviar_ultimo_comprovante)
+        menu.addAction("Enviar Extrato Completo", self.enviar_extrato_whatsapp)
         menu.addAction("Enviar Cobrança", self.enviar_cobranca_whatsapp)
-        menu.addAction("Enviar Saldo Devedor", self.enviar_saldo_devedor_whatsapp)
-        menu.addAction("Enviar Haver", self.enviar_haver_whatsapp)
-        menu.addAction("Enviar Cadastro do Cliente", self.enviar_cadastro_whatsapp)
 
         return menu
 
@@ -1608,6 +1718,9 @@ class FichaClienteDialog(QDialog):
         return layout
 
     def enviar_ultimo_comprovante(self):
+        """Manda um texto pronto com os dados da venda (não mais o PDF
+        anexado) -- mesmo padrão de mensagem de texto direta usado nas
+        outras duas opções do menu WhatsApp."""
 
         vendas_cliente = [
             v for v in listar_vendas()
@@ -1624,19 +1737,66 @@ class FichaClienteDialog(QDialog):
 
         ultima_venda = max(vendas_cliente, key=lambda v: v["data"])
 
-        data = str(ultima_venda["data"]).replace("T", " ")[:16]
+        dados = comprovante_service.buscar_dados_comprovante(ultima_venda["id"])
+
+        if not dados:
+            QMessageBox.critical(
+                self, "Erro", "Não foi possível carregar os dados da venda."
+            )
+            return
+
+        data = str(dados.get("data", "")).replace("T", " ")[:16]
 
         resposta = QMessageBox.question(
             self,
             "Enviar Último Comprovante",
-            f"Enviar pelo WhatsApp o comprovante da venda #{ultima_venda['id']}"
-            f" ({data}, {formatar_moeda(ultima_venda['valor_total'])})?",
+            f"Enviar pelo WhatsApp o comprovante da venda #{dados['venda_id']}"
+            f" ({data}, {formatar_moeda(dados['valor_total'])})?",
         )
 
         if resposta != QMessageBox.Yes:
             return
 
-        comprovante_acoes.enviar_whatsapp(ultima_venda["id"], self)
+        nome_loja = api.configuracoes().get("nome_loja") or "Vertex ERP"
+
+        itens_texto = "\n".join(
+            f"{item['quantidade']}x {item['nome']} — "
+            f"{formatar_moeda(item['subtotal'])}"
+            for item in dados.get("itens", [])
+        ) or "—"
+
+        if dados.get("forma_pagamento_2"):
+            valor_principal = float(dados["valor_total"]) - float(
+                dados.get("valor_forma_2") or 0
+            )
+            pagamento_texto = (
+                f"{formatar_moeda(valor_principal)} ({dados['forma_pagamento']}) + "
+                f"{formatar_moeda(dados['valor_forma_2'])} ({dados['forma_pagamento_2']})"
+            )
+        else:
+            pagamento_texto = dados.get("forma_pagamento") or "—"
+
+        situacao_texto = (
+            "EM ABERTO" if (dados.get("situacao") or "PAGO") == "FIADO" else "PAGO"
+        )
+
+        texto = (
+            f"Olá, {self.cliente.get('nome', '')}! Tudo bem?\n\n"
+            f"Agradecemos pela sua compra na {nome_loja}.\n\n"
+            f"COMPROVANTE DE VENDA\n\n"
+            f"Data: {data}\n"
+            f"Venda nº: {dados['venda_id']}\n\n"
+            f"Itens:\n"
+            f"{itens_texto}\n\n"
+            f"Valor total: {formatar_moeda(dados['valor_total'])}\n"
+            f"Forma de pagamento: {pagamento_texto}\n"
+            f"Situação: {situacao_texto}\n\n"
+            f"Agradecemos pela preferência. Qualquer dúvida, estamos à "
+            f"disposição!\n\n"
+            f"Equipe {nome_loja}"
+        )
+
+        self._enviar_texto_whatsapp(texto, "Enviar Último Comprovante")
 
     # ======================================
     # MENU "WHATSAPP ▾" -- mensagens de texto livre (extrato, cobrança,
@@ -1699,17 +1859,10 @@ class FichaClienteDialog(QDialog):
             QUrl(f"https://wa.me/{digitos}?text={quote(texto)}")
         )
 
-    def _cabecalho_texto_whatsapp(self, titulo):
-
-        config = api.configuracoes()
-        nome_loja = config.get("nome_loja") or "Vertex ERP"
-
-        return f"🛍️ {nome_loja}\n*{titulo}*"
-
     def enviar_extrato_whatsapp(self):
-        """'Extrato Completo' -- envia automaticamente pelo WhatsApp o
-        texto com todas as movimentações do cliente (ver seção 8 do
-        pedido de redesenho da ficha)."""
+        """'Extrato Completo' -- resumo financeiro curto (total
+        comprado, total pago, saldo em aberto), não mais o extrato
+        movimento a movimento -- mensagem mais direta pro WhatsApp."""
 
         saldo = saldo_cliente(self.cliente["id"])
 
@@ -1717,56 +1870,26 @@ class FichaClienteDialog(QDialog):
             self.cliente, [mov for mov, _ in reversed(self._movimentos)]
         )
 
-        cliente_desde = (
-            agr["criado_em"].strftime("%d/%m/%Y") if agr["criado_em"] else "—"
-        )
-        status = cliente_analise.status_financeiro(agr)
-
         total_pago = sum(
             float(mov.get("valor", 0) or 0)
             for mov, _ in self._movimentos
             if mov.get("tipo") == "PAGAMENTO"
         )
 
-        linhas = []
-
-        for mov, saldo_apos in reversed(self._movimentos):
-
-            data = str(mov.get("data", ""))
-            if "T" in data:
-                data = data.replace("T", " ")[:16]
-
-            tipo = mov.get("tipo", "")
-            rotulo = {
-                "COMPRA": "🛒 Compra",
-                "PAGAMENTO": "💵 Pagamento",
-                "HAVER": "💰 Haver",
-            }.get(tipo, tipo)
-
-            valor = float(mov.get("valor", 0) or 0)
-            sinal = "+" if tipo == "COMPRA" else "-"
-
-            linhas.append(
-                f"{data} | {rotulo} | {self._descricao_com_itens(mov)} | "
-                f"{sinal} {formatar_moeda(valor)} | "
-                f"Saldo: {formatar_moeda(saldo_apos)}"
-            )
-
-        movimentacoes = "\n".join(linhas) if linhas else "Nenhuma movimentação registrada."
+        nome_loja = api.configuracoes().get("nome_loja") or "Vertex ERP"
+        hoje = datetime.now().strftime("%d/%m/%Y")
 
         texto = (
-            f"{self._cabecalho_texto_whatsapp('EXTRATO DO CLIENTE')}\n\n"
-            f"Cliente: {self.cliente.get('nome', '')}\n"
-            f"Telefone: {self.cliente.get('telefone') or '—'}\n"
-            f"Status: {status}\n"
-            f"Cliente desde: {cliente_desde}\n"
-            f"Saldo Atual: {formatar_moeda(saldo)}\n\n"
-            f"*MOVIMENTAÇÕES*\n"
-            f"{movimentacoes}\n\n"
-            f"Total Comprado: {formatar_moeda(agr['total_comprado'])}\n"
-            f"Total Pago: {formatar_moeda(total_pago)}\n"
-            f"Saldo Devedor: {formatar_moeda(saldo)}\n\n"
-            f"Muito obrigado pela preferência!"
+            f"Olá, {self.cliente.get('nome', '')}! Tudo bem?\n\n"
+            f"Segue o resumo atualizado do seu cadastro na {nome_loja}:\n\n"
+            f"EXTRATO FINANCEIRO\n\n"
+            f"Total de compras: {formatar_moeda(agr['total_comprado'])}\n"
+            f"Total já pago: {formatar_moeda(total_pago)}\n"
+            f"Saldo atual em aberto: {formatar_moeda(saldo)}\n\n"
+            f"Última atualização: {hoje}\n\n"
+            f"Caso queira conferir alguma compra ou pagamento, é só nos "
+            f"chamar. Será um prazer ajudar!\n\n"
+            f"Equipe {nome_loja}"
         )
 
         self._enviar_texto_whatsapp(texto, "Extrato Completo")
@@ -1783,104 +1906,23 @@ class FichaClienteDialog(QDialog):
             )
             return
 
+        nome_loja = api.configuracoes().get("nome_loja") or "Vertex ERP"
+
         texto = (
-            f"{self._cabecalho_texto_whatsapp('COBRANÇA')}\n\n"
-            f"Olá, {self.cliente.get('nome', '')}! 👋\n\n"
-            f"Passando pra lembrar que você tem um saldo em aberto no "
-            f"valor de {formatar_moeda(saldo)}.\n\n"
-            f"Qualquer dúvida, é só chamar. Obrigado!"
+            f"Olá, {self.cliente.get('nome', '')}! Tudo bem?\n\n"
+            f"Estamos passando para lembrar, de forma amigável, que "
+            f"consta em nosso sistema um saldo em aberto referente às "
+            f"suas compras na {nome_loja}.\n\n"
+            f"Saldo pendente: {formatar_moeda(saldo)}\n\n"
+            f"Se o pagamento já foi realizado, por favor, desconsidere "
+            f"esta mensagem. Caso precise conferir o histórico das "
+            f"compras, combinar uma data ou tirar alguma dúvida, "
+            f"estamos à disposição.\n\n"
+            f"Agradecemos a sua atenção e preferência!\n\n"
+            f"Equipe {nome_loja}"
         )
 
         self._enviar_texto_whatsapp(texto, "Enviar Cobrança")
-
-    def enviar_saldo_devedor_whatsapp(self):
-        """Informativo -- ao contrário da cobrança, não trava se o
-        saldo for zero (o cliente pode querer confirmar que está em
-        dia)."""
-
-        saldo = saldo_cliente(self.cliente["id"])
-
-        texto = (
-            f"{self._cabecalho_texto_whatsapp('SALDO DEVEDOR')}\n\n"
-            f"Olá, {self.cliente.get('nome', '')}!\n"
-            f"Seu saldo devedor atual é de {formatar_moeda(saldo)}."
-        )
-
-        self._enviar_texto_whatsapp(texto, "Enviar Saldo Devedor")
-
-    def enviar_haver_whatsapp(self):
-        """Avisa sobre o crédito (Haver) mais recente lançado a favor
-        do cliente."""
-
-        haveres = [
-            (mov, saldo_apos)
-            for mov, saldo_apos in self._movimentos
-            if mov.get("tipo") == "HAVER"
-        ]
-
-        if not haveres:
-            QMessageBox.information(
-                self,
-                "Haver",
-                "Este cliente ainda não tem nenhum crédito (Haver) lançado.",
-            )
-            return
-
-        mov, saldo_apos = haveres[0]  # self._movimentos já é mais-novo primeiro
-
-        data = str(mov.get("data", ""))
-        if "T" in data:
-            data = data.replace("T", " ")[:16]
-
-        texto = (
-            f"{self._cabecalho_texto_whatsapp('CRÉDITO (HAVER)')}\n\n"
-            f"Olá, {self.cliente.get('nome', '')}!\n"
-            f"Você recebeu um crédito de "
-            f"{formatar_moeda(float(mov.get('valor', 0) or 0))} em {data}.\n"
-            f"Motivo: {mov.get('descricao') or '—'}\n\n"
-            f"Seu saldo devedor atualizado é de {formatar_moeda(saldo_apos)}."
-        )
-
-        self._enviar_texto_whatsapp(texto, "Enviar Haver")
-
-    def enviar_cadastro_whatsapp(self):
-        """Ficha completa do cliente via WhatsApp."""
-
-        cliente = self.cliente
-        saldo = saldo_cliente(cliente["id"])
-
-        agr = cliente_analise.calcular_agregados(
-            cliente, [mov for mov, _ in reversed(self._movimentos)]
-        )
-        cliente_desde = (
-            agr["criado_em"].strftime("%d/%m/%Y") if agr["criado_em"] else "—"
-        )
-
-        partes = [self._cabecalho_texto_whatsapp("CADASTRO DO CLIENTE"), ""]
-        partes.append(f"Nome: {cliente.get('nome', '')}")
-
-        if cliente.get("cpf_cnpj"):
-            partes.append(f"CPF/CNPJ: {cliente['cpf_cnpj']}")
-        if cliente.get("telefone"):
-            partes.append(f"Telefone: {cliente['telefone']}")
-        if cliente.get("email"):
-            partes.append(f"E-mail: {cliente['email']}")
-
-        endereco = ", ".join(
-            filter(None, [cliente.get("endereco"), cliente.get("cidade"), cliente.get("estado")])
-        )
-        if endereco:
-            partes.append(f"Endereço: {endereco}")
-
-        if cliente.get("data_nascimento"):
-            partes.append(f"Data de Nascimento: {cliente['data_nascimento']}")
-
-        partes.append(f"Cliente desde: {cliente_desde}")
-        partes.append(f"Saldo Atual: {formatar_moeda(saldo)}")
-        partes.append("")
-        partes.append("Muito obrigado pela preferência!")
-
-        self._enviar_texto_whatsapp("\n".join(partes), "Enviar Cadastro do Cliente")
 
     def _construir_pagina_observacoes(self):
         """Antes era a 4ª aba ('Observações'); agora mora dentro do

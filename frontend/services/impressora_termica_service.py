@@ -23,7 +23,9 @@ dispositivo, então funciona mesmo com o driver genérico).
 
 import textwrap
 import unicodedata
+from datetime import datetime
 from io import BytesIO
+from urllib.parse import quote
 
 # ==================================================
 # COMANDOS ESC/POS
@@ -143,6 +145,22 @@ def _data(data_iso):
     return texto[:16]
 
 
+def _data_com_hora(data_iso):
+    """"YYYY-MM-DDTHH:MM..." -> "DD/MM/AAAA às HH:MM" -- formato usado
+    nos comprovantes/recibos impressos (ver pedido do usuário)."""
+
+    if not data_iso:
+        return "—"
+
+    texto = str(data_iso).replace("T", " ")[:16]
+
+    try:
+        dt = datetime.strptime(texto, "%Y-%m-%d %H:%M")
+        return dt.strftime("%d/%m/%Y às %H:%M")
+    except ValueError:
+        return texto
+
+
 # ==================================================
 # IMAGEM (raster) -- usado pro logo da loja e pro QR Code, reaproveita
 # os mesmos PNGs já gerados pro comprovante em HTML
@@ -207,6 +225,30 @@ def _gerar_qrcode_png(texto):
     return buffer.getvalue()
 
 
+def _comando_qr_whatsapp(nome_loja, telefone_loja, pontos):
+    """QR code que abre direto uma conversa no WhatsApp da loja com uma
+    mensagem pronta -- em vez de só codificar um texto solto que não
+    leva a lugar nenhum quando escaneado. Sem telefone configurado não
+    tem como montar o link, então não desenha QR nenhum (melhor não
+    mostrar do que mostrar um QR que não funciona)."""
+
+    if not telefone_loja:
+        return None
+
+    digitos = "".join(c for c in telefone_loja if c.isdigit())
+
+    if not digitos:
+        return None
+
+    if len(digitos) <= 11:
+        digitos = "55" + digitos
+
+    mensagem = f"Olá! Vim pelo comprovante da {nome_loja} e preciso de atendimento."
+    link = f"https://wa.me/{digitos}?text={quote(mensagem)}"
+
+    return _comando_imagem(_gerar_qrcode_png(link), pontos // 3)
+
+
 # ==================================================
 # FECHAMENTO DE CAIXA -- rotulos de tipo de movimento em texto puro
 # (mesma ideia da pill colorida da tela, sem cor no cupom termico)
@@ -242,27 +284,35 @@ def gerar_comandos_comprovante(dados, config_loja, logo_bytes=None, largura_pape
             partes.append(_linha())
 
     nome_loja = config_loja.get("nome_loja") or "Vertex ERP"
+    telefone_loja = config_loja.get("telefone")
+
     partes.append(_negrito(True))
     partes.append(_tamanho_fonte(2, 2))
     partes.append(_linha(nome_loja))
     partes.append(_tamanho_fonte(1, 1))
     partes.append(_negrito(False))
 
-    for campo in ("endereco", "telefone", "cnpj_cpf"):
-        valor = config_loja.get(campo)
-        if valor:
-            partes.append(_linhas_quebradas(valor, largura))
+    if config_loja.get("endereco"):
+        partes.append(_linhas_quebradas(config_loja["endereco"], largura))
+    if telefone_loja:
+        partes.append(_linha(f"WhatsApp: {telefone_loja}"))
+    if config_loja.get("cnpj_cpf"):
+        partes.append(_linha(f"CNPJ: {config_loja['cnpj_cpf']}"))
+
+    partes.append(_divisoria(largura))
+
+    partes.append(_negrito(True))
+    partes.append(_linha("COMPROVANTE DE VENDA"))
+    partes.append(_negrito(False))
 
     partes.append(_divisoria(largura))
     partes.append(_alinhar(0))  # esquerda
 
-    partes.append(_negrito(True))
-    partes.append(_linha(f"Venda #{dados['venda_id']}"))
-    partes.append(_negrito(False))
-    partes.append(_linha(f"Data: {_data(dados.get('data'))}"))
+    partes.append(_linha(f"Pedido nº: {dados['venda_id']}"))
+    partes.append(_linha(f"Data: {_data_com_hora(dados.get('data'))}"))
 
     if dados.get("usuario_nome"):
-        partes.append(_linha(f"Vendedor: {dados['usuario_nome']}"))
+        partes.append(_linha(f"Atendente: {dados['usuario_nome']}"))
 
     if dados.get("cliente_nome"):
         partes.append(_linha(f"Cliente: {dados['cliente_nome']}"))
@@ -271,11 +321,15 @@ def gerar_comandos_comprovante(dados, config_loja, logo_bytes=None, largura_pape
 
     partes.append(_divisoria(largura))
 
+    partes.append(_negrito(True))
+    partes.append(_linha("ITENS"))
+    partes.append(_negrito(False))
+    partes.append(_linha())
+
     for item in dados["itens"]:
-        partes.append(_linhas_quebradas(item["nome"], largura))
-        linha_qtd = f"  {item['quantidade']} x {_moeda(item['valor_unitario'])}"
+        linha_item = f"{item['quantidade']}x  {item['nome']}"
         partes.append(
-            _linha_dupla_coluna(linha_qtd, _moeda(item["subtotal"]), largura)
+            _linha_dupla_coluna(linha_item, _moeda(item["subtotal"]), largura)
         )
 
     partes.append(_divisoria(largura))
@@ -284,34 +338,37 @@ def gerar_comandos_comprovante(dados, config_loja, logo_bytes=None, largura_pape
     if desconto > 0:
         partes.append(_linha_dupla_coluna("Desconto", f"-{_moeda(desconto)}", largura))
     elif desconto < 0:
-        partes.append(_linha_dupla_coluna("Acrescimo", f"+{_moeda(-desconto)}", largura))
+        partes.append(_linha_dupla_coluna("Acréscimo", f"+{_moeda(-desconto)}", largura))
 
     partes.append(_negrito(True))
     partes.append(_tamanho_fonte(1, 2))
-    partes.append(_linha_dupla_coluna("TOTAL", _moeda(dados["valor_total"]), largura))
+    partes.append(
+        _linha_dupla_coluna("TOTAL DA COMPRA", _moeda(dados["valor_total"]), largura)
+    )
     partes.append(_tamanho_fonte(1, 1))
     partes.append(_negrito(False))
+    partes.append(_linha())
 
     if dados.get("forma_pagamento_2"):
         valor_principal = float(dados["valor_total"]) - float(
             dados.get("valor_forma_2") or 0
         )
-        partes.append(_linha(f"Pagamento: {_moeda(valor_principal)} ({dados['forma_pagamento']})"))
+        partes.append(
+            _linha(f"Forma de pagamento: {_moeda(valor_principal)} ({dados['forma_pagamento']})")
+        )
         partes.append(
             _linha(f"          + {_moeda(dados['valor_forma_2'])} ({dados['forma_pagamento_2']})")
         )
     else:
-        partes.append(_linha(f"Pagamento: {dados['forma_pagamento']}"))
+        partes.append(_linha(f"Forma de pagamento: {dados['forma_pagamento']}"))
 
     situacao = dados.get("situacao") or "PAGO"
-    partes.append(_negrito(True))
-    partes.append(_linha(f"Situacao: {'FIADO (a prazo)' if situacao == 'FIADO' else 'PAGO'}"))
-    partes.append(_negrito(False))
+    partes.append(_linha(f"Situação: {'EM ABERTO' if situacao == 'FIADO' else 'PAGO'}"))
 
     if situacao == "FIADO" and dados.get("saldo_devedor_cliente") is not None:
         partes.append(
             _linha_dupla_coluna(
-                "Saldo devedor:", _moeda(dados["saldo_devedor_cliente"]), largura
+                "Saldo pendente:", _moeda(dados["saldo_devedor_cliente"]), largura
             )
         )
 
@@ -322,17 +379,120 @@ def gerar_comandos_comprovante(dados, config_loja, logo_bytes=None, largura_pape
     partes.append(_divisoria(largura))
     partes.append(_alinhar(1))  # centro
 
-    texto_qr = (
-        f"Vertex ERP | {nome_loja} | Venda #{dados['venda_id']} | "
-        f"{_data(dados.get('data'))} | Total: {_moeda(dados['valor_total'])}"
-    )
-    comando_qr = _comando_imagem(_gerar_qrcode_png(texto_qr), pontos // 3)
+    partes.append(_linha("Obrigado pela preferência!"))
+    partes.append(_linha())
+
+    comando_qr = _comando_qr_whatsapp(nome_loja, telefone_loja, pontos)
     if comando_qr:
         partes.append(comando_qr)
         partes.append(_linha())
+        partes.append(_linha("Aponte a câmera para falar conosco."))
+        partes.append(_linha())
 
-    partes.append(_linha("Este comprovante nao tem valor fiscal."))
-    partes.append(_linha("Documento gerado pelo Vertex ERP."))
+    partes.append(_linha("Este comprovante não possui valor fiscal."))
+
+    partes.append(_cortar_papel())
+
+    return b"".join(partes)
+
+
+# ==================================================
+# RECIBO DE PAGAMENTO -- impresso ao registrar um pagamento de fiado
+# na ficha do cliente (ver telas/ficha_cliente.py,
+# RegistrarPagamentoDialog.confirmar).
+# ==================================================
+
+
+def gerar_comandos_recibo_pagamento(
+    cliente_nome, valor, forma_pagamento, saldo_antes, saldo_depois,
+    responsavel, momento, config_loja, largura_papel_mm=80,
+):
+
+    largura = _colunas(largura_papel_mm)
+    pontos = _pontos(largura_papel_mm)
+
+    partes = [_INICIALIZAR, _SELECIONAR_PAGINA_CODIGO]
+
+    partes.append(_alinhar(1))
+
+    nome_loja = config_loja.get("nome_loja") or "Vertex ERP"
+    telefone_loja = config_loja.get("telefone")
+
+    partes.append(_negrito(True))
+    partes.append(_tamanho_fonte(2, 2))
+    partes.append(_linha(nome_loja))
+    partes.append(_tamanho_fonte(1, 1))
+    partes.append(_negrito(False))
+
+    if telefone_loja:
+        partes.append(_linha(f"WhatsApp: {telefone_loja}"))
+
+    partes.append(_divisoria(largura))
+
+    partes.append(_negrito(True))
+    partes.append(_linha("RECIBO DE PAGAMENTO"))
+    partes.append(_negrito(False))
+
+    partes.append(_divisoria(largura))
+    partes.append(_alinhar(0))
+
+    partes.append(_linha(f"Cliente: {cliente_nome}"))
+    partes.append(_linha(f"Data: {_data_com_hora(momento)}"))
+    partes.append(_linha(f"Atendente: {responsavel}"))
+
+    partes.append(_divisoria(largura))
+
+    partes.append(_negrito(True))
+    partes.append(_linha("PAGAMENTO RECEBIDO"))
+    partes.append(_negrito(False))
+    partes.append(_linha())
+
+    partes.append(_linha(f"Forma de pagamento: {forma_pagamento}"))
+    partes.append(_linha_dupla_coluna("Valor recebido:", _moeda(valor), largura))
+
+    partes.append(_divisoria(largura))
+
+    partes.append(_negrito(True))
+    partes.append(_linha("RESUMO DO CADASTRO"))
+    partes.append(_negrito(False))
+    partes.append(_linha())
+
+    partes.append(
+        _linha_dupla_coluna(
+            "Saldo antes do pagamento:", _moeda(saldo_antes), largura
+        )
+    )
+    partes.append(
+        _linha_dupla_coluna(
+            "Pagamento registrado:", f"-{_moeda(valor)}", largura
+        )
+    )
+    partes.append(_linha())
+
+    partes.append(_negrito(True))
+    partes.append(
+        _linha_dupla_coluna("Saldo atual:", _moeda(saldo_depois), largura)
+    )
+    partes.append(_negrito(False))
+    partes.append(_linha())
+
+    quitado = saldo_depois <= 0.009
+    partes.append(_linha(f"Situação: {'QUITADO' if quitado else 'SALDO EM ABERTO'}"))
+
+    partes.append(_divisoria(largura))
+    partes.append(_alinhar(1))
+
+    partes.append(_linha("Obrigado pelo pagamento e pela preferência!"))
+    partes.append(_linha())
+
+    comando_qr = _comando_qr_whatsapp(nome_loja, telefone_loja, pontos)
+    if comando_qr:
+        partes.append(comando_qr)
+        partes.append(_linha())
+        partes.append(_linha("Aponte a câmera para falar conosco."))
+        partes.append(_linha())
+
+    partes.append(_linha("Este comprovante não possui valor fiscal."))
 
     partes.append(_cortar_papel())
 
@@ -687,6 +847,18 @@ def listar_impressoras_windows():
 def imprimir_comprovante(dados, config_loja, logo_bytes, config_impressora):
     largura_papel_mm = (config_impressora or {}).get("largura_papel") or 80
     comandos = gerar_comandos_comprovante(dados, config_loja, logo_bytes, largura_papel_mm)
+    return enviar(comandos, config_impressora)
+
+
+def imprimir_recibo_pagamento(
+    cliente_nome, valor, forma_pagamento, saldo_antes, saldo_depois,
+    responsavel, momento, config_loja, config_impressora,
+):
+    largura_papel_mm = (config_impressora or {}).get("largura_papel") or 80
+    comandos = gerar_comandos_recibo_pagamento(
+        cliente_nome, valor, forma_pagamento, saldo_antes, saldo_depois,
+        responsavel, momento, config_loja, largura_papel_mm,
+    )
     return enviar(comandos, config_impressora)
 
 

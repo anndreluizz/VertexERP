@@ -119,7 +119,7 @@ def test_cupom_de_venda_completo():
     assert comandos.startswith(svc._INICIALIZAR)
     assert comandos.endswith(svc._cortar_papel())
     assert svc._codificar_texto("Loja Teste") in comandos
-    assert b"Venda #42" in comandos
+    assert svc._codificar_texto("Pedido nº: 42") in comandos
     assert svc._codificar_texto("R$ 23.00") in comandos
     assert b"PIX" in comandos
     assert svc._codificar_texto("Maria Souza") in comandos
@@ -131,7 +131,7 @@ def test_cupom_fiado_mostra_saldo_devedor():
         {**DADOS_VENDA, "situacao": "FIADO", "saldo_devedor_cliente": 150.0},
         CONFIG_LOJA,
     )
-    assert svc._codificar_texto("FIADO") in comandos
+    assert svc._codificar_texto("EM ABERTO") in comandos
     assert svc._codificar_texto("R$ 150.00") in comandos
 
 
@@ -171,6 +171,41 @@ def test_extrato_sem_movimentacao_nao_trava():
         CLIENTE, [], [], saldo=0.0, responsavel="Ana", config_loja=CONFIG_LOJA,
     )
     assert svc._codificar_texto("Nenhuma movimentacao registrada.") in comandos
+
+
+def test_recibo_pagamento_quitado():
+    comandos = svc.gerar_comandos_recibo_pagamento(
+        cliente_nome="Carlos Lima", valor=20.0, forma_pagamento="PIX",
+        saldo_antes=20.0, saldo_depois=0.0, responsavel="Ana",
+        momento="2026-09-10T14:30:00", config_loja=CONFIG_LOJA,
+    )
+    assert svc._codificar_texto("RECIBO DE PAGAMENTO") in comandos
+    assert svc._codificar_texto("Carlos Lima") in comandos
+    assert svc._codificar_texto("Ana") in comandos
+    assert svc._codificar_texto("R$ 20.00") in comandos
+    assert svc._codificar_texto("QUITADO") in comandos
+    assert comandos.endswith(svc._cortar_papel())
+
+
+def test_recibo_pagamento_saldo_em_aberto():
+    comandos = svc.gerar_comandos_recibo_pagamento(
+        cliente_nome="Carlos Lima", valor=20.0, forma_pagamento="DINHEIRO",
+        saldo_antes=50.0, saldo_depois=30.0, responsavel="Ana",
+        momento="2026-09-10T14:30:00", config_loja=CONFIG_LOJA,
+    )
+    assert svc._codificar_texto("SALDO EM ABERTO") in comandos
+    assert svc._codificar_texto("R$ 30.00") in comandos
+    assert svc._codificar_texto("R$ 50.00") in comandos
+
+
+def test_recibo_pagamento_58mm_gera_sem_erro():
+    comandos = svc.gerar_comandos_recibo_pagamento(
+        cliente_nome="Carlos Lima", valor=20.0, forma_pagamento="PIX",
+        saldo_antes=20.0, saldo_depois=0.0, responsavel="Ana",
+        momento="2026-09-10T14:30:00", config_loja=CONFIG_LOJA,
+        largura_papel_mm=58,
+    )
+    assert len(comandos) > 0
 
 
 def test_enviar_por_rede_com_sucesso():

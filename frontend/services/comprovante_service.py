@@ -3,6 +3,7 @@ import os
 import tempfile
 from datetime import datetime
 from io import BytesIO
+from urllib.parse import quote
 
 import qrcode
 from PySide6.QtGui import QTextDocument, QPageSize, QImage
@@ -111,6 +112,27 @@ def mensagem_whatsapp_padrao(cliente_nome, nome_loja):
 # ==================================================
 # QR CODE
 # ==================================================
+
+
+def _link_whatsapp_loja(nome_loja, telefone_loja):
+    """Link que abre uma conversa no WhatsApp da loja com uma mensagem
+    pronta -- None se não tiver telefone configurado (sem isso não da
+    pra montar um link que funcione, melhor nao desenhar QR nenhum)."""
+
+    if not telefone_loja:
+        return None
+
+    digitos = "".join(c for c in telefone_loja if c.isdigit())
+
+    if not digitos:
+        return None
+
+    if len(digitos) <= 11:
+        digitos = "55" + digitos
+
+    mensagem = f"Olá! Vim pelo comprovante da {nome_loja} e preciso de atendimento."
+
+    return f"https://wa.me/{digitos}?text={quote(mensagem)}"
 
 
 def _gerar_qrcode_base64(texto):
@@ -254,14 +276,14 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
 
     situacao = dados.get("situacao") or "PAGO"
     cor_situacao = "#DC2626" if situacao == "FIADO" else "#16A34A"
-    texto_situacao = "Fiado (a prazo)" if situacao == "FIADO" else "Pago"
+    texto_situacao = "Em aberto" if situacao == "FIADO" else "Pago"
 
     linha_saldo = ""
     saldo = dados.get("saldo_devedor_cliente")
     if situacao == "FIADO" and saldo is not None:
         linha_saldo = (
             f"<p style='margin:4px 0; color:{cor_situacao}; font-weight:bold;'>"
-            f"Saldo devedor atualizado: {_formatar_moeda(saldo)}</p>"
+            f"Saldo pendente: {_formatar_moeda(saldo)}</p>"
         )
 
     cliente_nome = dados.get("cliente_nome")
@@ -275,7 +297,7 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
             )
 
     vendedor_linha = (
-        f"<p style='margin:4px 0;'>Vendedor: {dados['usuario_nome']}</p>"
+        f"<p style='margin:4px 0;'>Atendente: {dados['usuario_nome']}</p>"
         if dados.get("usuario_nome") else ""
     )
 
@@ -284,12 +306,21 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
         if dados.get("observacao") else ""
     )
 
-    texto_qr = (
-        f"Vertex ERP | {nome_loja} | Venda #{dados['venda_id']} | "
-        f"{_formatar_data(dados['data'])} | "
-        f"Total: {_formatar_moeda(dados['valor_total'])}"
-    )
-    qr_b64 = _gerar_qrcode_base64(texto_qr)
+    data_com_hora = _formatar_data(dados["data"]).replace(" ", " às ", 1)
+
+    link_whatsapp = _link_whatsapp_loja(nome_loja, telefone_loja)
+    qr_html = ""
+    if link_whatsapp:
+        qr_b64 = _gerar_qrcode_base64(link_whatsapp)
+        qr_html = f"""
+        <div style="text-align:center; margin-top:16px;">
+            <img src="data:image/png;base64,{qr_b64}"
+                 width="110" height="110" /><br>
+            <span style="color:#64748B; font-size:8pt;">
+                Aponte a câmera para falar conosco.
+            </span>
+        </div>
+        """
 
     return f"""
     <html>
@@ -298,15 +329,18 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
             {logo_html}
             <h2 style="margin:2px 0;">{nome_loja}</h2>
             {f"<p style='margin:0; color:#64748B;'>{endereco_loja}</p>" if endereco_loja else ""}
-            {f"<p style='margin:0; color:#64748B;'>{telefone_loja}</p>" if telefone_loja else ""}
+            {f"<p style='margin:0; color:#64748B;'>WhatsApp: {telefone_loja}</p>" if telefone_loja else ""}
             {f"<p style='margin:0; color:#64748B;'>CNPJ: {cnpj_loja}</p>" if cnpj_loja else ""}
         </div>
         <hr style="border:none; border-top:1px solid #E5E7EB; margin:10px 0;">
-        <p style="margin:4px 0;"><b>Venda #{dados['venda_id']}</b></p>
-        <p style="margin:4px 0;">Data: {_formatar_data(dados['data'])}</p>
+        <h3 style="text-align:center; margin:8px 0;">COMPROVANTE DE VENDA</h3>
+        <hr style="border:none; border-top:1px solid #E5E7EB; margin:10px 0;">
+        <p style="margin:4px 0;"><b>Pedido nº: {dados['venda_id']}</b></p>
+        <p style="margin:4px 0;">Data: {data_com_hora}</p>
         {vendedor_linha}
         {cliente_linhas}
-        <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+        <h4 style="margin:14px 0 4px;">ITENS</h4>
+        <table style="width:100%; border-collapse:collapse;">
             <tr style="background:#F1F5F9;">
                 <th style="padding:6px 8px; text-align:left;">Produto</th>
                 <th style="padding:6px 8px;">Qtd</th>
@@ -317,7 +351,7 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
         </table>
         {linha_ajuste}
         <h3 style="text-align:right; margin-top:12px;">
-            Total: {_formatar_moeda(dados['valor_total'])}
+            TOTAL DA COMPRA: {_formatar_moeda(dados['valor_total'])}
         </h3>
         {linha_pagamento}
         <p style="margin:4px 0;">
@@ -328,14 +362,11 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
         </p>
         {linha_saldo}
         {observacao_linha}
-        <div style="text-align:center; margin-top:16px;">
-            <img src="data:image/png;base64,{qr_b64}"
-                 width="110" height="110" />
-        </div>
+        <p style="text-align:center; margin-top:16px;">Obrigado pela preferência!</p>
+        {qr_html}
         <hr style="border:none; border-top:1px solid #E5E7EB; margin:10px 0;">
         <p style="color:#94A3B8; font-size:8pt; text-align:center;">
-            Este comprovante não tem valor fiscal.<br>
-            Documento gerado automaticamente pelo Vertex ERP.
+            Este comprovante não possui valor fiscal.
         </p>
     </body>
     </html>

@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.animations import fade_in
-from design.icons import icone_pixmap
+from design.icons import icone, icone_pixmap
 
 
 # ==========================================
@@ -63,11 +63,31 @@ class CardKPI(Card):
     """Card de indicador executivo (ícone + rótulo + valor grande) —
     usado em grids de KPIs no topo de telas como o Dashboard."""
 
-    def __init__(self, titulo, icone_nome, cor=None, parent=None):
+    def __init__(self, titulo, icone_nome, cor=None, parent=None, destaque=False):
 
         super().__init__(parent)
 
         cor = cor or tokens.PRIMARIA
+
+        # destaque=True preenche o card com a cor cheia -- reservado pro
+        # numero mais importante de uma grade de KPIs (ex.: Faturamento),
+        # pra diferenciar "o dado principal da tela" dos demais em vez de
+        # repetir o mesmo card branco pra todos
+        if destaque:
+            self.setStyleSheet(self.styleSheet() + f"""
+                Card {{ background: {cor}; border: none; }}
+            """)
+            cor_icone_badge = "rgba(255, 255, 255, 0.18)"
+            cor_titulo = "rgba(255, 255, 255, 0.85)"
+            cor_valor = tokens.TEXTO_CLARO
+            cor_icone = tokens.TEXTO_CLARO
+            self._destaque = True
+        else:
+            cor_icone_badge = None
+            cor_titulo = tokens.TEXTO_SECUNDARIO
+            cor_valor = tokens.TEXTO
+            cor_icone = cor
+            self._destaque = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 18, 20, 18)
@@ -80,17 +100,22 @@ class CardKPI(Card):
         badge_icone.setFixedSize(36, 36)
         badge_icone.setAlignment(Qt.AlignCenter)
 
-        cor_rgb = QColor(cor)
+        if cor_icone_badge is None:
+            cor_rgb = QColor(cor)
+            cor_icone_badge = (
+                f"rgba({cor_rgb.red()}, {cor_rgb.green()}, {cor_rgb.blue()}, 0.12)"
+            )
+
         badge_icone.setStyleSheet(f"""
-            background: rgba({cor_rgb.red()}, {cor_rgb.green()}, {cor_rgb.blue()}, 0.12);
+            background: {cor_icone_badge};
             border-radius: {tokens.RADIUS_SM}px;
         """)
-        badge_icone.setPixmap(icone_pixmap(icone_nome, cor=cor, tamanho=18))
+        badge_icone.setPixmap(icone_pixmap(icone_nome, cor=cor_icone, tamanho=18))
 
         lbl_titulo = QLabel(titulo)
         lbl_titulo.setWordWrap(True)
         lbl_titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            background:transparent; color:{cor_titulo};
             font-size:{tokens.TAMANHO_SM}px; font-weight:600;
         """)
 
@@ -101,7 +126,7 @@ class CardKPI(Card):
 
         self.lbl_valor = QLabel("—")
         self.lbl_valor.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO};
+            background:transparent; color:{cor_valor};
             font-size:{tokens.TAMANHO_XXL}px; font-weight:800;
         """)
         layout.addWidget(self.lbl_valor)
@@ -127,12 +152,21 @@ class CardKPI(Card):
             return
 
         positiva = percentual >= 0
-        cor = tokens.SUCESSO if positiva else tokens.ERRO
         seta = "↑" if positiva else "↓"
 
+        # em cima do fundo cheio (destaque=True) verde/vermelho perdem
+        # contraste -- usa branco translucido em vez da cor semantica
+        cor = (
+            "rgba(255, 255, 255, 0.85)" if self._destaque
+            else (tokens.SUCESSO if positiva else tokens.ERRO)
+        )
+
+        cor_legenda = (
+            "rgba(255, 255, 255, 0.6)" if self._destaque else tokens.TEXTO_TERCIARIO
+        )
         self.lbl_variacao.setText(
             f'<span style="color:{cor}; font-weight:700;">{seta} {abs(percentual):.0f}%</span> '
-            f'<span style="color:{tokens.TEXTO_TERCIARIO};">{legenda}</span>'
+            f'<span style="color:{cor_legenda};">{legenda}</span>'
         )
         self.lbl_variacao.show()
 
@@ -462,14 +496,123 @@ class Avatar(QLabel):
 
 
 # ==========================================
+# CABEÇALHO DE DIÁLOGO — ícone + título/subtítulo + separador
+# ==========================================
+
+class CabecalhoDialogo(QFrame):
+    """Cabeçalho padrão de QDialog: chip de ícone colorido, coluna de
+    título+subtítulo, botão de fechar opcional e a linha separadora
+    logo abaixo -- esse bloco se repetia quase idêntico em cada
+    diálogo de cadastro/confirmação (cadastro_despesa.py,
+    pagamento_despesa.py, ...), então virou um widget único aqui em
+    vez de continuar sendo copiado.
+
+    `titulo`/`icone_cabecalho`/`subtitulo` ficam expostos como
+    atributos (via as propriedades .titulo/.subtitulo/.icone) pra quem
+    precisa mudá-los depois de construído -- ex.: PagamentoDespesaDialog
+    troca ícone/texto quando o pagamento é confirmado (ver
+    definir_texto/definir_icone)."""
+
+    def __init__(
+        self,
+        icone_nome,
+        cor,
+        cor_fundo,
+        titulo,
+        subtitulo="",
+        tamanho_icone=44,
+        tamanho_pixmap=20,
+        fechavel=False,
+        ao_fechar=None,
+        parent=None,
+    ):
+
+        super().__init__(parent)
+
+        layout_externo = QVBoxLayout(self)
+        layout_externo.setContentsMargins(0, 0, 0, 0)
+        layout_externo.setSpacing(0)
+
+        linha = QHBoxLayout()
+        linha.setContentsMargins(24, 20, 24, 16)
+        linha.setSpacing(12)
+
+        self.icone = QLabel()
+        self.icone.setFixedSize(tamanho_icone, tamanho_icone)
+        self.icone.setAlignment(Qt.AlignCenter)
+        self.icone.setStyleSheet(f"""
+            background:{cor_fundo};
+            border-radius:{tokens.RADIUS_MD}px;
+        """)
+        self.icone.setPixmap(icone_pixmap(icone_nome, cor=cor, tamanho=tamanho_pixmap))
+
+        col_titulo = QVBoxLayout()
+        col_titulo.setSpacing(2)
+
+        self.titulo = QLabel(titulo)
+        self.titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_LG}px; font-weight:800;
+        """)
+
+        self.subtitulo = QLabel(subtitulo)
+        self.subtitulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px;
+        """)
+
+        col_titulo.addWidget(self.titulo)
+        col_titulo.addWidget(self.subtitulo)
+
+        linha.addWidget(self.icone)
+        linha.addLayout(col_titulo)
+        linha.addStretch()
+
+        if fechavel:
+            bt_fechar = QPushButton()
+            bt_fechar.setFixedSize(32, 32)
+            bt_fechar.setCursor(Qt.PointingHandCursor)
+            bt_fechar.setAutoDefault(False)
+            bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=15))
+            bt_fechar.setStyleSheet(f"""
+                QPushButton {{ background:transparent; border:none; border-radius:8px; }}
+                QPushButton:hover {{ background:{tokens.FUNDO}; }}
+            """)
+            if ao_fechar:
+                bt_fechar.clicked.connect(ao_fechar)
+            linha.addWidget(bt_fechar)
+
+        layout_externo.addLayout(linha)
+
+        separador = QFrame()
+        separador.setFixedHeight(1)
+        separador.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
+        layout_externo.addWidget(separador)
+
+    def definir_icone(self, icone_nome, cor, tamanho_pixmap=20):
+        self.icone.setPixmap(icone_pixmap(icone_nome, cor=cor, tamanho=tamanho_pixmap))
+
+    def definir_texto(self, titulo, subtitulo=None):
+        self.titulo.setText(titulo)
+        if subtitulo is not None:
+            self.subtitulo.setText(subtitulo)
+
+
+# ==========================================
 # CAMPO DE TEXTO
 # ==========================================
 
 class CampoTexto(QLineEdit):
 
-    def __init__(self, placeholder="", parent=None):
+    def __init__(self, placeholder="", parent=None, cor_foco=None):
 
         super().__init__(parent)
+
+        # cor_foco deixa o campo casar com uma ação/botão adjacente de
+        # cor diferente da primária (ex.: campo ao lado de um botão
+        # verde de "Adicionar") -- por padrão usa a borda primária, que
+        # serve pra maioria dos formulários do sistema.
+        cor_foco = cor_foco or tokens.PRIMARIA
 
         self.setPlaceholderText(placeholder)
         self.setMinimumHeight(44)
@@ -483,7 +626,7 @@ class CampoTexto(QLineEdit):
                 background: {tokens.CARD};
             }}
             QLineEdit:focus {{
-                border: 1.5px solid {tokens.PRIMARIA};
+                border: 1.5px solid {cor_foco};
             }}
             QLineEdit:disabled {{
                 background: {tokens.FUNDO};

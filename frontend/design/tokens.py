@@ -15,41 +15,41 @@ saber nada sobre tema."""
 # ==========================================
 
 _CLARO = {
-    "PRIMARIA": "#2563EB",
-    "PRIMARIA_HOVER": "#1D4ED8",
-    "PRIMARIA_CLARA": "#EFF6FF",
+    "PRIMARIA": "#1B4B8F",
+    "PRIMARIA_HOVER": "#123A73",
+    "PRIMARIA_CLARA": "#E8EEF9",
 
-    "SECUNDARIA": "#16A34A",
-    "SECUNDARIA_HOVER": "#15803D",
+    "SECUNDARIA": "#0D7D6C",
+    "SECUNDARIA_HOVER": "#095F52",
 
-    "SUCESSO": "#22C55E",
-    "SUCESSO_CLARO": "#F0FDF4",
+    "SUCESSO": "#149174",
+    "SUCESSO_CLARO": "#E7F5F1",
 
-    "ALERTA": "#F59E0B",
-    "ALERTA_CLARO": "#FFFBEB",
-    "ALERTA_TEXTO": "#B45309",
+    "ALERTA": "#B4750F",
+    "ALERTA_CLARO": "#FBF1E1",
+    "ALERTA_TEXTO": "#8A5A0C",
 
-    "ERRO": "#DC2626",
-    "ERRO_HOVER": "#B91C1C",
-    "ERRO_CLARO": "#FEF2F2",
+    "ERRO": "#A9362A",
+    "ERRO_HOVER": "#8A2B21",
+    "ERRO_CLARO": "#FBEBE8",
 
-    "FUNDO": "#F5F7FA",
-    "SIDEBAR": "#18181B",
-    "SIDEBAR_HOVER": "#27272A",
-    "SIDEBAR_ATIVO": "#27272A",
+    "FUNDO": "#F5F3EF",
+    "SIDEBAR": "#101F38",
+    "SIDEBAR_HOVER": "#1C3357",
+    "SIDEBAR_ATIVO": "#24406B",
 
     "CARD": "#FFFFFF",
-    "BORDA": "#E5E7EB",
-    "BORDA_FORTE": "#D1D5DB",
+    "BORDA": "#E4DFD5",
+    "BORDA_FORTE": "#D3CCBD",
 
-    "TEXTO": "#1E293B",
-    "TEXTO_SECUNDARIO": "#64748B",
-    "TEXTO_TERCIARIO": "#94A3B8",
+    "TEXTO": "#16213B",
+    "TEXTO_SECUNDARIO": "#5B6B85",
+    "TEXTO_TERCIARIO": "#8B96AC",
     "TEXTO_CLARO": "#FFFFFF",
-    "TEXTO_SIDEBAR": "#D4D4D8",
-    "TEXTO_SIDEBAR_APAGADO": "#71717A",
+    "TEXTO_SIDEBAR": "#C7D2E3",
+    "TEXTO_SIDEBAR_APAGADO": "#7C89A3",
 
-    "SOMBRA_COR": "#1E293B",
+    "SOMBRA_COR": "#16213B",
 }
 
 # ==========================================
@@ -62,39 +62,39 @@ _CLARO = {
 # escala) -- SIDEBAR já nascia escuro mesmo no tema claro, então quase
 # não muda entre os dois.
 _ESCURO = {
-    "PRIMARIA": "#3B82F6",
-    "PRIMARIA_HOVER": "#60A5FA",
-    "PRIMARIA_CLARA": "#1E3A5F",
+    "PRIMARIA": "#4C7FC9",
+    "PRIMARIA_HOVER": "#6E9CDA",
+    "PRIMARIA_CLARA": "#1C2A3F",
 
-    "SECUNDARIA": "#22C55E",
-    "SECUNDARIA_HOVER": "#4ADE80",
+    "SECUNDARIA": "#2FA88F",
+    "SECUNDARIA_HOVER": "#4FC2A8",
 
-    "SUCESSO": "#4ADE80",
-    "SUCESSO_CLARO": "#14532D",
+    "SUCESSO": "#3FBFA0",
+    "SUCESSO_CLARO": "#163A31",
 
-    "ALERTA": "#FBBF24",
-    "ALERTA_CLARO": "#451A03",
-    "ALERTA_TEXTO": "#FBBF24",
+    "ALERTA": "#D69A3E",
+    "ALERTA_CLARO": "#3A2A11",
+    "ALERTA_TEXTO": "#E4B063",
 
-    "ERRO": "#EF4444",
-    "ERRO_HOVER": "#F87171",
-    "ERRO_CLARO": "#450A0A",
+    "ERRO": "#D9695C",
+    "ERRO_HOVER": "#E68A7F",
+    "ERRO_CLARO": "#3A1B17",
 
-    "FUNDO": "#0F172A",
-    "SIDEBAR": "#09090B",
-    "SIDEBAR_HOVER": "#27272A",
-    "SIDEBAR_ATIVO": "#3F3F46",
+    "FUNDO": "#0E1420",
+    "SIDEBAR": "#0A121F",
+    "SIDEBAR_HOVER": "#16233A",
+    "SIDEBAR_ATIVO": "#223655",
 
-    "CARD": "#1E293B",
-    "BORDA": "#334155",
-    "BORDA_FORTE": "#475569",
+    "CARD": "#182130",
+    "BORDA": "#29334A",
+    "BORDA_FORTE": "#39445E",
 
-    "TEXTO": "#F1F5F9",
-    "TEXTO_SECUNDARIO": "#94A3B8",
-    "TEXTO_TERCIARIO": "#64748B",
+    "TEXTO": "#ECE7DC",
+    "TEXTO_SECUNDARIO": "#9AA3B0",
+    "TEXTO_TERCIARIO": "#6B7280",
     "TEXTO_CLARO": "#FFFFFF",
-    "TEXTO_SIDEBAR": "#D4D4D8",
-    "TEXTO_SIDEBAR_APAGADO": "#71717A",
+    "TEXTO_SIDEBAR": "#B7C2D6",
+    "TEXTO_SIDEBAR_APAGADO": "#71809C",
 
     "SOMBRA_COR": "#000000",
 }
@@ -123,6 +123,16 @@ def aplicar(escuro: bool) -> None:
 # aplicar() (testes, scripts avulsos) continuar funcionando igual a
 # antes desta troca existir
 aplicar(escuro=False)
+
+# ==========================================
+# CORES DE GRADIENTE (decorativas, mesmo valor nos dois temas -- servem
+# só de ponto final de gradiente/ilustração, não de texto ou superfície,
+# então não precisam da troca clara/escura como o resto da paleta)
+# ==========================================
+
+PRIMARIA_ESCURA = "#0F2E57"
+SECUNDARIA_ESCURA = "#084A40"
+ALERTA_ESCURA = "#7A4E09"
 
 # ==========================================
 # RAIO DE BORDA

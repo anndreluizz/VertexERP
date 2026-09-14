@@ -150,16 +150,14 @@ class Sidebar(QFrame):
         cab_layout.setContentsMargins(20, 16, 16, 16)
         cab_layout.setSpacing(12)
 
-        self.marca = QLabel("V")
+        self.marca = QLabel()
         self.marca.setFixedSize(40, 40)
         self.marca.setAlignment(Qt.AlignCenter)
         self.marca.setStyleSheet(f"""
             background: {tokens.PRIMARIA};
-            color: white;
             border-radius: {tokens.RADIUS_SM}px;
-            font-size: 18px;
-            font-weight: 800;
         """)
+        self.marca.setPixmap(icone_pixmap("vertex-mark", cor="#FFFFFF", tamanho=20))
 
         col_nome = QVBoxLayout()
         col_nome.setSpacing(0)

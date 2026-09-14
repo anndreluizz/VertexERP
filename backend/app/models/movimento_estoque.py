@@ -16,12 +16,20 @@ class MovimentoEstoque(Base):
 
     produto_id: Mapped[int] = mapped_column(
         ForeignKey("produtos.id"),
+        index=True,
         nullable=False
     )
 
     usuario_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"),
+        index=True,
         nullable=False
+    )
+
+    loja_id: Mapped[int | None] = mapped_column(
+        ForeignKey("lojas.id"),
+        index=True,
+        nullable=True
     )
 
     tipo: Mapped[str] = mapped_column(

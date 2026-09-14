@@ -29,11 +29,21 @@ class ContaPagar(Base):
 
     fornecedor_id: Mapped[int | None] = mapped_column(
         ForeignKey("fornecedores.id"),
+        index=True,
         nullable=True,
     )
 
     compra_id: Mapped[int | None] = mapped_column(
         ForeignKey("compras.id"),
+        index=True,
+        nullable=True,
+    )
+
+    # nullable pelo mesmo motivo das outras entidades com loja_id novo
+    # -- contas antigas nao tem essa informacao (backfill na migracao)
+    loja_id: Mapped[int | None] = mapped_column(
+        ForeignKey("lojas.id"),
+        index=True,
         nullable=True,
     )
 

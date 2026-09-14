@@ -17,6 +17,7 @@ class Venda(Base):
 
     cliente_id: Mapped[int | None] = mapped_column(
         ForeignKey("clientes.id"),
+        index=True,
         nullable=True
     )
 
@@ -24,6 +25,16 @@ class Venda(Base):
     # tiveram esse dado) e pra registros futuros sem usuario disponivel
     usuario_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"),
+        index=True,
+        nullable=True
+    )
+
+    # loja onde a venda foi feita -- nullable pelo mesmo motivo do
+    # usuario_id acima (vendas antigas nao tem essa informacao); a
+    # migracao faz backfill pra loja Matriz em tudo que ja existe
+    loja_id: Mapped[int | None] = mapped_column(
+        ForeignKey("lojas.id"),
+        index=True,
         nullable=True
     )
 
@@ -94,6 +105,7 @@ class Venda(Base):
 
     cancelado_por_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"),
+        index=True,
         nullable=True
     )
 

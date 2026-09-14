@@ -16,11 +16,21 @@ class ContaReceber(Base):
     )
 
     cliente_id: Mapped[int] = mapped_column(
-        ForeignKey("clientes.id")
+        ForeignKey("clientes.id"),
+        index=True,
     )
 
     venda_id: Mapped[int | None] = mapped_column(
         ForeignKey("vendas.id"),
+        index=True,
+        nullable=True
+    )
+
+    # nullable pelo mesmo motivo das outras entidades com loja_id novo
+    # -- contas antigas nao tem essa informacao (backfill na migracao)
+    loja_id: Mapped[int | None] = mapped_column(
+        ForeignKey("lojas.id"),
+        index=True,
         nullable=True
     )
 

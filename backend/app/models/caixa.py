@@ -53,6 +53,15 @@ class Caixa(Base):
 
     usuario_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"),
+        index=True,
+        nullable=True
+    )
+
+    # nullable pelo mesmo motivo de usuario_id -- caixas antigos nao
+    # tem essa informacao (backfill pra Matriz na migracao)
+    loja_id: Mapped[int | None] = mapped_column(
+        ForeignKey("lojas.id"),
+        index=True,
         nullable=True
     )
 

@@ -10,6 +10,7 @@ from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from services.api import get, post, configuracoes
+from utils.formatacao import formatar_moeda
 
 
 # ==================================================
@@ -138,7 +139,7 @@ def _gerar_qrcode_base64(texto):
 
 
 def _formatar_moeda(valor):
-    return f"R$ {float(valor or 0):.2f}"
+    return formatar_moeda(valor, com_simbolo=True)
 
 
 def _formatar_data(data_iso):

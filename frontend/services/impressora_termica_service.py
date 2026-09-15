@@ -25,6 +25,8 @@ import textwrap
 import unicodedata
 from io import BytesIO
 
+from utils.formatacao import formatar_moeda
+
 # ==================================================
 # COMANDOS ESC/POS
 # ==================================================
@@ -133,7 +135,7 @@ def _divisoria(largura):
 
 
 def _moeda(valor):
-    return f"R$ {float(valor or 0):.2f}"
+    return formatar_moeda(valor, com_simbolo=True)
 
 
 def _data(data_iso):

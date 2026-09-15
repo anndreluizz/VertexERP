@@ -120,7 +120,7 @@ def test_cupom_de_venda_completo():
     assert comandos.endswith(svc._cortar_papel())
     assert svc._codificar_texto("Loja Teste") in comandos
     assert svc._codificar_texto("Pedido nº: 42") in comandos
-    assert svc._codificar_texto("R$ 23.00") in comandos
+    assert svc._codificar_texto("R$ 23,00") in comandos
     assert b"PIX" in comandos
     assert svc._codificar_texto("Maria Souza") in comandos
     assert svc._codificar_texto("Entregar embrulhado") in comandos
@@ -132,7 +132,7 @@ def test_cupom_fiado_mostra_saldo_devedor():
         CONFIG_LOJA,
     )
     assert svc._codificar_texto("EM ABERTO") in comandos
-    assert svc._codificar_texto("R$ 150.00") in comandos
+    assert svc._codificar_texto("R$ 150,00") in comandos
 
 
 def test_cupom_58mm_gera_sem_erro():
@@ -160,7 +160,7 @@ def test_extrato_do_cliente():
         config_loja=CONFIG_LOJA, largura_papel_mm=80,
     )
     assert svc._codificar_texto("Carlos Lima") in comandos
-    assert svc._codificar_texto("R$ 20.00") in comandos
+    assert svc._codificar_texto("R$ 20,00") in comandos
     assert svc._codificar_texto("Ana") in comandos
     assert svc._codificar_texto("Cliente pediu prazo") in comandos
     assert comandos.endswith(svc._cortar_papel())
@@ -182,7 +182,7 @@ def test_recibo_pagamento_quitado():
     assert svc._codificar_texto("RECIBO DE PAGAMENTO") in comandos
     assert svc._codificar_texto("Carlos Lima") in comandos
     assert svc._codificar_texto("Ana") in comandos
-    assert svc._codificar_texto("R$ 20.00") in comandos
+    assert svc._codificar_texto("R$ 20,00") in comandos
     assert svc._codificar_texto("QUITADO") in comandos
     assert comandos.endswith(svc._cortar_papel())
 
@@ -194,8 +194,8 @@ def test_recibo_pagamento_saldo_em_aberto():
         momento="2026-09-10T14:30:00", config_loja=CONFIG_LOJA,
     )
     assert svc._codificar_texto("SALDO EM ABERTO") in comandos
-    assert svc._codificar_texto("R$ 30.00") in comandos
-    assert svc._codificar_texto("R$ 50.00") in comandos
+    assert svc._codificar_texto("R$ 30,00") in comandos
+    assert svc._codificar_texto("R$ 50,00") in comandos
 
 
 def test_recibo_pagamento_58mm_gera_sem_erro():

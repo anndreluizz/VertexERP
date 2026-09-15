@@ -55,6 +55,31 @@ def carregar_servidor():
     return _settings().value("conexao/servidor_host")
 
 
+def salvar_loja_id(loja_id):
+    """Qual loja este terminal opera -- fixo por instalacao (decisao
+    do projeto: quem decide a loja de uma venda/caixa/estoque e o
+    terminal, nao o usuario logado nele, ver backend
+    app/auth/dependencies.resolver_loja_id). Um PC configurado como
+    "Filial" sempre grava como Filial, mesmo se um admin da Matriz
+    logar ali."""
+    if loja_id is None:
+        # remove a chave em vez de gravar None literal -- QSettings
+        # guarda tudo como string no .ini, entao um None vira "None"
+        # de verdade se so' fizer setValue, e carregar_loja_id() nunca
+        # mais devolveria None de volta
+        _settings().remove("conexao/loja_id")
+    else:
+        _settings().setValue("conexao/loja_id", loja_id)
+
+
+def carregar_loja_id():
+    # None (nenhuma configuracao ainda) faz o backend cair no proprio
+    # fallback (loja de origem do usuario, ou a loja ativa mais
+    # antiga) -- ver resolver_loja_id() no backend
+    valor = _settings().value("conexao/loja_id", defaultValue=None)
+    return int(valor) if valor is not None else None
+
+
 def salvar_tema_escuro(escuro):
     _settings().setValue("aparencia/tema_escuro", escuro)
 

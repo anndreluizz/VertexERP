@@ -1,6 +1,6 @@
 from urllib.parse import quote
 
-from services.api import get, post, delete
+from services.api import get, post, delete, endpoint_com_loja
 
 # a API nunca devolve mais que isso por chamada (ver vendas.py no
 # backend) -- listar_vendas() varre todas as paginas por baixo dos
@@ -87,4 +87,4 @@ def finalizar_venda(
             }
         )
 
-    return post("/vendas/", dados)
+    return post(endpoint_com_loja("/vendas/"), dados)

@@ -1,4 +1,4 @@
-from services.api import get, post, put, delete
+from services.api import get, post, put, delete, endpoint_com_loja
 
 
 def listar_contas_pagar():
@@ -13,7 +13,7 @@ def listar_contas_pagar():
 
 def cadastrar_conta_pagar(dados):
 
-    return post("/contas-pagar/", dados)
+    return post(endpoint_com_loja("/contas-pagar/"), dados)
 
 
 def atualizar_conta_pagar(conta_id, dados):

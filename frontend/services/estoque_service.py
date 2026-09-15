@@ -1,4 +1,4 @@
-from services.api import get, post
+from services.api import get, post, endpoint_com_loja
 
 
 # ==========================================
@@ -31,4 +31,4 @@ def listar_movimentos_por_produto(produto_id):
 
 def ajustar_estoque(dados):
 
-    return post("/estoque/movimentos", dados)
+    return post(endpoint_com_loja("/estoque/movimentos"), dados)

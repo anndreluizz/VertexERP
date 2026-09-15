@@ -68,6 +68,7 @@ from app.api.v1 import (
     financeiro_fluxo_caixa as financeiro_fluxo_caixa_router,
     configuracoes as configuracoes_router,
     relatorios as relatorios_router,
+    lojas as lojas_router,
 )
 from app.auth import dependencies as auth_dependencies
 
@@ -91,6 +92,7 @@ MODULOS_COM_GET_DB = [
     financeiro_fluxo_caixa_router,
     configuracoes_router,
     relatorios_router,
+    lojas_router,
     auth_dependencies,
 ]
 

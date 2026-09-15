@@ -1,4 +1,4 @@
-from services.api import get, post
+from services.api import get, post, endpoint_com_loja
 
 
 # ==========================================
@@ -11,7 +11,7 @@ def criar_movimento(
     descricao="",
 ):
     return post(
-        "/movimentos-caixa/",
+        endpoint_com_loja("/movimentos-caixa/"),
         {
             "tipo": tipo,
             "valor": valor,

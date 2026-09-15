@@ -292,6 +292,24 @@ def cadastrar_usuario(nome, email, senha):
     )
 
 
+def endpoint_com_loja(endpoint: str) -> str:
+    """Anexa ?loja_id=X (ou &loja_id=X se o endpoint ja tiver
+    querystring) usando a loja fixa configurada pra este terminal --
+    usado nos poucos endpoints de escrita que precisam saber em qual
+    loja registrar (venda, caixa, estoque, contas a pagar). Sem
+    configuracao nenhuma (carregar_loja_id() == None), devolve o
+    endpoint como veio e o backend cai no proprio fallback (ver
+    app/auth/dependencies.resolver_loja_id)."""
+
+    loja_id = preferencias_service.carregar_loja_id()
+
+    if loja_id is None:
+        return endpoint
+
+    separador = "&" if "?" in endpoint else "?"
+    return f"{endpoint}{separador}loja_id={loja_id}"
+
+
 def get(endpoint: str):
 
     if TOKEN is None:

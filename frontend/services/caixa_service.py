@@ -1,4 +1,4 @@
-from services.api import get, post
+from services.api import get, post, endpoint_com_loja
 
 
 # ==========================================
@@ -7,7 +7,7 @@ from services.api import get, post
 
 def caixa_aberto():
 
-    response = get("/caixa/aberto")
+    response = get(endpoint_com_loja("/caixa/aberto"))
 
     if response.status_code != 200:
         return None
@@ -18,7 +18,7 @@ def caixa_aberto():
 def abrir_caixa(saldo_inicial):
 
     return post(
-        "/caixa/abrir",
+        endpoint_com_loja("/caixa/abrir"),
         {
             "saldo_inicial": saldo_inicial,
         },
@@ -28,7 +28,7 @@ def abrir_caixa(saldo_inicial):
 def fechar_caixa(valor_contado=None, observacoes=None):
 
     return post(
-        "/caixa/fechar",
+        endpoint_com_loja("/caixa/fechar"),
         {
             "valor_contado": valor_contado,
             "observacoes": observacoes,
@@ -38,7 +38,7 @@ def fechar_caixa(valor_contado=None, observacoes=None):
 
 def resumo_caixa():
 
-    response = get("/caixa/resumo")
+    response = get(endpoint_com_loja("/caixa/resumo"))
 
     if response.status_code != 200:
         return None
@@ -123,7 +123,7 @@ def criar_movimento(
 ):
 
     response = post(
-        "/movimentos-caixa/",
+        endpoint_com_loja("/movimentos-caixa/"),
         {
             "tipo": tipo,
             "valor": valor,

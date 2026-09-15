@@ -25,13 +25,17 @@ from PySide6.QtWidgets import (
 from services.api import configuracoes, atualizar_configuracoes, me
 from services import preferencias_service
 from services import impressora_termica_service
+from services import loja_service
 from services.comprovante_service import obter_logo_loja
 from telas.gerenciar_usuarios import GerenciarUsuariosDialog
 
 from design import tokens
 from design.icons import icone, icone_pixmap
-from design.widgets import BotaoSecundario, BotaoSucesso
+from design.widgets import BotaoPrimario, BotaoSecundario, BotaoSucesso, CampoTexto
 from utils.validacao import email_valido
+from widgets.fields.cpf_field import CpfCnpjField
+from widgets.fields.phone_field import PhoneField
+from widgets.fields.email_field import EmailField
 
 
 class ItemMenuConfig(QPushButton):
@@ -152,9 +156,9 @@ class Configuracoes(QWidget):
         self.bt_email_config = ItemMenuConfig("mail", "E-mail (SMTP)")
         self.bt_impressora = ItemMenuConfig("printer", "Impressora / Cupom")
         self.bt_hardware = ItemMenuConfig("settings", "Hardware / Scanner")
+        self.bt_lojas = ItemMenuConfig("truck", "Lojas e Filiais")
 
         itens_futuros = [
-            ItemMenuConfig("truck", "Lojas e Filiais", habilitado=False),
             ItemMenuConfig("gift", "Fidelidade e Marketing", habilitado=False),
             ItemMenuConfig("refresh-cw", "Integrações (TEF/POS)", habilitado=False),
             ItemMenuConfig("lock", "Privacidade & LGPD", habilitado=False),
@@ -167,6 +171,7 @@ class Configuracoes(QWidget):
         submenu_layout.addWidget(self.bt_email_config)
         submenu_layout.addWidget(self.bt_impressora)
         submenu_layout.addWidget(self.bt_hardware)
+        submenu_layout.addWidget(self.bt_lojas)
 
         for item in itens_futuros:
             submenu_layout.addWidget(item)
@@ -182,6 +187,7 @@ class Configuracoes(QWidget):
         self.bt_email_config.clicked.connect(lambda: self._selecionar_aba(4))
         self.bt_impressora.clicked.connect(lambda: self._selecionar_aba(5))
         self.bt_hardware.clicked.connect(lambda: self._selecionar_aba(6))
+        self.bt_lojas.clicked.connect(lambda: self._selecionar_aba(7))
 
         corpo.addWidget(submenu_frame)
 
@@ -196,6 +202,7 @@ class Configuracoes(QWidget):
         self.paginas.addWidget(self._criar_pagina_email())
         self.paginas.addWidget(self._criar_pagina_impressora())
         self.paginas.addWidget(self._criar_pagina_hardware())
+        self.paginas.addWidget(self._criar_pagina_lojas())
 
         corpo.addWidget(self.paginas, stretch=1)
 
@@ -231,6 +238,7 @@ class Configuracoes(QWidget):
         self.bt_email_config.setChecked(indice == 4)
         self.bt_impressora.setChecked(indice == 5)
         self.bt_hardware.setChecked(indice == 6)
+        self.bt_lojas.setChecked(indice == 7)
 
         self.paginas.setCurrentIndex(indice)
 
@@ -284,13 +292,13 @@ class Configuracoes(QWidget):
             layout, "NOME DA LOJA", "Ex: Loja do João"
         )
         self.cnpj_cpf = self._campo(
-            layout, "CNPJ / CPF", "00.000.000/0000-00"
+            layout, "CNPJ / CPF", "000.000.000-00", cls=CpfCnpjField
         )
         self.endereco = self._campo(
             layout, "ENDEREÇO", "Rua, número, bairro, cidade"
         )
         self.telefone = self._campo(
-            layout, "TELEFONE", "(00) 00000-0000"
+            layout, "TELEFONE", "(00) 00000-0000", cls=PhoneField
         )
 
         layout.addStretch()
@@ -528,7 +536,7 @@ class Configuracoes(QWidget):
         layout.addWidget(self.smtp_porta)
 
         self.smtp_usuario = self._campo(
-            layout, "USUÁRIO (E-MAIL)", "seuemail@gmail.com"
+            layout, "USUÁRIO (E-MAIL)", "seuemail@gmail.com", cls=EmailField
         )
 
         self.smtp_senha = self._campo(
@@ -815,6 +823,170 @@ class Configuracoes(QWidget):
 
         return self._envolver_com_rolagem(pagina)
 
+    def _criar_pagina_lojas(self):
+
+        pagina = QWidget()
+        layout = QVBoxLayout(pagina)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(14)
+
+        # ---- loja deste terminal ----
+
+        lbl_terminal = QLabel("Loja deste terminal")
+        lbl_terminal.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.PRIMARIA};
+        """)
+        layout.addWidget(lbl_terminal)
+
+        dica_terminal = QLabel(
+            "Toda venda, movimento de caixa e ajuste de estoque feito "
+            "neste computador é registrado nessa loja — não importa "
+            "qual usuário estiver logado. Configure uma vez por "
+            "instalação."
+        )
+        dica_terminal.setWordWrap(True)
+        dica_terminal.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_SECUNDARIO}; line-height:1.5;
+        """)
+        layout.addWidget(dica_terminal)
+
+        linha_terminal = QHBoxLayout()
+        linha_terminal.setSpacing(10)
+
+        self.combo_loja_terminal = QComboBox()
+        self.combo_loja_terminal.setMinimumHeight(44)
+        self.combo_loja_terminal.setCursor(Qt.PointingHandCursor)
+        self.combo_loja_terminal.setStyleSheet(f"""
+            QComboBox {{
+                border:1.5px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
+                padding:0 12px; font-size:{tokens.TAMANHO_MD}px; color:{tokens.TEXTO};
+            }}
+        """)
+
+        bt_salvar_loja_terminal = BotaoPrimario("Salvar")
+        bt_salvar_loja_terminal.setMinimumHeight(44)
+        bt_salvar_loja_terminal.clicked.connect(self._salvar_loja_do_terminal)
+
+        linha_terminal.addWidget(self.combo_loja_terminal, stretch=1)
+        linha_terminal.addWidget(bt_salvar_loja_terminal)
+
+        layout.addLayout(linha_terminal)
+
+        linha_divisoria = QFrame()
+        linha_divisoria.setFixedHeight(1)
+        linha_divisoria.setStyleSheet(f"background:{tokens.BORDA};")
+        layout.addWidget(linha_divisoria)
+
+        # ---- lojas cadastradas ----
+
+        lbl_cadastradas = QLabel("Lojas cadastradas")
+        lbl_cadastradas.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
+        layout.addWidget(lbl_cadastradas)
+
+        self.lista_lojas = QVBoxLayout()
+        self.lista_lojas.setSpacing(6)
+        layout.addLayout(self.lista_lojas)
+
+        linha_nova_loja = QHBoxLayout()
+        linha_nova_loja.setSpacing(10)
+
+        self.campo_nova_loja = CampoTexto("Ex: Filial Centro")
+        self.campo_nova_loja.returnPressed.connect(self._criar_loja)
+
+        bt_criar_loja = BotaoSucesso("+ Adicionar")
+        bt_criar_loja.clicked.connect(self._criar_loja)
+
+        linha_nova_loja.addWidget(self.campo_nova_loja, stretch=1)
+        linha_nova_loja.addWidget(bt_criar_loja)
+
+        layout.addLayout(linha_nova_loja)
+
+        layout.addStretch()
+
+        self._carregar_lojas()
+
+        return self._envolver_com_rolagem(pagina)
+
+    def _carregar_lojas(self):
+
+        while self.lista_lojas.count():
+            item = self.lista_lojas.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        lojas = loja_service.listar_lojas()
+
+        self.combo_loja_terminal.blockSignals(True)
+        self.combo_loja_terminal.clear()
+        self.combo_loja_terminal.addItem("(usar a loja do usuário)", None)
+
+        loja_atual = preferencias_service.carregar_loja_id()
+
+        for loja in lojas:
+
+            self.combo_loja_terminal.addItem(loja["nome"], loja["id"])
+
+            if loja_atual == loja["id"]:
+                self.combo_loja_terminal.setCurrentIndex(
+                    self.combo_loja_terminal.count() - 1
+                )
+
+            lbl_loja = QLabel(f"•  {loja['nome']}")
+            lbl_loja.setStyleSheet(f"""
+                background:transparent; font-size:{tokens.TAMANHO_SM}px;
+                color:{tokens.TEXTO};
+            """)
+            self.lista_lojas.addWidget(lbl_loja)
+
+        self.combo_loja_terminal.blockSignals(False)
+
+        if not lojas:
+            lbl_vazio = QLabel("Nenhuma loja cadastrada ainda.")
+            lbl_vazio.setStyleSheet(f"""
+                background:transparent; font-size:{tokens.TAMANHO_SM}px;
+                color:{tokens.TEXTO_TERCIARIO};
+            """)
+            self.lista_lojas.addWidget(lbl_vazio)
+
+    def _salvar_loja_do_terminal(self):
+
+        loja_id = self.combo_loja_terminal.currentData()
+
+        preferencias_service.salvar_loja_id(loja_id)
+
+        QMessageBox.information(
+            self,
+            "Salvo",
+            "Este terminal já está configurado. Vendas, caixa e "
+            "estoque feitos aqui vão contar pra "
+            f"\"{self.combo_loja_terminal.currentText()}\".",
+        )
+
+    def _criar_loja(self):
+
+        nome = self.campo_nova_loja.text().strip()
+
+        if not nome:
+            return
+
+        response = loja_service.criar_loja(nome)
+
+        if response.status_code != 200:
+            try:
+                erro = response.json().get("detail") or str(response.json())
+            except Exception:
+                erro = response.text
+            QMessageBox.critical(self, "Erro", str(erro))
+            return
+
+        self.campo_nova_loja.clear()
+        self._carregar_lojas()
+
     def _exibir_logo_padrao(self):
 
         self.lbl_logo.setPixmap(QPixmap())
@@ -1023,7 +1195,7 @@ class Configuracoes(QWidget):
         else:
             QMessageBox.critical(self, "Falha", erro)
 
-    def _campo(self, layout, rotulo, placeholder):
+    def _campo(self, layout, rotulo, placeholder, cls=None):
 
         lbl = QLabel(rotulo)
         lbl.setStyleSheet(f"""
@@ -1031,17 +1203,23 @@ class Configuracoes(QWidget):
             font-weight:700; color:{tokens.TEXTO_TERCIARIO};
         """)
 
-        campo = QLineEdit()
-        campo.setPlaceholderText(placeholder)
-        campo.setMinimumHeight(42)
-        campo.setStyleSheet(f"""
-            QLineEdit {{
-                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
-                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
-                background: {tokens.CARD};
-            }}
-            QLineEdit:focus {{ border: 1.5px solid {tokens.PRIMARIA}; }}
-        """)
+        if cls is None:
+            campo = QLineEdit()
+            campo.setPlaceholderText(placeholder)
+            campo.setMinimumHeight(42)
+            campo.setStyleSheet(f"""
+                QLineEdit {{
+                    border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                    padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
+                    background: {tokens.CARD};
+                }}
+                QLineEdit:focus {{ border: 1.5px solid {tokens.PRIMARIA}; }}
+            """)
+        else:
+            # cls (CpfCnpjField/PhoneField/EmailField) já traz sua
+            # própria máscara/validação e estilo (baseado em
+            # CampoTexto) -- não sobrescrever por cima.
+            campo = cls(placeholder)
 
         layout.addWidget(lbl)
         layout.addWidget(campo)

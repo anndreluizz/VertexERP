@@ -76,7 +76,11 @@ class DashboardService:
     @staticmethod
     def resumo(db: Session):
 
-        hoje = date.today()
+        # UTC, nao date.today() (hora local) -- Venda/ContaPagar gravam
+        # a data com datetime.utcnow(), entao "hoje" precisa estar no
+        # mesmo fuso ou as vendas somem do painel entre 21h e meia-noite
+        # (horario de Brasilia, quando UTC ja virou o dia seguinte).
+        hoje = datetime.utcnow().date()
 
         vendas_hoje = (
             db.query(func.coalesce(func.sum(Venda.valor_total), 0))

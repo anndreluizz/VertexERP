@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.models.movimento_estoque import MovimentoEstoque
+from app.repositories.estoque_loja_repository import EstoqueLojaRepository
 from app.repositories.produto_repository import ProdutoRepository
 from app.repositories.movimento_estoque_repository import (
     MovimentoEstoqueRepository,
@@ -25,19 +26,33 @@ class MovimentoEstoqueService:
 
         tipo = dados.tipo.upper()
 
+        # quantidade "atual" pra validar SAIDA e calcular o delta de
+        # AJUSTE e a da PROPRIA loja (nao o agregado entre lojas) --
+        # senao uma saida seria bloqueada/liberada com base no estoque
+        # de outra loja, ou um ajuste "pra 10" na Filial na verdade
+        # setaria o total da empresa pra 10
+        if loja_id is not None:
+            atual = EstoqueLojaRepository.obter_ou_criar(
+                db, produto.id, loja_id
+            ).quantidade
+        else:
+            atual = produto.estoque
+
         if tipo == "ENTRADA":
-            produto.estoque += dados.quantidade
+            delta = dados.quantidade
 
         elif tipo == "SAIDA":
-            if dados.quantidade > produto.estoque:
+            if dados.quantidade > atual:
                 raise Exception("Estoque insuficiente para essa saída.")
-            produto.estoque -= dados.quantidade
+            delta = -dados.quantidade
 
         elif tipo == "AJUSTE":
-            produto.estoque = dados.quantidade
+            delta = dados.quantidade - atual
 
         else:
             raise Exception("Tipo de movimento inválido.")
+
+        EstoqueLojaRepository.ajustar(db, produto, loja_id, delta)
 
         movimento = MovimentoEstoque(
             produto_id=produto.id,

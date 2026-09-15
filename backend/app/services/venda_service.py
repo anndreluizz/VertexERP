@@ -17,6 +17,7 @@ from app.repositories.item_venda_repository import (
     ItemVendaRepository,
 )
 from app.repositories.caixa_repository import CaixaRepository
+from app.repositories.estoque_loja_repository import EstoqueLojaRepository
 from app.repositories.movimento_fiado_repository import (
     MovimentoFiadoRepository,
 )
@@ -304,7 +305,18 @@ class VendaService:
                         f"Produto {item.produto_id} não encontrado."
                     )
 
-                if produto.estoque < item.quantidade:
+                # checa/baixa o estoque da LOJA que esta vendendo, nao
+                # o agregado entre lojas -- senao a Filial conseguiria
+                # vender um produto que so tem estoque na Matriz (ou
+                # vice-versa)
+                estoque_atual_loja = (
+                    EstoqueLojaRepository.obter_ou_criar(
+                        db, produto.id, loja_id
+                    ).quantidade
+                    if loja_id is not None else produto.estoque
+                )
+
+                if estoque_atual_loja < item.quantidade:
                     raise Exception(
                         f"Estoque insuficiente para {produto.nome}."
                     )
@@ -325,9 +337,11 @@ class VendaService:
                 )
 
                 # Baixa do estoque (automatica, registrada no historico)
-                produto.estoque -= item.quantidade
+                EstoqueLojaRepository.ajustar(
+                    db, produto, loja_id, -item.quantidade
+                )
 
-                if produto.estoque <= produto.estoque_minimo:
+                if estoque_atual_loja - item.quantidade <= produto.estoque_minimo:
                     produtos_com_estoque_baixo.append(produto)
 
                 db.add(produto)
@@ -511,7 +525,9 @@ class VendaService:
 
             if produto:
 
-                produto.estoque += item.quantidade
+                EstoqueLojaRepository.ajustar(
+                    db, produto, venda.loja_id, item.quantidade
+                )
 
                 db.add(produto)
 

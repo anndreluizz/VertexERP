@@ -37,10 +37,11 @@ def get_db():
 def listar(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    return VendaService.listar(db, skip, limit)
+    return VendaService.listar(db, skip, limit, loja_id)
 
 
 @router.get("/{venda_id}", response_model=VendaResponse)

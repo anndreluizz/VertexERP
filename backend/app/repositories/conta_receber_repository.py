@@ -13,9 +13,14 @@ class ContaReceberRepository:
         return conta
 
     @staticmethod
-    def listar(db: Session, skip: int = 0, limit: int = 100):
+    def listar(db: Session, skip: int = 0, limit: int = 100, loja_id: int | None = None):
+        query = db.query(ContaReceber)
+
+        if loja_id is not None:
+            query = query.filter(ContaReceber.loja_id == loja_id)
+
         return (
-            db.query(ContaReceber)
+            query
             .order_by(ContaReceber.id.desc())
             .offset(skip)
             .limit(limit)

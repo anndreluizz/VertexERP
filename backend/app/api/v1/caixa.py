@@ -113,9 +113,10 @@ def resumo_caixa(
 
 @router.get("/historico", response_model=list[CaixaResponse])
 def historico_caixa(
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    caixas = CaixaService.historico(db)
+    caixas = CaixaService.historico(db, loja_id=loja_id)
 
     return [caixa_to_response(c) for c in caixas]

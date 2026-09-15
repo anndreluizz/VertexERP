@@ -38,9 +38,14 @@ class ContaPagarRepository:
         )
 
     @staticmethod
-    def listar(db: Session, skip: int = 0, limit: int = 100):
+    def listar(db: Session, skip: int = 0, limit: int = 100, loja_id: int | None = None):
+        query = db.query(ContaPagar)
+
+        if loja_id is not None:
+            query = query.filter(ContaPagar.loja_id == loja_id)
+
         return (
-            db.query(ContaPagar)
+            query
             .order_by(
                 ContaPagar.data_vencimento
             )

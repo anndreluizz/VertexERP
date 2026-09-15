@@ -53,10 +53,11 @@ def criar(
 def listar(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    contas = ContaReceberService.listar(db, skip, limit)
+    contas = ContaReceberService.listar(db, skip, limit, loja_id)
 
     return [
         ContaReceberResponse.from_orm(c)

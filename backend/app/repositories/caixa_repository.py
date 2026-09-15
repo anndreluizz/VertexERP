@@ -36,9 +36,14 @@ class CaixaRepository:
         return caixa
 
     @staticmethod
-    def listar(db: Session, limite: int = 20):
+    def listar(db: Session, limite: int = 20, loja_id: int | None = None):
+        query = db.query(Caixa)
+
+        if loja_id is not None:
+            query = query.filter(Caixa.loja_id == loja_id)
+
         return (
-            db.query(Caixa)
+            query
             .order_by(Caixa.data_abertura.desc())
             .limit(limite)
             .all()

@@ -6,12 +6,17 @@ from app.models.venda import Venda
 class VendaRepository:
 
     @staticmethod
-    def listar(db: Session, skip: int = 0, limit: int = 100):
+    def listar(db: Session, skip: int = 0, limit: int = 100, loja_id: int | None = None):
         # mais recente primeiro -- pra "carregar mais" na tela de
         # vendas mostrar o historico atual logo na primeira pagina,
         # em vez de comecar pelas vendas mais antigas
+        query = db.query(Venda)
+
+        if loja_id is not None:
+            query = query.filter(Venda.loja_id == loja_id)
+
         return (
-            db.query(Venda)
+            query
             .order_by(Venda.id.desc())
             .offset(skip)
             .limit(limit)

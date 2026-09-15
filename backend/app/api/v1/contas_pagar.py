@@ -62,11 +62,12 @@ def criar(
 
 @router.get("/", response_model=list[ContaPagarResponse])
 def listar(
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
 
-    contas = ContaPagarService.listar(db)
+    contas = ContaPagarService.listar(db, loja_id=loja_id)
 
     return [
         ContaPagarResponse.from_orm(c)

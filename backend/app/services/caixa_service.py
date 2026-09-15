@@ -82,8 +82,8 @@ class CaixaService:
         return CaixaRepository.buscar_aberto(db, usuario_id, loja_id)
 
     @staticmethod
-    def historico(db: Session, limite: int = 20):
-        return CaixaRepository.listar(db, limite)
+    def historico(db: Session, limite: int = 20, loja_id: int | None = None):
+        return CaixaRepository.listar(db, limite, loja_id)
 
     @staticmethod
     def resumo(db: Session, caixa: Caixa) -> dict:

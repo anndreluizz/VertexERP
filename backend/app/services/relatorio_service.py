@@ -16,22 +16,30 @@ class RelatorioService:
     @staticmethod
     def vendas_geral(
         db: Session,
-        data_inicio: date,
+        data_inicio: date | None,
         data_fim: date,
         cliente_id: int | None = None,
         produto_id: int | None = None,
         categoria: str | None = None,
         forma_pagamento: str | None = None,
         status: str | None = None,
+        loja_id: int | None = None,
         skip: int = 0,
         limit: int = 100,
+        top_produtos_limite: int = 5,
+        top_produtos_ordenar_por: str = "quantidade",
     ):
-        inicio = datetime.combine(data_inicio, time.min)
+        # data_inicio None = "Tudo" (sem limite inferior), usado pela
+        # tela de Relatórios > Financeiro -- nesse caso não existe uma
+        # janela "período anterior" que faça sentido pra comparar (não
+        # dá pra comparar "tudo" com "o período antes de tudo"), então
+        # kpis_anterior fica zerado sem rodar a query de comparação
+        # (_kpi_valor já trata anterior=0 como "sem comparação").
+        inicio = (
+            datetime.combine(data_inicio, time.min)
+            if data_inicio is not None else None
+        )
         fim = datetime.combine(data_fim, time.min) + timedelta(days=1)
-
-        duracao = fim - inicio
-        inicio_anterior = inicio - duracao
-        fim_anterior = inicio
 
         filtros = dict(
             cliente_id=cliente_id,
@@ -39,12 +47,24 @@ class RelatorioService:
             categoria=categoria,
             forma_pagamento=forma_pagamento,
             status=status,
+            loja_id=loja_id,
         )
 
         kpis_atual = RelatorioService._kpis(db, inicio, fim, **filtros)
-        kpis_anterior = RelatorioService._kpis(
-            db, inicio_anterior, fim_anterior, **filtros
-        )
+
+        if inicio is not None:
+            duracao = fim - inicio
+            inicio_anterior = inicio - duracao
+            fim_anterior = inicio
+            kpis_anterior = RelatorioService._kpis(
+                db, inicio_anterior, fim_anterior, **filtros
+            )
+        else:
+            kpis_anterior = {
+                "receita_total": 0, "lucro": 0, "quantidade_vendas": 0,
+                "ticket_medio": 0, "clientes_atendidos": 0,
+                "produtos_vendidos": 0, "margem_lucro": 0,
+            }
 
         vendas_total, vendas = RelatorioService._listar_vendas(
             db, inicio, fim, skip=skip, limit=limit, **filtros
@@ -79,7 +99,10 @@ class RelatorioService:
                 db, inicio, fim, **filtros
             ),
             "top_produtos": RelatorioService._top_produtos(
-                db, inicio, fim, **filtros
+                db, inicio, fim,
+                limite=top_produtos_limite,
+                ordenar_por=top_produtos_ordenar_por,
+                **filtros,
             ),
             "formas_pagamento": RelatorioService._formas_pagamento(
                 db, inicio, fim, **filtros
@@ -102,15 +125,28 @@ class RelatorioService:
         categoria=None,
         forma_pagamento=None,
         status=None,
+        loja_id=None,
     ):
         query = db.query(Venda.id).filter(
-            Venda.data >= inicio,
-            Venda.data < fim,
             Venda.status == (status or "FINALIZADA"),
         )
 
+        # inicio None = sem limite inferior ("Tudo", ver
+        # RelatorioService.vendas_geral) -- em vez de simular isso com
+        # uma data fixa hardcoded, que descartaria vendas reais
+        # anteriores a ela e forcaria um calculo de janela de
+        # comparacao sem sentido
+        if inicio is not None:
+            query = query.filter(Venda.data >= inicio)
+
+        if fim is not None:
+            query = query.filter(Venda.data < fim)
+
         if cliente_id is not None:
             query = query.filter(Venda.cliente_id == cliente_id)
+
+        if loja_id is not None:
+            query = query.filter(Venda.loja_id == loja_id)
 
         if forma_pagamento is not None:
             # uma venda dividida em 2 formas (ver forma_pagamento_2)
@@ -154,10 +190,11 @@ class RelatorioService:
         categoria=None,
         forma_pagamento=None,
         status=None,
+        loja_id=None,
     ):
         ids = RelatorioService._ids_vendas(
             db, inicio, fim, cliente_id, produto_id,
-            categoria, forma_pagamento, status,
+            categoria, forma_pagamento, status, loja_id,
         )
 
         if not ids:
@@ -252,10 +289,11 @@ class RelatorioService:
         categoria=None,
         forma_pagamento=None,
         status=None,
+        loja_id=None,
     ):
         ids = RelatorioService._ids_vendas(
             db, inicio, fim, cliente_id, produto_id,
-            categoria, forma_pagamento, status,
+            categoria, forma_pagamento, status, loja_id,
         )
 
         if not ids:
@@ -291,11 +329,13 @@ class RelatorioService:
         categoria=None,
         forma_pagamento=None,
         status=None,
+        loja_id=None,
         limite=5,
+        ordenar_por="quantidade",
     ):
         ids = RelatorioService._ids_vendas(
             db, inicio, fim, cliente_id, produto_id,
-            categoria, forma_pagamento, status,
+            categoria, forma_pagamento, status, loja_id,
         )
 
         if not ids:
@@ -317,9 +357,24 @@ class RelatorioService:
         if categoria is not None:
             query = query.filter(Produto.categoria == categoria)
 
+        # "quantidade" (padrão) é o critério de "mais vendido" usado pelo
+        # PDV/Dashboard; a aba Financeiro dos Relatórios pede "valor" pra
+        # manter o ranking por faturamento que a tela já mostrava antes
+        # de migrar pra este endpoint agregado.
+        ordenacao = (
+            func.sum(ItemVenda.subtotal).desc()
+            if ordenar_por == "valor"
+            else func.sum(ItemVenda.quantidade).desc()
+        )
+
+        # agrupa por id (chave real) e nao so por nome -- Produto.nome
+        # nao tem constraint unique, entao dois produtos distintos com
+        # o mesmo nome (ex.: um recadastrado apos descontinuar o
+        # antigo) nao podem ter a receita mesclada num unico item do
+        # ranking
         resultados = (
-            query.group_by(Produto.nome)
-            .order_by(func.sum(ItemVenda.quantidade).desc())
+            query.group_by(Produto.id, Produto.nome)
+            .order_by(ordenacao)
             .limit(limite)
             .all()
         )
@@ -343,10 +398,11 @@ class RelatorioService:
         categoria=None,
         forma_pagamento=None,
         status=None,
+        loja_id=None,
     ):
         ids = RelatorioService._ids_vendas(
             db, inicio, fim, cliente_id, produto_id,
-            categoria, forma_pagamento, status,
+            categoria, forma_pagamento, status, loja_id,
         )
 
         if not ids:
@@ -404,12 +460,13 @@ class RelatorioService:
         categoria=None,
         forma_pagamento=None,
         status=None,
+        loja_id=None,
         skip=0,
         limit=100,
     ):
         ids = RelatorioService._ids_vendas(
             db, inicio, fim, cliente_id, produto_id,
-            categoria, forma_pagamento, status,
+            categoria, forma_pagamento, status, loja_id,
         )
 
         if not ids:

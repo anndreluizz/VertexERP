@@ -16,8 +16,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
-from services.api import configuracoes
 from services.categoria_despesa_service import listar_categorias_despesa
+from services.loja_service import listar_lojas
 from services.conta_pagar_service import (
     listar_contas_pagar,
     excluir_conta_pagar,
@@ -28,7 +28,7 @@ from telas.cadastro_despesa import CadastroDespesaDialog
 from telas.pagamento_despesa import PagamentoDespesaDialog
 
 from design import tokens
-from design.icons import icone
+from design.icons import icone, icone_pixmap
 from design.widgets import Badge, BotaoPerigo, BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
 from utils.formatacao import formatar_moeda
 
@@ -298,29 +298,36 @@ class ContasPagar(QWidget):
         """)
         self.bt_voltar.clicked.connect(self.voltar.emit)
 
+        icone_titulo = QLabel()
+        icone_titulo.setFixedSize(36, 36)
+        icone_titulo.setAlignment(Qt.AlignCenter)
+        icone_titulo.setStyleSheet(f"""
+            background:{tokens.ALERTA_CLARO}; border-radius:{tokens.RADIUS_SM}px;
+        """)
+        icone_titulo.setPixmap(icone_pixmap("wallet", cor=tokens.ALERTA, tamanho=18))
+
         col_titulo = QVBoxLayout()
         col_titulo.setSpacing(0)
 
-        config = configuracoes()
-        nome_loja = config.get("nome_loja") or "Vertex ERP"
-
-        titulo = QLabel(nome_loja)
+        titulo = QLabel("Contas a Pagar")
         titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XL}px;
+            background:transparent; font-size:{tokens.TAMANHO_LG}px;
             font-weight:800; color:{tokens.TEXTO};
         """)
 
-        subtitulo = QLabel("CONTAS A PAGAR")
+        subtitulo = QLabel(
+            "Acompanhe despesas, vencimentos e pagamentos do estabelecimento."
+        )
         subtitulo.setStyleSheet(f"""
             background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            color:{tokens.SECUNDARIA_HOVER}; font-weight:700;
+            color:{tokens.TEXTO_TERCIARIO};
         """)
 
         col_titulo.addWidget(titulo)
         col_titulo.addWidget(subtitulo)
 
         cabecalho.addWidget(self.bt_voltar)
-        cabecalho.addSpacing(4)
+        cabecalho.addWidget(icone_titulo)
         cabecalho.addLayout(col_titulo)
         cabecalho.addStretch()
 
@@ -432,6 +439,20 @@ class ContasPagar(QWidget):
         linha_filtros.addLayout(grupo_periodo)
         linha_filtros.addStretch()
 
+        self.combo_loja_filtro = QComboBox()
+        self.combo_loja_filtro.setMinimumHeight(34)
+        self.combo_loja_filtro.setCursor(Qt.PointingHandCursor)
+        self.combo_loja_filtro.setStyleSheet(f"""
+            QComboBox {{
+                border:1px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
+                padding:0 12px; background:{tokens.CARD}; color:{tokens.TEXTO};
+            }}
+        """)
+        self._carregar_combo_lojas()
+        self.combo_loja_filtro.currentIndexChanged.connect(self.carregar)
+
+        linha_filtros.addWidget(self.combo_loja_filtro)
+
         layout.addLayout(linha_filtros)
 
         self._estilizar_pills(self.botoes_status, self.filtro_status)
@@ -523,11 +544,23 @@ class ContasPagar(QWidget):
 
     def carregar(self):
 
-        self.contas = listar_contas_pagar()
+        loja_id = self.combo_loja_filtro.currentData()
+        self.contas = listar_contas_pagar(loja_id)
 
         self._carregar_categorias()
         self._atualizar_kpis()
         self._renderizar_lista()
+
+    def _carregar_combo_lojas(self):
+
+        self.combo_loja_filtro.blockSignals(True)
+        self.combo_loja_filtro.clear()
+        self.combo_loja_filtro.addItem("Todas as lojas", None)
+
+        for loja in listar_lojas():
+            self.combo_loja_filtro.addItem(loja["nome"], loja["id"])
+
+        self.combo_loja_filtro.blockSignals(False)
 
     def _carregar_categorias(self):
 

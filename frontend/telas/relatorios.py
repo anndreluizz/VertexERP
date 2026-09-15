@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QWidget,
@@ -17,14 +17,16 @@ from PySide6.QtWidgets import (
 )
 
 from services.api import configuracoes
-from services.venda_service import listar_vendas
+from services.relatorio_service import relatorio_vendas
 from services.produto_service import listar_produtos
 from services.caixa_service import historico_caixa
+from services.loja_service import listar_lojas
 
 from design import tokens
 from design.icons import icone
 from design.widgets import BotaoSecundario, CardKPI, SecaoCard
 from utils.formatacao import formatar_moeda
+from widgets.dialogs.message_dialog import Mensagem
 
 
 NOMES_FORMA_PAGAMENTO = {
@@ -33,7 +35,7 @@ NOMES_FORMA_PAGAMENTO = {
     "DEBITO": "Débito",
     "CREDITO": "Crédito",
     "BOLETO": "Boleto",
-    "PRAZO": "A Prazo",
+    "PRAZO": "Crediário",
 }
 
 CORES_FORMA_PAGAMENTO = {
@@ -200,7 +202,6 @@ class Relatorios(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.vendas = []
         self.produtos = []
         self.caixas = []
 
@@ -239,7 +240,7 @@ class Relatorios(QWidget):
             font-weight:800; color:{tokens.TEXTO};
         """)
 
-        subtitulo = QLabel("GERENCIAMENTO E INTELIGÊNCIA")
+        subtitulo = QLabel("Gerenciamento e inteligência")
         subtitulo.setStyleSheet(f"""
             background:transparent; font-size:{tokens.TAMANHO_XS}px;
             color:{tokens.TEXTO_TERCIARIO}; font-weight:700;
@@ -394,11 +395,37 @@ class Relatorios(QWidget):
                 padding:4px 12px; background:{tokens.CARD}; color:{tokens.TEXTO};
             }}
         """)
-        self.combo_periodo.currentTextChanged.connect(
+        # debounced: cada mudanca de periodo dispara uma chamada de
+        # rede pro backend (agregado agora, nao mais um filtro local)
+        # -- sem isso, alguem clicando rapido por varias opcoes do
+        # combo dispararia uma requisicao sincrona bloqueante por
+        # clique. Reiniciar o timer a cada mudanca faz so a ultima
+        # selecao "vencer".
+        self._timer_atualizar_financeiro = QTimer(self)
+        self._timer_atualizar_financeiro.setSingleShot(True)
+        self._timer_atualizar_financeiro.timeout.connect(
             self._atualizar_financeiro
+        )
+        self.combo_periodo.currentTextChanged.connect(
+            lambda: self._timer_atualizar_financeiro.start(300)
+        )
+
+        self.combo_loja = QComboBox()
+        self.combo_loja.setMinimumHeight(38)
+        self.combo_loja.setCursor(Qt.PointingHandCursor)
+        self.combo_loja.setStyleSheet(f"""
+            QComboBox {{
+                border:1px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
+                padding:4px 12px; background:{tokens.CARD}; color:{tokens.TEXTO};
+            }}
+        """)
+        self._carregar_combo_lojas()
+        self.combo_loja.currentIndexChanged.connect(
+            lambda: self._timer_atualizar_financeiro.start(300)
         )
 
         filtro_layout.addWidget(self.combo_periodo)
+        filtro_layout.addWidget(self.combo_loja)
         filtro_layout.addStretch()
 
         layout.addLayout(filtro_layout)
@@ -406,7 +433,9 @@ class Relatorios(QWidget):
         cards_layout = QHBoxLayout()
         cards_layout.setSpacing(14)
 
-        self.card_faturamento = CardKPI("Faturamento Bruto", "dollar-sign", tokens.PRIMARIA)
+        self.card_faturamento = CardKPI(
+            "Faturamento Bruto", "dollar-sign", tokens.PRIMARIA, destaque=True
+        )
         self.card_volume = CardKPI("Volume de Vendas", "shopping-cart", tokens.PRIMARIA)
         self.card_ticket = CardKPI("Ticket Médio", "trending-up", tokens.SECUNDARIA)
 
@@ -430,117 +459,114 @@ class Relatorios(QWidget):
 
         return pagina
 
-    def _filtrar_vendas_por_periodo(self):
+    def _periodo_selecionado(self):
+        """Traduz a opção escolhida no combo pra um intervalo (inicio,
+        fim) de datas -- mesmos limites de sempre, só que agora servem
+        pra montar a query do relatório agregado no backend em vez de
+        filtrar uma lista de vendas já em memória."""
 
         periodo = self.combo_periodo.currentText()
-        agora = datetime.now()
-        hoje = agora.date()
-
-        def data_venda(venda):
-            texto = venda.get("data", "")
-            try:
-                return datetime.fromisoformat(texto).date()
-            except (ValueError, TypeError):
-                return None
+        hoje = datetime.now().date()
 
         if periodo == "Hoje":
-            inicio = hoje
-            fim = hoje
-        elif periodo == "Ontem":
-            inicio = hoje - timedelta(days=1)
-            fim = inicio
-        elif periodo == "Últimos 7 dias":
-            inicio = hoje - timedelta(days=6)
-            fim = hoje
-        elif periodo == "Este mês":
-            inicio = hoje.replace(day=1)
-            fim = hoje
-        elif periodo == "Mês anterior":
+            return hoje, hoje
+
+        if periodo == "Ontem":
+            ontem = hoje - timedelta(days=1)
+            return ontem, ontem
+
+        if periodo == "Últimos 7 dias":
+            return hoje - timedelta(days=6), hoje
+
+        if periodo == "Este mês":
+            return hoje.replace(day=1), hoje
+
+        if periodo == "Mês anterior":
             primeiro_dia_mes_atual = hoje.replace(day=1)
             fim = primeiro_dia_mes_atual - timedelta(days=1)
-            inicio = fim.replace(day=1)
-        else:
-            return [
-                v for v in self.vendas
-                if v.get("status") != "CANCELADA"
-            ]
+            return fim.replace(day=1), fim
 
-        resultado = []
+        # "Tudo" -- inicio=None diz pro backend pra não aplicar limite
+        # inferior nenhum, em vez de fingir isso com uma data hardcoded
+        # (que descartaria vendas reais anteriores a ela e ainda
+        # forçaria um cálculo de "período anterior" sem sentido pra
+        # comparação -- ver RelatorioService.vendas_geral).
+        return None, hoje
 
-        for venda in self.vendas:
+    def _carregar_combo_lojas(self):
 
-            if venda.get("status") == "CANCELADA":
-                continue
+        self.combo_loja.blockSignals(True)
+        self.combo_loja.clear()
+        self.combo_loja.addItem("Todas as lojas", None)
 
-            data = data_venda(venda)
+        for loja in listar_lojas():
+            self.combo_loja.addItem(loja["nome"], loja["id"])
 
-            if data is None:
-                continue
-
-            if inicio <= data <= fim:
-                resultado.append(venda)
-
-        return resultado
+        self.combo_loja.blockSignals(False)
 
     def _atualizar_financeiro(self):
 
-        vendas_periodo = self._filtrar_vendas_por_periodo()
+        inicio, fim = self._periodo_selecionado()
 
-        faturamento = sum(
-            float(v.get("valor_total", 0)) for v in vendas_periodo
-        )
-        volume = len(vendas_periodo)
-        ticket_medio = faturamento / volume if volume else 0
+        try:
+            relatorio = relatorio_vendas(
+                inicio.isoformat() if inicio else None,
+                fim.isoformat(),
+                limit=1,
+                top_produtos_limite=10,
+                top_produtos_ordenar_por="valor",
+                loja_id=self.combo_loja.currentData(),
+            )
+        except Exception as erro:
+            relatorio = None
+            Mensagem.erro(
+                self,
+                "Não foi possível carregar o relatório financeiro.\n"
+                f"Os valores exibidos abaixo não refletem o período "
+                f"selecionado.\n\nDetalhes: {erro}",
+            )
+
+        if relatorio is None:
+            self.card_faturamento.definir_valor(formatar_moeda(0))
+            self.card_volume.definir_valor("0")
+            self.card_ticket.definir_valor(formatar_moeda(0))
+            self._atualizar_ranking_produtos([])
+            self._atualizar_mix_pagamentos([])
+            return
+
+        faturamento = float(relatorio["receita_total"]["atual"])
+        volume = int(relatorio["quantidade_vendas"]["atual"])
+        ticket_medio = float(relatorio["ticket_medio"]["atual"])
 
         self.card_faturamento.definir_valor(formatar_moeda(faturamento))
         self.card_volume.definir_valor(str(volume))
         self.card_ticket.definir_valor(formatar_moeda(ticket_medio))
 
-        self._atualizar_ranking_produtos(vendas_periodo)
-        self._atualizar_mix_pagamentos(vendas_periodo)
+        self._atualizar_ranking_produtos(relatorio["top_produtos"])
+        self._atualizar_mix_pagamentos(relatorio["formas_pagamento"])
 
-    def _atualizar_ranking_produtos(self, vendas_periodo):
+    def _atualizar_ranking_produtos(self, top_produtos):
 
         self.painel_ranking.limpar_corpo()
 
-        nomes_produto = {
-            p["id"]: p["nome"] for p in self.produtos
-        }
-
-        totais_por_produto = {}
-
-        for venda in vendas_periodo:
-            for item in venda.get("itens", []):
-                produto_id = item.get("produto_id")
-                subtotal = float(item.get("subtotal", 0))
-                totais_por_produto[produto_id] = (
-                    totais_por_produto.get(produto_id, 0) + subtotal
-                )
-
-        if not totais_por_produto:
+        if not top_produtos:
             self.painel_ranking.adicionar_vazio(
                 "Nenhuma venda no período selecionado."
             )
             return
 
-        ranking = sorted(
-            totais_por_produto.items(),
-            key=lambda item: item[1],
-            reverse=True,
-        )[:10]
+        maior_valor = float(top_produtos[0]["total"]) or 1
 
-        maior_valor = ranking[0][1] if ranking else 1
+        for posicao, item in enumerate(top_produtos, start=1):
 
-        for posicao, (produto_id, total) in enumerate(ranking, start=1):
-
-            nome = nomes_produto.get(produto_id, "Produto removido")
+            total = float(item["total"])
 
             percentual = (
                 (total / maior_valor) * 100 if maior_valor else 0
             )
 
             linha = LinhaBarra(
-                f"{posicao}. {nome}",
+                f"{posicao}. {item['produto']}",
                 None,
                 formatar_moeda(total),
                 percentual,
@@ -549,38 +575,11 @@ class Relatorios(QWidget):
 
             self.painel_ranking.corpo.addWidget(linha)
 
-    def _atualizar_mix_pagamentos(self, vendas_periodo):
+    def _atualizar_mix_pagamentos(self, formas_pagamento):
 
         self.painel_mix.limpar_corpo()
 
-        totais_por_forma = {}
-
-        for venda in vendas_periodo:
-
-            valor_total = float(venda.get("valor_total", 0))
-            forma_2 = venda.get("forma_pagamento_2")
-            valor_2 = float(venda.get("valor_forma_2") or 0)
-
-            if forma_2 and valor_2:
-                # venda dividida em 2 formas — cada parcela conta
-                # separado, senao o mix fica atribuindo o valor
-                # inteiro pra forma principal
-                forma_1 = venda.get("forma_pagamento", "DINHEIRO")
-                valor_1 = valor_total - valor_2
-
-                totais_por_forma[forma_1] = (
-                    totais_por_forma.get(forma_1, 0) + valor_1
-                )
-                totais_por_forma[forma_2] = (
-                    totais_por_forma.get(forma_2, 0) + valor_2
-                )
-            else:
-                forma = venda.get("forma_pagamento", "DINHEIRO")
-                totais_por_forma[forma] = (
-                    totais_por_forma.get(forma, 0) + valor_total
-                )
-
-        total_geral = sum(totais_por_forma.values())
+        total_geral = sum(float(item["total"]) for item in formas_pagamento)
 
         if not total_geral:
             self.painel_mix.adicionar_vazio(
@@ -588,14 +587,12 @@ class Relatorios(QWidget):
             )
             return
 
-        formas_ordenadas = sorted(
-            totais_por_forma.items(),
-            key=lambda item: item[1],
-            reverse=True,
-        )
+        # o backend (RelatorioService._formas_pagamento) já devolve a
+        # lista ordenada do maior pro menor total
+        for item in formas_pagamento:
 
-        for forma, total in formas_ordenadas:
-
+            forma = item["forma_pagamento"]
+            total = float(item["total"])
             percentual = (total / total_geral) * 100
 
             nome = NOMES_FORMA_PAGAMENTO.get(forma, forma)
@@ -809,7 +806,7 @@ class Relatorios(QWidget):
 
         cores_status = {
             "NORMAL": tokens.SECUNDARIA_HOVER,
-            "CRITICO": "#B45309",
+            "CRITICO": tokens.ALERTA_TEXTO,
             "ESGOTADO": tokens.ERRO,
         }
 
@@ -904,7 +901,6 @@ class Relatorios(QWidget):
 
     def carregar(self):
 
-        self.vendas = listar_vendas()
         self.produtos = listar_produtos()
         self.caixas = historico_caixa()
 

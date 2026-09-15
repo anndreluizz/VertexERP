@@ -1,9 +1,17 @@
 from services.api import get, post, put, delete, endpoint_com_loja
 
 
-def listar_contas_pagar():
+def listar_contas_pagar(loja_id=None):
 
-    response = get("/contas-pagar/")
+    # loja_id aqui e' o filtro escolhido no combo da tela (ver
+    # ContasPagar._carregar_combo_lojas), diferente do loja_id fixo do
+    # terminal usado em endpoint_com_loja() pra escrita -- por isso
+    # nao usa esse helper aqui
+    endpoint = "/contas-pagar/"
+    if loja_id is not None:
+        endpoint += f"?loja_id={loja_id}"
+
+    response = get(endpoint)
 
     if response.status_code != 200:
         return []

@@ -18,6 +18,7 @@ class Compra(Base):
 
     fornecedor_id: Mapped[int] = mapped_column(
         ForeignKey("fornecedores.id"),
+        index=True,
     )
 
     data: Mapped[datetime] = mapped_column(

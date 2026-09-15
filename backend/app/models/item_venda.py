@@ -15,11 +15,13 @@ class ItemVenda(Base):
     )
 
     venda_id: Mapped[int] = mapped_column(
-        ForeignKey("vendas.id")
+        ForeignKey("vendas.id"),
+        index=True,
     )
 
     produto_id: Mapped[int] = mapped_column(
-        ForeignKey("produtos.id")
+        ForeignKey("produtos.id"),
+        index=True,
     )
 
     quantidade: Mapped[int] = mapped_column(

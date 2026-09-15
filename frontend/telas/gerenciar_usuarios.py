@@ -23,6 +23,7 @@ from services.user_service import (
 from design import tokens
 from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, BotaoSucesso
+from widgets.fields.email_field import EmailField
 
 
 class NovoUsuarioDialog(QDialog):
@@ -59,7 +60,7 @@ class NovoUsuarioDialog(QDialog):
 
         self.nome = self._campo(layout, "NOME COMPLETO", "Nome")
         self.email = self._campo(
-            layout, "E-MAIL", "email@exemplo.com"
+            layout, "E-MAIL", "email@exemplo.com", cls=EmailField
         )
         self.senha = self._campo(
             layout, "SENHA", "••••••", senha=True
@@ -90,7 +91,7 @@ class NovoUsuarioDialog(QDialog):
 
         self.nome.setFocus()
 
-    def _campo(self, layout, rotulo, placeholder, senha=False):
+    def _campo(self, layout, rotulo, placeholder, senha=False, cls=None):
 
         lbl = QLabel(rotulo)
         lbl.setStyleSheet(f"""
@@ -98,20 +99,25 @@ class NovoUsuarioDialog(QDialog):
             font-weight:700; color:{tokens.TEXTO_TERCIARIO};
         """)
 
-        campo = QLineEdit()
-        campo.setPlaceholderText(placeholder)
-        campo.setMinimumHeight(40)
-        campo.setStyleSheet(f"""
-            QLineEdit {{
-                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
-                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
-                background: {tokens.CARD};
-            }}
-            QLineEdit:focus {{ border: 1.5px solid {tokens.PRIMARIA}; }}
-        """)
+        if cls is None:
+            campo = QLineEdit()
+            campo.setPlaceholderText(placeholder)
+            campo.setMinimumHeight(40)
+            campo.setStyleSheet(f"""
+                QLineEdit {{
+                    border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                    padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
+                    background: {tokens.CARD};
+                }}
+                QLineEdit:focus {{ border: 1.5px solid {tokens.PRIMARIA}; }}
+            """)
 
-        if senha:
-            campo.setEchoMode(QLineEdit.Password)
+            if senha:
+                campo.setEchoMode(QLineEdit.Password)
+        else:
+            # cls (ex.: EmailField) já traz sua própria máscara/validação
+            # e estilo (baseado em CampoTexto) -- não sobrescrever.
+            campo = cls(placeholder)
 
         layout.addWidget(lbl)
         layout.addWidget(campo)

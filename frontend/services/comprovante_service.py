@@ -230,18 +230,21 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
             f'style="margin-bottom:6px;" />'
         )
 
+    # zebra striping feito aqui em Python (linha par/ímpar) porque o
+    # QTextDocument não entende seletor :nth-child em CSS -- precisa
+    # decidir a cor de cada <tr> na hora de montar o HTML.
     linhas_itens = "".join(
-        "<tr>"
-        f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB;'>"
+        f"<tr style='background:{'#FFFFFF' if indice % 2 == 0 else '#F8FAFC'};'>"
+        f"<td style='padding:7px 8px; border-bottom:1px solid #E5E7EB;'>"
         f"{item['nome']}</td>"
-        f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB; "
+        f"<td style='padding:7px 8px; border-bottom:1px solid #E5E7EB; "
         f"text-align:center;'>{item['quantidade']}</td>"
-        f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB; "
+        f"<td style='padding:7px 8px; border-bottom:1px solid #E5E7EB; "
         f"text-align:right;'>{_formatar_moeda(item['valor_unitario'])}</td>"
-        f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB; "
+        f"<td style='padding:7px 8px; border-bottom:1px solid #E5E7EB; "
         f"text-align:right;'>{_formatar_moeda(item['subtotal'])}</td>"
         "</tr>"
-        for item in dados["itens"]
+        for indice, item in enumerate(dados["itens"])
     )
 
     desconto = float(dados.get("desconto") or 0)
@@ -325,6 +328,9 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
     return f"""
     <html>
     <body style="font-family: Arial; font-size: 10pt; color:#1E293B;">
+        <table width="100%" style="margin-bottom:14px;">
+            <tr><td style="background:#2563EB; height:4px; font-size:1px;">&nbsp;</td></tr>
+        </table>
         <div style="text-align:center;">
             {logo_html}
             <h2 style="margin:2px 0;">{nome_loja}</h2>
@@ -332,39 +338,52 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
             {f"<p style='margin:0; color:#64748B;'>WhatsApp: {telefone_loja}</p>" if telefone_loja else ""}
             {f"<p style='margin:0; color:#64748B;'>CNPJ: {cnpj_loja}</p>" if cnpj_loja else ""}
         </div>
-        <hr style="border:none; border-top:1px solid #E5E7EB; margin:10px 0;">
-        <h3 style="text-align:center; margin:8px 0;">COMPROVANTE DE VENDA</h3>
-        <hr style="border:none; border-top:1px solid #E5E7EB; margin:10px 0;">
+        <table width="100%" style="margin:14px 0;">
+            <tr><td style="background:#2563EB; padding:8px; text-align:center;">
+                <span style="color:#FFFFFF; font-size:12pt; font-weight:bold;">
+                    COMPROVANTE DE VENDA
+                </span>
+            </td></tr>
+        </table>
         <p style="margin:4px 0;"><b>Pedido nº: {dados['venda_id']}</b></p>
         <p style="margin:4px 0;">Data: {data_com_hora}</p>
         {vendedor_linha}
         {cliente_linhas}
-        <h4 style="margin:14px 0 4px;">ITENS</h4>
-        <table style="width:100%; border-collapse:collapse;">
-            <tr style="background:#F1F5F9;">
-                <th style="padding:6px 8px; text-align:left;">Produto</th>
-                <th style="padding:6px 8px;">Qtd</th>
-                <th style="padding:6px 8px; text-align:right;">Unitário</th>
-                <th style="padding:6px 8px; text-align:right;">Subtotal</th>
+        <h4 style="margin:16px 0 6px; color:#1E293B;">ITENS</h4>
+        <table style="width:100%; border-collapse:collapse; border:1px solid #E5E7EB;">
+            <tr style="background:#EFF6FF;">
+                <th style="padding:7px 8px; text-align:left; color:#1E3A8A;">Produto</th>
+                <th style="padding:7px 8px; color:#1E3A8A;">Qtd</th>
+                <th style="padding:7px 8px; text-align:right; color:#1E3A8A;">Unitário</th>
+                <th style="padding:7px 8px; text-align:right; color:#1E3A8A;">Subtotal</th>
             </tr>
             {linhas_itens}
         </table>
         {linha_ajuste}
-        <h3 style="text-align:right; margin-top:12px;">
-            TOTAL DA COMPRA: {_formatar_moeda(dados['valor_total'])}
-        </h3>
+        <table width="100%" style="margin-top:14px;">
+            <tr><td style="background:#EFF6FF; padding:10px 14px; text-align:right;">
+                <span style="font-size:8pt; color:#2563EB; font-weight:bold;">
+                    TOTAL DA COMPRA
+                </span><br>
+                <span style="font-size:15pt; color:#1E293B; font-weight:bold;">
+                    {_formatar_moeda(dados['valor_total'])}
+                </span>
+            </td></tr>
+        </table>
         {linha_pagamento}
         <p style="margin:4px 0;">
             Situação:
-            <span style="color:{cor_situacao}; font-weight:bold;">
+            <span style="color:{cor_situacao}; font-weight:bold; font-size:11pt;">
                 {texto_situacao}
             </span>
         </p>
         {linha_saldo}
         {observacao_linha}
-        <p style="text-align:center; margin-top:16px;">Obrigado pela preferência!</p>
+        <p style="text-align:center; margin-top:18px; font-size:11pt; color:#2563EB; font-weight:bold;">
+            Obrigado pela preferência!
+        </p>
         {qr_html}
-        <hr style="border:none; border-top:1px solid #E5E7EB; margin:10px 0;">
+        <hr style="border:none; border-top:1px solid #E5E7EB; margin:14px 0 8px;">
         <p style="color:#94A3B8; font-size:8pt; text-align:center;">
             Este comprovante não possui valor fiscal.
         </p>

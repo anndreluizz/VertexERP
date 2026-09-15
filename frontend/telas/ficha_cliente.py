@@ -1095,14 +1095,26 @@ class RegistrarPagamentoDialog(QDialog):
             QMessageBox.critical(self, "Erro", str(erro))
             return
 
-        self._imprimir_recibo_pagamento(valor)
+        # o recibo NAO sai mais sozinho -- só imprime se o usuário
+        # pedir aqui, na hora (pedido direto: tava saindo automático
+        # demais, sem perguntar nada).
+        resposta = QMessageBox.question(
+            self,
+            "Pagamento Registrado",
+            "Pagamento registrado com sucesso!\n\n"
+            "Deseja imprimir o recibo de pagamento?",
+        )
+
+        if resposta == QMessageBox.Yes:
+            self._imprimir_recibo_pagamento(valor)
 
         self.accept()
 
     # ======================================
-    # RECIBO DE PAGAMENTO -- impresso automaticamente ao confirmar,
-    # mesmo padrão de impressora térmica com fallback pro diálogo
-    # normal do Windows usado no extrato de fechamento de caixa (ver
+    # RECIBO DE PAGAMENTO -- só é impresso se o usuário confirmar
+    # depois de registrar o pagamento (ver confirmar() acima), mesmo
+    # padrão de impressora térmica com fallback pro diálogo normal do
+    # Windows usado no extrato de fechamento de caixa (ver
     # telas/fechar_caixa.py).
     # ======================================
 
@@ -3152,21 +3164,31 @@ class FichaClienteDialog(QDialog):
             valor = float(mov.get("valor", 0) or 0)
             descricao = self._descricao_com_itens(mov)
 
-            debito = formatar_moeda(valor) if tipo == "COMPRA" else ""
-            credito = formatar_moeda(valor) if tipo == "PAGAMENTO" else ""
+            debito = (
+                f"<span style='color:#DC2626;'>{formatar_moeda(valor)}</span>"
+                if tipo == "COMPRA" else ""
+            )
+            credito = (
+                f"<span style='color:#16A34A;'>{formatar_moeda(valor)}</span>"
+                if tipo == "PAGAMENTO" else ""
+            )
+
+            # zebra striping feito aqui (não em CSS :nth-child, que o
+            # QTextDocument do Qt não entende)
+            cor_fundo = "#FFFFFF" if len(linhas_tabela) % 2 == 0 else "#F8FAFC"
 
             linhas_tabela.append(
-                f"<tr>"
-                f"<td>{data}</td>"
-                f"<td>{descricao}</td>"
-                f"<td align='right'>{debito}</td>"
-                f"<td align='right'>{credito}</td>"
-                f"<td align='right'>{formatar_moeda(saldo_apos)}</td>"
+                f"<tr style='background:{cor_fundo};'>"
+                f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB;'>{data}</td>"
+                f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB;'>{descricao}</td>"
+                f"<td align='right' style='padding:6px 8px; border-bottom:1px solid #E5E7EB;'>{debito}</td>"
+                f"<td align='right' style='padding:6px 8px; border-bottom:1px solid #E5E7EB;'>{credito}</td>"
+                f"<td align='right' style='padding:6px 8px; border-bottom:1px solid #E5E7EB;'>{formatar_moeda(saldo_apos)}</td>"
                 f"</tr>"
             )
 
         linhas_html = "".join(linhas_tabela) or (
-            "<tr><td colspan='5' align='center'>"
+            "<tr><td colspan='5' align='center' style='padding:10px;'>"
             "Nenhuma movimentação registrada.</td></tr>"
         )
 
@@ -3186,37 +3208,53 @@ class FichaClienteDialog(QDialog):
         )
 
         return f"""
-        <div style="text-align:center;">
-            <h2 style="margin-bottom:0;">{nome_loja}</h2>
-            <div style="color:#666;">{telefone_loja}</div>
-        </div>
-        <hr>
-        <table width="100%" cellspacing="4">
-            <tr><td><b>Cliente:</b></td><td>{self.cliente.get('nome', '')}</td></tr>
-            <tr><td><b>CPF/CNPJ:</b></td><td>{self.cliente.get('cpf_cnpj') or '—'}</td></tr>
-            <tr><td><b>Telefone:</b></td><td>{self.cliente.get('telefone') or '—'}</td></tr>
-            <tr><td><b>Emitido em:</b></td><td>{agora}</td></tr>
+        <body style="font-family: Arial; font-size: 10pt; color:#1E293B;">
+        <table width="100%" style="margin-bottom:14px;">
+            <tr><td style="background:#2563EB; height:4px; font-size:1px;">&nbsp;</td></tr>
         </table>
-        <h3>Extrato Financeiro</h3>
-        <table width="100%" border="1" cellspacing="0" cellpadding="6">
-            <tr style="background:#f0f0f0;">
-                <th>Data</th><th>Descrição</th><th>Débito</th>
-                <th>Crédito</th><th>Saldo</th>
+        <div style="text-align:center;">
+            <h2 style="margin:2px 0;">{nome_loja}</h2>
+            {f"<p style='margin:0; color:#64748B;'>WhatsApp: {telefone_loja}</p>" if telefone_loja else ""}
+        </div>
+        <table width="100%" style="margin:14px 0;">
+            <tr><td style="background:#2563EB; padding:8px; text-align:center;">
+                <span style="color:#FFFFFF; font-size:12pt; font-weight:bold;">
+                    EXTRATO FINANCEIRO
+                </span>
+            </td></tr>
+        </table>
+        <table width="100%" cellspacing="4">
+            <tr><td style="color:#64748B;"><b>Cliente:</b></td><td>{self.cliente.get('nome', '')}</td></tr>
+            <tr><td style="color:#64748B;"><b>CPF/CNPJ:</b></td><td>{self.cliente.get('cpf_cnpj') or '—'}</td></tr>
+            <tr><td style="color:#64748B;"><b>Telefone:</b></td><td>{self.cliente.get('telefone') or '—'}</td></tr>
+            <tr><td style="color:#64748B;"><b>Emitido em:</b></td><td>{agora}</td></tr>
+        </table>
+        <h4 style="margin:16px 0 6px; color:#1E293B;">MOVIMENTAÇÕES</h4>
+        <table style="width:100%; border-collapse:collapse; border:1px solid #E5E7EB;">
+            <tr style="background:#EFF6FF;">
+                <th style="padding:7px 8px; text-align:left; color:#1E3A8A;">Data</th>
+                <th style="padding:7px 8px; text-align:left; color:#1E3A8A;">Descrição</th>
+                <th style="padding:7px 8px; text-align:right; color:#1E3A8A;">Débito</th>
+                <th style="padding:7px 8px; text-align:right; color:#1E3A8A;">Crédito</th>
+                <th style="padding:7px 8px; text-align:right; color:#1E3A8A;">Saldo</th>
             </tr>
             {linhas_html}
         </table>
         {bloco_observacoes}
-        <hr>
-        <table width="100%">
-            <tr>
-                <td><b>Total Devedor:</b></td>
-                <td align="right"><b>{formatar_moeda(saldo)}</b></td>
-            </tr>
-            <tr>
-                <td>Responsável:</td>
-                <td align="right">{responsavel}</td>
-            </tr>
+        <table width="100%" style="margin-top:14px;">
+            <tr><td style="background:#EFF6FF; padding:10px 14px; text-align:right;">
+                <span style="font-size:8pt; color:#2563EB; font-weight:bold;">
+                    TOTAL DEVEDOR
+                </span><br>
+                <span style="font-size:15pt; color:#1E293B; font-weight:bold;">
+                    {formatar_moeda(saldo)}
+                </span>
+            </td></tr>
         </table>
+        <p style="margin:8px 0 0; color:#64748B; font-size:9pt;">
+            Responsável pela emissão: {responsavel}
+        </p>
+        </body>
         """
 
     def _montar_documento_extrato(self):

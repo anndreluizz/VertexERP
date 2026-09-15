@@ -26,16 +26,19 @@ class SolicitacaoAprovacao(Base):
 
     status: Mapped[str] = mapped_column(
         String(20),
+        index=True,
         default="PENDENTE",
     )
 
     solicitante_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"),
+        index=True,
         nullable=False,
     )
 
     aprovador_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"),
+        index=True,
         nullable=True,
     )
 

@@ -29,7 +29,7 @@ from telas.gerenciar_categorias_despesa import (
 )
 
 from design import tokens
-from design.widgets import BotaoPerigo, BotaoSecundario, CampoTexto
+from design.widgets import BotaoPerigo, BotaoSecundario, CabecalhoDialogo, CampoTexto
 from utils.formatacao import formatar_moeda
 
 
@@ -77,32 +77,12 @@ class CadastroDespesaDialog(QDialog):
         # CABEÇALHO
         # ======================
 
-        cabecalho = QFrame()
-        cabecalho.setStyleSheet(f"background:{tokens.SIDEBAR};")
-        cabecalho.setFixedHeight(70)
-
-        cab_layout = QVBoxLayout(cabecalho)
-        cab_layout.setContentsMargins(24, 12, 24, 12)
-        cab_layout.setSpacing(2)
-
-        titulo = QLabel(
-            "EDITAR DESPESA" if editando else "NOVA DESPESA"
-        )
-        titulo.setStyleSheet(f"""
-            background:transparent; color:white;
-            font-size:{tokens.TAMANHO_LG}px; font-weight:800;
-        """)
-
-        subtitulo = QLabel("Contas e despesas do estabelecimento")
-        subtitulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SIDEBAR};
-            font-size:{tokens.TAMANHO_XS}px;
-        """)
-
-        cab_layout.addWidget(titulo)
-        cab_layout.addWidget(subtitulo)
-
-        raiz.addWidget(cabecalho)
+        raiz.addWidget(CabecalhoDialogo(
+            "wallet", tokens.ALERTA, tokens.ALERTA_CLARO,
+            "Editar Despesa" if editando else "Nova Despesa",
+            "Contas e despesas do estabelecimento",
+            fechavel=True, ao_fechar=self.reject,
+        ))
 
         # ======================
         # CORPO (rolável)
@@ -122,12 +102,12 @@ class CadastroDespesaDialog(QDialog):
         corpo_scroll_layout.setSpacing(12)
 
         self.descricao = self._campo(
-            corpo_scroll_layout, "DESCRIÇÃO", "Ex: aluguel, funcionária, luz..."
+            corpo_scroll_layout, "Descrição", "Ex: aluguel, funcionária, luz..."
         )
 
         cabecalho_categoria = QHBoxLayout()
 
-        lbl_categoria = QLabel("CATEGORIA")
+        lbl_categoria = QLabel("Categoria")
         lbl_categoria.setStyleSheet(f"""
             background:transparent; font-size:{tokens.TAMANHO_XS}px;
             font-weight:700; color:{tokens.TEXTO_TERCIARIO};
@@ -163,10 +143,10 @@ class CadastroDespesaDialog(QDialog):
         corpo_scroll_layout.addLayout(cabecalho_categoria)
         corpo_scroll_layout.addWidget(self.categoria)
 
-        self.valor = self._campo(corpo_scroll_layout, "VALOR (R$)", "0,00")
+        self.valor = self._campo(corpo_scroll_layout, "Valor (R$)", "0,00")
         self.valor.textChanged.connect(self._atualizar_valor_final)
 
-        lbl_vencimento = QLabel("VENCIMENTO")
+        lbl_vencimento = QLabel("Vencimento")
         lbl_vencimento.setStyleSheet(f"""
             background:transparent; font-size:{tokens.TAMANHO_XS}px;
             font-weight:700; color:{tokens.TEXTO_TERCIARIO};
@@ -189,13 +169,13 @@ class CadastroDespesaDialog(QDialog):
 
         self.numero_boleto = self._campo(
             corpo_scroll_layout,
-            "CÓDIGO DE BARRAS (BOLETO)",
+            "Código de barras (boleto)",
             "Bipe o boleto ou digite a linha digitável",
         )
 
         # ---- anexo do boleto/nota (PDF ou foto) ----
 
-        lbl_anexo = QLabel("DOCUMENTO")
+        lbl_anexo = QLabel("Documento")
         lbl_anexo.setStyleSheet(f"""
             background:transparent; font-size:{tokens.TAMANHO_XS}px;
             font-weight:700; color:{tokens.TEXTO_TERCIARIO};
@@ -246,7 +226,7 @@ class CadastroDespesaDialog(QDialog):
 
         self.observacoes = self._campo(
             corpo_scroll_layout,
-            "OBSERVAÇÕES",
+            "Observações",
             "Anotações internas sobre essa despesa",
         )
 
@@ -277,15 +257,15 @@ class CadastroDespesaDialog(QDialog):
         linha_ajuste = QHBoxLayout()
         linha_ajuste.setSpacing(10)
 
-        self.desconto = self._campo_ajuste(linha_ajuste, "DESCONTO")
-        self.juros = self._campo_ajuste(linha_ajuste, "JUROS")
-        self.multa = self._campo_ajuste(linha_ajuste, "MULTA")
+        self.desconto = self._campo_ajuste(linha_ajuste, "Desconto")
+        self.juros = self._campo_ajuste(linha_ajuste, "Juros")
+        self.multa = self._campo_ajuste(linha_ajuste, "Multa")
 
         ajuste_layout.addLayout(linha_ajuste)
 
         linha_final = QHBoxLayout()
 
-        lbl_final_titulo = QLabel("VALOR FINAL (será salvo)")
+        lbl_final_titulo = QLabel("Valor final (será salvo)")
         lbl_final_titulo.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO_TERCIARIO};
             font-size:{tokens.TAMANHO_XS}px; font-weight:700;

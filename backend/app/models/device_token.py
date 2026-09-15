@@ -11,7 +11,7 @@ class DeviceToken(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
 
-    usuario_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
 
     token: Mapped[str] = mapped_column(
         String(255),

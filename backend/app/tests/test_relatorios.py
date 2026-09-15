@@ -222,6 +222,66 @@ def test_relatorio_vendas_top_produtos_e_formas_pagamento(
     assert formas["DINHEIRO"]["total"] == 20.0
 
 
+def test_relatorio_vendas_top_produtos_ordenar_por_valor(
+    client, auth_headers, db, produto
+):
+    from app.models.produto import Produto
+
+    # produto caro, vendido poucas vezes: maior valor total, menor
+    # quantidade
+    caro = Produto(
+        codigo="P003",
+        nome="Produto Caro",
+        categoria="Geral",
+        unidade="UN",
+        preco_custo=50.0,
+        preco_venda=100.0,
+        estoque=50,
+        estoque_minimo=5,
+        ativo=True,
+    )
+    db.add(caro)
+    db.commit()
+    db.refresh(caro)
+
+    # "produto" (fixture, preco_venda=20) vendido 10x = R$200/10un
+    # "caro" (preco_venda=100) vendido 3x = R$300/3un
+    # -> por quantidade o barato vence (10 > 3), por valor o caro vence
+    # (300 > 200) -- cenário desenhado pra provar que o parâmetro
+    # ordenar_por realmente troca o critério, não só o número de itens
+    _criar_venda(db, produto, quantidade=10)
+    _criar_venda(db, caro, quantidade=3)
+
+    response = client.get(
+        "/relatorios/vendas",
+        params={
+            **_periodo_hoje(),
+            "top_produtos_ordenar_por": "quantidade",
+        },
+        headers=auth_headers,
+    )
+    dados = response.json()
+
+    # por quantidade (padrão, usado pelo PDV/Dashboard): o barato vence
+    assert dados["top_produtos"][0]["produto"] == produto.nome
+    assert dados["top_produtos"][0]["quantidade"] == 10
+
+    response = client.get(
+        "/relatorios/vendas",
+        params={
+            **_periodo_hoje(),
+            "top_produtos_ordenar_por": "valor",
+            "top_produtos_limite": 10,
+        },
+        headers=auth_headers,
+    )
+    dados = response.json()
+
+    # por valor (usado pelos Relatórios): o caro vence
+    assert dados["top_produtos"][0]["produto"] == caro.nome
+    assert dados["top_produtos"][0]["total"] == 300.0
+
+
 def test_relatorio_vendas_tabela_detalhada_paginada(
     client, auth_headers, db, produto
 ):

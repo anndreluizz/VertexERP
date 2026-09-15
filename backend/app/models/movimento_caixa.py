@@ -17,16 +17,19 @@ class MovimentoCaixa(Base):
 
     caixa_id: Mapped[int] = mapped_column(
         ForeignKey("caixa.id"),
+        index=True,
         nullable=False
     )
 
     usuario_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"),
+        index=True,
         nullable=False
     )
 
     venda_id: Mapped[int | None] = mapped_column(
         ForeignKey("vendas.id", ondelete="SET NULL"),
+        index=True,
         nullable=True
     )
 

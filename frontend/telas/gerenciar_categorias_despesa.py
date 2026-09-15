@@ -5,7 +5,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
@@ -21,6 +20,7 @@ from services.categoria_despesa_service import (
 )
 
 from design import tokens
+from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, BotaoSucesso, CampoTexto
 
 
 class GerenciarCategoriasDespesaDialog(QDialog):
@@ -39,47 +39,21 @@ class GerenciarCategoriasDespesaDialog(QDialog):
         layout.setSpacing(14)
 
         titulo = QLabel("Categorias de Despesa")
-        titulo.setStyleSheet(
-            f"background:transparent; font-size:18px; "
-            f"font-weight:bold; color:{tokens.TEXTO};"
-        )
+        titulo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_LG}px;
+            font-weight:800; color:{tokens.TEXTO};
+        """)
         layout.addWidget(titulo)
 
         nova_layout = QHBoxLayout()
 
-        self.novo_nome = QLineEdit()
-        self.novo_nome.setPlaceholderText("Nova categoria...")
-        self.novo_nome.setMinimumHeight(40)
-        self.novo_nome.setStyleSheet(f"""
-            QLineEdit {{
-                border: 1px solid {tokens.BORDA};
-                border-radius: 8px;
-                padding: 0 12px;
-                font-size: 13px;
-                color: {tokens.TEXTO};
-                background: {tokens.CARD};
-            }}
-            QLineEdit:focus {{
-                border: 1px solid {tokens.SECUNDARIA};
-            }}
-        """)
+        self.novo_nome = CampoTexto(
+            "Nova categoria...", cor_foco=tokens.SECUNDARIA
+        )
         self.novo_nome.returnPressed.connect(self.adicionar)
 
-        bt_adicionar = QPushButton("+ Adicionar")
+        bt_adicionar = BotaoSucesso("Adicionar", icone_nome="plus")
         bt_adicionar.setAutoDefault(False)
-        bt_adicionar.setMinimumHeight(40)
-        bt_adicionar.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.SECUNDARIA};
-                color:{tokens.TEXTO_CLARO};
-                font-weight:bold;
-                border-radius:8px;
-                padding:0 16px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.SECUNDARIA_HOVER};
-            }}
-        """)
         bt_adicionar.clicked.connect(self.adicionar)
 
         nova_layout.addWidget(self.novo_nome)
@@ -102,7 +76,7 @@ class GerenciarCategoriasDespesaDialog(QDialog):
         self.tabela.setStyleSheet(f"""
             QTableWidget {{
                 border: 1px solid {tokens.BORDA};
-                border-radius: 8px;
+                border-radius: {tokens.RADIUS_SM}px;
                 color: {tokens.TEXTO};
                 background: {tokens.CARD};
                 alternate-background-color: {tokens.FUNDO};
@@ -114,8 +88,8 @@ class GerenciarCategoriasDespesaDialog(QDialog):
             QHeaderView::section {{
                 background: {tokens.FUNDO};
                 color: {tokens.TEXTO};
-                font-weight: bold;
-                padding: 6px;
+                font-weight: 700;
+                padding: 8px;
                 border: none;
                 border-bottom: 1px solid {tokens.BORDA};
             }}
@@ -125,51 +99,16 @@ class GerenciarCategoriasDespesaDialog(QDialog):
 
         rodape = QHBoxLayout()
 
-        bt_editar = QPushButton("Editar")
+        bt_editar = BotaoPrimario("Editar", icone_nome="edit-2")
         bt_editar.setAutoDefault(False)
-        bt_editar.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.PRIMARIA};
-                color:{tokens.TEXTO_CLARO};
-                font-weight:bold;
-                border-radius:8px;
-                padding:8px 16px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.PRIMARIA_HOVER};
-            }}
-        """)
         bt_editar.clicked.connect(self.editar)
 
-        bt_excluir = QPushButton("Excluir")
+        bt_excluir = BotaoPerigo("Excluir", icone_nome="trash-2")
         bt_excluir.setAutoDefault(False)
-        bt_excluir.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.ERRO};
-                color:{tokens.TEXTO_CLARO};
-                font-weight:bold;
-                border-radius:8px;
-                padding:8px 16px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.ERRO_HOVER};
-            }}
-        """)
         bt_excluir.clicked.connect(self.excluir)
 
-        bt_fechar = QPushButton("Fechar")
+        bt_fechar = BotaoSecundario("Fechar")
         bt_fechar.setAutoDefault(False)
-        bt_fechar.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.FUNDO};
-                color:{tokens.TEXTO};
-                border-radius:8px;
-                padding:8px 20px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.BORDA};
-            }}
-        """)
         bt_fechar.clicked.connect(self.accept)
 
         rodape.addWidget(bt_editar)

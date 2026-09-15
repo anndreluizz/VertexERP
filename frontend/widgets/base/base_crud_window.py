@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
 )
 
+from design import tokens
 from widgets.toolbar.crud_toolbar import CrudToolbar
 from widgets.tables.standard_table import StandardTable
 
@@ -38,7 +39,9 @@ class BaseCRUDWindow(QWidget):
 
         titulo_lbl = QLabel(self.titulo)
         titulo_lbl.setAlignment(Qt.AlignCenter)
-        titulo_lbl.setStyleSheet("font-size:24px; font-weight:bold;")
+        titulo_lbl.setStyleSheet(
+            f"font-size:24px; font-weight:bold; color:{tokens.TEXTO};"
+        )
         layout.addWidget(titulo_lbl)
 
         pesquisa_layout = QHBoxLayout()
@@ -51,7 +54,9 @@ class BaseCRUDWindow(QWidget):
         layout.addWidget(self.toolbar)
 
         self.legenda_atalhos = QLabel(self.atalhos_texto)
-        self.legenda_atalhos.setStyleSheet("color:#888; font-size:11px;")
+        self.legenda_atalhos.setStyleSheet(
+            f"color:{tokens.TEXTO_TERCIARIO}; font-size:11px;"
+        )
         layout.addWidget(self.legenda_atalhos)
 
         self.tabela = StandardTable(self.colunas)

@@ -83,7 +83,7 @@ class _PainelAnimado(QFrame):
 
         gradiente = QLinearGradient(0, 0, x2, y2)
         gradiente.setColorAt(0, QColor(tokens.PRIMARIA))
-        gradiente.setColorAt(1, QColor("#1E3A8A"))
+        gradiente.setColorAt(1, QColor(tokens.PRIMARIA_ESCURA))
 
         painter.fillRect(self.rect(), gradiente)
 
@@ -194,7 +194,7 @@ class _IlustracaoPainel(QWidget):
         icone_lbl = QLabel()
         icone_lbl.setAlignment(Qt.AlignCenter)
         icone_lbl.setStyleSheet("background:transparent; border:none;")
-        icone_lbl.setPixmap(icone_pixmap(icone_nome, cor="#FFFFFF", tamanho=22))
+        icone_lbl.setPixmap(icone_pixmap(icone_nome, cor=tokens.TEXTO_CLARO, tamanho=22))
 
         layout.addWidget(icone_lbl)
 
@@ -330,15 +330,15 @@ class LoginWindow(QWidget):
             background: rgba(255, 255, 255, 0.16);
             border-radius: 11px;
         """)
-        bolha.setPixmap(icone_pixmap(icone_nome, cor="#FFFFFF", tamanho=17))
+        bolha.setPixmap(icone_pixmap(icone_nome, cor=tokens.TEXTO_CLARO, tamanho=17))
 
         coluna = QVBoxLayout()
         coluna.setSpacing(1)
         coluna.setContentsMargins(0, 0, 0, 0)
 
         lbl_titulo = QLabel(titulo)
-        lbl_titulo.setStyleSheet("""
-            background:transparent; color: #FFFFFF;
+        lbl_titulo.setStyleSheet(f"""
+            background:transparent; color: {tokens.TEXTO_CLARO};
             font-size:13.5px; font-weight:700;
         """)
 

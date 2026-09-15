@@ -4,18 +4,28 @@ Este arquivo fornece orientações ao Claude Code (claude.ai/code) ao trabalhar 
 
 ## Visão geral do projeto
 
-Vertex ERP é um ERP empresarial brasileiro com backend em FastAPI e frontend desktop em PySide6 (Qt). O domínio cobre vendas (PDV/vendas), compras, estoque (produtos), clientes/fornecedores, caixa e contas a pagar/receber. Todo o código de domínio (models, variáveis, endpoints, textos de UI) é escrito em português — mantenha essa convenção em código novo.
+Vertex ERP é um ERP empresarial brasileiro com backend em FastAPI e frontend desktop em PySide6 (Qt). O domínio cobre vendas (PDV/vendas), estoque (produtos), clientes, caixa e contas a pagar/receber. Todo o código de domínio (models, variáveis, endpoints, textos de UI) é escrito em português — mantenha essa convenção em código novo.
+
+**Compras/Fornecedores foi removido** (a pedido do usuário, commit `remove: modulo de Fornecedores e Compras`): sem tela no frontend, sem router registrado em `main.py`. Os models `backend/app/models/compra.py`/`fornecedor.py` (e `item_compra.py`) ainda existem no disco mas estão órfãos — não trate como domínio ativo.
 
 ## Comandos
 
 Backend (executar a partir de `backend/`, usando o `.venv` do repositório):
-- Rodar a API: `uvicorn main:app --reload` (serve em `http://127.0.0.1:8000`)
+- Rodar a API pra uso com o frontend: **precisa de HTTPS**, mesmo em dev — `frontend/services/api.py` monta a URL sempre como `https://127.0.0.1:8000` (nunca `http://`), então `uvicorn main:app --reload` puro (HTTP) sobe a API mas o frontend não consegue falar com ela. Suba com certificado autoassinado, gerado/reaproveitado por `app/core/tls.py::garantir_certificado`:
+  ```python
+  import uvicorn
+  from app.core.tls import garantir_certificado
+  from main import app
+  cert, key = garantir_certificado("certs")
+  uvicorn.run(app, host="127.0.0.1", port=8000, ssl_certfile=cert, ssl_keyfile=key)
+  ```
+  (o pacote final usa o mesmo mecanismo, ver `backend/backend_entry.py`, só que na porta `58734` por padrão em vez de `8000` — ver comentário em `frontend/services/api.py` sobre `_PORTA_PADRAO`). `uvicorn main:app --reload` sem TLS ainda serve pra bater direto na API (`/docs`, testes manuais de rota via curl/Postman), só não serve pro frontend desktop.
 - Rodar migrações: `alembic upgrade head`
 - Criar uma migração: `alembic revision --autogenerate -m "descricao"` — **novos models precisam ser importados manualmente em `backend/migrations/env.py`**, ou o autogenerate não vai enxergá-los (veja a lista de imports já existente lá).
 - Rodar testes: `pytest` (teste único: `pytest app/tests/test_venda.py::nome_do_teste`) — suíte real cobrindo todos os módulos do backend (~78 testes). Usa um banco Postgres de teste separado (`vertexerp_test`, mesmas credenciais do `.env`), criado e recriado do zero automaticamente por `app/tests/conftest.py` a cada execução — não precisa de setup manual.
 
 Frontend (executar a partir de `frontend/`):
-- Rodar o app desktop: `python app.py` (requer o backend FastAPI rodando em `127.0.0.1:8000`; sem ele, o login falha com um diálogo "Servidor Offline")
+- Rodar o app desktop: `python app.py` (requer o backend rodando em `https://127.0.0.1:8000` com TLS, ver acima; sem ele, o login falha com um diálogo "Servidor Offline" — e se o backend estiver em HTTP puro, falha com erro de SSL em vez disso)
 
 Notas de setup:
 - O `requirements.txt` na raiz está em UTF-16 e lista apenas dependências do backend (FastAPI, SQLAlchemy, Alembic, psycopg, python-jose, passlib, pytest, etc.). Pacotes exclusivos do frontend (`PySide6`, `requests`) não estão listados ali e precisam ser instalados separadamente.
@@ -48,10 +58,9 @@ api/v1/<entidade>.py                     APIRouter do FastAPI, um router por ent
 
 ## Arquitetura do frontend (`frontend/`)
 
-- Ponto de entrada `app.py` → `telas/login.py` (`LoginWindow`) → após login bem-sucedido abre `telas/principal.py` (`PrincipalWindow`), um `QMainWindow` com menu lateral e um `QStackedWidget` contendo um widget de página por módulo (dashboard, PDV, produtos, clientes, fornecedores, compras, ...).
-- `services/api.py` contém um cliente HTTP genérico mínimo (`login`/`get`/`post`/`put`/`delete`) com um `TOKEN` global de módulo, definido no login e enviado como Bearer. Os módulos de service por entidade (`services/cliente_service.py`, `services/fornecedor_service.py`, `services/compra_service.py`, ...) encapsulam isso para chamar endpoints específicos.
-- **Duas gerações de UI coexistindo** — verifique qual padrão uma tela já usa antes de estendê-la:
-  - Novo/reutilizável (telas de listagem): `widgets/base/base_crud_window.py` (`BaseCRUDWindow`), classe base no estilo template-method (subclasses definem `titulo`/`colunas` e implementam `carregar`/`filtrar`/`novo`/`editar`/`excluir`), apoiada por `widgets/tables/standard_table.py` (`StandardTable`), `widgets/toolbar/crud_toolbar.py` (`CrudToolbar`), `widgets/dialogs/message_dialog.py` (`Mensagem`), `widgets/dialogs/pesquisa_window.py`, `widgets/cards/card.py`. Já usado por `telas/produtos.py`, `telas/clientes.py`, `telas/fornecedores.py`, `telas/vendas.py`, `telas/ajuste_estoque.py`, `telas/relatorios.py`. Novas telas de listagem/CRUD devem seguir esse padrão.
-  - Antigo/manual (diálogos de cadastro): mesmo nas telas já migradas para `BaseCRUDWindow`, os diálogos de criar/editar (`telas/cadastro_cliente.py`, `telas/cadastro_fornecedor.py`, `telas/cadastro_produto.py`) continuam com `QDialog` construído à mão. `widgets/base/base_cadastro_dialog.py` (`BaseCadastroDialog`) existe mas **nenhuma tela o usa**.
-  - `widgets/fields/*` (campos mascarados de CPF/CNPJ/telefone/e-mail/dinheiro) e `widgets/buttons/*` são **arquivos vazios** — nunca implementados, não assuma que têm conteúdo.
-- Os imports de widgets Qt usam caminhos absolutos com raiz em `frontend/` (ex.: `from telas.cadastro_cliente import ...`, `from widgets.tables.standard_table import ...`), então `frontend/` precisa estar no `sys.path`/diretório de trabalho ao rodar o app.
+- Ponto de entrada `app.py` → `telas/login.py` (`LoginWindow`) → após login bem-sucedido abre `telas/principal.py` (`PrincipalWindow`), um `QMainWindow` com menu lateral e um `QStackedWidget` contendo um widget de página por módulo (dashboard, PDV, produtos, clientes, caixa, contas a pagar/receber, ...).
+- `services/api.py` contém um cliente HTTP genérico mínimo (`login`/`get`/`post`/`put`/`delete`) com um `TOKEN` global de módulo, definido no login e enviado como Bearer. Os módulos de service por entidade (`services/cliente_service.py`, `services/produto_service.py`, ...) encapsulam isso para chamar endpoints específicos.
+- **`frontend/design/` é o design system atual e a base de praticamente toda tela** (`tokens.py` — cor/raio/tipografia/sombra, com paleta clara e escura e `aplicar(escuro: bool)` pra trocar tema em runtime; `widgets.py` — componentes reutilizáveis `Card`/`CardKPI`/`BotaoPrimario`/`BotaoSucesso`/`BotaoPerigo`/`BotaoSecundario`/`Badge`/`Avatar`/`CampoTexto`; mais `theme.py`, `sidebar.py`, `header.py`, `icons.py`, `fonts.py`, `animations.py`, `responsive.py`, `charts.py`). 38 das ~39 telas reais importam `design/` — só `telas/cadastro_usuario.py` ficou pra trás, ainda em `QDialog` cru sem tokens. **Nunca escrever cor hex direto num stylesheet de tela** — sempre `tokens.PRIMARIA` etc. (exceção legítima: HTML de recibo/comprovante impresso, que deve ficar fixo preto-no-branco independente do tema; e paletas decorativas fixas tipo `_CORES_MONOGRAMA` de avatar, que não são texto/superfície da UI).
+- **`BaseCRUDWindow`/`BaseCadastroDialog` (`widgets/base/`) não pegaram** — apesar do nome "padrão novo", só `telas/vendas.py` usa `BaseCRUDWindow`; todo o resto (`produtos.py`, `clientes.py`, `contas_pagar.py`, ...) é `QWidget`/`QDialog` construído à mão + `design/`. `BaseCadastroDialog` tem **zero telas usando**. Não assuma que é o padrão a seguir em tela nova sem confirmar — hoje o padrão de fato é "QWidget/QDialog manual estilizado com `design/`".
+- `widgets/fields/*`: `money_field.py` (`MoneyField`), `quantity_field.py` (`QuantityField`), `cpf_field.py` (`CpfCnpjField` — máscara única que detecta CPF/CNPJ pela quantidade de dígitos), `phone_field.py` (`PhoneField`) e `email_field.py` (`EmailField`, validação de formato ao vivo via `utils.validacao.email_valido`) estão implementados e usados em `cadastro_cliente.py`/`configuracoes.py`/`gerenciar_usuarios.py`. Só `search_field.py` continua **vazio**. `widgets/buttons/*` também segue vazio — nunca implementado, não assuma que tem conteúdo.
+- Os imports de widgets Qt usam caminhos absolutos com raiz em `frontend/` (ex.: `from telas.cadastro_cliente import ...`, `from design import tokens`), então `frontend/` precisa estar no `sys.path`/diretório de trabalho ao rodar o app.

@@ -188,17 +188,17 @@ class Dashboard(QWidget):
 
         self.card_pdv = NavCard(
             "Frente de Caixa", "Venda rápida",
-            tokens.PRIMARIA, "#1E3A8A", icone_nome="shopping-cart",
+            tokens.PRIMARIA, tokens.PRIMARIA_ESCURA, icone_nome="shopping-cart",
             atalho="F3", texto_botao="Abrir PDV",
         )
         self.card_estoque = NavCard(
             "Estoque", "Gestão de itens",
-            tokens.SECUNDARIA, "#0D7A4B", icone_nome="package",
+            tokens.SECUNDARIA, tokens.SECUNDARIA_ESCURA, icone_nome="package",
             texto_botao="Ver estoque",
         )
         self.card_caixa = NavCard(
             "Caixa", "Abertura e fechamento",
-            tokens.ALERTA, "#C2660B", icone_nome="wallet",
+            tokens.ALERTA, tokens.ALERTA_ESCURA, icone_nome="wallet",
             texto_botao="Acessar caixa",
         )
 
@@ -228,7 +228,9 @@ class Dashboard(QWidget):
         for coluna in range(4):
             self.grid_kpi.setColumnStretch(coluna, 1)
 
-        self.kpi_faturamento = CardKPI("Faturamento Hoje", "dollar-sign", tokens.PRIMARIA)
+        self.kpi_faturamento = CardKPI(
+            "Faturamento Hoje", "dollar-sign", tokens.PRIMARIA, destaque=True
+        )
         self.kpi_lucro = CardKPI("Lucro Hoje", "trending-up", tokens.SECUNDARIA)
         self.kpi_ticket = CardKPI("Ticket Médio", "shopping-cart", tokens.PRIMARIA)
         self.kpi_pedidos = CardKPI("Pedidos Hoje", "file-text", tokens.PRIMARIA)
@@ -900,7 +902,7 @@ class Dashboard(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
 
-        cores_pos = {1: tokens.ALERTA, 2: tokens.TEXTO_TERCIARIO, 3: "#B45309"}
+        cores_pos = {1: tokens.ALERTA, 2: tokens.TEXTO_TERCIARIO, 3: tokens.ALERTA_TEXTO}
         cor_numero = cores_pos.get(posicao, tokens.TEXTO_TERCIARIO)
 
         selo = QLabel(str(posicao))

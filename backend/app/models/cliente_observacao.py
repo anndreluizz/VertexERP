@@ -16,11 +16,13 @@ class ClienteObservacao(Base):
 
     cliente_id: Mapped[int] = mapped_column(
         ForeignKey("clientes.id", ondelete="CASCADE"),
+        index=True,
         nullable=False
     )
 
     usuario_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"),
+        index=True,
         nullable=False
     )
 

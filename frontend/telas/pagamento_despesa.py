@@ -23,7 +23,13 @@ from services.conta_pagar_service import atualizar_conta_pagar, pagar_conta_paga
 
 from design import tokens
 from design.responsive import tamanho_fixo_seguro
-from design.widgets import BotaoPerigo, BotaoSecundario, BotaoSucesso, CampoTexto
+from design.widgets import (
+    BotaoPerigo,
+    BotaoSecundario,
+    BotaoSucesso,
+    CabecalhoDialogo,
+    CampoTexto,
+)
 from utils.formatacao import formatar_moeda
 
 
@@ -65,30 +71,11 @@ class PagamentoDespesaDialog(QDialog):
         raiz.setContentsMargins(0, 0, 0, 0)
         raiz.setSpacing(0)
 
-        cabecalho = QFrame()
-        cabecalho.setStyleSheet(f"background:{tokens.SIDEBAR};")
-        cabecalho.setFixedHeight(70)
-
-        cab_layout = QVBoxLayout(cabecalho)
-        cab_layout.setContentsMargins(24, 12, 24, 12)
-        cab_layout.setSpacing(2)
-
-        self.lbl_titulo = QLabel("CONFIRMAR PAGAMENTO")
-        self.lbl_titulo.setStyleSheet(f"""
-            background:transparent; color:white;
-            font-size:{tokens.TAMANHO_LG}px; font-weight:800;
-        """)
-
-        self.lbl_subtitulo = QLabel("Revise os dados antes de confirmar")
-        self.lbl_subtitulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SIDEBAR};
-            font-size:{tokens.TAMANHO_XS}px;
-        """)
-
-        cab_layout.addWidget(self.lbl_titulo)
-        cab_layout.addWidget(self.lbl_subtitulo)
-
-        raiz.addWidget(cabecalho)
+        self.cabecalho = CabecalhoDialogo(
+            "credit-card", tokens.SUCESSO, tokens.SUCESSO_CLARO,
+            "Confirmar Pagamento", "Revise os dados antes de confirmar",
+        )
+        raiz.addWidget(self.cabecalho)
 
         self.paginas = QStackedWidget()
 
@@ -127,7 +114,7 @@ class PagamentoDespesaDialog(QDialog):
 
         layout.addWidget(bloco_dados)
 
-        lbl_forma_titulo = QLabel("FORMA DE PAGAMENTO")
+        lbl_forma_titulo = QLabel("Forma de pagamento")
         lbl_forma_titulo.setStyleSheet(f"""
             background:transparent; font-size:{tokens.TAMANHO_XS}px;
             font-weight:700; color:{tokens.TEXTO_TERCIARIO};
@@ -155,7 +142,7 @@ class PagamentoDespesaDialog(QDialog):
 
         layout.addLayout(formas_layout)
 
-        lbl_obs_titulo = QLabel("OBSERVAÇÃO (OPCIONAL)")
+        lbl_obs_titulo = QLabel("Observação (opcional)")
         lbl_obs_titulo.setStyleSheet(f"""
             background:transparent; font-size:{tokens.TAMANHO_XS}px;
             font-weight:700; color:{tokens.TEXTO_TERCIARIO};
@@ -166,7 +153,7 @@ class PagamentoDespesaDialog(QDialog):
         layout.addWidget(lbl_obs_titulo)
         layout.addWidget(self.observacao)
 
-        lbl_comprovante_titulo = QLabel("COMPROVANTE (OPCIONAL)")
+        lbl_comprovante_titulo = QLabel("Comprovante (opcional)")
         lbl_comprovante_titulo.setStyleSheet(f"""
             background:transparent; font-size:{tokens.TAMANHO_XS}px;
             font-weight:700; color:{tokens.TEXTO_TERCIARIO};
@@ -364,8 +351,10 @@ class PagamentoDespesaDialog(QDialog):
 
         self._pagamento_confirmado = True
 
-        self.lbl_titulo.setText("PAGAMENTO CONFIRMADO")
-        self.lbl_subtitulo.setText("Despesa marcada como paga com sucesso")
+        self.cabecalho.definir_texto(
+            "Pagamento Confirmado", "Despesa marcada como paga com sucesso"
+        )
+        self.cabecalho.definir_icone("check", tokens.SUCESSO)
 
         self._atualizar_comprovante(observacao_final)
 

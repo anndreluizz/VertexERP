@@ -11,12 +11,19 @@ from services.pdv_service import buscar_produto
 from services.caixa_service import caixa_aberto
 from services.relatorio_service import relatorio_vendas
 from services.api import configuracoes, me
-from services import preferencias_service
+from services import preferencias_service, comprovante_service
 
 ATALHOS_PADRAO = {"busca": "F1", "cadastro_rapido": "F4", "cancelar": "Esc"}
 
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QShortcut, QKeySequence, QFont, QTextDocument, QCursor
+from PySide6.QtCore import Qt, QTimer, Signal, QSize
+from PySide6.QtGui import (
+    QShortcut,
+    QKeySequence,
+    QFont,
+    QTextDocument,
+    QCursor,
+    QPixmap,
+)
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (
     QApplication,
@@ -359,6 +366,37 @@ class PDV(QWidget):
         config = configuracoes()
         nome_loja = config.get("nome_loja") or ""
 
+        # logo da loja no cabecalho -- mesma imagem usada nos
+        # comprovantes, pra dar uma cara mais profissional pro PDV
+        # (fica de frente pro cliente, no caixa). So aparece se a loja
+        # tiver logo cadastrado em Configuracoes.
+        self.lbl_logo_pdv = QLabel()
+        self.lbl_logo_pdv.setFixedSize(40, 40)
+        self.lbl_logo_pdv.setAlignment(Qt.AlignCenter)
+        self.lbl_logo_pdv.setStyleSheet("background:transparent; border:none;")
+        self.lbl_logo_pdv.setVisible(False)
+
+        logo_bytes = None
+        if config.get("tem_logo"):
+            try:
+                logo_bytes = comprovante_service.obter_logo_loja()
+            except Exception:
+                # rede/servidor instavel nao pode derrubar a tela do
+                # PDV inteira so por causa da logo -- pior caso e' o
+                # cabecalho ficar sem ela, igual quando a loja nao tem
+                # logo cadastrado
+                logo_bytes = None
+
+        if logo_bytes:
+            pixmap_logo = QPixmap()
+            if pixmap_logo.loadFromData(logo_bytes):
+                self.lbl_logo_pdv.setPixmap(
+                    pixmap_logo.scaled(
+                        40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                    )
+                )
+                self.lbl_logo_pdv.setVisible(True)
+
         self.lbl_loja = QLabel(nome_loja)
         self.lbl_loja.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO_TERCIARIO};
@@ -370,20 +408,21 @@ class PDV(QWidget):
 
         self.badge_caixa = Badge("Caixa aberto", "sucesso")
 
-        self.bt_retomar = BotaoSecundario("Vendas Suspensas")
+        self.bt_retomar = self._botao_ghost_cabecalho("Vendas Suspensas")
         self.bt_retomar.setEnabled(False)
         self.bt_retomar.clicked.connect(self.abrir_vendas_suspensas)
 
-        self.bt_suspender = BotaoSecundario("Suspender")
+        self.bt_suspender = self._botao_ghost_cabecalho("Suspender")
         self.bt_suspender.clicked.connect(self.suspender_venda)
 
-        self.bt_orcamento = BotaoSecundario("Orçamento", icone_nome="printer")
+        self.bt_orcamento = self._botao_ghost_cabecalho("Orçamento", icone_nome="printer")
         self.bt_orcamento.clicked.connect(self.imprimir_orcamento)
 
         self.bt_cancelar = BotaoPerigo("Cancelar Venda", icone_nome="x")
         self.bt_cancelar.clicked.connect(self.cancelar_venda)
 
         cabecalho.addWidget(self.bt_voltar)
+        cabecalho.addWidget(self.lbl_logo_pdv)
         cabecalho.addLayout(col_titulo)
         cabecalho.addSpacing(4)
         cabecalho.addWidget(self.badge_caixa, alignment=Qt.AlignVCenter)
@@ -395,14 +434,43 @@ class PDV(QWidget):
 
         return cabecalho
 
+    def _botao_ghost_cabecalho(self, texto, icone_nome=None):
+        """Botão de ação secundária do cabeçalho sem contorno -- só
+        fundo sutil no hover. As 3 ações daqui (Vendas Suspensas,
+        Suspender, Orçamento) são usadas bem menos que Cancelar Venda
+        e não precisam do mesmo peso visual de um botão contornado
+        (pedido direto: menos linha no cabeçalho)."""
+
+        bt = QPushButton(texto)
+        bt.setCursor(Qt.PointingHandCursor)
+        bt.setMinimumHeight(38)
+
+        if icone_nome:
+            bt.setIcon(icone(icone_nome, cor=tokens.TEXTO_SECUNDARIO, tamanho=15))
+            bt.setIconSize(QSize(15, 15))
+
+        bt.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; border:none; border-radius:{tokens.RADIUS_SM}px;
+                padding:0 12px; color:{tokens.TEXTO_SECUNDARIO};
+                font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+            }}
+            QPushButton:hover:enabled {{ background:{tokens.FUNDO}; }}
+            QPushButton:disabled {{
+                background:{tokens.BORDA}; color:{tokens.TEXTO_TERCIARIO};
+            }}
+        """)
+
+        return bt
+
     def _construir_barra_atalhos(self):
 
         barra = QFrame()
         barra.setFixedHeight(42)
         barra.setStyleSheet(f"""
             QFrame {{
-                background: {tokens.CARD};
-                border-top: 1px solid {tokens.BORDA};
+                background: {tokens.FUNDO};
+                border: none;
             }}
         """)
 
@@ -459,8 +527,8 @@ class PDV(QWidget):
         badge_tecla.setAlignment(Qt.AlignCenter)
         badge_tecla.setFixedHeight(20)
         badge_tecla.setStyleSheet(f"""
-            background:{tokens.FUNDO}; color:{tokens.TEXTO_SECUNDARIO};
-            border:1px solid {tokens.BORDA}; border-radius:4px;
+            background:{tokens.CARD}; color:{tokens.TEXTO_SECUNDARIO};
+            border:none; border-radius:4px;
             font-size:{tokens.TAMANHO_XS}px; font-weight:700; padding: 0 6px;
         """)
 
@@ -564,8 +632,8 @@ class PDV(QWidget):
         linha = QFrame()
         linha.setStyleSheet(f"""
             QFrame {{
-                background: {tokens.CARD};
-                border: 1px solid {tokens.BORDA};
+                background: {tokens.FUNDO};
+                border: none;
                 border-radius: {tokens.RADIUS_SM}px;
             }}
         """)
@@ -764,11 +832,6 @@ class PDV(QWidget):
 
         layout.addLayout(cabecalho_tabela)
 
-        divisor_topo = QFrame()
-        divisor_topo.setFixedHeight(1)
-        divisor_topo.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
-        layout.addWidget(divisor_topo)
-
         self.pilha_carrinho = QStackedWidget()
         self.pilha_carrinho.setStyleSheet("background:transparent;")
 
@@ -817,7 +880,7 @@ class PDV(QWidget):
                 border-bottom: 1px solid {tokens.BORDA};
             }}
             QTableWidget::item {{
-                border-bottom: 1px solid {tokens.BORDA};
+                border: none;
                 padding: 4px;
             }}
         """)
@@ -1002,10 +1065,7 @@ class PDV(QWidget):
         linha_acrescimo, self.lbl_acrescimo_valor = self._linha_resumo("Acréscimo")
         layout.addLayout(linha_acrescimo)
 
-        divisor = QFrame()
-        divisor.setFixedHeight(1)
-        divisor.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
-        layout.addWidget(divisor)
+        layout.addSpacing(6)
 
         caixa_total = QFrame()
         caixa_total.setStyleSheet(f"""

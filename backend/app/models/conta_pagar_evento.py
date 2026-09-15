@@ -28,6 +28,7 @@ class ContaPagarEvento(Base):
 
     usuario_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"),
+        index=True,
         nullable=True,
     )
 

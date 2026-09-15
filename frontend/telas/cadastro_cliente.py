@@ -24,6 +24,9 @@ from services.cliente_service import (
     obter_foto_cliente,
 )
 from utils.validacao import email_valido
+from widgets.fields.cpf_field import CpfCnpjField
+from widgets.fields.phone_field import PhoneField
+from widgets.fields.email_field import EmailField
 
 
 def _parse_valor_opcional(texto):
@@ -127,9 +130,15 @@ class CadastroClienteDialog(QDialog):
         corpo.addLayout(linha_foto)
 
         self.nome = self._campo(corpo, "NOME", "Nome completo")
-        self.whatsapp = self._campo(corpo, "WHATSAPP", "(00) 00000-0000")
-        self.cpf = self._campo(corpo, "CPF/CNPJ", "000.000.000-00")
-        self.email = self._campo(corpo, "E-MAIL", "email@exemplo.com")
+        self.whatsapp = self._campo(
+            corpo, "WHATSAPP", "(00) 00000-0000", cls=PhoneField
+        )
+        self.cpf = self._campo(
+            corpo, "CPF/CNPJ", "000.000.000-00", cls=CpfCnpjField
+        )
+        self.email = self._campo(
+            corpo, "E-MAIL", "email@exemplo.com", cls=EmailField
+        )
         self.endereco = self._campo(corpo, "ENDEREÇO", "Rua, número, bairro")
         self.cidade = self._campo(corpo, "CIDADE", "Cidade")
         self.estado = self._campo(corpo, "ESTADO (UF)", "Ex.: SP")
@@ -230,7 +239,7 @@ class CadastroClienteDialog(QDialog):
 
     # ======================================
 
-    def _campo(self, layout, rotulo, placeholder):
+    def _campo(self, layout, rotulo, placeholder, cls=CampoTexto):
 
         lbl = QLabel(rotulo)
         lbl.setStyleSheet(f"""
@@ -238,7 +247,7 @@ class CadastroClienteDialog(QDialog):
             font-weight:700; color:{tokens.TEXTO_TERCIARIO};
         """)
 
-        campo = CampoTexto(placeholder)
+        campo = cls(placeholder)
         campo.setMinimumHeight(44)
 
         layout.addWidget(lbl)

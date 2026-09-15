@@ -57,13 +57,46 @@ class _LockScreenState extends ConsumerState<LockScreen> {
         await ref.read(sessaoControllerProvider.notifier)
             .desbloquearComBiometria();
       } else {
+        // usuario recusou/cancelou o prompt de proposito -- continua
+        // exigindo (ou biometria de novo, ou email/senha manual)
         setState(() => _aviso = 'Não foi possível confirmar sua identidade.');
       }
-    } catch (_) {
-      if (mounted) {
+    } on LocalAuthException catch (e) {
+      // So faz sentido deixar entrar quando a checagem em si nao pode
+      // rodar por o aparelho nao ter NENHUMA trava configurada -- isso
+      // NAO foi o usuario recusando de proposito, e travar numa tela
+      // sem saida por uma seguranca que nem existe no aparelho e pior
+      // do que deixar entrar ("Manter conectado" ja e a escolha
+      // consciente do usuario, mesmo raciocinio do Desktop).
+      //
+      // temporaryLockout/biometricLockout (sensor bloqueado por
+      // tentativas biometricas erradas) e qualquer outro codigo NAO
+      // caem aqui -- ali a checagem existe e falhou, entao continua
+      // exigindo (biometria de novo, ou email/senha manual) em vez de
+      // virar um bypass.
+      final codigosSemTravaNoAparelho = {
+        LocalAuthExceptionCode.noCredentialsSet,
+        LocalAuthExceptionCode.noBiometricsEnrolled,
+        LocalAuthExceptionCode.noBiometricHardware,
+      };
+
+      if (codigosSemTravaNoAparelho.contains(e.code)) {
+        if (mounted) {
+          await ref.read(sessaoControllerProvider.notifier)
+              .desbloquearComBiometria();
+        }
+      } else if (mounted) {
         setState(
-          () => _aviso = 'Não foi possível abrir a verificação do aparelho.',
+          () => _aviso = 'Não foi possível confirmar sua identidade.',
         );
+      }
+    } catch (_) {
+      // Erro que nem veio do plugin de biometria (ex.: falha no
+      // proprio app/estado) -- mesmo raciocinio do ramo acima: a
+      // checagem nao pode ser dada como bem-sucedida so por ter
+      // explodido, entao continua travado em vez de virar bypass.
+      if (mounted) {
+        setState(() => _aviso = 'Não foi possível confirmar sua identidade.');
       }
     } finally {
       if (mounted) setState(() => _autenticando = false);

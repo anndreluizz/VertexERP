@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, get_current_admin
+from app.auth.dependencies import get_current_user, get_current_admin, resolver_loja_id
 from app.database.session import SessionLocal
 from app.schemas.caixa import (
     CaixaCreate,
@@ -45,11 +45,13 @@ def caixa_to_response(caixa):
 @router.post("/abrir", response_model=CaixaResponse)
 def abrir_caixa(
     dados: CaixaCreate,
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
     try:
-        caixa = CaixaService.abrir(db, dados, usuario.id)
+        loja_efetiva = resolver_loja_id(db, usuario, loja_id)
+        caixa = CaixaService.abrir(db, dados, usuario.id, loja_efetiva)
         return caixa_to_response(caixa)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -58,15 +60,18 @@ def abrir_caixa(
 @router.post("/fechar", response_model=CaixaResponse)
 def fechar_caixa(
     dados: FecharCaixaRequest,
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_admin),
 ):
     try:
+        loja_efetiva = resolver_loja_id(db, usuario, loja_id)
         caixa = CaixaService.fechar(
             db,
             usuario.id,
             dados.valor_contado,
             dados.observacoes,
+            loja_efetiva,
         )
         return caixa_to_response(caixa)
     except Exception as e:
@@ -75,10 +80,12 @@ def fechar_caixa(
 
 @router.get("/aberto", response_model=CaixaResponse | None)
 def caixa_aberto(
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    caixa = CaixaService.caixa_aberto(db, usuario.id)
+    loja_efetiva = resolver_loja_id(db, usuario, loja_id)
+    caixa = CaixaService.caixa_aberto(db, usuario.id, loja_efetiva)
 
     if caixa is None:
         return None
@@ -88,10 +95,12 @@ def caixa_aberto(
 
 @router.get("/resumo", response_model=ResumoCaixaResponse)
 def resumo_caixa(
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    resumo = CaixaService.resumo_aberto(db, usuario.id)
+    loja_efetiva = resolver_loja_id(db, usuario, loja_id)
+    resumo = CaixaService.resumo_aberto(db, usuario.id, loja_efetiva)
 
     if resumo is None:
         raise HTTPException(

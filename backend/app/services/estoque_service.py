@@ -15,6 +15,7 @@ class EstoqueService:
         db: Session,
         dados: MovimentoEstoqueCreate,
         usuario_id: int,
+        loja_id: int | None = None,
     ):
 
         produto = (
@@ -40,6 +41,7 @@ class EstoqueService:
         movimento = MovimentoEstoque(
             produto_id=produto.id,
             usuario_id=usuario_id,
+            loja_id=loja_id,
             tipo=dados.tipo.value,
             quantidade=dados.quantidade,
             motivo=dados.motivo,

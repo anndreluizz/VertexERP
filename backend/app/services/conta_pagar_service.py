@@ -45,6 +45,7 @@ class ContaPagarService:
         dados: ContaPagarCreate,
         usuario_id: int | None = None,
         dispositivo: str | None = None,
+        loja_id: int | None = None,
     ):
 
         conta = ContaPagar(
@@ -57,6 +58,7 @@ class ContaPagarService:
             observacao=dados.observacao,
             numero_boleto=dados.numero_boleto,
             status=StatusContaPagar.PENDENTE.value,
+            loja_id=loja_id,
         )
 
         if dados.documento_base64:

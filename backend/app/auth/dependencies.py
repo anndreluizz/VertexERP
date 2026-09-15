@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.jwt import SECRET_KEY, ALGORITHM
 from app.database.session import SessionLocal
+from app.models.loja import Loja
 from app.models.user import User
 
 security = HTTPBearer()
@@ -65,6 +66,34 @@ def get_current_user(
             status_code=401,
             detail="Token inválido."
         )
+
+
+def resolver_loja_id(db: Session, usuario: User, loja_id_informado: int | None = None):
+    """Decide em qual loja uma escrita (venda, abertura de caixa, ajuste
+    de estoque, conta a pagar/receber) deve ser registrada.
+
+    Prioridade: (1) loja_id que o TERMINAL mandou explicitamente na
+    requisicao -- e o terminal, nao o usuario, que sabe em qual loja
+    fisica ele esta instalado (ver frontend, config local por PC); (2)
+    a loja de origem do usuario logado; (3) admin sem loja de origem
+    (enxerga todas) e sem terminal configurado ainda cai na loja ativa
+    mais antiga, pra nao travar o sistema enquanto o terminal nao manda
+    esse dado (frontend ainda nao implementa isso)."""
+
+    if loja_id_informado is not None:
+        return loja_id_informado
+
+    if usuario.loja_id is not None:
+        return usuario.loja_id
+
+    loja = (
+        db.query(Loja)
+        .filter(Loja.ativa.is_(True))
+        .order_by(Loja.id)
+        .first()
+    )
+
+    return loja.id if loja else None
 
 
 def get_current_admin(

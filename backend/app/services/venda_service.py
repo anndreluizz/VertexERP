@@ -222,6 +222,7 @@ class VendaService:
         db: Session,
         dados,
         usuario_id: int,
+        loja_id: int | None = None,
     ):
 
         # Toda venda (qualquer forma de pagamento) precisa de um caixa
@@ -229,7 +230,7 @@ class VendaService:
         # (pix/cartao/prazo) gera um MovimentoCaixa preso a esse caixa,
         # pra aparecer certinho no fechamento do turno (ver loop de
         # _parcelas_pagamento logo abaixo).
-        caixa = CaixaRepository.buscar_aberto(db, usuario_id)
+        caixa = CaixaRepository.buscar_aberto(db, usuario_id, loja_id)
 
         if not caixa:
             raise Exception(
@@ -266,6 +267,7 @@ class VendaService:
             venda = Venda(
                 cliente_id=dados.cliente_id,
                 usuario_id=usuario_id,
+                loja_id=loja_id,
                 observacao=dados.observacao,
                 desconto=dados.desconto,
                 forma_pagamento=forma_pagamento,
@@ -334,6 +336,7 @@ class VendaService:
                     MovimentoEstoque(
                         produto_id=produto.id,
                         usuario_id=usuario_id,
+                        loja_id=loja_id,
                         tipo="SAIDA",
                         quantidade=item.quantidade,
                         motivo=f"Venda #{venda.id}",
@@ -487,7 +490,7 @@ class VendaService:
         )
 
         if tem_parcela_dinheiro and not CaixaRepository.buscar_aberto(
-            db, usuario_id
+            db, usuario_id, venda.loja_id
         ):
             raise Exception(
                 "O caixa já está fechado. Abra um caixa antes de "
@@ -516,6 +519,7 @@ class VendaService:
                     MovimentoEstoque(
                         produto_id=produto.id,
                         usuario_id=usuario_id,
+                        loja_id=venda.loja_id,
                         tipo="ENTRADA",
                         quantidade=item.quantidade,
                         motivo=f"Estorno da venda #{venda_id}",
@@ -532,7 +536,9 @@ class VendaService:
             # em dinheiro (pix/cartao/prazo nao afetam a gaveta fisica)
             if forma_parcela == "DINHEIRO":
 
-                caixa = CaixaRepository.buscar_aberto(db, usuario_id)
+                caixa = CaixaRepository.buscar_aberto(
+                    db, usuario_id, venda.loja_id
+                )
 
                 if caixa:
 

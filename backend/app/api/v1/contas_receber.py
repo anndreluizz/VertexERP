@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, get_current_admin
+from app.auth.dependencies import get_current_user, get_current_admin, resolver_loja_id
 from app.database.session import SessionLocal
 
 from app.schemas.conta_receber import (
@@ -29,6 +29,7 @@ def get_db():
 @router.post("/", response_model=ContaReceberResponse)
 def criar(
     dados: ContaReceberCreate,
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
@@ -36,6 +37,7 @@ def criar(
         conta = ContaReceberService.criar(
             db,
             dados,
+            resolver_loja_id(db, usuario, loja_id),
         )
 
         return ContaReceberResponse.from_orm(conta)

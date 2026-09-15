@@ -3,7 +3,7 @@ import base64
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_admin, get_current_user
+from app.auth.dependencies import get_current_admin, get_current_user, resolver_loja_id
 from app.database.session import SessionLocal
 from app.models.cliente import Cliente
 from app.schemas.venda import (
@@ -63,11 +63,13 @@ def buscar(
 @router.post("/", response_model=VendaResponse, status_code=201)
 def criar(
     dados: VendaCreate,
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
     try:
-        return VendaService.criar(db, dados, usuario.id)
+        loja_efetiva = resolver_loja_id(db, usuario, loja_id)
+        return VendaService.criar(db, dados, usuario.id, loja_efetiva)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

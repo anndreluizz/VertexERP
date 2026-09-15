@@ -15,6 +15,7 @@ class MovimentoEstoqueService:
         db: Session,
         dados: MovimentoEstoqueCreate,
         usuario_id: int,
+        loja_id: int | None = None,
     ):
 
         produto = ProdutoRepository.buscar_por_id(db, dados.produto_id)
@@ -41,6 +42,7 @@ class MovimentoEstoqueService:
         movimento = MovimentoEstoque(
             produto_id=produto.id,
             usuario_id=usuario_id,
+            loja_id=loja_id,
             tipo=tipo,
             quantidade=dados.quantidade,
             motivo=dados.motivo,

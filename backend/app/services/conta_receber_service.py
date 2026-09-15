@@ -25,6 +25,7 @@ class ContaReceberService:
     def criar(
         db: Session,
         dados: ContaReceberCreate,
+        loja_id: int | None = None,
     ):
 
         cliente = ClienteRepository.buscar_por_id(
@@ -44,6 +45,7 @@ class ContaReceberService:
             valor=dados.valor,
             observacao=dados.observacao,
             status=StatusContaReceber.PENDENTE.value,
+            loja_id=loja_id,
         )
 
         return ContaReceberRepository.criar(
@@ -215,6 +217,7 @@ class ContaReceberService:
             valor=venda.valor_total,
             observacao="Gerada automaticamente pela venda.",
             status=StatusContaReceber.PENDENTE.value,
+            loja_id=venda.loja_id,
         )
 
         return ContaReceberRepository.criar(

@@ -15,9 +15,9 @@ from app.services.notificacao_service import NotificacaoService
 class CaixaService:
 
     @staticmethod
-    def abrir(db: Session, dados: CaixaCreate, usuario_id: int):
+    def abrir(db: Session, dados: CaixaCreate, usuario_id: int, loja_id: int | None = None):
 
-        caixa = CaixaRepository.buscar_aberto(db, usuario_id)
+        caixa = CaixaRepository.buscar_aberto(db, usuario_id, loja_id)
 
         if caixa:
             raise Exception("Você já tem um caixa aberto.")
@@ -27,6 +27,7 @@ class CaixaService:
             saldo_final=dados.saldo_inicial,
             status="ABERTO",
             usuario_id=usuario_id,
+            loja_id=loja_id,
         )
 
         novo = CaixaRepository.criar(db, novo)
@@ -49,9 +50,10 @@ class CaixaService:
         usuario_id: int,
         valor_contado: Decimal | None = None,
         observacoes: str | None = None,
+        loja_id: int | None = None,
     ):
 
-        caixa = CaixaRepository.buscar_aberto(db, usuario_id)
+        caixa = CaixaRepository.buscar_aberto(db, usuario_id, loja_id)
 
         if not caixa:
             raise Exception("Nenhum caixa aberto.")
@@ -76,8 +78,8 @@ class CaixaService:
         return caixa
 
     @staticmethod
-    def caixa_aberto(db: Session, usuario_id: int):
-        return CaixaRepository.buscar_aberto(db, usuario_id)
+    def caixa_aberto(db: Session, usuario_id: int, loja_id: int | None = None):
+        return CaixaRepository.buscar_aberto(db, usuario_id, loja_id)
 
     @staticmethod
     def historico(db: Session, limite: int = 20):
@@ -157,9 +159,9 @@ class CaixaService:
         }
 
     @staticmethod
-    def resumo_aberto(db: Session, usuario_id: int):
+    def resumo_aberto(db: Session, usuario_id: int, loja_id: int | None = None):
 
-        caixa = CaixaRepository.buscar_aberto(db, usuario_id)
+        caixa = CaixaRepository.buscar_aberto(db, usuario_id, loja_id)
 
         if not caixa:
             return None

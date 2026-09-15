@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, resolver_loja_id
 from app.database.session import SessionLocal
 from app.schemas.movimento_caixa import (
     MovimentoCaixaCreate,
@@ -28,6 +28,7 @@ def get_db():
 @router.post("/", response_model=MovimentoCaixaResponse)
 def criar_movimento(
     dados: MovimentoCaixaCreate,
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
@@ -36,6 +37,7 @@ def criar_movimento(
             db,
             dados,
             usuario.id,
+            resolver_loja_id(db, usuario, loja_id),
         )
 
         return MovimentoCaixaResponse.from_orm(movimento)

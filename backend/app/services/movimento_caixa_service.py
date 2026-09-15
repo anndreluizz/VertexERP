@@ -26,6 +26,7 @@ class MovimentoCaixaService:
         db: Session,
         dados: MovimentoCaixaCreate,
         usuario_id: int,
+        loja_id: int | None = None,
     ):
 
         tipo = dados.tipo.upper()
@@ -39,7 +40,7 @@ class MovimentoCaixaService:
         if dados.valor <= 0:
             raise Exception("Informe um valor maior que zero.")
 
-        caixa = CaixaRepository.buscar_aberto(db, usuario_id)
+        caixa = CaixaRepository.buscar_aberto(db, usuario_id, loja_id)
 
         if not caixa:
             raise Exception("Não existe caixa aberto.")

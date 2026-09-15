@@ -46,9 +46,15 @@ def resumo_caixa():
     return response.json()
 
 
-def historico_caixa():
+def historico_caixa(loja_id=None):
 
-    response = get("/caixa/historico")
+    # loja_id aqui e' o filtro escolhido na tela de Relatorios, nao a
+    # config fixa do terminal -- por isso nao usa endpoint_com_loja()
+    endpoint = "/caixa/historico"
+    if loja_id is not None:
+        endpoint += f"?loja_id={loja_id}"
+
+    response = get(endpoint)
 
     if response.status_code != 200:
         return []

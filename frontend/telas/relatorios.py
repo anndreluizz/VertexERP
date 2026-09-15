@@ -419,7 +419,7 @@ class Relatorios(QWidget):
                 padding:4px 12px; background:{tokens.CARD}; color:{tokens.TEXTO};
             }}
         """)
-        self._carregar_combo_lojas()
+        self._carregar_combo_lojas(self.combo_loja)
         self.combo_loja.currentIndexChanged.connect(
             lambda: self._timer_atualizar_financeiro.start(300)
         )
@@ -493,16 +493,16 @@ class Relatorios(QWidget):
         # comparação -- ver RelatorioService.vendas_geral).
         return None, hoje
 
-    def _carregar_combo_lojas(self):
+    def _carregar_combo_lojas(self, combo):
 
-        self.combo_loja.blockSignals(True)
-        self.combo_loja.clear()
-        self.combo_loja.addItem("Todas as lojas", None)
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem("Todas as lojas", None)
 
         for loja in listar_lojas():
-            self.combo_loja.addItem(loja["nome"], loja["id"])
+            combo.addItem(loja["nome"], loja["id"])
 
-        self.combo_loja.blockSignals(False)
+        combo.blockSignals(False)
 
     def _atualizar_financeiro(self):
 
@@ -616,12 +616,32 @@ class Relatorios(QWidget):
 
         pagina, layout = self._pagina_rolavel(espacamento=12)
 
+        cabecalho_caixa = QHBoxLayout()
+
         titulo = QLabel("Histórico de Caixas")
         titulo.setStyleSheet(f"""
             font-size:{tokens.TAMANHO_LG}px; font-weight:700; color:{tokens.TEXTO};
             background:transparent;
         """)
-        layout.addWidget(titulo)
+        cabecalho_caixa.addWidget(titulo)
+        cabecalho_caixa.addStretch()
+
+        self.combo_loja_caixa = QComboBox()
+        self.combo_loja_caixa.setMinimumHeight(34)
+        self.combo_loja_caixa.setCursor(Qt.PointingHandCursor)
+        self.combo_loja_caixa.setStyleSheet(f"""
+            QComboBox {{
+                border:1px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
+                padding:0 12px; background:{tokens.CARD}; color:{tokens.TEXTO};
+            }}
+        """)
+        self._carregar_combo_lojas(self.combo_loja_caixa)
+        self.combo_loja_caixa.currentIndexChanged.connect(
+            self._recarregar_historico_caixa
+        )
+        cabecalho_caixa.addWidget(self.combo_loja_caixa)
+
+        layout.addLayout(cabecalho_caixa)
 
         self.tabela_caixa = QTableWidget()
         self.tabela_caixa.setColumnCount(4)
@@ -902,8 +922,12 @@ class Relatorios(QWidget):
     def carregar(self):
 
         self.produtos = listar_produtos()
-        self.caixas = historico_caixa()
+        self.caixas = historico_caixa(self.combo_loja_caixa.currentData())
 
         self._atualizar_financeiro()
         self._atualizar_caixa()
         self._atualizar_estoque()
+
+    def _recarregar_historico_caixa(self):
+        self.caixas = historico_caixa(self.combo_loja_caixa.currentData())
+        self._atualizar_caixa()

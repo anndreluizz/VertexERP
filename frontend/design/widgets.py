@@ -1,5 +1,5 @@
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, QVariantAnimation
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
@@ -294,6 +294,14 @@ class _BotaoAnimado(QPushButton):
             self._animar_para(self._cor_normal)
         super().leaveEvent(event)
 
+    def focusInEvent(self, event):
+        self.update()
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event):
+        self.update()
+        super().focusOutEvent(event)
+
     def _animar_para(self, cor_destino):
         self._anim.stop()
         self._anim.setStartValue(self._cor_atual)
@@ -363,6 +371,26 @@ class _BotaoAnimado(QPushButton):
             Qt.AlignVCenter | Qt.AlignLeft,
             self.text(),
         )
+
+        # anel de foco por teclado -- paintEvent e' totalmente custom
+        # (sem chamar super().paintEvent), entao o anel padrao do Qt
+        # nunca aparecia sozinho; sem isso, navegar por Tab deixava
+        # invisivel qual botao estava selecionado antes de apertar
+        # Enter/Espaco. Desenhado por dentro da borda (nao por fora) pra
+        # nao precisar de espaco extra no layout.
+        if self.hasFocus() and self.isEnabled():
+            anel = QPainterPath()
+            anel.addRoundedRect(
+                rect.adjusted(3, 3, -3, -3),
+                max(tokens.RADIUS_SM - 3, 2),
+                max(tokens.RADIUS_SM - 3, 2),
+            )
+            cor_anel = self._cor_atual if self._contorno else QColor(tokens.TEXTO_CLARO)
+            caneta_foco = QPen(cor_anel)
+            caneta_foco.setWidthF(2)
+            painter.setPen(caneta_foco)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawPath(anel)
 
         painter.end()
 
@@ -574,6 +602,10 @@ class CabecalhoDialogo(QFrame):
             bt_fechar.setCursor(Qt.PointingHandCursor)
             bt_fechar.setAutoDefault(False)
             bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=15))
+            # so' icone, sem texto -- sem nome, leitor de tela (Narrator/
+            # NVDA) nao tem o que anunciar pra esse botao
+            bt_fechar.setToolTip("Fechar")
+            bt_fechar.setAccessibleName("Fechar")
             bt_fechar.setStyleSheet(f"""
                 QPushButton {{ background:transparent; border:none; border-radius:8px; }}
                 QPushButton:hover {{ background:{tokens.FUNDO}; }}

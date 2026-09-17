@@ -44,7 +44,15 @@ _CLARO = {
 
     "TEXTO": "#16213B",
     "TEXTO_SECUNDARIO": "#5B6B85",
-    "TEXTO_TERCIARIO": "#8B96AC",
+    # era #8B96AC (~2,98:1 sobre CARD branco -- reprova WCAG AA, que
+    # exige 4,5:1 pra texto normal). Usado em 38 das ~39 telas (legenda
+    # de campo, texto secundario de cards etc.), boa parte em
+    # TAMANHO_XS (11px). FUNDO (#F5F3EF) e' quase tao claro quanto CARD,
+    # entao a cor precisa passar nos dois -- isso deixa esse tom bem
+    # perto de TEXTO_SECUNDARIO (pouco espaco pra um terceiro nivel mais
+    # claro continuar acessivel sobre fundo quase branco); 5,47:1
+    # sobre CARD e 4,94:1 sobre FUNDO, os dois com folga sobre o 4,5:1.
+    "TEXTO_TERCIARIO": "#5C6A82",
     "TEXTO_CLARO": "#FFFFFF",
     "TEXTO_SIDEBAR": "#C7D2E3",
     "TEXTO_SIDEBAR_APAGADO": "#7C89A3",
@@ -91,7 +99,9 @@ _ESCURO = {
 
     "TEXTO": "#ECE7DC",
     "TEXTO_SECUNDARIO": "#9AA3B0",
-    "TEXTO_TERCIARIO": "#6B7280",
+    # mesmo motivo do tema claro: era #6B7280, ~3,34:1 sobre CARD
+    # escuro (#182130), tambem reprova AA -- este tom da ~4,70:1.
+    "TEXTO_TERCIARIO": "#818B9D",
     "TEXTO_CLARO": "#FFFFFF",
     "TEXTO_SIDEBAR": "#B7C2D6",
     "TEXTO_SIDEBAR_APAGADO": "#71809C",

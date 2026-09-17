@@ -53,10 +53,11 @@ def criar_movimento(
 def listar_movimentos(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    movimentos = MovimentoCaixaService.listar(db, skip, limit)
+    movimentos = MovimentoCaixaService.listar(db, skip, limit, loja_id)
 
     return [
         MovimentoCaixaResponse.from_orm(m)

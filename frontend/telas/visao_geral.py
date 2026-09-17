@@ -22,15 +22,19 @@ from services.produto_service import listar_produtos
 from services.conta_pagar_service import listar_contas_pagar
 from services.caixa_service import listar_movimentacoes
 from services.worker import rodar_em_thread
+from services import preferencias_service
 
 
 def _buscar_dados_visao_geral():
-    """Roda na worker thread -- as 4 chamadas que carregar() precisa."""
+    """Roda na worker thread -- as 4 chamadas que carregar() precisa.
+    loja_id do terminal (nao None) pra nao misturar o resumo com a
+    outra loja -- Visão Geral é um panorama desta loja, nao da rede."""
+    loja_id = preferencias_service.carregar_loja_id()
     return (
-        listar_vendas(),
+        listar_vendas(loja_id),
         listar_produtos(),
-        listar_contas_pagar(),
-        listar_movimentacoes(),
+        listar_contas_pagar(loja_id),
+        listar_movimentacoes(loja_id),
     )
 
 from telas.relatorios import (

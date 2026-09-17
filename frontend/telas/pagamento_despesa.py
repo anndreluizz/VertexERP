@@ -301,6 +301,11 @@ class PagamentoDespesaDialog(QDialog):
                 }}
             """)
 
+    # mesmo motivo/limite de cadastro_despesa.py::escolher_documento --
+    # sem isso, uma foto de celular sem compressao pode derrubar o
+    # backend numa maquina de loja com pouca memoria
+    _TAMANHO_MAX_COMPROVANTE = 8 * 1024 * 1024
+
     def escolher_comprovante(self):
 
         caminho, _ = QFileDialog.getOpenFileName(
@@ -312,7 +317,17 @@ class PagamentoDespesaDialog(QDialog):
             return
 
         with open(caminho, "rb") as arquivo:
-            self.comprovante_bytes = arquivo.read()
+            conteudo = arquivo.read()
+
+        if len(conteudo) > self._TAMANHO_MAX_COMPROVANTE:
+            QMessageBox.warning(
+                self, "Arquivo muito grande",
+                "Esse arquivo passa de 8 MB. Anexe um PDF ou uma foto "
+                "mais leve (tire com menos resolução ou comprima antes).",
+            )
+            return
+
+        self.comprovante_bytes = conteudo
 
         nome_arquivo = caminho.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
         self.comprovante_nome_arquivo = nome_arquivo

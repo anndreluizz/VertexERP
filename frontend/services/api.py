@@ -403,7 +403,7 @@ def delete(endpoint: str):
 
 def dashboard():
 
-    response = get("/dashboard")
+    response = get(endpoint_com_loja("/dashboard"))
 
     if response.status_code == 200:
         return response.json()

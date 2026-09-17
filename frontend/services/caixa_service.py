@@ -69,20 +69,23 @@ def historico_caixa(loja_id=None):
 _TAMANHO_PAGINA = 500
 
 
-def listar_movimentacoes():
+def listar_movimentacoes(loja_id=None):
     """Busca TODAS as movimentações de caixa, varrendo as páginas por
     baixo dos panos -- essa lista alimenta cálculos agregados (Visão
     Geral), então não pode truncar silenciosamente no limite padrão
-    da API."""
+    da API. loja_id=None traz de todas as lojas; quem quer só a do
+    terminal (Visão Geral) passa explicitamente."""
 
     movimentos = []
     skip = 0
 
     while True:
 
-        response = get(
-            f"/movimentos-caixa/?skip={skip}&limit={_TAMANHO_PAGINA}"
-        )
+        endpoint = f"/movimentos-caixa/?skip={skip}&limit={_TAMANHO_PAGINA}"
+        if loja_id is not None:
+            endpoint += f"&loja_id={loja_id}"
+
+        response = get(endpoint)
 
         if response.status_code != 200:
             break

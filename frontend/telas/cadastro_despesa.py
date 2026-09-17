@@ -414,6 +414,12 @@ class CadastroDespesaDialog(QDialog):
 
         self._carregar_categorias()
 
+    # limite pra nao mandar um JSON gigante num POST so' -- um boleto/
+    # nota legivel nunca passa disso; sem esse limite, uma foto de
+    # celular (5-15MB, ~33% maior em base64) pode derrubar o backend
+    # por falta de memoria numa maquina de loja mais simples
+    _TAMANHO_MAX_DOCUMENTO = 8 * 1024 * 1024
+
     def escolher_documento(self):
 
         caminho, _ = QFileDialog.getOpenFileName(
@@ -425,7 +431,18 @@ class CadastroDespesaDialog(QDialog):
             return
 
         with open(caminho, "rb") as arquivo:
-            self.documento_bytes = arquivo.read()
+            conteudo = arquivo.read()
+
+        if len(conteudo) > self._TAMANHO_MAX_DOCUMENTO:
+            QMessageBox.warning(
+                self, "Arquivo muito grande",
+                "Esse arquivo passa de 8 MB. Anexe um PDF do boleto "
+                "ou uma foto mais leve (tire com menos resolução ou "
+                "comprima antes).",
+            )
+            return
+
+        self.documento_bytes = conteudo
 
         nome_arquivo = caminho.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
         self.documento_nome_arquivo = nome_arquivo

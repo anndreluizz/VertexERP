@@ -14,16 +14,22 @@ from app.repositories.conta_receber_repository import (
 class FinanceiroService:
 
     @staticmethod
-    def fluxo_caixa(db: Session, dias: int = 30):
+    def fluxo_caixa(db: Session, dias: int = 30, loja_id: int | None = None):
 
-        # soma TODOS os caixas abertos no momento -- fluxo de caixa e
-        # uma visao financeira geral da loja, nao de um operador so
-        # (mesmo criterio do KPI 'saldo_caixa' do dashboard).
-        saldo_atual = (
-            db.query(func.coalesce(func.sum(Caixa.saldo_final), 0))
-            .filter(Caixa.status == "ABERTO")
-            .scalar()
-        ) or Decimal("0")
+        # soma os caixas abertos no momento -- fluxo de caixa e uma
+        # visao financeira geral da loja, nao de um operador so (mesmo
+        # criterio do KPI 'saldo_caixa' do dashboard, inclusive o
+        # filtro por loja_id).
+        query_saldo_atual = db.query(
+            func.coalesce(func.sum(Caixa.saldo_final), 0)
+        ).filter(Caixa.status == "ABERTO")
+
+        if loja_id is not None:
+            query_saldo_atual = query_saldo_atual.filter(
+                Caixa.loja_id == loja_id
+            )
+
+        saldo_atual = query_saldo_atual.scalar() or Decimal("0")
 
         limite = datetime.utcnow() + timedelta(days=dias)
 

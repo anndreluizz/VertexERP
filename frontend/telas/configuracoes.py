@@ -1,6 +1,6 @@
 import base64
 
-from PySide6.QtCore import Qt, QSize, Signal
+from PySide6.QtCore import Qt, QSize, Signal, QBuffer, QIODevice
 from PySide6.QtGui import QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QWidget,
@@ -1019,6 +1019,28 @@ class Configuracoes(QWidget):
             font-size:{tokens.TAMANHO_XS}px;
         """)
 
+    def _comprimir_imagem(self, caminho, lado_maximo=640, qualidade=82):
+        """Mesmo motivo de cadastro_produto.py::_comprimir_imagem --
+        uma foto de celular sem redimensionar pode passar de varios MB
+        e ia inteira pro banco/pro corpo do request."""
+
+        pixmap = QPixmap(caminho)
+
+        if pixmap.isNull():
+            return None
+
+        if pixmap.width() > lado_maximo or pixmap.height() > lado_maximo:
+            pixmap = pixmap.scaled(
+                lado_maximo, lado_maximo,
+                Qt.KeepAspectRatio, Qt.SmoothTransformation,
+            )
+
+        buffer = QBuffer()
+        buffer.open(QIODevice.WriteOnly)
+        pixmap.save(buffer, "JPEG", qualidade)
+
+        return bytes(buffer.data())
+
     def escolher_logo(self):
 
         caminho, _ = QFileDialog.getOpenFileName(
@@ -1028,8 +1050,16 @@ class Configuracoes(QWidget):
         if not caminho:
             return
 
-        with open(caminho, "rb") as arquivo:
-            self.logo_bytes = arquivo.read()
+        imagem_comprimida = self._comprimir_imagem(caminho)
+
+        if imagem_comprimida is None:
+            QMessageBox.warning(
+                self, "Imagem inválida",
+                "Não foi possível abrir essa imagem.",
+            )
+            return
+
+        self.logo_bytes = imagem_comprimida
 
         pixmap = QPixmap()
         pixmap.loadFromData(self.logo_bytes)

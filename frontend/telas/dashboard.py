@@ -101,13 +101,15 @@ def _buscar_dados_dashboard():
     silenciosos ja existentes (contas_pagar/clientes/movimentos_fiado
     nao devem travar o painel inteiro se falharem sozinhos)."""
 
+    loja_id = preferencias_service.carregar_loja_id()
+
     usuario = me()
     dados = dashboard()
-    vendas = listar_vendas()
+    vendas = listar_vendas(loja_id)
     produtos = listar_produtos()
 
     try:
-        contas_pagar = listar_contas_pagar()
+        contas_pagar = listar_contas_pagar(loja_id)
     except Exception:
         contas_pagar = []
 

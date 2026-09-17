@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 
+from app.models.caixa import Caixa
 from app.models.movimento_caixa import MovimentoCaixa
 
 
@@ -13,9 +14,24 @@ class MovimentoCaixaRepository:
         return movimento
 
     @staticmethod
-    def listar(db: Session, skip: int = 0, limit: int = 100):
+    def listar(
+        db: Session,
+        skip: int = 0,
+        limit: int = 100,
+        loja_id: int | None = None,
+    ):
+        # MovimentoCaixa nao tem loja_id proprio -- so' da pra saber a
+        # loja de um movimento pela loja do caixa que o gerou, entao o
+        # filtro precisa de join com Caixa (ver Caixa.loja_id)
+        query = db.query(MovimentoCaixa)
+
+        if loja_id is not None:
+            query = query.join(
+                Caixa, MovimentoCaixa.caixa_id == Caixa.id
+            ).filter(Caixa.loja_id == loja_id)
+
         return (
-            db.query(MovimentoCaixa)
+            query
             .order_by(MovimentoCaixa.data.desc())
             .offset(skip)
             .limit(limit)

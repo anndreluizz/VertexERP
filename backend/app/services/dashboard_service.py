@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import func
+from sqlalchemy import func, or_, true
 from sqlalchemy.orm import Session
 
 from app.models.caixa import Caixa
@@ -74,7 +74,7 @@ class DashboardService:
         return serie
 
     @staticmethod
-    def resumo(db: Session):
+    def resumo(db: Session, loja_id: int | None = None):
 
         # UTC, nao date.today() (hora local) -- Venda/ContaPagar gravam
         # a data com datetime.utcnow(), entao "hoje" precisa estar no
@@ -82,11 +82,29 @@ class DashboardService:
         # (horario de Brasilia, quando UTC ja virou o dia seguinte).
         hoje = datetime.utcnow().date()
 
+        # KPIs cruzam Venda/ContaPagar/Produto, que ganharam loja_id na
+        # feature multi-loja -- sem esse filtro, cada numero do painel
+        # somava as duas lojas juntas (mesmo bug do 'saldo_caixa').
+        # Cliente fica de fora de propósito: Cliente.loja_id so marca
+        # origem, nao restringe (cliente e compartilhado entre lojas).
+        filtro_loja_venda = (
+            Venda.loja_id == loja_id if loja_id is not None else true()
+        )
+        filtro_loja_conta_pagar = (
+            ContaPagar.loja_id == loja_id if loja_id is not None else true()
+        )
+        filtro_loja_produto = (
+            or_(Produto.loja_id.is_(None), Produto.loja_id == loja_id)
+            if loja_id is not None
+            else true()
+        )
+
         vendas_hoje = (
             db.query(func.coalesce(func.sum(Venda.valor_total), 0))
             .filter(
                 func.date(Venda.data) == hoje,
                 Venda.status == StatusVenda.FINALIZADA.value,
+                filtro_loja_venda,
             )
             .scalar()
         )
@@ -96,6 +114,7 @@ class DashboardService:
             .filter(
                 func.date(Venda.data) == hoje,
                 Venda.status == StatusVenda.FINALIZADA.value,
+                filtro_loja_venda,
             )
             .count()
         )
@@ -107,6 +126,7 @@ class DashboardService:
             .filter(
                 func.date(Venda.data) == ontem,
                 Venda.status == StatusVenda.FINALIZADA.value,
+                filtro_loja_venda,
             )
             .scalar()
         )
@@ -128,6 +148,7 @@ class DashboardService:
                 func.date(Venda.data) >= inicio_7_dias,
                 func.date(Venda.data) <= hoje,
                 Venda.status == StatusVenda.FINALIZADA.value,
+                filtro_loja_venda,
             )
             .group_by("dia")
             .all()
@@ -158,6 +179,7 @@ class DashboardService:
                 func.extract("year", Venda.data) == hoje.year,
                 func.extract("month", Venda.data) == hoje.month,
                 Venda.status == StatusVenda.FINALIZADA.value,
+                filtro_loja_venda,
             )
             .scalar()
         )
@@ -168,14 +190,21 @@ class DashboardService:
             .scalar()
         )
 
-        # soma o saldo de TODOS os caixas abertos no momento — desde
-        # que caixa passou a ser por usuario (nao mais um unico por
-        # loja), pode haver varias sessoes abertas ao mesmo tempo
-        saldo_caixa = (
-            db.query(func.coalesce(func.sum(Caixa.saldo_final), 0))
-            .filter(Caixa.status == "ABERTO")
-            .scalar()
-        )
+        # soma o saldo dos caixas abertos no momento -- desde que caixa
+        # passou a ser por usuario (nao mais um unico por loja), pode
+        # haver varias sessoes abertas ao mesmo tempo; e desde que
+        # caixa ganhou loja_id, precisa filtrar pela loja do terminal
+        # tambem, senao o KPI soma caixa de outra loja junto
+        query_saldo_caixa = db.query(
+            func.coalesce(func.sum(Caixa.saldo_final), 0)
+        ).filter(Caixa.status == "ABERTO")
+
+        if loja_id is not None:
+            query_saldo_caixa = query_saldo_caixa.filter(
+                Caixa.loja_id == loja_id
+            )
+
+        saldo_caixa = query_saldo_caixa.scalar()
 
         # ContaReceber e uma tabela legada que nao e mais alimentada
         # desde que a venda fiado passou a gerar MovimentoFiado direto
@@ -186,7 +215,8 @@ class DashboardService:
             db.query(func.coalesce(func.sum(ContaPagar.valor), 0))
             .filter(
                 ContaPagar.status ==
-                StatusContaPagar.PENDENTE.value
+                StatusContaPagar.PENDENTE.value,
+                filtro_loja_conta_pagar,
             )
             .scalar()
         )
@@ -195,12 +225,13 @@ class DashboardService:
 
         fornecedores = db.query(Fornecedor).count()
 
-        produtos = db.query(Produto).count()
+        produtos = db.query(Produto).filter(filtro_loja_produto).count()
 
         estoque_baixo = (
             db.query(Produto)
             .filter(
-                Produto.estoque <= Produto.estoque_minimo
+                Produto.estoque <= Produto.estoque_minimo,
+                filtro_loja_produto,
             )
             .count()
         )
@@ -215,6 +246,7 @@ class DashboardService:
             .filter(
                 ContaPagar.status == StatusContaPagar.PENDENTE.value,
                 func.date(ContaPagar.data_vencimento) < hoje,
+                filtro_loja_conta_pagar,
             )
             .one()
         )
@@ -229,6 +261,7 @@ class DashboardService:
             .filter(
                 ContaPagar.status == StatusContaPagar.PENDENTE.value,
                 func.date(ContaPagar.data_vencimento) == hoje,
+                filtro_loja_conta_pagar,
             )
             .one()
         )
@@ -243,6 +276,7 @@ class DashboardService:
             .filter(
                 ContaPagar.status == StatusContaPagar.PAGO.value,
                 func.date(ContaPagar.data_pagamento) == hoje,
+                filtro_loja_conta_pagar,
             )
             .one()
         )
@@ -267,6 +301,7 @@ class DashboardService:
                 ContaPagar.status == StatusContaPagar.PAGO.value,
                 func.extract("year", ContaPagar.data_pagamento) == hoje.year,
                 func.extract("month", ContaPagar.data_pagamento) == hoje.month,
+                filtro_loja_conta_pagar,
             )
             .scalar()
         )
@@ -275,6 +310,7 @@ class DashboardService:
             db.query(func.coalesce(func.sum(ContaPagar.valor), 0))
             .filter(
                 ContaPagar.status == StatusContaPagar.PENDENTE.value,
+                filtro_loja_conta_pagar,
                 func.extract("year", ContaPagar.data_vencimento) == hoje.year,
                 func.extract("month", ContaPagar.data_vencimento) == hoje.month,
             )
@@ -285,14 +321,20 @@ class DashboardService:
             db,
             Venda.data,
             Venda.valor_total,
-            filtros=[Venda.status == StatusVenda.FINALIZADA.value],
+            filtros=[
+                Venda.status == StatusVenda.FINALIZADA.value,
+                filtro_loja_venda,
+            ],
         )
 
         serie_pagamentos_mensal = DashboardService._serie_mensal(
             db,
             ContaPagar.data_pagamento,
             ContaPagar.valor,
-            filtros=[ContaPagar.status == StatusContaPagar.PAGO.value],
+            filtros=[
+                ContaPagar.status == StatusContaPagar.PAGO.value,
+                filtro_loja_conta_pagar,
+            ],
         )
 
         return {

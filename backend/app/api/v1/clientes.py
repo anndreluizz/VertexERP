@@ -16,7 +16,7 @@ from app.services.cliente_service import ClienteService
 from app.services.cliente_observacao_service import ClienteObservacaoService
 from app.services.aprovacao_service import AprovacaoService
 from app.services.whatsapp_service import WhatsappService
-from app.auth.dependencies import get_current_user, get_current_admin
+from app.auth.dependencies import get_current_user, get_current_admin, resolver_loja_id
 
 router = APIRouter(
     prefix="/clientes",
@@ -35,11 +35,14 @@ def get_db():
 @router.post("/", response_model=ClienteResponse)
 def criar_cliente(
     dados: ClienteCreate,
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user)
 ):
     try:
-        return ClienteService.criar(db, dados)
+        return ClienteService.criar(
+            db, dados, resolver_loja_id(db, usuario, loja_id)
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -48,10 +51,11 @@ def criar_cliente(
 def listar_clientes(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user)
 ):
-    return ClienteService.listar(db, skip, limit)
+    return ClienteService.listar(db, skip, limit, loja_id)
 
 
 @router.get("/{cliente_id}", response_model=ClienteResponse)

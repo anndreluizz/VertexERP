@@ -6,6 +6,7 @@ from telas.cadastro_cliente import CadastroClienteDialog
 from telas.ficha_cliente import FichaClienteDialog
 
 from services.cliente_service import listar_clientes, reativar_cliente
+from services.loja_service import listar_lojas
 from services.movimento_fiado_service import listar_movimentos
 from services.venda_service import listar_vendas
 from services import cliente_analise
@@ -451,6 +452,22 @@ class Clientes(QWidget):
 
         barra_ordenacao.addWidget(self.combo_ordenacao)
 
+        barra_ordenacao.addSpacing(20)
+
+        self.combo_loja_filtro = QComboBox()
+        self.combo_loja_filtro.setMinimumHeight(34)
+        self.combo_loja_filtro.setCursor(Qt.PointingHandCursor)
+        self.combo_loja_filtro.setStyleSheet(f"""
+            QComboBox {{
+                border:1px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
+                padding:0 12px; background:{tokens.CARD}; color:{tokens.TEXTO};
+            }}
+        """)
+        self._carregar_combo_lojas()
+        self.combo_loja_filtro.currentIndexChanged.connect(self.carregar)
+
+        barra_ordenacao.addWidget(self.combo_loja_filtro)
+
         barra_ordenacao.addStretch()
 
         self.lbl_contagem = QLabel("")
@@ -510,9 +527,21 @@ class Clientes(QWidget):
     # CARREGAR CLIENTES
     # ==========================================
 
+    def _carregar_combo_lojas(self):
+
+        self.combo_loja_filtro.blockSignals(True)
+        self.combo_loja_filtro.clear()
+        self.combo_loja_filtro.addItem("Todas as lojas", None)
+
+        for loja in listar_lojas():
+            self.combo_loja_filtro.addItem(loja["nome"], loja["id"])
+
+        self.combo_loja_filtro.blockSignals(False)
+
     def carregar(self):
 
-        self.clientes = listar_clientes()
+        loja_id = self.combo_loja_filtro.currentData()
+        self.clientes = listar_clientes(loja_id)
 
         # todos os movimentos de fiado numa unica chamada -- agrupa
         # por cliente aqui do lado de fora, em vez de bater 1 endpoint

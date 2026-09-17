@@ -5,30 +5,66 @@ from sqlalchemy.orm import Session
 
 from app.models.produto import Produto
 from app.repositories.produto_repository import ProdutoRepository
+from app.repositories.estoque_loja_repository import EstoqueLojaRepository
 from app.schemas.produto import ProdutoCreate, ProdutoUpdate
 
 
 class ProdutoService:
 
     @staticmethod
-    def listar(db: Session, skip: int = 0, limit: int = 100):
-        return ProdutoRepository.listar(db, skip, limit)
+    def listar(db: Session, skip: int = 0, limit: int = 100, loja_id: int | None = None):
+        produtos = ProdutoRepository.listar(db, skip, limit, loja_id)
+
+        if loja_id is not None:
+            mapa = EstoqueLojaRepository.quantidades_por_loja(
+                db, [p.id for p in produtos], loja_id
+            )
+            for produto in produtos:
+                produto.estoque = mapa.get(produto.id, 0)
+
+        return produtos
 
     @staticmethod
-    def buscar(db: Session, produto_id: int):
-        return ProdutoRepository.buscar_por_id(db, produto_id)
+    def buscar(db: Session, produto_id: int, loja_id: int | None = None):
+        produto = ProdutoRepository.buscar_por_id(db, produto_id)
+
+        if produto is None:
+            return None
+
+        # produto exclusivo de outra loja (ver Produto.loja_id) nao
+        # deve aparecer pra quem esta noutro terminal -- trata como nao
+        # encontrado, mesmo padrao de listar()
+        if (
+            loja_id is not None
+            and produto.loja_id is not None
+            and produto.loja_id != loja_id
+        ):
+            return None
+
+        if loja_id is not None:
+            produto.estoque = EstoqueLojaRepository.quantidades_por_loja(
+                db, [produto.id], loja_id
+            ).get(produto.id, 0)
+
+        return produto
 
     @staticmethod
-    def criar(db: Session, dados: ProdutoCreate):
+    def criar(db: Session, dados: ProdutoCreate, loja_id: int | None = None):
 
         condicoes = [Produto.codigo == dados.codigo]
 
         if dados.codigo_barras:
             condicoes.append(Produto.codigo_barras == dados.codigo_barras)
 
+        # duplicidade so' conta dentro do mesmo "espaco" do produto novo
+        # -- global (loja_id None) so bate com outro produto global, e
+        # exclusivo de uma loja so bate com outro da MESMA loja (mesmo
+        # escopo dos indices parciais uq_produto_codigo_(barras_)*, ver
+        # Produto.__table_args__) -- filial e matriz podem usar o mesmo
+        # codigo pra produtos diferentes.
         existente = (
             db.query(Produto)
-            .filter(or_(*condicoes))
+            .filter(Produto.loja_id == loja_id, or_(*condicoes))
             .first()
         )
 
@@ -45,24 +81,63 @@ class ProdutoService:
 
         campos = dados.dict(exclude={"foto_base64"})
         produto = Produto(**campos)
+        produto.loja_id = loja_id
 
         if dados.foto_base64:
             produto.foto = base64.b64decode(dados.foto_base64)
 
-        return ProdutoRepository.criar(db, produto)
+        produto = ProdutoRepository.criar(db, produto)
+
+        # semeia o estoque inicial na loja de quem cadastrou -- sem
+        # isso, o proximo ajuste/venda feito em QUALQUER loja recalcula
+        # produto.estoque como soma das linhas de EstoqueLoja que
+        # existirem, e essa loja nova ainda nao tem nenhuma: o estoque
+        # inicial digitado no cadastro sumiria (viraria 0) assim que
+        # outra loja mexesse no produto primeiro.
+        if loja_id is not None and produto.estoque:
+            registro = EstoqueLojaRepository.obter_ou_criar(
+                db, produto.id, loja_id
+            )
+            registro.quantidade = produto.estoque
+            db.add(registro)
+            db.commit()
+
+        return produto
 
     @staticmethod
-    def atualizar(db: Session, produto_id: int, dados: ProdutoUpdate):
+    def atualizar(
+        db: Session,
+        produto_id: int,
+        dados: ProdutoUpdate,
+        loja_id: int | None = None,
+    ):
         produto = ProdutoRepository.buscar_por_id(db, produto_id)
 
         if not produto:
+            return None
+
+        # mesmo guard de visibilidade do buscar() -- terminal de uma
+        # loja nao edita produto exclusivo de outra so' por adivinhar o
+        # id
+        if (
+            loja_id is not None
+            and produto.loja_id is not None
+            and produto.loja_id != loja_id
+        ):
             return None
 
         # exclude_unset: sem isso, todo campo que o formulario nao manda
         # (ex.: "ativo", que o dialogo de edicao nunca envia) volta pro
         # valor padrao do schema em vez de manter o que ja estava salvo
         # -- editar um produto desativado reativava ele sem querer.
+        #
+        # "estoque" sai do lote generico e vira um AJUSTE da loja de
+        # quem editou (mesma logica de MovimentoEstoqueService) -- sem
+        # isso, editar o produto sobrescrevia direto o agregado entre
+        # lojas com o que a tela mostrava (que, pelo mesmo motivo, podia
+        # nem ser o estoque real da loja de quem estava editando).
         campos = dados.dict(exclude_unset=True, exclude={"foto_base64"})
+        novo_estoque = campos.pop("estoque", None)
 
         # mesma checagem que ja existe em criar() -- codigo_barras e'
         # editavel na tela (o codigo em si nao, mas a API aceita
@@ -80,6 +155,7 @@ class ProdutoService:
                 db.query(Produto)
                 .filter(
                     getattr(Produto, campo) == valor,
+                    Produto.loja_id == produto.loja_id,
                     Produto.id != produto_id,
                 )
                 .first()
@@ -97,6 +173,17 @@ class ProdutoService:
 
         for campo, valor in campos.items():
             setattr(produto, campo, valor)
+
+        if novo_estoque is not None:
+            if loja_id is not None:
+                atual = EstoqueLojaRepository.obter_ou_criar(
+                    db, produto.id, loja_id
+                ).quantidade
+                EstoqueLojaRepository.ajustar(
+                    db, produto, loja_id, novo_estoque - atual
+                )
+            else:
+                produto.estoque = novo_estoque
 
         if dados.foto_base64:
             produto.foto = base64.b64decode(dados.foto_base64)

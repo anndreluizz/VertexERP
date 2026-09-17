@@ -12,7 +12,7 @@ from app.repositories.movimento_fiado_repository import MovimentoFiadoRepository
 class ClienteService:
 
     @staticmethod
-    def criar(db: Session, dados: ClienteCreate):
+    def criar(db: Session, dados: ClienteCreate, loja_id: int | None = None):
 
         if dados.cpf_cnpj:
 
@@ -34,6 +34,7 @@ class ClienteService:
             estado=dados.estado,
             data_nascimento=dados.data_nascimento,
             limite_credito=dados.limite_credito,
+            loja_id=loja_id,
             ativo=True
 
         )
@@ -44,8 +45,8 @@ class ClienteService:
         return ClienteRepository.criar(db, novo_cliente)
 
     @staticmethod
-    def listar(db: Session, skip: int = 0, limit: int = 100):
-        return ClienteRepository.listar(db, skip, limit)
+    def listar(db: Session, skip: int = 0, limit: int = 100, loja_id: int | None = None):
+        return ClienteRepository.listar(db, skip, limit, loja_id)
 
     @staticmethod
     def buscar_por_id(db: Session, cliente_id: int):

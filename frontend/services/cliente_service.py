@@ -1,4 +1,4 @@
-from services.api import get, post, put, delete
+from services.api import get, post, put, delete, endpoint_com_loja
 
 # a API nunca devolve mais que isso por chamada (ver clientes.py no
 # backend) -- listar_clientes() varre todas as paginas por baixo dos
@@ -7,17 +7,25 @@ from services.api import get, post, put, delete
 _TAMANHO_PAGINA = 500
 
 
-def listar_clientes():
+def listar_clientes(loja_id=None):
 
+    # loja_id aqui e' o filtro escolhido na tela (combo "Todas as
+    # lojas"/uma loja especifica), diferente do loja_id fixo do
+    # terminal usado em endpoint_com_loja() pra escrita -- por isso
+    # nao usa esse helper aqui (mesmo padrao de listar_contas_pagar)
     clientes = []
     pagina = 0
 
     while True:
 
-        response = get(
+        endpoint = (
             f"/clientes/?skip={pagina * _TAMANHO_PAGINA}"
             f"&limit={_TAMANHO_PAGINA}"
         )
+        if loja_id is not None:
+            endpoint += f"&loja_id={loja_id}"
+
+        response = get(endpoint)
 
         if response.status_code != 200:
             break
@@ -35,7 +43,7 @@ def listar_clientes():
 
 def cadastrar_cliente(dados):
 
-    return post("/clientes/", dados)
+    return post(endpoint_com_loja("/clientes/"), dados)
 
 
 def atualizar_cliente(cliente_id, dados):

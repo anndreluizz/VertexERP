@@ -3,6 +3,7 @@ import sys
 from urllib.parse import urlparse
 
 import requests
+from requests.adapters import HTTPAdapter
 
 from services import tls_confianca, preferencias_service
 
@@ -17,6 +18,23 @@ _PORTA_PADRAO = "58734" if getattr(sys, "frozen", False) else "8000"
 URL = f"https://127.0.0.1:{os.getenv('VERTEXERP_PORT', _PORTA_PADRAO)}"
 
 TOKEN = None
+
+
+class _AdaptadorSemChecagemDeHostname(HTTPAdapter):
+    """O pin do TOFU (ver tls_confianca.py) já garante que o
+    certificado é byte-a-byte o mesmo que foi confiado antes -- exigir
+    que o hostname/IP bata também é redundante aqui, e quebra na
+    prática: o certificado autoassinado só cobre os IPs que a máquina
+    tinha na hora de ser gerado (ver backend/app/core/tls.py), o que
+    nunca inclui um IP de VPN tipo Tailscale."""
+
+    def cert_verify(self, conn, url, verify, cert):
+        super().cert_verify(conn, url, verify, cert)
+        conn.assert_hostname = False
+
+
+_SESSAO = requests.Session()
+_SESSAO.mount("https://", _AdaptadorSemChecagemDeHostname())
 
 
 class CertificadoServidorMudou(Exception):
@@ -95,9 +113,10 @@ def _requisitar(func, *args, **kwargs):
     meio pra desconfiar de verdade (ver tls_confianca.eh_endereco_local)."""
 
     kwargs.setdefault("verify", _verify_ssl())
+    metodo = getattr(_SESSAO, func.__name__)
 
     try:
-        return func(*args, **kwargs)
+        return metodo(*args, **kwargs)
     except requests.exceptions.SSLError:
 
         partes = urlparse(URL)
@@ -295,10 +314,12 @@ def cadastrar_usuario(nome, email, senha):
 def endpoint_com_loja(endpoint: str) -> str:
     """Anexa ?loja_id=X (ou &loja_id=X se o endpoint ja tiver
     querystring) usando a loja fixa configurada pra este terminal --
-    usado nos poucos endpoints de escrita que precisam saber em qual
-    loja registrar (venda, caixa, estoque, contas a pagar). Sem
-    configuracao nenhuma (carregar_loja_id() == None), devolve o
-    endpoint como veio e o backend cai no proprio fallback (ver
+    usado nos endpoints que precisam saber em qual loja registrar uma
+    escrita (venda, caixa, estoque, contas a pagar, cadastro/edicao de
+    produto) ou filtrar uma leitura pelo estoque fisico dessa loja
+    (listagem/busca de produto, PDV). Sem configuracao nenhuma
+    (carregar_loja_id() == None), devolve o endpoint como veio e o
+    backend cai no proprio fallback (ver
     app/auth/dependencies.resolver_loja_id)."""
 
     loja_id = preferencias_service.carregar_loja_id()

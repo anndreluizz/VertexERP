@@ -36,6 +36,32 @@ class EstoqueLojaRepository:
         return registro
 
     @staticmethod
+    def quantidades_por_loja(
+        db: Session, produto_ids: list[int], loja_id: int
+    ) -> dict[int, int]:
+        """Quantidade fisica de cada produto NESSA loja especifica --
+        usado pra sobrescrever Produto.estoque (soma agregada entre
+        lojas) quando quem pediu a lista/busca de produtos informou
+        loja_id, ex.: tela de Produtos e PDV rodando num terminal com
+        loja fixa configurada (ver resolver_loja_id/endpoint_com_loja).
+        Produto sem linha em EstoqueLoja ainda (nunca teve movimento
+        nessa loja) conta como 0, nao como o agregado."""
+
+        if not produto_ids:
+            return {}
+
+        linhas = (
+            db.query(EstoqueLoja.produto_id, EstoqueLoja.quantidade)
+            .filter(
+                EstoqueLoja.produto_id.in_(produto_ids),
+                EstoqueLoja.loja_id == loja_id,
+            )
+            .all()
+        )
+
+        return {produto_id: quantidade for produto_id, quantidade in linhas}
+
+    @staticmethod
     def ajustar(db: Session, produto: Produto, loja_id: int | None, delta: int):
         """Aplica delta (positivo ou negativo) na quantidade da loja e
         recalcula produto.estoque como a soma entre todas as lojas --

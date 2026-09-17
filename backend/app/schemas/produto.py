@@ -29,6 +29,7 @@ class ProdutoUpdate(ProdutoBase):
 
 class ProdutoResponse(BaseModel):
     id: int
+    loja_id: int | None = None
     codigo: str
     nome: str
     descricao: str | None = None

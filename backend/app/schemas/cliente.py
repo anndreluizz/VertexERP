@@ -38,6 +38,7 @@ class ClienteUpdate(BaseModel):
 
 class ClienteResponse(BaseModel):
     id: int
+    loja_id: int | None = None
     nome: str
     cpf_cnpj: str | None
     email: EmailStr | None

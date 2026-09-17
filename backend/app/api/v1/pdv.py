@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, resolver_loja_id
 from app.database.session import SessionLocal
 
 from app.schemas.pdv import ProdutoPDV
@@ -28,6 +28,7 @@ def get_db():
 )
 def pesquisar_produtos(
     q: str,
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
@@ -35,6 +36,7 @@ def pesquisar_produtos(
     return PDVService.pesquisar(
         db,
         q,
+        resolver_loja_id(db, usuario, loja_id),
     )
 
 
@@ -44,6 +46,7 @@ def pesquisar_produtos(
 )
 def buscar_produto(
     codigo: str,
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
@@ -51,4 +54,5 @@ def buscar_produto(
     return PDVService.buscar_produto(
         db,
         codigo,
+        resolver_loja_id(db, usuario, loja_id),
     )

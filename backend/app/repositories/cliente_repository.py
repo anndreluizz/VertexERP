@@ -13,9 +13,14 @@ class ClienteRepository:
         return cliente
 
     @staticmethod
-    def listar(db: Session, skip: int = 0, limit: int = 100):
+    def listar(db: Session, skip: int = 0, limit: int = 100, loja_id: int | None = None):
+        query = db.query(Cliente)
+
+        if loja_id is not None:
+            query = query.filter(Cliente.loja_id == loja_id)
+
         return (
-            db.query(Cliente)
+            query
             .order_by(Cliente.id)
             .offset(skip)
             .limit(limit)

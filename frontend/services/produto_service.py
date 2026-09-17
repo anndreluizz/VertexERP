@@ -1,4 +1,4 @@
-from services.api import get, post, put, delete
+from services.api import get, post, put, delete, endpoint_com_loja
 
 # a API nunca devolve mais que isso por chamada (ver produtos.py no
 # backend) -- listar_produtos() varre todas as paginas por baixo dos
@@ -19,8 +19,10 @@ def listar_produtos():
     while True:
 
         response = get(
-            f"/produtos?skip={pagina * _TAMANHO_PAGINA}"
-            f"&limit={_TAMANHO_PAGINA}"
+            endpoint_com_loja(
+                f"/produtos?skip={pagina * _TAMANHO_PAGINA}"
+                f"&limit={_TAMANHO_PAGINA}"
+            )
         )
 
         if response.status_code != 200:
@@ -43,7 +45,7 @@ def listar_produtos():
 
 def buscar_produto(produto_id):
 
-    response = get(f"/produtos/{produto_id}")
+    response = get(endpoint_com_loja(f"/produtos/{produto_id}"))
 
     if response.status_code != 200:
         return None
@@ -58,7 +60,7 @@ def buscar_produto(produto_id):
 def cadastrar_produto(dados):
 
     return post(
-        "/produtos",
+        endpoint_com_loja("/produtos"),
         dados,
     )
 
@@ -73,7 +75,7 @@ def atualizar_produto(
 ):
 
     return put(
-        f"/produtos/{produto_id}",
+        endpoint_com_loja(f"/produtos/{produto_id}"),
         dados,
     )
 

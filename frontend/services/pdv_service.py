@@ -1,12 +1,12 @@
 from urllib.parse import quote
 
-from services.api import get
+from services.api import get, endpoint_com_loja
 
 
 def buscar_produto(codigo: str):
 
     response = get(
-        f"/pdv/produto/{codigo}"
+        endpoint_com_loja(f"/pdv/produto/{codigo}")
     )
 
     if response.status_code == 200:
@@ -18,7 +18,7 @@ def buscar_produto(codigo: str):
 def pesquisar_produtos(termo: str):
 
     response = get(
-        f"/pdv/produtos?q={quote(termo)}"
+        endpoint_com_loja(f"/pdv/produtos?q={quote(termo)}")
     )
 
     if response.status_code == 200:

@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import String, Boolean, DateTime, Date, Numeric, LargeBinary
+from sqlalchemy import String, Boolean, DateTime, Date, ForeignKey, Numeric, LargeBinary
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -11,6 +11,18 @@ class Cliente(Base):
     __tablename__ = "clientes"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+
+    # nullable pelo mesmo motivo das outras entidades com loja_id novo
+    # (ver ContaPagar.loja_id) -- clientes antigos nao tem essa
+    # informacao, e o cliente continua visivel/vendavel em qualquer
+    # loja mesmo com loja_id preenchido (so marca onde foi cadastrado,
+    # nao restringe onde pode comprar -- diferente de Produto.estoque,
+    # que e' de verdade exclusivo por loja).
+    loja_id: Mapped[int | None] = mapped_column(
+        ForeignKey("lojas.id"),
+        index=True,
+        nullable=True,
+    )
 
     nome: Mapped[str] = mapped_column(String(150), nullable=False)
 

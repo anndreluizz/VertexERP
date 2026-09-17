@@ -13,7 +13,7 @@ from services.produto_service import (
     excluir_produto,
     obter_foto_produto,
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 
 from PySide6.QtGui import (
     QShortcut,
@@ -43,6 +43,22 @@ from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
 from utils.formatacao import formatar_moeda
+
+
+class _CardKPIClicavel(CardKPI):
+    """CardKPI que também funciona de atalho de filtro -- clicar nele
+    aplica o filtro de status correspondente, em vez de só mostrar o
+    número (ver Produtos.__init__ pros clicado.connect)."""
+
+    clicado = Signal()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def mousePressEvent(self, event):
+        self.clicado.emit()
+        super().mousePressEvent(event)
 
 
 # rótulo exibido -> chave interna do filtro de status
@@ -193,18 +209,44 @@ class Produtos(QWidget):
         resumo_layout = QGridLayout()
         resumo_layout.setSpacing(14)
 
-        self.card_total = CardKPI("Total de Produtos", "package", tokens.PRIMARIA)
-        self.card_alerta = CardKPI("Estoque em Alerta", "alert-triangle", tokens.ALERTA)
-        self.card_patrimonio = CardKPI("Valor em Estoque", "dollar-sign", tokens.SECUNDARIA)
+        self.card_total = _CardKPIClicavel("Total de Produtos", "package", tokens.PRIMARIA)
+        self.card_itens = _CardKPIClicavel("Itens em Estoque", "package", tokens.PRIMARIA_ESCURA)
+        self.card_alerta = _CardKPIClicavel("Estoque em Alerta", "alert-triangle", tokens.ALERTA)
+        self.card_sem_estoque = _CardKPIClicavel("Sem Estoque", "x", tokens.ERRO)
+        self.card_patrimonio = _CardKPIClicavel("Valor em Estoque", "dollar-sign", tokens.SECUNDARIA)
         self.card_categorias = CardKPI("Categorias Ativas", "filter", tokens.PRIMARIA)
+        self.card_inativos = _CardKPIClicavel("Produtos Inativos", "eye-off", tokens.TEXTO_TERCIARIO)
 
         resumo_layout.addWidget(self.card_total, 0, 0)
-        resumo_layout.addWidget(self.card_alerta, 0, 1)
-        resumo_layout.addWidget(self.card_patrimonio, 0, 2)
-        resumo_layout.addWidget(self.card_categorias, 0, 3)
+        resumo_layout.addWidget(self.card_itens, 0, 1)
+        resumo_layout.addWidget(self.card_alerta, 0, 2)
+        resumo_layout.addWidget(self.card_sem_estoque, 0, 3)
+        resumo_layout.addWidget(self.card_patrimonio, 1, 0)
+        resumo_layout.addWidget(self.card_categorias, 1, 1)
+        resumo_layout.addWidget(self.card_inativos, 1, 2)
 
         for coluna in range(4):
             resumo_layout.setColumnStretch(coluna, 1)
+
+        # cliques nos cards reaproveitam os mesmos filtros de status já
+        # existentes (pills "Ativos"/"Estoque baixo"/... logo abaixo) --
+        # nao criam um filtro novo, só atalham pra um já existente.
+        self.card_total.clicado.connect(lambda: self.selecionar_status("ATIVOS"))
+        self.card_itens.clicado.connect(lambda: self.selecionar_status("ATIVOS"))
+        self.card_alerta.clicado.connect(lambda: self.selecionar_status("ESTOQUE_BAIXO"))
+        self.card_sem_estoque.clicado.connect(lambda: self.selecionar_status("SEM_ESTOQUE"))
+        self.card_patrimonio.clicado.connect(lambda: self.selecionar_status("ATIVOS"))
+        self.card_inativos.clicado.connect(lambda: self.selecionar_status("INATIVOS"))
+
+        for card in (
+            self.card_total, self.card_itens, self.card_alerta,
+            self.card_sem_estoque, self.card_patrimonio,
+        ):
+            card.lbl_variacao.setText(
+                f'<span style="color:{tokens.TEXTO_TERCIARIO};">'
+                f"Considerando apenas produtos ativos</span>"
+            )
+            card.lbl_variacao.show()
 
         conteudo_layout.addLayout(resumo_layout)
 
@@ -444,6 +486,16 @@ class Produtos(QWidget):
 
         self.carregar()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        # recarrega toda vez que a tela volta a ficar visivel -- sem
+        # isso, um ajuste de estoque feito na tela de Estoque (ou uma
+        # venda no PDV) so refletiria aqui depois de apertar F5/
+        # Atualizar na mao (ver requisito de atualizacao automatica).
+        # Adiado pro proximo ciclo de eventos pra nao travar a troca de
+        # aba esperando a API responder (mesmo padrao do PDV).
+        QTimer.singleShot(0, self.carregar)
+
     # ==========================================
     # CARREGAR PRODUTOS
     # ==========================================
@@ -464,35 +516,61 @@ class Produtos(QWidget):
 
     def atualizar_cards_resumo(self):
 
-        total = len(self.produtos)
+        # produto inativo continua cadastrado (soft-delete, ver
+        # ProdutoService.excluir no backend) mas nao pode influenciar
+        # nenhum indicador do estoque principal -- só aparece no card
+        # e no filtro "Inativos", dedicados a ele.
+        ativos = [p for p in self.produtos if p.get("ativo", True)]
+        inativos = len(self.produtos) - len(ativos)
 
         em_alerta = sum(
             1
-            for p in self.produtos
+            for p in ativos
             if p["estoque"] <= p.get("estoque_minimo", 0)
         )
 
+        sem_estoque = sum(1 for p in ativos if p["estoque"] <= 0)
+
+        itens_em_estoque = sum(p["estoque"] for p in ativos)
+
+        # preco de custo é o valor "de verdade" pra saber quanto está
+        # parado em estoque; produto que nunca teve custo preenchido
+        # (campo zerado, comum em cadastro rápido) cai pro preço de
+        # venda em vez de contar como R$ 0 -- ver preco_custo em
+        # schemas/produto.py, já existe, só não era usado aqui ainda.
+        def preco_para_valor(p):
+            custo = float(p.get("preco_custo") or 0)
+            return custo if custo > 0 else float(p.get("preco_venda") or 0)
+
         patrimonio = sum(
-            float(p.get("preco_venda") or 0) * p["estoque"]
-            for p in self.produtos
+            preco_para_valor(p) * p["estoque"]
+            for p in ativos
         )
 
+        nomes_com_produto_ativo = {
+            p["categoria"] for p in ativos if p.get("categoria")
+        }
         categorias_ativas = sum(
             1
             for c in self.categorias
-            if c.get("ativo", True)
+            if c.get("ativo", True) and c["nome"] in nomes_com_produto_ativo
         )
 
-        self.card_total.definir_valor(str(total))
+        self.card_total.definir_valor(str(len(ativos)))
+        self.card_itens.definir_valor(str(itens_em_estoque))
         self.card_alerta.definir_valor(str(em_alerta))
+        self.card_sem_estoque.definir_valor(str(sem_estoque))
         self.card_patrimonio.definir_valor(formatar_moeda(patrimonio))
         self.card_categorias.definir_valor(str(categorias_ativas))
+        self.card_inativos.definir_valor(str(inativos))
 
         # sem selo de variação (ex.: "↑ 12%") aqui de propósito -- a
         # API não guarda um retrato de "produtos/valor em estoque de
         # ontem" pra comparar, então mostrar uma porcentagem seria
         # inventar um número (mesma decisão já tomada no Dashboard
-        # pros cards sem base histórica confiável)
+        # pros cards sem base histórica confiável). lbl_variacao nos
+        # cards acima é reaproveitado só pra legenda estática fixa,
+        # não por percentual.
 
     # ==========================================
     # FILTRO DE STATUS
@@ -646,10 +724,14 @@ class Produtos(QWidget):
         if self.filtro_status == "ESTOQUE_BAIXO":
             produtos = [
                 p for p in produtos
-                if 0 < p["estoque"] <= p.get("estoque_minimo", 0)
+                if p.get("ativo", True)
+                and 0 < p["estoque"] <= p.get("estoque_minimo", 0)
             ]
         elif self.filtro_status == "SEM_ESTOQUE":
-            produtos = [p for p in produtos if p["estoque"] <= 0]
+            produtos = [
+                p for p in produtos
+                if p.get("ativo", True) and p["estoque"] <= 0
+            ]
         elif self.filtro_status == "ATIVOS":
             produtos = [p for p in produtos if p.get("ativo", True)]
         elif self.filtro_status == "INATIVOS":
@@ -699,7 +781,8 @@ class Produtos(QWidget):
         )
 
         precisam_atencao = sum(
-            1 for p in produtos if p["estoque"] <= p.get("estoque_minimo", 0)
+            1 for p in produtos
+            if p.get("ativo", True) and p["estoque"] <= p.get("estoque_minimo", 0)
         )
         self.lbl_resumo_rodape.setText(
             f"{total} produto(s)"

@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone, icone_pixmap
+from utils.acessibilidade import movimento_reduzido
 from design.widgets import Avatar
 
 LARGURA_EXPANDIDA = 248
@@ -65,6 +66,12 @@ class ItemMenuLateral(QPushButton):
 
     def _animar(self, destino):
         self._anim.stop()
+
+        if movimento_reduzido():
+            self._opacidade_fundo = destino
+            self.update()
+            return
+
         self._anim.setStartValue(self._opacidade_fundo)
         self._anim.setEndValue(destino)
         self._anim.start()
@@ -408,9 +415,15 @@ class Sidebar(QFrame):
 
         for anim in (self._anim_largura, self._anim_largura_max):
             anim.stop()
-            anim.setStartValue(self.width())
-            anim.setEndValue(largura)
-            anim.start()
+
+        if movimento_reduzido():
+            self.setMinimumWidth(largura)
+            self.setMaximumWidth(largura)
+        else:
+            for anim in (self._anim_largura, self._anim_largura_max):
+                anim.setStartValue(self.width())
+                anim.setEndValue(largura)
+                anim.start()
 
         self.lbl_titulo.setVisible(not self._recolhida)
         self.lbl_loja.setVisible(not self._recolhida)

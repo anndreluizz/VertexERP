@@ -27,6 +27,7 @@ from services import preferencias_service
 from services import impressora_termica_service
 from services import loja_service
 from services.comprovante_service import obter_logo_loja
+from services.worker import rodar_em_thread
 from telas.gerenciar_usuarios import GerenciarUsuariosDialog
 
 from design import tokens
@@ -914,12 +915,22 @@ class Configuracoes(QWidget):
 
     def _carregar_lojas(self):
 
+        rodar_em_thread(
+            self,
+            loja_service.listar_lojas,
+            ao_sucesso=self._ao_carregar_lojas_sucesso,
+            ao_erro=self._ao_carregar_lojas_erro,
+        )
+
+    def _ao_carregar_lojas_erro(self, erro):
+        QMessageBox.critical(self, "Erro", f"Não foi possível carregar as lojas.\n{erro}")
+
+    def _ao_carregar_lojas_sucesso(self, lojas):
+
         while self.lista_lojas.count():
             item = self.lista_lojas.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-
-        lojas = loja_service.listar_lojas()
 
         self.combo_loja_terminal.blockSignals(True)
         self.combo_loja_terminal.clear()
@@ -974,7 +985,15 @@ class Configuracoes(QWidget):
         if not nome:
             return
 
-        response = loja_service.criar_loja(nome)
+        rodar_em_thread(
+            self,
+            loja_service.criar_loja,
+            nome,
+            ao_sucesso=self._ao_criar_loja_sucesso,
+            ao_erro=self._ao_criar_loja_erro,
+        )
+
+    def _ao_criar_loja_sucesso(self, response):
 
         if response.status_code != 200:
             try:
@@ -986,6 +1005,9 @@ class Configuracoes(QWidget):
 
         self.campo_nova_loja.clear()
         self._carregar_lojas()
+
+    def _ao_criar_loja_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
 
     def _exibir_logo_padrao(self):
 
@@ -1237,7 +1259,19 @@ class Configuracoes(QWidget):
 
     def carregar(self):
 
-        dados = configuracoes()
+        rodar_em_thread(
+            self,
+            configuracoes,
+            ao_sucesso=self._ao_carregar_sucesso,
+            ao_erro=self._ao_carregar_erro,
+        )
+
+    def _ao_carregar_erro(self, erro):
+        QMessageBox.critical(
+            self, "Erro", f"Não foi possível carregar as configurações.\n{erro}"
+        )
+
+    def _ao_carregar_sucesso(self, dados):
 
         self.nome_loja.setText(dados.get("nome_loja") or "")
         self.cnpj_cpf.setText(dados.get("cnpj_cpf") or "")
@@ -1273,16 +1307,22 @@ class Configuracoes(QWidget):
         self.smtp_ativo.setChecked(bool(dados.get("smtp_ativo")))
 
         if dados.get("tem_logo"):
-            logo_bytes = obter_logo_loja()
-            if logo_bytes:
-                pixmap = QPixmap()
-                pixmap.loadFromData(logo_bytes)
-                self.lbl_logo.setStyleSheet("background:transparent; border:none;")
-                self.lbl_logo.setPixmap(
-                    pixmap.scaled(
-                        80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation
-                    )
+            rodar_em_thread(
+                self,
+                obter_logo_loja,
+                ao_sucesso=self._ao_carregar_logo_sucesso,
+            )
+
+    def _ao_carregar_logo_sucesso(self, logo_bytes):
+        if logo_bytes:
+            pixmap = QPixmap()
+            pixmap.loadFromData(logo_bytes)
+            self.lbl_logo.setStyleSheet("background:transparent; border:none;")
+            self.lbl_logo.setPixmap(
+                pixmap.scaled(
+                    80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation
                 )
+            )
 
     def salvar(self):
 
@@ -1331,7 +1371,21 @@ class Configuracoes(QWidget):
         if self.logo_bytes:
             dados["logo_base64"] = base64.b64encode(self.logo_bytes).decode("ascii")
 
-        response = atualizar_configuracoes(dados)
+        self.bt_salvar.setEnabled(False)
+        self._salvar_dados_pendente = dados
+
+        rodar_em_thread(
+            self,
+            atualizar_configuracoes,
+            dados,
+            ao_sucesso=self._ao_salvar_sucesso,
+            ao_erro=self._ao_salvar_erro,
+            ao_finalizar=self._ao_salvar_finalizado,
+        )
+
+    def _ao_salvar_sucesso(self, response):
+
+        dados = self._salvar_dados_pendente
 
         if response.status_code == 200:
 
@@ -1353,3 +1407,9 @@ class Configuracoes(QWidget):
                 erro = response.text
 
             QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_salvar_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_salvar_finalizado(self):
+        self.bt_salvar.setEnabled(True)

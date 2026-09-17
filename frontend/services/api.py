@@ -105,14 +105,26 @@ def _verify_ssl():
     return tls_confianca.caminho_pinado(host, porta)
 
 
+_TIMEOUT_PADRAO = (5, 20)  # (conectar, ler) em segundos
+
+
 def _requisitar(func, *args, **kwargs):
     """Envolve toda chamada requests.* -- injeta o verify= certo (ver
     _verify_ssl) e traduz uma falha de certificado (pin salvo não bate
     mais) numa mensagem clara em vez do erro críptico padrão do
     requests/urllib3. Em localhost, reconfia sozinho -- não tem rede no
-    meio pra desconfiar de verdade (ver tls_confianca.eh_endereco_local)."""
+    meio pra desconfiar de verdade (ver tls_confianca.eh_endereco_local).
+
+    kwargs.setdefault("timeout", ...): sem isso, requests espera pra
+    sempre (timeout=None é o padrão dele) -- uma conexão que trava no
+    meio (rede caiu, servidor pendurado) congelava a janela inteira
+    indefinidamente, não só "por uns segundos". 20s de leitura cobre
+    uma escrita mais pesada (ex.: venda com muitos itens); quem
+    precisa de um teto mais curto (existe_usuario, testar_conexao) já
+    passa o próprio timeout= explícito, que kwargs.setdefault respeita."""
 
     kwargs.setdefault("verify", _verify_ssl())
+    kwargs.setdefault("timeout", _TIMEOUT_PADRAO)
     metodo = getattr(_SESSAO, func.__name__)
 
     try:

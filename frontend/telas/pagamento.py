@@ -23,6 +23,7 @@ from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoSecundario, BotaoSucesso, CampoTexto
 from services.api import configuracoes
 from services.pix_utils import montar_payload_pix
+from services.worker import rodar_em_thread
 from telas.selecionar_cliente import SelecionarClienteDialog
 from utils.formatacao import formatar_moeda
 
@@ -59,6 +60,44 @@ def _texto_para_valor(texto):
 def _fmt(valor):
     """Formata valores monetários no padrão da interface brasileira."""
     return formatar_moeda(valor, com_simbolo=False)
+
+
+def _gerar_qrcode_pix_dados(valor):
+    """Roda na worker thread -- busca a config PIX e gera a imagem do
+    QR Code (CPU local, mas junto mesmo assim: sem motivo pra voltar
+    na GUI thread so' pra chamar qrcode.make() logo depois)."""
+
+    config = configuracoes()
+
+    chave = (config.get("pix_chave") or "").strip()
+
+    if not chave:
+        return None, (
+            "Cadastre uma chave PIX em Configurações "
+            "para gerar o QR Code de cobrança."
+        )
+
+    nome = config.get("pix_nome") or config.get("nome_loja") or "LOJA"
+    cidade = config.get("pix_cidade") or ""
+
+    payload = montar_payload_pix(
+        chave=chave,
+        nome=nome,
+        cidade=cidade,
+        valor=valor,
+    )
+
+    imagem = qrcode.make(payload)
+
+    buffer = BytesIO()
+    imagem.save(buffer, format="PNG")
+
+    texto_info = (
+        f"Aponte a câmera do banco para pagar "
+        f"R$ {_fmt(valor)} via PIX para {chave}"
+    )
+
+    return buffer.getvalue(), texto_info
 
 
 class PagamentoWindow(QDialog):
@@ -1022,16 +1061,22 @@ class PagamentoWindow(QDialog):
 
         layout.addStretch()
 
-        config = configuracoes()
-        nome_loja = config.get("nome_loja") or "Vertex ERP"
-
-        lbl_loja = QLabel(nome_loja)
-        lbl_loja.setStyleSheet(
+        self.lbl_loja = QLabel("")
+        self.lbl_loja.setStyleSheet(
             f"background:transparent; color:{tokens.TEXTO_SECUNDARIO}; font-size:11px;"
         )
-        layout.addWidget(lbl_loja)
+        layout.addWidget(self.lbl_loja)
+
+        rodar_em_thread(
+            self,
+            configuracoes,
+            ao_sucesso=self._ao_config_rodape_sucesso,
+        )
 
         return barra
+
+    def _ao_config_rodape_sucesso(self, config):
+        self.lbl_loja.setText(config.get("nome_loja") or "Vertex ERP")
 
     def _item_atalho(self, tecla, rotulo):
 
@@ -1481,37 +1526,28 @@ class PagamentoWindow(QDialog):
 
     def gerar_qrcode_pix(self):
 
-        config = configuracoes()
+        self.lbl_qrcode.setText("Gerando QR Code...")
+        self.lbl_pix_info.setText("")
 
-        chave = (config.get("pix_chave") or "").strip()
-
-        if not chave:
-
-            self.lbl_qrcode.setText("QR Code indisponível")
-            self.lbl_pix_info.setText(
-                "Cadastre uma chave PIX em Configurações "
-                "para gerar o QR Code de cobrança."
-            )
-
-            return
-
-        nome = config.get("pix_nome") or config.get("nome_loja") or "LOJA"
-        cidade = config.get("pix_cidade") or ""
-
-        payload = montar_payload_pix(
-            chave=chave,
-            nome=nome,
-            cidade=cidade,
-            valor=self.valor_principal(),
+        rodar_em_thread(
+            self,
+            _gerar_qrcode_pix_dados,
+            self.valor_principal(),
+            ao_sucesso=self._ao_qrcode_pix_sucesso,
+            ao_erro=self._ao_qrcode_pix_erro,
         )
 
-        imagem = qrcode.make(payload)
+    def _ao_qrcode_pix_sucesso(self, resultado):
 
-        buffer = BytesIO()
-        imagem.save(buffer, format="PNG")
+        png_bytes, texto_info = resultado
+
+        if png_bytes is None:
+            self.lbl_qrcode.setText("QR Code indisponível")
+            self.lbl_pix_info.setText(texto_info)
+            return
 
         pixmap = QPixmap()
-        pixmap.loadFromData(buffer.getvalue())
+        pixmap.loadFromData(png_bytes)
 
         self.lbl_qrcode.setPixmap(
             pixmap.scaled(
@@ -1522,10 +1558,11 @@ class PagamentoWindow(QDialog):
             )
         )
 
-        self.lbl_pix_info.setText(
-            f"Aponte a câmera do banco para pagar "
-            f"R$ {_fmt(self.valor_principal())} via PIX para {chave}"
-        )
+        self.lbl_pix_info.setText(texto_info)
+
+    def _ao_qrcode_pix_erro(self, erro):
+        self.lbl_qrcode.setText("QR Code indisponível")
+        self.lbl_pix_info.setText(f"Não foi possível gerar o QR Code.\n{erro}")
 
     def adicionar_valor(self, valor):
 

@@ -16,9 +16,17 @@ from PySide6.QtWidgets import (
 
 from services.produto_service import listar_produtos
 from services.estoque_service import listar_movimentos, ajustar_estoque
+from services.worker import rodar_em_thread
 from widgets.dialogs.pesquisa_window import PesquisaWindow
 from widgets.tables.standard_table import StandardTable
 from design import tokens
+
+
+def _buscar_historico_estoque():
+    """Roda na worker thread -- as 2 chamadas que carregar() precisa."""
+    produtos_map = {p["id"]: p["nome"] for p in listar_produtos()}
+    movimentos = listar_movimentos()
+    return produtos_map, movimentos
 
 
 def _estilo_campo():
@@ -49,6 +57,7 @@ class AjusteEstoque(QWidget):
         super().__init__()
 
         self.produto_id = None
+        self._carregando = False
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
@@ -214,7 +223,16 @@ class AjusteEstoque(QWidget):
     # PESQUISAR PRODUTO
     # ==========================================
     def pesquisar_produto(self):
-        produtos = listar_produtos()
+        self.bt_produto.setEnabled(False)
+        rodar_em_thread(
+            self,
+            listar_produtos,
+            ao_sucesso=self._ao_pesquisar_produto_sucesso,
+            ao_erro=self._ao_pesquisar_produto_erro,
+            ao_finalizar=self._ao_pesquisar_produto_finalizado,
+        )
+
+    def _ao_pesquisar_produto_sucesso(self, produtos):
 
         tela = PesquisaWindow(
             titulo="Pesquisar Produto",
@@ -234,16 +252,42 @@ class AjusteEstoque(QWidget):
             f"(estoque atual: {tela.selecionado['estoque']})"
         )
 
+    def _ao_pesquisar_produto_erro(self, erro):
+        QMessageBox.critical(self, "Erro", f"Não foi possível buscar produtos.\n{erro}")
+
+    def _ao_pesquisar_produto_finalizado(self):
+        self.bt_produto.setEnabled(True)
+
     # ==========================================
     # CARREGAR HISTÓRICO
     # ==========================================
     def carregar(self):
-        self.produtos_map = {
-            produto["id"]: produto["nome"] for produto in listar_produtos()
-        }
+        if self._carregando:
+            return
+        self._carregando = True
+        self.bt_registrar.setEnabled(False)
 
-        self.movimentos = listar_movimentos()
-        self.preencher_tabela(self.movimentos)
+        rodar_em_thread(
+            self,
+            _buscar_historico_estoque,
+            ao_sucesso=self._ao_carregar_sucesso,
+            ao_erro=self._ao_carregar_erro,
+            ao_finalizar=self._ao_carregar_finalizado,
+        )
+
+    def _ao_carregar_sucesso(self, resultado):
+        try:
+            self.produtos_map, self.movimentos = resultado
+            self.preencher_tabela(self.movimentos)
+        except Exception as erro:
+            self._ao_carregar_erro(erro)
+
+    def _ao_carregar_erro(self, erro):
+        QMessageBox.critical(self, "Erro", f"Não foi possível carregar o histórico.\n{erro}")
+
+    def _ao_carregar_finalizado(self):
+        self._carregando = False
+        self.bt_registrar.setEnabled(True)
 
     def preencher_tabela(self, movimentos):
         self.tabela.setRowCount(len(movimentos))
@@ -305,8 +349,18 @@ class AjusteEstoque(QWidget):
             "motivo": self.motivo.text() or None,
         }
 
-        response = ajustar_estoque(dados)
+        self.bt_registrar.setEnabled(False)
 
+        rodar_em_thread(
+            self,
+            ajustar_estoque,
+            dados,
+            ao_sucesso=self._ao_registrar_ajuste_sucesso,
+            ao_erro=self._ao_registrar_ajuste_erro,
+            ao_finalizar=self._ao_registrar_ajuste_finalizado,
+        )
+
+    def _ao_registrar_ajuste_sucesso(self, response):
         if response.status_code == 201:
             QMessageBox.information(
                 self, "Sucesso", "Ajuste registrado com sucesso."
@@ -315,6 +369,15 @@ class AjusteEstoque(QWidget):
             self.carregar()
         else:
             self._exibir_erro(response)
+
+    def _ao_registrar_ajuste_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_registrar_ajuste_finalizado(self):
+        # se o sucesso ja disparou carregar() de novo, deixa ele mesmo
+        # reabilitar (mesmo raciocinio de telas/caixa.py)
+        if not self._carregando:
+            self.bt_registrar.setEnabled(True)
 
     # ==========================================
     # LIMPAR FORMULÁRIO

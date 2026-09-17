@@ -6,6 +6,7 @@ from telas.venda_concluida import VendaConcluidaDialog
 from telas.cadastro_produto import CadastroProdutoWindow
 from telas.selecionar_cliente import SelecionarClienteDialog
 from services.venda_service import finalizar_venda as enviar_venda
+from services.worker import rodar_em_thread
 from services.produto_service import listar_produtos, cadastrar_produto
 from services.pdv_service import buscar_produto
 from services.caixa_service import caixa_aberto
@@ -1905,89 +1906,107 @@ class PDV(QWidget):
             )
             return
 
+        # PagamentoWindow e' so' local (forma de pagamento, troco...),
+        # sem chamada de rede -- fica sincrono/modal mesmo, so' a
+        # submissao da venda em si (dali pra baixo) vai pra thread.
+        tela = PagamentoWindow(
+            total,
+            self.itens,
+            cliente_id=self.cliente_id,
+            cliente_nome=self.cliente_nome,
+            desconto=self.desconto_valor,
+            acrescimo=self.acrescimo_valor,
+        )
+
+        if tela.exec() != QDialog.Accepted:
+            return
+
+        # sem UI otimista aqui de proposito: venda envolve dinheiro e
+        # baixa de estoque de verdade no servidor, nao tem "desfazer"
+        # seguro no cliente -- a tela so' mostra "venda concluida"
+        # depois que o 201 realmente voltar.
         self._finalizando_venda = True
         self.bt_pagar.setEnabled(False)
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
-        try:
+        self._venda_pagamento_tela = tela
+        self._venda_total_em_andamento = total
 
-            tela = PagamentoWindow(
+        desconto_liquido = self.desconto_valor - self.acrescimo_valor
+
+        rodar_em_thread(
+            self,
+            enviar_venda,
+            itens=self.itens,
+            forma_pagamento=tela.forma_pagamento,
+            cliente_id=tela.cliente_id,
+            desconto=desconto_liquido,
+            observacao=tela.observacao.text().strip() or None,
+            data_vencimento=None,
+            forma_pagamento_2=tela.forma_pagamento_2,
+            valor_forma_2=(
+                tela.valor_forma_2 if tela.forma_pagamento_2 else None
+            ),
+            ao_sucesso=self._ao_venda_sucesso,
+            ao_erro=self._ao_venda_erro,
+            ao_finalizar=self._ao_venda_finalizada,
+        )
+
+    def _ao_venda_sucesso(self, response):
+
+        tela = self._venda_pagamento_tela
+        total = self._venda_total_em_andamento
+
+        if response.status_code == 201:
+
+            venda_criada = response.json()
+
+            concluida = VendaConcluidaDialog(
+                venda_criada["id"],
                 total,
                 self.itens,
-                cliente_id=self.cliente_id,
-                cliente_nome=self.cliente_nome,
-                desconto=self.desconto_valor,
-                acrescimo=self.acrescimo_valor,
+                tela.forma_pagamento,
+                cliente_nome=tela.cliente_nome,
+                forma_pagamento_2=tela.forma_pagamento_2,
+                valor_forma_2=tela.valor_forma_2,
+                parent=self,
             )
+            concluida.exec()
 
-            if tela.exec() != QDialog.Accepted:
-                return
+            self.limpar_venda()
 
-            desconto_liquido = self.desconto_valor - self.acrescimo_valor
-
-            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        else:
 
             try:
-                response = enviar_venda(
-                    itens=self.itens,
-                    forma_pagamento=tela.forma_pagamento,
-                    cliente_id=tela.cliente_id,
-                    desconto=desconto_liquido,
-                    observacao=tela.observacao.text().strip() or None,
-                    data_vencimento=None,
-                    forma_pagamento_2=tela.forma_pagamento_2,
-                    valor_forma_2=(
-                        tela.valor_forma_2 if tela.forma_pagamento_2 else None
-                    ),
-                )
-            finally:
-                QApplication.restoreOverrideCursor()
+                erro = response.json()
 
-            if response.status_code == 201:
+                if isinstance(erro, dict):
+                    erro = erro.get(
+                        "detail",
+                        str(erro)
+                    )
 
-                venda_criada = response.json()
-
-                concluida = VendaConcluidaDialog(
-                    venda_criada["id"],
-                    total,
-                    self.itens,
-                    tela.forma_pagamento,
-                    cliente_nome=tela.cliente_nome,
-                    forma_pagamento_2=tela.forma_pagamento_2,
-                    valor_forma_2=tela.valor_forma_2,
-                    parent=self,
-                )
-                concluida.exec()
-
-                self.limpar_venda()
-
-            else:
-
-                try:
-                    erro = response.json()
-
-                    if isinstance(erro, dict):
-                        erro = erro.get(
-                            "detail",
-                            str(erro)
-                        )
-
-                except Exception:
-                    erro = response.text
-
-                QMessageBox.critical(
-                    self,
-                    "Erro",
-                    f"Erro ao finalizar a venda.\n\n{erro}"
-                )
-
-        except Exception as e:
+            except Exception:
+                erro = response.text
 
             QMessageBox.critical(
                 self,
                 "Erro",
-                str(e)
+                f"Erro ao finalizar a venda.\n\n{erro}"
             )
 
-        finally:
-            self._finalizando_venda = False
-            self.bt_pagar.setEnabled(True)
+    def _ao_venda_erro(self, erro):
+
+        QMessageBox.critical(
+            self,
+            "Erro",
+            str(erro)
+        )
+
+    def _ao_venda_finalizada(self):
+
+        self._finalizando_venda = False
+        self.bt_pagar.setEnabled(True)
+        QApplication.restoreOverrideCursor()
+        self._venda_pagamento_tela = None
+        self._venda_total_em_andamento = None

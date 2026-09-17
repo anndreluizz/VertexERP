@@ -28,6 +28,14 @@ def listar_clientes(loja_id=None):
         response = get(endpoint)
 
         if response.status_code != 200:
+            # mesmo raciocinio de ProdutoService.listar_produtos: so' a
+            # 1a pagina falhando vira erro de verdade, pra "erro de
+            # rede" nao parecer "zero clientes cadastrados" pra tela
+            if pagina == 0:
+                raise Exception(
+                    "Não foi possível carregar os clientes "
+                    f"(servidor respondeu {response.status_code})."
+                )
             break
 
         lote = response.json()

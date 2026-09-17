@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 from design import tokens
 from design.animations import fade_in
 from design.icons import icone, icone_pixmap
+from utils.acessibilidade import movimento_reduzido
 
 
 # ==========================================
@@ -304,6 +305,12 @@ class _BotaoAnimado(QPushButton):
 
     def _animar_para(self, cor_destino):
         self._anim.stop()
+
+        if movimento_reduzido():
+            self._cor_atual = cor_destino
+            self.update()
+            return
+
         self._anim.setStartValue(self._cor_atual)
         self._anim.setEndValue(cor_destino)
         self._anim.start()

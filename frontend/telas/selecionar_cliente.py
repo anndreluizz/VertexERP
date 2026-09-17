@@ -12,8 +12,30 @@ from PySide6.QtWidgets import (
 )
 
 from services.cliente_service import listar_clientes
+from services.worker import rodar_em_thread
 from telas.cadastro_cliente import CadastroClienteDialog
 from design import tokens
+
+
+def _pesquisar_clientes(sequencia, termo):
+    """Roda na worker thread -- a sequencia viaja junto com o
+    resultado (mesmo padrao de telas/buscar_produto.py) pra quem
+    recebe saber se ainda e' a busca mais recente."""
+
+    ativos = [c for c in listar_clientes() if c.get("ativo", True)]
+
+    if termo:
+        clientes = [
+            c
+            for c in ativos
+            if termo in (c.get("nome") or "").lower()
+            or termo in (c.get("telefone") or "").lower()
+            or termo in (c.get("cpf_cnpj") or "").lower()
+        ]
+    else:
+        clientes = ativos
+
+    return sequencia, termo, ativos, clientes
 
 
 class ItemResultadoCliente(QWidget):
@@ -175,6 +197,7 @@ class SelecionarClienteDialog(QDialog):
         self.timer_busca.timeout.connect(self.executar_busca)
 
         self._clientes_ativos = []
+        self._busca_sequencia = 0
 
         self.busca.setFocus()
 
@@ -189,20 +212,31 @@ class SelecionarClienteDialog(QDialog):
 
         termo = self.busca.text().strip().lower()
 
-        self._clientes_ativos = [
-            c for c in listar_clientes() if c.get("ativo", True)
-        ]
+        self._busca_sequencia += 1
 
-        if termo:
-            clientes = [
-                c
-                for c in self._clientes_ativos
-                if termo in (c.get("nome") or "").lower()
-                or termo in (c.get("telefone") or "").lower()
-                or termo in (c.get("cpf_cnpj") or "").lower()
-            ]
-        else:
-            clientes = self._clientes_ativos
+        rodar_em_thread(
+            self,
+            _pesquisar_clientes,
+            self._busca_sequencia,
+            termo,
+            ao_sucesso=self._ao_busca_sucesso,
+            ao_erro=self._ao_busca_erro,
+        )
+
+    def _ao_busca_erro(self, erro):
+        self.lista.clear()
+        self.lista.setVisible(False)
+        self.lbl_vazio.setText(f"Não foi possível buscar clientes.\n{erro}")
+        self.lbl_vazio.setVisible(True)
+
+    def _ao_busca_sucesso(self, resultado):
+
+        sequencia, termo, ativos, clientes = resultado
+
+        if sequencia != self._busca_sequencia:
+            return  # resposta de uma busca ja' superada, ignora
+
+        self._clientes_ativos = ativos
 
         self.lista.clear()
 

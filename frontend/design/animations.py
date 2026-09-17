@@ -12,8 +12,17 @@ from PySide6.QtCore import (
 )
 from PySide6.QtWidgets import QGraphicsOpacityEffect
 
+from utils.acessibilidade import movimento_reduzido
+
 
 def fade_in(widget, duracao=220, ao_terminar=None):
+
+    # respeita "Mostrar animacoes" do Windows -- pula direto pro
+    # estado final (widget totalmente visivel) em vez de animar
+    if movimento_reduzido():
+        if ao_terminar:
+            ao_terminar()
+        return None
 
     efeito = QGraphicsOpacityEffect(widget)
     widget.setGraphicsEffect(efeito)
@@ -48,6 +57,11 @@ def fade_in(widget, duracao=220, ao_terminar=None):
 
 
 def slide_up(widget, distancia=16, duracao=260, ao_terminar=None):
+
+    if movimento_reduzido():
+        if ao_terminar:
+            ao_terminar()
+        return None
 
     pos_final = widget.pos()
     pos_inicial = QPoint(pos_final.x(), pos_final.y() + distancia)

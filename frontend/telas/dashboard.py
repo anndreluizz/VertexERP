@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QGridLayout,
     QLabel,
+    QMessageBox,
     QScrollArea,
     QFrame,
     QComboBox,
@@ -29,6 +30,7 @@ from services.conta_pagar_service import listar_contas_pagar
 from services.cliente_service import listar_clientes
 from services.movimento_fiado_service import listar_movimentos
 from services.user_service import listar_usuarios
+from services.worker import rodar_em_thread
 from services import preferencias_service
 
 from telas.relatorios import NOMES_FORMA_PAGAMENTO, CORES_FORMA_PAGAMENTO
@@ -93,6 +95,45 @@ def _reordenar_por_preferencia(registro, ordem_salva):
     return ordenado + restantes
 
 
+def _buscar_dados_dashboard():
+    """Roda na worker thread (ver services/worker.py) -- as 7 chamadas
+    de rede que Dashboard.carregar() precisa, incluindo os fallbacks
+    silenciosos ja existentes (contas_pagar/clientes/movimentos_fiado
+    nao devem travar o painel inteiro se falharem sozinhos)."""
+
+    usuario = me()
+    dados = dashboard()
+    vendas = listar_vendas()
+    produtos = listar_produtos()
+
+    try:
+        contas_pagar = listar_contas_pagar()
+    except Exception:
+        contas_pagar = []
+
+    try:
+        clientes = listar_clientes()
+    except Exception:
+        clientes = []
+
+    try:
+        movimentos_fiado = listar_movimentos()
+    except Exception:
+        movimentos_fiado = []
+
+    usuarios_por_id = {}
+    if usuario.get("admin"):
+        try:
+            usuarios_por_id = {u["id"]: u.get("nome") for u in listar_usuarios()}
+        except Exception:
+            usuarios_por_id = {}
+
+    return (
+        usuario, dados, vendas, produtos, contas_pagar,
+        clientes, movimentos_fiado, usuarios_por_id,
+    )
+
+
 class Dashboard(QWidget):
 
     navegar_pdv = Signal()
@@ -100,9 +141,11 @@ class Dashboard(QWidget):
     navegar_caixa = Signal()
     navegar_relatorios = Signal()
 
-    def __init__(self):
+    def __init__(self, usuario_id=None):
 
         super().__init__()
+
+        self._carregando = False
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
@@ -142,7 +185,13 @@ class Dashboard(QWidget):
         # SAUDAÇÃO
         # ======================
 
-        self._usuario_id = (me() or {}).get("id")
+        # usuario_id normalmente ja' vem pronto de quem construiu (ver
+        # telas/principal.py, que ja' buscou isso pro Header/Sidebar) --
+        # so' busca sozinho (sincrono) se for construido isolado, ex.
+        # nos scripts de teste/demo
+        self._usuario_id = usuario_id
+        if self._usuario_id is None:
+            self._usuario_id = (me() or {}).get("id")
 
         linha_saudacao = QHBoxLayout()
         linha_saudacao.setSpacing(12)
@@ -634,9 +683,12 @@ class Dashboard(QWidget):
 
     def carregar(self):
 
-        usuario = me()
-        nome_usuario = usuario.get("nome") or "Usuário"
-        self.lbl_saudacao.setText(f"Olá, {nome_usuario}!")
+        if self._carregando:
+            return
+        self._carregando = True
+
+        self.combo_periodo_pagamento.setEnabled(False)
+        self.combo_periodo_produtos.setEnabled(False)
 
         agora = datetime.now()
         dia_semana = DIAS_SEMANA_COMPLETO[agora.weekday()]
@@ -646,55 +698,64 @@ class Dashboard(QWidget):
             f"Aqui está o resumo da sua loja para hoje, {data_extenso}."
         )
         self.badge_data.lbl_texto.setText(f"{dia_semana}, {agora.strftime('%d/%m/%Y')}")
-        self.badge_atualizacao.lbl_texto.setText(f"Atualizado às {agora.strftime('%H:%M')}")
 
-        dados = dashboard()
-        vendas = listar_vendas()
-        produtos = listar_produtos()
-
-        try:
-            contas_pagar = listar_contas_pagar()
-        except Exception:
-            contas_pagar = []
-
-        try:
-            clientes = listar_clientes()
-        except Exception:
-            clientes = []
-
-        try:
-            movimentos_fiado = listar_movimentos()
-        except Exception:
-            movimentos_fiado = []
-
-        # nomes de vendedor só pra quem é admin — /users/ é restrito, e
-        # nao vale a pena tentar (e falhar) essa chamada pra um caixa comum
-        usuarios_por_id = {}
-        if usuario.get("admin"):
-            try:
-                usuarios_por_id = {u["id"]: u.get("nome") for u in listar_usuarios()}
-            except Exception:
-                usuarios_por_id = {}
-
-        produtos_por_id = {p["id"]: p for p in produtos}
-        vendas_finalizadas = [v for v in vendas if v.get("status") == "FINALIZADA"]
-
-        # cache pra trocas de aba/periodo (grafico, formas de pagamento,
-        # top produtos) reprocessarem sem bater na API de novo
-        self._vendas_finalizadas = vendas_finalizadas
-        self._produtos_por_id = produtos_por_id
-        self._clientes = clientes
-        self._totais_por_dia, self._lucros_por_dia = self._construir_series_diarias(
-            vendas_finalizadas, produtos_por_id
+        rodar_em_thread(
+            self,
+            _buscar_dados_dashboard,
+            ao_sucesso=self._ao_carregar_sucesso,
+            ao_erro=self._ao_carregar_erro,
+            ao_finalizar=self._ao_carregar_finalizado,
         )
 
-        self._atualizar_kpis(dados)
-        self._atualizar_grafico()
-        self._atualizar_formas_pagamento()
-        self._atualizar_top_produtos()
-        self._atualizar_vendas_recentes(vendas_finalizadas, usuarios_por_id)
-        self._atualizar_clientes_recentes(vendas_finalizadas, clientes)
-        self._atualizar_alertas(produtos, contas_pagar, clientes, movimentos_fiado)
+    def _ao_carregar_sucesso(self, resultado):
+        try:
+            (
+                usuario, dados, vendas, produtos, contas_pagar,
+                clientes, movimentos_fiado, usuarios_por_id,
+            ) = resultado
+
+            nome_usuario = usuario.get("nome") or "Usuário"
+            self.lbl_saudacao.setText(f"Olá, {nome_usuario}!")
+
+            agora = datetime.now()
+            self.badge_atualizacao.lbl_texto.setText(
+                f"Atualizado às {agora.strftime('%H:%M')}"
+            )
+
+            produtos_por_id = {p["id"]: p for p in produtos}
+            vendas_finalizadas = [v for v in vendas if v.get("status") == "FINALIZADA"]
+
+            # cache pra trocas de aba/periodo (grafico, formas de
+            # pagamento, top produtos) reprocessarem sem bater na API
+            # de novo
+            self._vendas_finalizadas = vendas_finalizadas
+            self._produtos_por_id = produtos_por_id
+            self._clientes = clientes
+            self._totais_por_dia, self._lucros_por_dia = self._construir_series_diarias(
+                vendas_finalizadas, produtos_por_id
+            )
+
+            self._atualizar_kpis(dados)
+            self._atualizar_grafico()
+            self._atualizar_formas_pagamento()
+            self._atualizar_top_produtos()
+            self._atualizar_vendas_recentes(vendas_finalizadas, usuarios_por_id)
+            self._atualizar_clientes_recentes(vendas_finalizadas, clientes)
+            self._atualizar_alertas(produtos, contas_pagar, clientes, movimentos_fiado)
+        except Exception as erro:
+            self._ao_carregar_erro(erro)
+
+    def _ao_carregar_erro(self, erro):
+        QMessageBox.critical(
+            self,
+            "Erro",
+            f"Não foi possível carregar o painel.\n{erro}",
+        )
+
+    def _ao_carregar_finalizado(self):
+        self._carregando = False
+        self.combo_periodo_pagamento.setEnabled(True)
+        self.combo_periodo_produtos.setEnabled(True)
 
     def _construir_series_diarias(self, vendas_finalizadas, produtos_por_id):
         """Soma faturamento e lucro por dia, uma vez só -- reaproveitado

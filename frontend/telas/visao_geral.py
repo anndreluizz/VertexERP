@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QFrame,
     QScrollArea,
@@ -20,6 +21,17 @@ from services.venda_service import listar_vendas
 from services.produto_service import listar_produtos
 from services.conta_pagar_service import listar_contas_pagar
 from services.caixa_service import listar_movimentacoes
+from services.worker import rodar_em_thread
+
+
+def _buscar_dados_visao_geral():
+    """Roda na worker thread -- as 4 chamadas que carregar() precisa."""
+    return (
+        listar_vendas(),
+        listar_produtos(),
+        listar_contas_pagar(),
+        listar_movimentacoes(),
+    )
 
 from telas.relatorios import (
     PainelSecao,
@@ -236,6 +248,7 @@ class VisaoGeral(QWidget):
         self.contas_pagar = []
         self.movimentos_caixa = []
         self.filtro_periodo = "Hoje"
+        self._carregando = False
 
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setStyleSheet(f"background:{tokens.FUNDO};")
@@ -625,12 +638,29 @@ class VisaoGeral(QWidget):
 
     def carregar(self):
 
-        self.vendas = listar_vendas()
-        self.produtos = listar_produtos()
-        self.contas_pagar = listar_contas_pagar()
-        self.movimentos_caixa = listar_movimentacoes()
+        if self._carregando:
+            return
+        self._carregando = True
 
+        rodar_em_thread(
+            self,
+            _buscar_dados_visao_geral,
+            ao_sucesso=self._ao_carregar_sucesso,
+            ao_erro=self._ao_carregar_erro,
+            ao_finalizar=self._ao_carregar_finalizado,
+        )
+
+    def _ao_carregar_sucesso(self, resultado):
+        self.vendas, self.produtos, self.contas_pagar, self.movimentos_caixa = resultado
         self._atualizar_tudo()
+
+    def _ao_carregar_erro(self, erro):
+        QMessageBox.critical(
+            self, "Erro", f"Não foi possível carregar a visão geral.\n{erro}"
+        )
+
+    def _ao_carregar_finalizado(self):
+        self._carregando = False
 
     def _atualizar_tudo(self):
 

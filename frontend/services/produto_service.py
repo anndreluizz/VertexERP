@@ -26,6 +26,17 @@ def listar_produtos():
         )
 
         if response.status_code != 200:
+            # so' a 1a pagina falhando vira erro de verdade -- uma
+            # pagina seguinte falhando no meio (bem mais raro) ainda
+            # devolve o que ja' foi coletado, melhor que jogar fora.
+            # Sem isso, "erro de rede" e "zero produtos cadastrados"
+            # pareciam a mesma coisa pra tela (ambos viravam lista
+            # vazia), e ela nao tinha como mostrar o estado certo.
+            if pagina == 0:
+                raise Exception(
+                    "Não foi possível carregar os produtos "
+                    f"(servidor respondeu {response.status_code})."
+                )
             break
 
         lote = response.json()

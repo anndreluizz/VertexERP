@@ -12,8 +12,23 @@ from design.animations import fade_in
 from design.widgets import BotaoPrimario, BotaoSecundario
 from services import comprovante_service
 from services.api import configuracoes
+from services.worker import rodar_em_thread
 from telas import comprovante_acoes
 from telas.historico_envios import HistoricoEnviosDialog
+
+
+def _buscar_dados_comprovante(venda_id):
+    """Roda na worker thread -- as 3 chamadas que
+    ComprovanteDialog.carregar() precisa."""
+    dados = comprovante_service.buscar_dados_comprovante(venda_id)
+
+    if not dados:
+        return None
+
+    config = configuracoes()
+    logo = comprovante_service.obter_logo_loja()
+
+    return comprovante_service.gerar_html_comprovante(dados, config, logo)
 
 
 class ComprovanteDialog(QDialog):
@@ -93,23 +108,51 @@ class ComprovanteDialog(QDialog):
 
     def carregar(self):
 
-        dados = comprovante_service.buscar_dados_comprovante(self.venda_id)
+        self.area.setHtml("<p>Carregando comprovante...</p>")
+        for bt in (
+            self.bt_imprimir, self.bt_baixar,
+            self.bt_whatsapp, self.bt_email, self.bt_historico,
+        ):
+            bt.setEnabled(False)
 
-        if not dados:
+        rodar_em_thread(
+            self,
+            _buscar_dados_comprovante,
+            self.venda_id,
+            ao_sucesso=self._ao_carregar_sucesso,
+            ao_erro=self._ao_carregar_erro,
+        )
+
+    def _ao_carregar_sucesso(self, html):
+
+        for bt in (
+            self.bt_imprimir, self.bt_baixar,
+            self.bt_whatsapp, self.bt_email, self.bt_historico,
+        ):
+            bt.setEnabled(True)
+
+        if html is None:
             QMessageBox.critical(
                 self, "Erro", "Não foi possível carregar o comprovante."
             )
             self.reject()
             return
 
-        config = configuracoes()
-        logo = comprovante_service.obter_logo_loja()
-
-        self._html = comprovante_service.gerar_html_comprovante(
-            dados, config, logo
-        )
-
+        self._html = html
         self.area.setHtml(self._html)
+
+    def _ao_carregar_erro(self, erro):
+
+        for bt in (
+            self.bt_imprimir, self.bt_baixar,
+            self.bt_whatsapp, self.bt_email, self.bt_historico,
+        ):
+            bt.setEnabled(True)
+
+        QMessageBox.critical(
+            self, "Erro", f"Não foi possível carregar o comprovante.\n{erro}"
+        )
+        self.reject()
 
     def imprimir(self):
         comprovante_acoes.imprimir(self.venda_id, self)

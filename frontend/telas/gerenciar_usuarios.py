@@ -19,6 +19,7 @@ from services.user_service import (
     criar_usuario,
     redefinir_senha,
 )
+from services.worker import rodar_em_thread
 
 from design import tokens
 from design.responsive import tamanho_fixo_seguro
@@ -79,13 +80,13 @@ class NovoUsuarioDialog(QDialog):
         bt_cancelar.setAutoDefault(False)
         bt_cancelar.clicked.connect(self.reject)
 
-        bt_criar = BotaoSucesso("Cadastrar")
-        bt_criar.setMinimumHeight(44)
-        bt_criar.setAutoDefault(False)
-        bt_criar.clicked.connect(self.criar)
+        self.bt_criar = BotaoSucesso("Cadastrar")
+        self.bt_criar.setMinimumHeight(44)
+        self.bt_criar.setAutoDefault(False)
+        self.bt_criar.clicked.connect(self.criar)
 
         botoes.addWidget(bt_cancelar)
-        botoes.addWidget(bt_criar)
+        botoes.addWidget(self.bt_criar)
 
         layout.addLayout(botoes)
 
@@ -148,7 +149,20 @@ class NovoUsuarioDialog(QDialog):
             )
             return
 
-        response = criar_usuario(nome, email, senha)
+        self.bt_criar.setEnabled(False)
+
+        rodar_em_thread(
+            self,
+            criar_usuario,
+            nome,
+            email,
+            senha,
+            ao_sucesso=self._ao_criar_sucesso,
+            ao_erro=self._ao_criar_erro,
+            ao_finalizar=self._ao_criar_finalizado,
+        )
+
+    def _ao_criar_sucesso(self, response):
 
         if response.status_code == 200:
             self.accept()
@@ -161,6 +175,12 @@ class NovoUsuarioDialog(QDialog):
                 erro = response.text
 
             QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_criar_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_criar_finalizado(self):
+        self.bt_criar.setEnabled(True)
 
 
 class RedefinirSenhaDialog(QDialog):
@@ -275,6 +295,7 @@ class GerenciarUsuariosDialog(QDialog):
         super().__init__(parent)
 
         self.usuarios = []
+        self._carregando = False
 
         self.setWindowTitle("Gerenciar Usuários")
         self.resize(680, 500)
@@ -383,7 +404,35 @@ class GerenciarUsuariosDialog(QDialog):
 
     def carregar(self):
 
-        self.usuarios = listar_usuarios()
+        if self._carregando:
+            return
+        self._carregando = True
+        self._definir_controles_carregando(True)
+
+        rodar_em_thread(
+            self,
+            listar_usuarios,
+            ao_sucesso=self._ao_carregar_sucesso,
+            ao_erro=self._ao_carregar_erro,
+            ao_finalizar=self._ao_carregar_finalizado,
+        )
+
+    def _definir_controles_carregando(self, carregando: bool):
+        self.bt_ativar_desativar.setEnabled(not carregando)
+        self.bt_admin.setEnabled(not carregando)
+        self.bt_redefinir_senha.setEnabled(not carregando)
+        self.bt_2fa.setEnabled(not carregando)
+
+    def _ao_carregar_erro(self, erro):
+        QMessageBox.critical(self, "Erro", f"Não foi possível carregar os usuários.\n{erro}")
+
+    def _ao_carregar_finalizado(self):
+        self._carregando = False
+        self._definir_controles_carregando(False)
+
+    def _ao_carregar_sucesso(self, usuarios):
+
+        self.usuarios = usuarios
 
         self.tabela.setRowCount(len(self.usuarios))
 
@@ -463,10 +512,23 @@ class GerenciarUsuariosDialog(QDialog):
         if resposta != QMessageBox.Yes:
             return
 
-        response = atualizar_usuario(
-            usuario["id"], {"ativo": novo_status}
+        self._atualizar_usuario_async(usuario["id"], {"ativo": novo_status})
+
+    def _atualizar_usuario_async(self, usuario_id, campos):
+
+        self._definir_controles_carregando(True)
+
+        rodar_em_thread(
+            self,
+            atualizar_usuario,
+            usuario_id,
+            campos,
+            ao_sucesso=self._ao_atualizar_usuario_sucesso,
+            ao_erro=self._ao_mutacao_erro,
+            ao_finalizar=self._ao_mutacao_finalizada,
         )
 
+    def _ao_atualizar_usuario_sucesso(self, response):
         if response.status_code == 200:
             self.carregar()
         else:
@@ -478,6 +540,13 @@ class GerenciarUsuariosDialog(QDialog):
                 erro = response.text
 
             QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_mutacao_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_mutacao_finalizada(self):
+        if not self._carregando:
+            self._definir_controles_carregando(False)
 
     def alternar_admin(self):
 
@@ -501,21 +570,7 @@ class GerenciarUsuariosDialog(QDialog):
         if resposta != QMessageBox.Yes:
             return
 
-        response = atualizar_usuario(
-            usuario["id"], {"admin": novo_admin}
-        )
-
-        if response.status_code == 200:
-            self.carregar()
-        else:
-            try:
-                erro = response.json().get("detail") or str(
-                    response.json()
-                )
-            except Exception:
-                erro = response.text
-
-            QMessageBox.critical(self, "Erro", str(erro))
+        self._atualizar_usuario_async(usuario["id"], {"admin": novo_admin})
 
     def alternar_2fa(self):
 
@@ -542,21 +597,9 @@ class GerenciarUsuariosDialog(QDialog):
         if resposta != QMessageBox.Yes:
             return
 
-        response = atualizar_usuario(
+        self._atualizar_usuario_async(
             usuario["id"], {"dois_fatores_ativo": novo_valor}
         )
-
-        if response.status_code == 200:
-            self.carregar()
-        else:
-            try:
-                erro = response.json().get("detail") or str(
-                    response.json()
-                )
-            except Exception:
-                erro = response.text
-
-            QMessageBox.critical(self, "Erro", str(erro))
 
     def redefinir_senha_usuario(self):
 
@@ -570,13 +613,25 @@ class GerenciarUsuariosDialog(QDialog):
         if dialogo.exec() != QDialog.Accepted:
             return
 
-        response = redefinir_senha(
-            usuario["id"], dialogo.senha_nova_confirmada
+        self._redefinir_senha_usuario_nome = usuario["nome"]
+        self._definir_controles_carregando(True)
+
+        rodar_em_thread(
+            self,
+            redefinir_senha,
+            usuario["id"],
+            dialogo.senha_nova_confirmada,
+            ao_sucesso=self._ao_redefinir_senha_sucesso,
+            ao_erro=self._ao_mutacao_erro,
+            ao_finalizar=self._ao_mutacao_finalizada,
         )
+
+    def _ao_redefinir_senha_sucesso(self, response):
 
         if response.status_code == 200:
             QMessageBox.information(
-                self, "Sucesso", f"Senha de {usuario['nome']} redefinida."
+                self, "Sucesso",
+                f"Senha de {self._redefinir_senha_usuario_nome} redefinida."
             )
         else:
             try:

@@ -20,6 +20,30 @@ from PySide6.QtWidgets import (
 
 from services.api import configuracoes
 from services.conta_pagar_service import atualizar_conta_pagar, pagar_conta_pagar
+from services.worker import rodar_em_thread
+
+
+def _confirmar_pagamento(conta_id, observacao_final, forma_pagamento, comprovante_base64, comprovante_nome, comprovante_tipo):
+    """Roda na worker thread -- as 2 chamadas sequenciais que
+    confirmar() precisa (atualiza observacao, depois marca como
+    pago)."""
+
+    response_obs = atualizar_conta_pagar(conta_id, {"observacao": observacao_final})
+
+    if response_obs.status_code != 200:
+        return response_obs, None
+
+    response = pagar_conta_pagar(
+        conta_id,
+        forma_pagamento=forma_pagamento,
+        comprovante_base64=comprovante_base64,
+        comprovante_nome=comprovante_nome,
+        comprovante_tipo=comprovante_tipo,
+    )
+
+    config = configuracoes() if response.status_code == 200 else {}
+
+    return response_obs, response, config
 
 from design import tokens
 from design.responsive import tamanho_fixo_seguro
@@ -316,9 +340,31 @@ class PagamentoDespesaDialog(QDialog):
             if observacao_atual else nota_pagamento
         )
 
-        response_obs = atualizar_conta_pagar(
-            self.conta["id"], {"observacao": observacao_final}
+        comprovante_base64 = (
+            base64.b64encode(self.comprovante_bytes).decode("ascii")
+            if self.comprovante_bytes else None
         )
+
+        self.bt_confirmar.setEnabled(False)
+        self._observacao_final_pendente = observacao_final
+
+        rodar_em_thread(
+            self,
+            _confirmar_pagamento,
+            self.conta["id"],
+            observacao_final,
+            self.forma_pagamento,
+            comprovante_base64,
+            self.comprovante_nome_arquivo,
+            self.comprovante_tipo_arquivo,
+            ao_sucesso=self._ao_confirmar_sucesso,
+            ao_erro=self._ao_confirmar_erro,
+            ao_finalizar=self._ao_confirmar_finalizado,
+        )
+
+    def _ao_confirmar_sucesso(self, resultado):
+
+        response_obs, response, config = resultado
 
         if response_obs.status_code != 200:
             try:
@@ -327,19 +373,6 @@ class PagamentoDespesaDialog(QDialog):
                 erro = response_obs.text
             QMessageBox.critical(self, "Erro", str(erro))
             return
-
-        comprovante_base64 = (
-            base64.b64encode(self.comprovante_bytes).decode("ascii")
-            if self.comprovante_bytes else None
-        )
-
-        response = pagar_conta_pagar(
-            self.conta["id"],
-            forma_pagamento=self.forma_pagamento,
-            comprovante_base64=comprovante_base64,
-            comprovante_nome=self.comprovante_nome_arquivo,
-            comprovante_tipo=self.comprovante_tipo_arquivo,
-        )
 
         if response.status_code != 200:
             try:
@@ -356,9 +389,15 @@ class PagamentoDespesaDialog(QDialog):
         )
         self.cabecalho.definir_icone("check", tokens.SUCESSO)
 
-        self._atualizar_comprovante(observacao_final)
+        self._atualizar_comprovante(self._observacao_final_pendente, config)
 
         self.paginas.setCurrentWidget(self.pagina_comprovante)
+
+    def _ao_confirmar_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_confirmar_finalizado(self):
+        self.bt_confirmar.setEnabled(True)
 
     def closeEvent(self, event):
         # o pagamento ja foi gravado no backend assim que chega na
@@ -425,9 +464,8 @@ class PagamentoDespesaDialog(QDialog):
 
         return pagina
 
-    def _atualizar_comprovante(self, observacao_final):
+    def _atualizar_comprovante(self, observacao_final, config):
 
-        config = configuracoes()
         nome_loja = config.get("nome_loja") or "Vertex ERP"
 
         agora = datetime.now().strftime("%d/%m/%Y %H:%M")

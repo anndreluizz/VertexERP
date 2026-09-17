@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from services.api import atualizar_configuracoes
+from services.worker import rodar_em_thread
 from design import tokens
 from design.responsive import tamanho_fixo_seguro
 
@@ -103,10 +104,10 @@ class CadastrarLojaDialog(QDialog):
         """)
         bt_cancelar.clicked.connect(self.pular)
 
-        bt_salvar = QPushButton("SALVAR LOJA  ✓")
-        bt_salvar.setMinimumHeight(46)
-        bt_salvar.setAutoDefault(False)
-        bt_salvar.setStyleSheet(f"""
+        self.bt_salvar = QPushButton("SALVAR LOJA  ✓")
+        self.bt_salvar.setMinimumHeight(46)
+        self.bt_salvar.setAutoDefault(False)
+        self.bt_salvar.setStyleSheet(f"""
             QPushButton {{
                 background:{tokens.PRIMARIA};
                 color:{tokens.TEXTO_CLARO};
@@ -117,10 +118,10 @@ class CadastrarLojaDialog(QDialog):
                 background:{tokens.PRIMARIA_HOVER};
             }}
         """)
-        bt_salvar.clicked.connect(self.salvar)
+        self.bt_salvar.clicked.connect(self.salvar)
 
         botoes.addWidget(bt_cancelar)
-        botoes.addWidget(bt_salvar)
+        botoes.addWidget(self.bt_salvar)
 
         layout.addLayout(botoes)
 
@@ -136,7 +137,18 @@ class CadastrarLojaDialog(QDialog):
             )
             return
 
-        response = atualizar_configuracoes({"nome_loja": nome})
+        self.bt_salvar.setEnabled(False)
+
+        rodar_em_thread(
+            self,
+            atualizar_configuracoes,
+            {"nome_loja": nome},
+            ao_sucesso=self._ao_salvar_sucesso,
+            ao_erro=self._ao_salvar_erro,
+            ao_finalizar=self._ao_salvar_finalizado,
+        )
+
+    def _ao_salvar_sucesso(self, response):
 
         if response.status_code != 200:
 
@@ -152,6 +164,12 @@ class CadastrarLojaDialog(QDialog):
 
         self.loja_salva.emit()
         self.accept()
+
+    def _ao_salvar_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_salvar_finalizado(self):
+        self.bt_salvar.setEnabled(True)
 
     def pular(self):
         self.loja_salva.emit()

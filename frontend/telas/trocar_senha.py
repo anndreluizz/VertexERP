@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 )
 
 from services.api import trocar_senha
+from services.worker import rodar_em_thread
 
 from design import tokens
 from design.responsive import tamanho_fixo_seguro
@@ -63,13 +64,13 @@ class TrocarSenhaDialog(QDialog):
         bt_cancelar.setAutoDefault(False)
         bt_cancelar.clicked.connect(self.reject)
 
-        bt_salvar = BotaoSucesso("Salvar")
-        bt_salvar.setMinimumHeight(44)
-        bt_salvar.setAutoDefault(False)
-        bt_salvar.clicked.connect(self.salvar)
+        self.bt_salvar = BotaoSucesso("Salvar")
+        self.bt_salvar.setMinimumHeight(44)
+        self.bt_salvar.setAutoDefault(False)
+        self.bt_salvar.clicked.connect(self.salvar)
 
         botoes.addWidget(bt_cancelar)
-        botoes.addWidget(bt_salvar)
+        botoes.addWidget(self.bt_salvar)
 
         layout.addLayout(botoes)
 
@@ -119,7 +120,19 @@ class TrocarSenhaDialog(QDialog):
             )
             return
 
-        response = trocar_senha(senha_atual, senha_nova)
+        self.bt_salvar.setEnabled(False)
+
+        rodar_em_thread(
+            self,
+            trocar_senha,
+            senha_atual,
+            senha_nova,
+            ao_sucesso=self._ao_salvar_sucesso,
+            ao_erro=self._ao_salvar_erro,
+            ao_finalizar=self._ao_salvar_finalizado,
+        )
+
+    def _ao_salvar_sucesso(self, response):
 
         if response.status_code == 200:
             QMessageBox.information(
@@ -135,3 +148,9 @@ class TrocarSenhaDialog(QDialog):
                 erro = response.text
 
             QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_salvar_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_salvar_finalizado(self):
+        self.bt_salvar.setEnabled(True)

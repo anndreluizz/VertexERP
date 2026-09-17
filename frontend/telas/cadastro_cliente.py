@@ -23,6 +23,7 @@ from services.cliente_service import (
     atualizar_cliente,
     obter_foto_cliente,
 )
+from services.worker import rodar_em_thread
 from utils.validacao import email_valido
 from widgets.fields.cpf_field import CpfCnpjField
 from widgets.fields.phone_field import PhoneField
@@ -219,15 +220,15 @@ class CadastroClienteDialog(QDialog):
         rodape_layout.setContentsMargins(24, 14, 24, 14)
         rodape_layout.setSpacing(10)
 
-        bt_cancelar = BotaoSecundario("Cancelar")
-        bt_cancelar.clicked.connect(self.reject)
+        self.bt_cancelar = BotaoSecundario("Cancelar")
+        self.bt_cancelar.clicked.connect(self.reject)
 
         self.bt_salvar = BotaoPrimario(
             "Salvar Alterações" if editando else "Cadastrar Cliente"
         )
         self.bt_salvar.clicked.connect(self.salvar)
 
-        rodape_layout.addWidget(bt_cancelar)
+        rodape_layout.addWidget(self.bt_cancelar)
         rodape_layout.addWidget(self.bt_salvar)
 
         raiz.addWidget(rodape)
@@ -365,14 +366,27 @@ class CadastroClienteDialog(QDialog):
             dados["foto_base64"] = base64.b64encode(self.foto_bytes).decode("ascii")
 
         if self.cliente:
-
             dados["ativo"] = self.cliente.get("ativo", True)
-
-            response = atualizar_cliente(self.cliente["id"], dados)
-
+            func, args = atualizar_cliente, (self.cliente["id"], dados)
         else:
+            func, args = cadastrar_cliente, (dados,)
 
-            response = cadastrar_cliente(dados)
+        self._definir_salvando(True)
+
+        rodar_em_thread(
+            self,
+            func,
+            *args,
+            ao_sucesso=self._ao_salvar_sucesso,
+            ao_erro=self._ao_salvar_erro,
+            ao_finalizar=self._ao_salvar_finalizado,
+        )
+
+    def _definir_salvando(self, salvando: bool):
+        self.bt_salvar.setEnabled(not salvando)
+        self.bt_cancelar.setEnabled(not salvando)
+
+    def _ao_salvar_sucesso(self, response):
 
         if response.status_code in (200, 201):
 
@@ -388,3 +402,9 @@ class CadastroClienteDialog(QDialog):
                 erro = response.text
 
             QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_salvar_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_salvar_finalizado(self):
+        self._definir_salvando(False)

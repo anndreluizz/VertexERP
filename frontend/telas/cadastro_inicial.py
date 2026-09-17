@@ -14,10 +14,34 @@ from PySide6.QtWidgets import (
 
 from requests.exceptions import ConnectionError
 
-from services.api import cadastrar_usuario, login
+from services.api import cadastrar_usuario, login, me, configuracoes
+from services.worker import rodar_em_thread
+
+
+def _criar_conta_e_logar(nome, email, senha):
+    """Roda na worker thread -- cadastro do primeiro/novo usuario
+    seguido de login automatico com a mesma credencial."""
+
+    response = cadastrar_usuario(nome, email, senha)
+
+    if response.status_code != 200:
+        return response, None
+
+    eh_primeiro_usuario = response.json().get("data", {}).get("admin", False)
+    ok, erro_login, _verificacao_id = login(email, senha)
+
+    return response, (eh_primeiro_usuario, ok, erro_login)
 from design import tokens
 from design.responsive import tamanho_fixo_seguro
 from utils.validacao import email_valido
+
+
+def _buscar_info_principal():
+    """Roda na worker thread -- mesmo raciocinio de
+    telas/login.py::_buscar_info_principal (duplicado aqui de proposito
+    em vez de importar de lá, pra nao criar acoplamento entre as duas
+    telas de entrada por causa de uma funcao de 1 linha)."""
+    return me(), configuracoes()
 
 
 class CadastroInicialWindow(QWidget):
@@ -217,87 +241,107 @@ class CadastroInicialWindow(QWidget):
             )
             return
 
+        self.bt_criar.setEnabled(False)
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
-        try:
+        rodar_em_thread(
+            self,
+            _criar_conta_e_logar,
+            nome,
+            email,
+            senha,
+            ao_sucesso=self._ao_criar_conta_sucesso,
+            ao_erro=self._ao_criar_conta_erro,
+            ao_finalizar=self._ao_criar_conta_finalizado,
+        )
 
-            response = cadastrar_usuario(nome, email, senha)
+    def _ao_criar_conta_sucesso(self, resultado):
 
-            if response.status_code != 200:
+        response, pos_login = resultado
 
-                QApplication.restoreOverrideCursor()
+        if response.status_code != 200:
 
-                try:
-                    erro = response.json().get("detail") or str(
-                        response.json()
-                    )
-                except Exception:
-                    erro = response.text
+            try:
+                erro = response.json().get("detail") or str(
+                    response.json()
+                )
+            except Exception:
+                erro = response.text
 
-                QMessageBox.critical(self, "Erro", str(erro))
-                return
+            QMessageBox.critical(self, "Erro", str(erro))
+            return
 
-            # so o primeirissimo usuario do sistema (a loja ainda nem
-            # tem nome) nasce admin - so nesse caso faz sentido pedir
-            # pra configurar a loja logo em seguida
-            eh_primeiro_usuario = (
-                response.json().get("data", {}).get("admin", False)
+        eh_primeiro_usuario, ok, _erro_login = pos_login
+
+        if not ok:
+
+            QMessageBox.critical(
+                self,
+                "Erro",
+                "Conta criada, mas não foi possível entrar "
+                "automaticamente. Tente acessar manualmente.",
             )
+            return
 
-            ok, _erro_login, _verificacao_id = login(email, senha)
+        if eh_primeiro_usuario:
 
-            if not ok:
+            from telas.cadastrar_loja import CadastrarLojaDialog
 
-                QApplication.restoreOverrideCursor()
+            self.dialogo_loja = CadastrarLojaDialog()
+            self.dialogo_loja.loja_salva.connect(
+                self.abrir_sistema
+            )
+            self.dialogo_loja.show()
 
-                QMessageBox.critical(
-                    self,
-                    "Erro",
-                    "Conta criada, mas não foi possível entrar "
-                    "automaticamente. Tente acessar manualmente.",
-                )
-                return
+        else:
 
-            QApplication.restoreOverrideCursor()
+            self.abrir_sistema()
 
-            if eh_primeiro_usuario:
+        self.close()
 
-                from telas.cadastrar_loja import CadastrarLojaDialog
+    def _ao_criar_conta_erro(self, erro):
 
-                self.dialogo_loja = CadastrarLojaDialog()
-                self.dialogo_loja.loja_salva.connect(
-                    self.abrir_sistema
-                )
-                self.dialogo_loja.show()
-
-            else:
-
-                self.abrir_sistema()
-
-            self.close()
-
-        except ConnectionError:
-
-            QApplication.restoreOverrideCursor()
-
+        if isinstance(erro, ConnectionError):
             QMessageBox.critical(
                 self,
                 "Servidor Offline",
                 "Não foi possível conectar ao Backend.\n\n"
                 "Verifique se o FastAPI está executando.",
             )
+            return
 
-        except Exception as e:
+        QMessageBox.critical(self, "Erro", str(erro))
 
-            QApplication.restoreOverrideCursor()
-
-            QMessageBox.critical(self, "Erro", str(e))
+    def _ao_criar_conta_finalizado(self):
+        self.bt_criar.setEnabled(True)
+        QApplication.restoreOverrideCursor()
 
     def abrir_sistema(self):
 
+        # me()+configuracoes() buscados aqui ANTES de construir
+        # PrincipalWindow (que os aceita prontos, ver telas/principal.py)
+        # em vez de deixar o __init__ dela buscar sincrono
+        rodar_em_thread(
+            self,
+            _buscar_info_principal,
+            ao_sucesso=self._ao_buscar_info_principal_sucesso,
+            ao_erro=self._ao_buscar_info_principal_erro,
+        )
+
+    def _ao_buscar_info_principal_erro(self, erro):
+        QMessageBox.critical(
+            self,
+            "Erro",
+            f"Conta criada, mas não foi possível abrir o sistema.\n{erro}",
+        )
+
+    def _ao_buscar_info_principal_sucesso(self, resultado):
+
         from telas.principal import PrincipalWindow
 
-        self.principal = PrincipalWindow()
+        info_usuario, config = resultado
+
+        self.principal = PrincipalWindow(info_usuario, config)
         self.principal.show()
 
     def ir_para_login(self):

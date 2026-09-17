@@ -18,12 +18,14 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import (
     QShortcut,
     QKeySequence,
+    QCursor,
     QPixmap,
     QPainter,
     QPainterPath,
 )
 
 from PySide6.QtWidgets import (
+    QApplication,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
@@ -42,7 +44,32 @@ from PySide6.QtWidgets import (
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
+from services.worker import rodar_em_thread
 from utils.formatacao import formatar_moeda
+from widgets.estado_async import PainelErro, linhas_esqueleto_tabela
+
+
+def _excluir_produtos_em_lote(ids, nomes):
+    """Roda na worker thread -- 1 chamada DELETE por produto,
+    sequencial (mesmo padrao de antes, so' que fora da GUI thread
+    agora). Sem UI otimista: a linha some da tabela so' depois do
+    carregar() de verdade rodar de novo, nao antes -- um produto que
+    falhar em excluir continua aparecendo, nao ha' "desfazer" client-
+    side pra sumir e voltar."""
+    falhas = []
+    for produto_id, nome in zip(ids, nomes):
+        response = excluir_produto(produto_id)
+        if response.status_code != 200:
+            falhas.append(nome)
+    return falhas, len(ids)
+
+
+def _buscar_dados_produtos():
+    """Roda na worker thread (ver services/worker.py) -- as duas
+    chamadas de rede que carregar() precisa, sequenciais aqui dentro
+    porque quem chama so' quer o par pronto no final, sem travar a
+    janela esperando nenhuma das duas."""
+    return listar_produtos(), listar_categorias()
 
 
 class _CardKPIClicavel(CardKPI):
@@ -106,6 +133,7 @@ class Produtos(QWidget):
         self.botoes_categoria = {}
         self.botoes_status = {}
         self._cache_fotos = {}
+        self._carregando = False
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
@@ -397,6 +425,20 @@ class Produtos(QWidget):
         self.tabela.setMinimumHeight(360)
         conteudo_layout.addWidget(self.tabela)
 
+        self.painel_erro = PainelErro()
+        self.painel_erro.tentar_novamente.connect(self.carregar)
+        conteudo_layout.addWidget(self.painel_erro)
+
+        self.lbl_vazio = QLabel("")
+        self.lbl_vazio.setAlignment(Qt.AlignCenter)
+        self.lbl_vazio.setWordWrap(True)
+        self.lbl_vazio.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_MD}px; padding:32px;
+        """)
+        self.lbl_vazio.hide()
+        conteudo_layout.addWidget(self.lbl_vazio)
+
         # ======================
         # RODAPÉ
         # ======================
@@ -502,13 +544,74 @@ class Produtos(QWidget):
 
     def carregar(self):
 
-        self.produtos = listar_produtos()
-        self.categorias = listar_categorias()
+        # guarda contra carga dupla sobreposta -- __init__ chama
+        # carregar() direto E showEvent agenda outra (ver showEvent
+        # acima) toda vez que a tela aparece; com chamada sincrona isso
+        # era inofensivo (a 2a so' rodava depois da 1a terminar, forcado
+        # pela propria GUI thread bloqueada). Assincrono, virava uma
+        # corrida de verdade entre duas cargas concorrentes pisando no
+        # mesmo estado (pego rodando o teste de fumaça -- a tabela podia
+        # terminar escondida mesmo com produto carregado, dependendo de
+        # qual das duas terminava por ultimo).
+        if self._carregando:
+            return
+        self._carregando = True
 
-        self.atualizar_cards_resumo()
-        self.atualizar_filtro_categorias()
+        self.painel_erro.hide()
+        self.tabela.setVisible(True)
+        self._definir_controles_carregando(True)
 
-        self.filtrar_produtos()
+        linhas_esqueleto_tabela(self.tabela, colunas_texto=(2, 3, 4, 5, 6, 7))
+        self.lbl_contagem.setText("Carregando...")
+
+        rodar_em_thread(
+            self,
+            _buscar_dados_produtos,
+            ao_sucesso=self._ao_carregar_sucesso,
+            ao_erro=self._ao_carregar_erro,
+            ao_finalizar=self._ao_carregar_finalizado,
+        )
+
+    def _ao_carregar_finalizado(self):
+        self._carregando = False
+        self._definir_controles_carregando(False)
+
+    def _definir_controles_carregando(self, carregando: bool):
+        # nao desabilita bt_novo/atalho Ctrl+N de proposito -- cadastrar
+        # um produto novo nao depende da listagem ter terminado de
+        # carregar, travar esse botao so' atrasaria o usuario a toa
+        for widget in (
+            self.bt_importar, self.bt_exportar, self.bt_atualizar,
+            self.pesquisa, self.combo_ordenacao,
+        ):
+            widget.setEnabled(not carregando)
+        for bt in self.botoes_status.values():
+            bt.setEnabled(not carregando)
+
+    def _ao_carregar_sucesso(self, dados):
+        # mesmo raciocinio de Clientes._ao_carregar_sucesso: sem o
+        # try/except, um bug aqui dentro (dado com formato inesperado
+        # etc.) deixava o skeleton preso na tela pra sempre, mesmo com
+        # o "finalizado" ja tendo reabilitado os controles
+        try:
+            self.produtos, self.categorias = dados
+
+            self.atualizar_cards_resumo()
+            self.atualizar_filtro_categorias()
+
+            self.filtrar_produtos()
+        except Exception as erro:
+            self._ao_carregar_erro(erro)
+
+    def _ao_carregar_erro(self, erro):
+        self.tabela.setRowCount(0)
+        self.tabela.setVisible(False)
+        self.painel_erro.definir_mensagem(
+            f"Não foi possível carregar os produtos.\n{erro}"
+        )
+        self.painel_erro.show()
+        self.lbl_contagem.setText("")
+        self.lbl_resumo_rodape.setText("Falha ao carregar")
 
     # ==========================================
     # CARDS DE RESUMO
@@ -775,6 +878,21 @@ class Produtos(QWidget):
         self.preencher_tabela(produtos)
 
         total = len(produtos)
+
+        filtro_ativo = bool(texto) or bool(self.filtro_categoria) or self.filtro_status != "TODOS"
+        if total == 0 and not self.painel_erro.isVisible():
+            self.tabela.setVisible(False)
+            self.lbl_vazio.setText(
+                "Nenhum produto encontrado para esse filtro."
+                if filtro_ativo
+                else "Nenhum produto cadastrado ainda. Clique em "
+                     '"Novo Produto" para começar.'
+            )
+            self.lbl_vazio.show()
+        else:
+            self.tabela.setVisible(not self.painel_erro.isVisible())
+            self.lbl_vazio.hide()
+
         self.lbl_contagem.setText(
             "1 produto encontrado" if total == 1
             else f"{total} produtos encontrados"
@@ -986,12 +1104,32 @@ class Produtos(QWidget):
         if resposta != QMessageBox.Yes:
             return
 
-        falhas = []
+        self._definir_excluindo(True, len(selecionados))
 
-        for produto in selecionados:
-            response = excluir_produto(produto["id"])
-            if response.status_code != 200:
-                falhas.append(produto["nome"])
+        rodar_em_thread(
+            self,
+            _excluir_produtos_em_lote,
+            [p["id"] for p in selecionados],
+            [p["nome"] for p in selecionados],
+            ao_sucesso=self._ao_excluir_selecionados_sucesso,
+            ao_erro=self._ao_excluir_selecionados_erro,
+            ao_finalizar=self._ao_excluir_selecionados_finalizado,
+        )
+
+    def _definir_excluindo(self, excluindo: bool, total: int = 0):
+
+        self.bt_excluir_selecionados.setEnabled(not excluindo)
+        self._definir_controles_carregando(excluindo)
+
+        if excluindo:
+            self.lbl_resumo_rodape.setText(f"Excluindo {total} produto(s)...")
+            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        else:
+            QApplication.restoreOverrideCursor()
+
+    def _ao_excluir_selecionados_sucesso(self, resultado):
+
+        falhas, total = resultado
 
         self.carregar()
 
@@ -1003,8 +1141,18 @@ class Produtos(QWidget):
             )
         else:
             QMessageBox.information(
-                self, "Sucesso", f"{len(selecionados)} produto(s) excluído(s)."
+                self, "Sucesso", f"{total} produto(s) excluído(s)."
             )
+
+    def _ao_excluir_selecionados_erro(self, erro):
+        QMessageBox.critical(
+            self,
+            "Erro",
+            f"Não foi possível excluir os produtos selecionados.\n{erro}",
+        )
+
+    def _ao_excluir_selecionados_finalizado(self):
+        self._definir_excluindo(False)
 
     # ==========================================
     # FOTO (MINIATURA COM CACHE)
@@ -1090,9 +1238,21 @@ class Produtos(QWidget):
         if tela.exec() != QDialog.Accepted:
             return
 
-        response = cadastrar_produto(
-            tela.dados
+        self.bt_novo.setEnabled(False)
+        self._novo_produto_tela = tela
+
+        rodar_em_thread(
+            self,
+            cadastrar_produto,
+            tela.dados,
+            ao_sucesso=self._ao_novo_produto_sucesso,
+            ao_erro=self._ao_novo_produto_erro,
+            ao_finalizar=self._ao_novo_produto_finalizado,
         )
+
+    def _ao_novo_produto_sucesso(self, response):
+
+        tela = self._novo_produto_tela
 
         if response.status_code == 201:
 
@@ -1130,6 +1290,13 @@ class Produtos(QWidget):
                 erro,
             )
 
+    def _ao_novo_produto_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_novo_produto_finalizado(self):
+        self.bt_novo.setEnabled(True)
+        self._novo_produto_tela = None
+
     # ==========================================
     # EDITAR PRODUTO
     # ==========================================
@@ -1157,10 +1324,22 @@ class Produtos(QWidget):
         if tela.exec() != QDialog.Accepted:
             return
 
-        response = atualizar_produto(
+        self._editar_produto_tela = tela
+        self._editar_produto_alvo = produto
+
+        rodar_em_thread(
+            self,
+            atualizar_produto,
             produto["id"],
             tela.dados,
+            ao_sucesso=self._ao_editar_produto_sucesso,
+            ao_erro=self._ao_editar_produto_erro,
         )
+
+    def _ao_editar_produto_sucesso(self, response):
+
+        tela = self._editar_produto_tela
+        produto = self._editar_produto_alvo
 
         if response.status_code == 200:
 
@@ -1189,6 +1368,9 @@ class Produtos(QWidget):
                 "Erro",
                 erro,
             )
+
+    def _ao_editar_produto_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
 
     # ==========================================
     # EXCLUIR PRODUTO

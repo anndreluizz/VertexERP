@@ -19,8 +19,13 @@ from services.categoria_service import (
     atualizar_categoria,
     excluir_categoria,
 )
+from services.worker import rodar_em_thread
 
 from design import tokens
+
+
+def _listar_categorias_ativas():
+    return [c for c in listar_categorias() if c.get("ativo", True)]
 
 
 class GerenciarCategoriasDialog(QDialog):
@@ -33,6 +38,7 @@ class GerenciarCategoriasDialog(QDialog):
         super().__init__(parent)
 
         self.categorias = []
+        self._carregando = False
 
         self.setWindowTitle("Gerenciar Categorias")
         self.resize(480, 480)
@@ -69,10 +75,10 @@ class GerenciarCategoriasDialog(QDialog):
         """)
         self.novo_nome.returnPressed.connect(self.adicionar)
 
-        bt_adicionar = QPushButton("+ Adicionar")
-        bt_adicionar.setAutoDefault(False)
-        bt_adicionar.setMinimumHeight(40)
-        bt_adicionar.setStyleSheet(f"""
+        self.bt_adicionar = QPushButton("+ Adicionar")
+        self.bt_adicionar.setAutoDefault(False)
+        self.bt_adicionar.setMinimumHeight(40)
+        self.bt_adicionar.setStyleSheet(f"""
             QPushButton {{
                 background:{tokens.SECUNDARIA};
                 color:{tokens.TEXTO_CLARO};
@@ -84,10 +90,10 @@ class GerenciarCategoriasDialog(QDialog):
                 background:{tokens.SECUNDARIA_HOVER};
             }}
         """)
-        bt_adicionar.clicked.connect(self.adicionar)
+        self.bt_adicionar.clicked.connect(self.adicionar)
 
         nova_layout.addWidget(self.novo_nome)
-        nova_layout.addWidget(bt_adicionar)
+        nova_layout.addWidget(self.bt_adicionar)
 
         layout.addLayout(nova_layout)
 
@@ -129,9 +135,9 @@ class GerenciarCategoriasDialog(QDialog):
 
         rodape = QHBoxLayout()
 
-        bt_editar = QPushButton("Editar")
-        bt_editar.setAutoDefault(False)
-        bt_editar.setStyleSheet(f"""
+        self.bt_editar = QPushButton("Editar")
+        self.bt_editar.setAutoDefault(False)
+        self.bt_editar.setStyleSheet(f"""
             QPushButton {{
                 background:{tokens.PRIMARIA};
                 color:{tokens.TEXTO_CLARO};
@@ -143,11 +149,11 @@ class GerenciarCategoriasDialog(QDialog):
                 background:{tokens.PRIMARIA_HOVER};
             }}
         """)
-        bt_editar.clicked.connect(self.editar)
+        self.bt_editar.clicked.connect(self.editar)
 
-        bt_excluir = QPushButton("Excluir")
-        bt_excluir.setAutoDefault(False)
-        bt_excluir.setStyleSheet(f"""
+        self.bt_excluir = QPushButton("Excluir")
+        self.bt_excluir.setAutoDefault(False)
+        self.bt_excluir.setStyleSheet(f"""
             QPushButton {{
                 background:{tokens.ERRO};
                 color:{tokens.TEXTO_CLARO};
@@ -159,7 +165,7 @@ class GerenciarCategoriasDialog(QDialog):
                 background:{tokens.ERRO_HOVER};
             }}
         """)
-        bt_excluir.clicked.connect(self.excluir)
+        self.bt_excluir.clicked.connect(self.excluir)
 
         bt_fechar = QPushButton("Fechar")
         bt_fechar.setAutoDefault(False)
@@ -176,8 +182,8 @@ class GerenciarCategoriasDialog(QDialog):
         """)
         bt_fechar.clicked.connect(self.accept)
 
-        rodape.addWidget(bt_editar)
-        rodape.addWidget(bt_excluir)
+        rodape.addWidget(self.bt_editar)
+        rodape.addWidget(self.bt_excluir)
         rodape.addStretch()
         rodape.addWidget(bt_fechar)
 
@@ -189,12 +195,27 @@ class GerenciarCategoriasDialog(QDialog):
 
     def carregar(self):
 
-        # so mostra as ativas, igual o combobox de categoria do
-        # cadastro de produto (ver _carregar_categorias em
-        # cadastro_produto.py)
-        self.categorias = [
-            c for c in listar_categorias() if c.get("ativo", True)
-        ]
+        if self._carregando:
+            return
+        self._carregando = True
+        self._definir_controles_carregando(True)
+
+        rodar_em_thread(
+            self,
+            _listar_categorias_ativas,
+            ao_sucesso=self._ao_carregar_sucesso,
+            ao_erro=self._ao_carregar_erro,
+            ao_finalizar=self._ao_carregar_finalizado,
+        )
+
+    def _definir_controles_carregando(self, carregando: bool):
+        self.bt_adicionar.setEnabled(not carregando)
+        self.bt_editar.setEnabled(not carregando)
+        self.bt_excluir.setEnabled(not carregando)
+
+    def _ao_carregar_sucesso(self, categorias):
+
+        self.categorias = categorias
 
         self.tabela.setRowCount(len(self.categorias))
 
@@ -202,6 +223,13 @@ class GerenciarCategoriasDialog(QDialog):
             self.tabela.setItem(
                 linha, 0, QTableWidgetItem(categoria.get("nome", ""))
             )
+
+    def _ao_carregar_erro(self, erro):
+        QMessageBox.critical(self, "Erro", f"Não foi possível carregar as categorias.\n{erro}")
+
+    def _ao_carregar_finalizado(self):
+        self._carregando = False
+        self._definir_controles_carregando(False)
 
     def _categoria_selecionada(self):
 
@@ -222,8 +250,18 @@ class GerenciarCategoriasDialog(QDialog):
         if not nome:
             return
 
-        response = criar_categoria(nome)
+        self._definir_controles_carregando(True)
 
+        rodar_em_thread(
+            self,
+            criar_categoria,
+            nome,
+            ao_sucesso=self._ao_adicionar_sucesso,
+            ao_erro=self._ao_mutacao_erro,
+            ao_finalizar=self._ao_mutacao_finalizada,
+        )
+
+    def _ao_adicionar_sucesso(self, response):
         if response.status_code in (200, 201):
             self.novo_nome.clear()
             self.carregar()
@@ -235,6 +273,13 @@ class GerenciarCategoriasDialog(QDialog):
             except Exception:
                 erro = response.text
             QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_mutacao_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_mutacao_finalizada(self):
+        if not self._carregando:
+            self._definir_controles_carregando(False)
 
     def editar(self):
 
@@ -259,8 +304,19 @@ class GerenciarCategoriasDialog(QDialog):
         if not novo_nome:
             return
 
-        response = atualizar_categoria(categoria["id"], novo_nome)
+        self._definir_controles_carregando(True)
 
+        rodar_em_thread(
+            self,
+            atualizar_categoria,
+            categoria["id"],
+            novo_nome,
+            ao_sucesso=self._ao_editar_sucesso,
+            ao_erro=self._ao_mutacao_erro,
+            ao_finalizar=self._ao_mutacao_finalizada,
+        )
+
+    def _ao_editar_sucesso(self, response):
         if response.status_code == 200:
             self.carregar()
         else:
@@ -290,8 +346,18 @@ class GerenciarCategoriasDialog(QDialog):
         if resposta != QMessageBox.Yes:
             return
 
-        response = excluir_categoria(categoria["id"])
+        self._definir_controles_carregando(True)
 
+        rodar_em_thread(
+            self,
+            excluir_categoria,
+            categoria["id"],
+            ao_sucesso=self._ao_excluir_sucesso,
+            ao_erro=self._ao_mutacao_erro,
+            ao_finalizar=self._ao_mutacao_finalizada,
+        )
+
+    def _ao_excluir_sucesso(self, response):
         if response.status_code == 200:
             self.carregar()
         else:

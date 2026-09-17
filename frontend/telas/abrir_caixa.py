@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from services.caixa_service import historico_caixa
+from services.worker import rodar_em_thread
 
 from design import tokens
 from design.icons import icone, icone_pixmap
@@ -202,13 +203,41 @@ class AbrirCaixaWindow(QDialog):
 
     def carregar_historico(self):
 
+        # so' essa secao do dialogo depende de rede -- o resto (campo
+        # de valor, atalhos, rodape) ja pinta na hora; sem isso, o
+        # dialogo inteiro demorava pra aparecer esperando o historico
+        rodar_em_thread(
+            self,
+            historico_caixa,
+            ao_sucesso=self._ao_historico_sucesso,
+            ao_erro=self._ao_historico_erro,
+        )
+
+    def _ao_historico_erro(self, erro):
+
         while self.historico_layout.count():
             item = self.historico_layout.takeAt(0)
             widget = item.widget()
             if widget:
                 widget.deleteLater()
 
-        sessoes = historico_caixa()[:3]
+        vazio = QLabel(f"Não foi possível carregar o histórico.\n{erro}")
+        vazio.setWordWrap(True)
+        vazio.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
+        self.historico_layout.addWidget(vazio, 0, 0, 1, 3)
+
+    def _ao_historico_sucesso(self, sessoes):
+
+        while self.historico_layout.count():
+            item = self.historico_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        sessoes = sessoes[:3]
 
         if not sessoes:
             vazio = QLabel("Nenhuma sessão registrada ainda.")

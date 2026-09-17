@@ -24,8 +24,10 @@ from design import tokens
 from design.animations import fade_in, slide_up
 from design.icons import icone, icone_pixmap
 from design.widgets import BotaoPrimario, BotaoSecundario, Card
-from services.api import login
+from services.api import login, me, configuracoes
 from services.preferencias_service import carregar_tema_escuro, salvar_tema_escuro
+from services.worker import rodar_em_thread
+from utils.acessibilidade import movimento_reduzido
 from telas.verificar_2fa import Verificar2FADialog
 from telas.principal import PrincipalWindow
 
@@ -57,7 +59,12 @@ class _PainelAnimado(QFrame):
         self._anim.setEndValue(1.0)
         self._anim.setLoopCount(-1)
         self._anim.valueChanged.connect(self._ao_animar)
-        self._anim.start()
+
+        # decorativa e roda pra sempre (loop infinito) -- com "Mostrar
+        # animacoes" desligado no Windows, nem comeca (fica parada na
+        # fase inicial, ainda com o gradiente estatico de paintEvent)
+        if not movimento_reduzido():
+            self._anim.start()
 
     def parar_animacao(self):
         self._anim.stop()
@@ -199,6 +206,15 @@ class _IlustracaoPainel(QWidget):
         layout.addWidget(icone_lbl)
 
         return selo
+
+
+def _buscar_info_principal():
+    """Roda na worker thread -- me()+configuracoes() que
+    PrincipalWindow precisa pra se montar (Header/Sidebar), buscados
+    ANTES de construir a janela em vez de dentro do __init__ dela (ver
+    telas/principal.py) -- assim a janela nao trava a GUI thread
+    esperando essas 2 chamadas."""
+    return me(), configuracoes()
 
 
 class LoginWindow(QWidget):
@@ -813,52 +829,106 @@ class LoginWindow(QWidget):
             )
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        if not self.botao.isEnabled():
+            # ja tem um login em andamento -- clique duplo (ou Enter
+            # depois de clicar) so' faria bater no backend duas vezes.
+            # Antes disso ser desnecessario: a chamada sincrona
+            # travava a janela inteira, entao um segundo clique era
+            # fisicamente impossivel de acontecer no meio; assincrono,
+            # vira possivel de verdade.
+            return
 
-        try:
+        self._definir_entrando(True)
 
-            ok, erro, verificacao_id = login(
+        rodar_em_thread(
+            self,
+            login,
+            self.usuario.text().strip(),
+            self.senha.text(),
+            lembrar=self.manter_conectado.isChecked(),
+            ao_sucesso=self._ao_login_sucesso,
+            ao_erro=self._ao_login_erro,
+            ao_finalizar=self._ao_login_finalizado,
+        )
+
+    def _ao_login_finalizado(self):
+        self._definir_entrando(False)
+
+    def _definir_entrando(self, entrando: bool):
+
+        self.botao.setEnabled(not entrando)
+        self.usuario.setEnabled(not entrando)
+        self.senha.setEnabled(not entrando)
+
+        if entrando:
+            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        else:
+            QApplication.restoreOverrideCursor()
+
+    def _ao_login_sucesso(self, resultado):
+
+        ok, erro, verificacao_id = resultado
+
+        if ok:
+
+            self._abrir_principal()
+
+        elif verificacao_id:
+
+            # senha certa, mas falta o segundo fator (2FA) -- o
+            # codigo ja foi mandado por e-mail nesse momento (ver
+            # services/api.py: login())
+            dialogo = Verificar2FADialog(
+                verificacao_id,
                 self.usuario.text().strip(),
-                self.senha.text(),
                 lembrar=self.manter_conectado.isChecked(),
+                parent=self,
             )
 
-            QApplication.restoreOverrideCursor()
+            if dialogo.exec() == Verificar2FADialog.Accepted:
+                self._abrir_principal()
 
-            if ok:
+        else:
 
-                self.principal = PrincipalWindow()
-                self.principal.show()
-                self.close()
+            QMessageBox.warning(
+                self,
+                "Erro",
+                erro,
+            )
 
-            elif verificacao_id:
+    def _abrir_principal(self):
 
-                # senha certa, mas falta o segundo fator (2FA) -- o
-                # codigo ja foi mandado por e-mail nesse momento (ver
-                # services/api.py: login())
-                dialogo = Verificar2FADialog(
-                    verificacao_id,
-                    self.usuario.text().strip(),
-                    lembrar=self.manter_conectado.isChecked(),
-                    parent=self,
-                )
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
-                if dialogo.exec() == Verificar2FADialog.Accepted:
-                    self.principal = PrincipalWindow()
-                    self.principal.show()
-                    self.close()
+        rodar_em_thread(
+            self,
+            _buscar_info_principal,
+            ao_sucesso=self._ao_buscar_info_principal_sucesso,
+            ao_erro=self._ao_buscar_info_principal_erro,
+            ao_finalizar=self._ao_buscar_info_principal_finalizado,
+        )
 
-            else:
+    def _ao_buscar_info_principal_finalizado(self):
+        QApplication.restoreOverrideCursor()
 
-                QMessageBox.warning(
-                    self,
-                    "Erro",
-                    erro,
-                )
+    def _ao_buscar_info_principal_erro(self, erro):
+        QMessageBox.critical(
+            self,
+            "Erro",
+            f"Login feito, mas não foi possível abrir o sistema.\n{erro}",
+        )
 
-        except ConnectionError:
+    def _ao_buscar_info_principal_sucesso(self, resultado):
 
-            QApplication.restoreOverrideCursor()
+        info_usuario, config = resultado
+
+        self.principal = PrincipalWindow(info_usuario, config)
+        self.principal.show()
+        self.close()
+
+    def _ao_login_erro(self, erro):
+
+        if isinstance(erro, ConnectionError):
 
             QMessageBox.critical(
                 self,
@@ -866,13 +936,10 @@ class LoginWindow(QWidget):
                 "Não foi possível conectar ao Backend.\n\n"
                 "Verifique se o FastAPI está executando.",
             )
+            return
 
-        except Exception as e:
-
-            QApplication.restoreOverrideCursor()
-
-            QMessageBox.critical(
-                self,
-                "Erro",
-                str(e),
-            )
+        QMessageBox.critical(
+            self,
+            "Erro",
+            str(erro),
+        )

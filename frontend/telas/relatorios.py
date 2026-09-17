@@ -21,6 +21,22 @@ from services.relatorio_service import relatorio_vendas
 from services.produto_service import listar_produtos
 from services.caixa_service import historico_caixa
 from services.loja_service import listar_lojas
+from services.worker import rodar_em_thread
+
+
+def _listar_lojas_para_combo(combo):
+    """Roda na worker thread -- `combo` so' viaja de ida e volta junto
+    com o resultado (nao chamado/tocado aqui, so' repassado; ver
+    services/worker.py sobre por que o callback nao pode ser uma
+    lambda que "lembra" o combo via closure)."""
+    return listar_lojas(), combo
+
+
+def _buscar_dados_relatorio_geral(loja_id_caixa):
+    """Roda na worker thread -- as 2 chamadas que carregar() precisa
+    (a 3a, relatorio_vendas, fica em _atualizar_financeiro, que ja e'
+    independente/refeita sozinha quando o filtro financeiro muda)."""
+    return listar_produtos(), historico_caixa(loja_id_caixa)
 
 from design import tokens
 from design.icons import icone
@@ -204,6 +220,9 @@ class Relatorios(QWidget):
 
         self.produtos = []
         self.caixas = []
+        self._carregando = False
+        self._carregando_financeiro = False
+        self._carregando_caixa = False
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
@@ -498,41 +517,65 @@ class Relatorios(QWidget):
         combo.blockSignals(True)
         combo.clear()
         combo.addItem("Todas as lojas", None)
+        combo.blockSignals(False)
 
-        for loja in listar_lojas():
+        rodar_em_thread(
+            self,
+            _listar_lojas_para_combo,
+            combo,
+            ao_sucesso=self._ao_carregar_combo_lojas_sucesso,
+        )
+
+    def _ao_carregar_combo_lojas_sucesso(self, resultado):
+
+        lojas, combo = resultado
+
+        combo.blockSignals(True)
+
+        for loja in lojas:
             combo.addItem(loja["nome"], loja["id"])
 
         combo.blockSignals(False)
 
     def _atualizar_financeiro(self):
 
+        if self._carregando_financeiro:
+            return
+        self._carregando_financeiro = True
+
         inicio, fim = self._periodo_selecionado()
 
-        try:
-            relatorio = relatorio_vendas(
-                inicio.isoformat() if inicio else None,
-                fim.isoformat(),
-                limit=1,
-                top_produtos_limite=10,
-                top_produtos_ordenar_por="valor",
-                loja_id=self.combo_loja.currentData(),
-            )
-        except Exception as erro:
-            relatorio = None
-            Mensagem.erro(
-                self,
-                "Não foi possível carregar o relatório financeiro.\n"
-                f"Os valores exibidos abaixo não refletem o período "
-                f"selecionado.\n\nDetalhes: {erro}",
-            )
+        rodar_em_thread(
+            self,
+            relatorio_vendas,
+            inicio.isoformat() if inicio else None,
+            fim.isoformat(),
+            limit=1,
+            top_produtos_limite=10,
+            top_produtos_ordenar_por="valor",
+            loja_id=self.combo_loja.currentData(),
+            ao_sucesso=self._ao_atualizar_financeiro_sucesso,
+            ao_erro=self._ao_atualizar_financeiro_erro,
+            ao_finalizar=self._ao_atualizar_financeiro_finalizado,
+        )
 
-        if relatorio is None:
-            self.card_faturamento.definir_valor(formatar_moeda(0))
-            self.card_volume.definir_valor("0")
-            self.card_ticket.definir_valor(formatar_moeda(0))
-            self._atualizar_ranking_produtos([])
-            self._atualizar_mix_pagamentos([])
-            return
+    def _ao_atualizar_financeiro_erro(self, erro):
+        Mensagem.erro(
+            self,
+            "Não foi possível carregar o relatório financeiro.\n"
+            f"Os valores exibidos abaixo não refletem o período "
+            f"selecionado.\n\nDetalhes: {erro}",
+        )
+        self.card_faturamento.definir_valor(formatar_moeda(0))
+        self.card_volume.definir_valor("0")
+        self.card_ticket.definir_valor(formatar_moeda(0))
+        self._atualizar_ranking_produtos([])
+        self._atualizar_mix_pagamentos([])
+
+    def _ao_atualizar_financeiro_finalizado(self):
+        self._carregando_financeiro = False
+
+    def _ao_atualizar_financeiro_sucesso(self, relatorio):
 
         faturamento = float(relatorio["receita_total"]["atual"])
         volume = int(relatorio["quantidade_vendas"]["atual"])
@@ -921,13 +964,56 @@ class Relatorios(QWidget):
 
     def carregar(self):
 
-        self.produtos = listar_produtos()
-        self.caixas = historico_caixa(self.combo_loja_caixa.currentData())
+        if self._carregando:
+            return
+        self._carregando = True
 
+        rodar_em_thread(
+            self,
+            _buscar_dados_relatorio_geral,
+            self.combo_loja_caixa.currentData(),
+            ao_sucesso=self._ao_carregar_sucesso,
+            ao_erro=self._ao_carregar_erro,
+            ao_finalizar=self._ao_carregar_finalizado,
+        )
+
+    def _ao_carregar_sucesso(self, resultado):
+        self.produtos, self.caixas = resultado
         self._atualizar_financeiro()
         self._atualizar_caixa()
         self._atualizar_estoque()
 
+    def _ao_carregar_erro(self, erro):
+        Mensagem.erro(
+            self, f"Não foi possível carregar os dados do relatório.\n{erro}"
+        )
+
+    def _ao_carregar_finalizado(self):
+        self._carregando = False
+
     def _recarregar_historico_caixa(self):
-        self.caixas = historico_caixa(self.combo_loja_caixa.currentData())
+
+        if self._carregando_caixa:
+            return
+        self._carregando_caixa = True
+
+        rodar_em_thread(
+            self,
+            historico_caixa,
+            self.combo_loja_caixa.currentData(),
+            ao_sucesso=self._ao_recarregar_caixa_sucesso,
+            ao_erro=self._ao_recarregar_caixa_erro,
+            ao_finalizar=self._ao_recarregar_caixa_finalizado,
+        )
+
+    def _ao_recarregar_caixa_sucesso(self, caixas):
+        self.caixas = caixas
         self._atualizar_caixa()
+
+    def _ao_recarregar_caixa_erro(self, erro):
+        Mensagem.erro(
+            self, f"Não foi possível carregar o histórico de caixa.\n{erro}"
+        )
+
+    def _ao_recarregar_caixa_finalizado(self):
+        self._carregando_caixa = False

@@ -38,6 +38,7 @@ from services.movimento_caixa_service import (
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import Badge, BotaoPerigo, BotaoSecundario, BotaoSucesso, CardKPI
+from services.worker import rodar_em_thread
 from utils.formatacao import formatar_moeda
 
 
@@ -125,10 +126,27 @@ def _pill_tipo_movimento(tipo):
     return container
 
 
+def _buscar_dados_caixa():
+    """Roda na worker thread -- caixa_aberto() + resumo_caixa() +
+    listar_movimentos_caixa(), as 3 chamadas que Caixa.carregar()
+    precisa."""
+    caixa = caixa_aberto()
+
+    if caixa is None:
+        return caixa, None, []
+
+    resumo = resumo_caixa() or {}
+    movimentos = listar_movimentos_caixa(caixa["id"])
+
+    return caixa, resumo, movimentos
+
+
 class Caixa(QWidget):
 
     def __init__(self):
         super().__init__()
+
+        self._carregando = False
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
@@ -185,16 +203,16 @@ class Caixa(QWidget):
         """)
         subtitulo.setFixedWidth(360)
 
-        bt_abrir = BotaoSucesso("Abrir Caixa", icone_nome="wallet")
-        bt_abrir.setFixedWidth(200)
-        bt_abrir.setMinimumHeight(46)
-        bt_abrir.clicked.connect(self.abrir_caixa)
+        self.bt_abrir = BotaoSucesso("Abrir Caixa", icone_nome="wallet")
+        self.bt_abrir.setFixedWidth(200)
+        self.bt_abrir.setMinimumHeight(46)
+        self.bt_abrir.clicked.connect(self.abrir_caixa)
 
         layout.addWidget(icone, alignment=Qt.AlignHCenter)
         layout.addWidget(titulo)
         layout.addWidget(subtitulo, alignment=Qt.AlignHCenter)
         layout.addSpacing(8)
-        layout.addWidget(bt_abrir, alignment=Qt.AlignHCenter)
+        layout.addWidget(self.bt_abrir, alignment=Qt.AlignHCenter)
 
         return pagina
 
@@ -482,57 +500,88 @@ class Caixa(QWidget):
 
     def carregar(self):
 
-        caixa = caixa_aberto()
-
-        if caixa is None:
-            self.paginas.setCurrentWidget(self.pagina_sem_caixa)
+        if self._carregando:
             return
+        self._carregando = True
+        self._definir_controles_carregando(True)
 
-        resumo = resumo_caixa() or {}
-
-        data_abertura = str(caixa.get("data_abertura", ""))[:16]
-        data_abertura = data_abertura.replace("T", " ")
-
-        self.lbl_abertura.setText(f"Aberto em {data_abertura}")
-
-        total_previsto = float(resumo.get("total_previsto", 0) or 0)
-        self.lbl_total_previsto.setText(formatar_moeda(total_previsto))
-
-        self.card_troco.definir_valor(
-            formatar_moeda(resumo.get("saldo_inicial", 0))
-        )
-        self.card_dinheiro.definir_valor(
-            formatar_moeda(resumo.get("vendas_dinheiro", 0))
-        )
-        self.card_pix.definir_valor(
-            formatar_moeda(resumo.get("vendas_pix", 0))
-        )
-        self.card_cartao.definir_valor(
-            formatar_moeda(resumo.get("vendas_cartao", 0))
-        )
-        self.card_suprimentos.definir_valor(
-            f"+ {formatar_moeda(resumo.get('suprimentos', 0))}"
-        )
-        self.card_sangrias.definir_valor(
-            f"- {formatar_moeda(resumo.get('sangrias', 0))}"
-        )
-        self.card_prazo.definir_valor(
-            formatar_moeda(resumo.get("vendas_prazo", 0))
-        )
-        self.card_recebimentos_fiado.definir_valor(
-            formatar_moeda(resumo.get("recebimentos_fiado", 0))
-        )
-        self.lbl_total_geral.setText(
-            formatar_moeda(resumo.get("total_geral", 0))
+        rodar_em_thread(
+            self,
+            _buscar_dados_caixa,
+            ao_sucesso=self._ao_carregar_sucesso,
+            ao_erro=self._ao_carregar_erro,
+            ao_finalizar=self._ao_carregar_finalizado,
         )
 
-        self.carregar_movimentos(caixa["id"])
+    def _definir_controles_carregando(self, carregando: bool):
+        self.bt_abrir.setEnabled(not carregando)
+        self.bt_suprimento.setEnabled(not carregando)
+        self.bt_sangria.setEnabled(not carregando)
+        self.bt_encerrar.setEnabled(not carregando)
+        self.bt_atualizar_historico.setEnabled(not carregando)
 
-        self.paginas.setCurrentWidget(self.pagina_com_caixa)
+    def _ao_carregar_sucesso(self, resultado):
+        try:
+            caixa, resumo, movimentos = resultado
 
-    def carregar_movimentos(self, caixa_id):
+            if caixa is None:
+                self.paginas.setCurrentWidget(self.pagina_sem_caixa)
+                return
 
-        movimentos = listar_movimentos_caixa(caixa_id)
+            resumo = resumo or {}
+
+            data_abertura = str(caixa.get("data_abertura", ""))[:16]
+            data_abertura = data_abertura.replace("T", " ")
+
+            self.lbl_abertura.setText(f"Aberto em {data_abertura}")
+
+            total_previsto = float(resumo.get("total_previsto", 0) or 0)
+            self.lbl_total_previsto.setText(formatar_moeda(total_previsto))
+
+            self.card_troco.definir_valor(
+                formatar_moeda(resumo.get("saldo_inicial", 0))
+            )
+            self.card_dinheiro.definir_valor(
+                formatar_moeda(resumo.get("vendas_dinheiro", 0))
+            )
+            self.card_pix.definir_valor(
+                formatar_moeda(resumo.get("vendas_pix", 0))
+            )
+            self.card_cartao.definir_valor(
+                formatar_moeda(resumo.get("vendas_cartao", 0))
+            )
+            self.card_suprimentos.definir_valor(
+                f"+ {formatar_moeda(resumo.get('suprimentos', 0))}"
+            )
+            self.card_sangrias.definir_valor(
+                f"- {formatar_moeda(resumo.get('sangrias', 0))}"
+            )
+            self.card_prazo.definir_valor(
+                formatar_moeda(resumo.get("vendas_prazo", 0))
+            )
+            self.card_recebimentos_fiado.definir_valor(
+                formatar_moeda(resumo.get("recebimentos_fiado", 0))
+            )
+            self.lbl_total_geral.setText(
+                formatar_moeda(resumo.get("total_geral", 0))
+            )
+
+            self.carregar_movimentos(movimentos)
+
+            self.paginas.setCurrentWidget(self.pagina_com_caixa)
+        except Exception as erro:
+            self._ao_carregar_erro(erro)
+
+    def _ao_carregar_erro(self, erro):
+        QMessageBox.critical(
+            self, "Erro", f"Não foi possível carregar o caixa.\n{erro}"
+        )
+
+    def _ao_carregar_finalizado(self):
+        self._carregando = False
+        self._definir_controles_carregando(False)
+
+    def carregar_movimentos(self, movimentos):
 
         movimentos = sorted(
             movimentos,
@@ -579,8 +628,18 @@ class Caixa(QWidget):
         if janela.exec() != QDialog.Accepted:
             return
 
-        response = abrir_caixa(janela.saldo)
+        self._definir_controles_carregando(True)
 
+        rodar_em_thread(
+            self,
+            abrir_caixa,
+            janela.saldo,
+            ao_sucesso=self._ao_abrir_caixa_sucesso,
+            ao_erro=self._ao_mutacao_erro,
+            ao_finalizar=self._ao_mutacao_finalizada,
+        )
+
+    def _ao_abrir_caixa_sucesso(self, response):
         if response.status_code == 200:
             self.carregar()
         else:
@@ -590,6 +649,18 @@ class Caixa(QWidget):
                 erro = response.text
 
             QMessageBox.warning(self, "Erro", erro)
+
+    def _ao_mutacao_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_mutacao_finalizada(self):
+        # se o sucesso da mutacao ja disparou carregar() de novo (abrir/
+        # sangria/suprimento fazem isso), esse carregar() ja marcou
+        # self._carregando=True antes de chegar aqui -- deixa ele mesmo
+        # reabilitar os controles quando terminar, senao reabilitava
+        # cedo demais (no meio do reload que ele proprio disparou)
+        if not self._carregando:
+            self._definir_controles_carregando(False)
 
     def fechar_caixa(self):
 
@@ -615,20 +686,17 @@ class Caixa(QWidget):
 
         dados = janela.dados
 
-        response = criar_sangria(
+        self._definir_controles_carregando(True)
+
+        rodar_em_thread(
+            self,
+            criar_sangria,
             dados["valor"],
             dados["descricao"],
+            ao_sucesso=self._ao_movimento_sucesso,
+            ao_erro=self._ao_mutacao_erro,
+            ao_finalizar=self._ao_mutacao_finalizada,
         )
-
-        if response.status_code == 200:
-            self.carregar()
-        else:
-            try:
-                erro = response.json()["detail"]
-            except Exception:
-                erro = response.text
-
-            QMessageBox.critical(self, "Erro", erro)
 
     def suprimento(self):
 
@@ -639,11 +707,19 @@ class Caixa(QWidget):
 
         dados = janela.dados
 
-        response = criar_suprimento(
+        self._definir_controles_carregando(True)
+
+        rodar_em_thread(
+            self,
+            criar_suprimento,
             dados["valor"],
             dados["descricao"],
+            ao_sucesso=self._ao_movimento_sucesso,
+            ao_erro=self._ao_mutacao_erro,
+            ao_finalizar=self._ao_mutacao_finalizada,
         )
 
+    def _ao_movimento_sucesso(self, response):
         if response.status_code == 200:
             self.carregar()
         else:

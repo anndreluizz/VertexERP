@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 from design import tokens
 from design.widgets import BotaoPrimario, BotaoSecundario
 from services.api import verificar_codigo_2fa
+from services.worker import rodar_em_thread
 
 
 class Verificar2FADialog(QDialog):
@@ -90,13 +91,13 @@ class Verificar2FADialog(QDialog):
         bt_cancelar.setAutoDefault(False)
         bt_cancelar.clicked.connect(self.reject)
 
-        bt_confirmar = BotaoPrimario("Confirmar")
-        bt_confirmar.setMinimumHeight(44)
-        bt_confirmar.setAutoDefault(False)
-        bt_confirmar.clicked.connect(self.confirmar)
+        self.bt_confirmar = BotaoPrimario("Confirmar")
+        self.bt_confirmar.setMinimumHeight(44)
+        self.bt_confirmar.setAutoDefault(False)
+        self.bt_confirmar.clicked.connect(self.confirmar)
 
         botoes.addWidget(bt_cancelar)
-        botoes.addWidget(bt_confirmar)
+        botoes.addWidget(self.bt_confirmar)
 
         layout.addLayout(botoes)
 
@@ -110,14 +111,24 @@ class Verificar2FADialog(QDialog):
             QMessageBox.warning(self, "Atenção", "Digite o código recebido por e-mail.")
             return
 
+        self.bt_confirmar.setEnabled(False)
+        self.codigo.setEnabled(False)
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
-        try:
-            ok, erro = verificar_codigo_2fa(
-                self.verificacao_id, codigo, lembrar=self.lembrar
-            )
-        finally:
-            QApplication.restoreOverrideCursor()
+        rodar_em_thread(
+            self,
+            verificar_codigo_2fa,
+            self.verificacao_id,
+            codigo,
+            lembrar=self.lembrar,
+            ao_sucesso=self._ao_confirmar_sucesso,
+            ao_erro=self._ao_confirmar_erro,
+            ao_finalizar=self._ao_confirmar_finalizado,
+        )
+
+    def _ao_confirmar_sucesso(self, resultado):
+
+        ok, erro = resultado
 
         if ok:
             self.accept()
@@ -126,3 +137,11 @@ class Verificar2FADialog(QDialog):
         QMessageBox.warning(self, "Código inválido", erro)
         self.codigo.selectAll()
         self.codigo.setFocus()
+
+    def _ao_confirmar_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_confirmar_finalizado(self):
+        self.bt_confirmar.setEnabled(True)
+        self.codigo.setEnabled(True)
+        QApplication.restoreOverrideCursor()

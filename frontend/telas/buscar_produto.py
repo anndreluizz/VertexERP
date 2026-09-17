@@ -15,12 +15,24 @@ from PySide6.QtWidgets import (
 
 from services.pdv_service import pesquisar_produtos
 from services.produto_service import obter_foto_produto, alternar_favorito_produto
+from services.worker import rodar_em_thread
 from utils.formatacao import formatar_moeda
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import Badge
 
 _TAMANHO_FOTO = 64
+
+
+def _executar_pesquisa(sequencia, termo, so_favoritos):
+    """Roda na worker thread -- a sequencia so' viaja de ida e volta
+    junto com o resultado (ver BuscarProdutoDialog._ao_busca_sucesso)
+    pra quem recebe saber se essa resposta ainda e' da busca mais
+    recente ou se o usuario ja digitou de novo enquanto ela voltava."""
+    produtos = pesquisar_produtos(termo)
+    if so_favoritos:
+        produtos = [p for p in produtos if p.get("favorito")]
+    return sequencia, termo, produtos
 
 
 def _pixmap_arredondado(pixmap, tamanho, raio=10):
@@ -367,6 +379,8 @@ class BuscarProdutoDialog(QDialog):
 
         layout.addLayout(rodape)
 
+        self._busca_sequencia = 0
+
         self.timer_busca = QTimer(self)
         self.timer_busca.setSingleShot(True)
         self.timer_busca.timeout.connect(self.executar_busca)
@@ -417,14 +431,38 @@ class BuscarProdutoDialog(QDialog):
 
         _, termo = self.parse_quantidade_termo(self.busca.text())
 
+        # sequencia: cada busca ganha um numero crescente -- a resposta
+        # so' e' aplicada se ainda for a busca mais recente. Sem isso,
+        # duas buscas assincronas em voo (usuario digitou nova letra
+        # antes da resposta da anterior voltar) podiam se cruzar e o
+        # resultado ERRADO (de uma busca antiga) sobrescrever o certo,
+        # so' por ter chegado depois pela rede.
+        self._busca_sequencia += 1
+
+        # nao limpa/esconde a lista atual aqui de proposito -- deixa o
+        # resultado anterior visivel ate' o novo chegar, em vez de
+        # piscar a lista vazia a cada tecla (a resposta normalmente
+        # volta rapido; se demorar, a lista antiga continua navegavel
+        # em vez de sumir sem motivo).
+
+        rodar_em_thread(
+            self,
+            _executar_pesquisa,
+            self._busca_sequencia,
+            termo,
+            self.bt_favoritos.isChecked(),
+            ao_sucesso=self._ao_busca_sucesso,
+            ao_erro=self._ao_busca_erro,
+        )
+
+    def _ao_busca_sucesso(self, resultado):
+
+        sequencia, termo, produtos = resultado
+
+        if sequencia != self._busca_sequencia:
+            return  # resposta de uma busca ja' superada, ignora
+
         self.lista.clear()
-
-        # termo vazio = lista os produtos cadastrados (navegavel),
-        # sem precisar digitar nada pra ver algo na tela
-        produtos = pesquisar_produtos(termo)
-
-        if self.bt_favoritos.isChecked():
-            produtos = [p for p in produtos if p.get("favorito")]
 
         for produto in produtos:
 
@@ -466,6 +504,15 @@ class BuscarProdutoDialog(QDialog):
                     "Nenhum produto cadastrado ainda.\n"
                     "Cadastre produtos na tela de Estoque."
                 )
+
+    def _ao_busca_erro(self, erro):
+        # erro nao passa pelo guard de sequencia (ver _ao_busca_sucesso)
+        # de proposito -- um erro de rede importa mostrar mesmo que uma
+        # busca mais nova ja tenha sido disparada, ela ainda nao voltou
+        self.lista.clear()
+        self.lista.setVisible(False)
+        self.lbl_vazio.setText(f"Não foi possível buscar.\n{erro}")
+        self.lbl_vazio.setVisible(True)
 
     # ==================================================
 

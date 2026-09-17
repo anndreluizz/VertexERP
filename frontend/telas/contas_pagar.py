@@ -24,6 +24,7 @@ from services.conta_pagar_service import (
     obter_documento_conta_pagar,
     obter_comprovante_pagamento_conta_pagar,
 )
+from services.worker import rodar_em_thread
 from telas.cadastro_despesa import CadastroDespesaDialog
 from telas.pagamento_despesa import PagamentoDespesaDialog
 
@@ -271,6 +272,7 @@ class ContasPagar(QWidget):
         self.contas = []
         self.filtro_status = "TODAS"
         self.filtro_periodo = "TODOS"
+        self._carregando = False
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
@@ -503,6 +505,12 @@ class ContasPagar(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        # achado nesta conversao: nada em __init__ chamava carregar()
+        # -- a tela nascia vazia e so' mostrava dado depois do 1o tick
+        # de 20s deste timer (ou de alguem trocar o filtro de loja).
+        # Carrega na hora de ficar visivel, e so' DEPOIS liga o timer
+        # de auto-atualizacao.
+        self.carregar()
         self._timer_auto_atualizacao.start()
 
     def hideEvent(self, event):
@@ -544,20 +552,58 @@ class ContasPagar(QWidget):
 
     def carregar(self):
 
-        loja_id = self.combo_loja_filtro.currentData()
-        self.contas = listar_contas_pagar(loja_id)
+        if self._carregando:
+            return
+        self._carregando = True
 
-        self._carregar_categorias()
-        self._atualizar_kpis()
-        self._renderizar_lista()
+        loja_id = self.combo_loja_filtro.currentData()
+
+        rodar_em_thread(
+            self,
+            listar_contas_pagar,
+            loja_id,
+            ao_sucesso=self._ao_carregar_sucesso,
+            ao_erro=self._ao_carregar_erro,
+            ao_finalizar=self._ao_carregar_finalizado,
+        )
+
+    def _ao_carregar_sucesso(self, contas):
+        try:
+            self.contas = contas
+            self._carregar_categorias()
+            self._atualizar_kpis()
+            self._renderizar_lista()
+        except Exception as erro:
+            self._ao_carregar_erro(erro)
+
+    def _ao_carregar_erro(self, erro):
+        # nao interrompe com QMessageBox aqui de proposito -- o timer
+        # de 20s roda em segundo plano sem o usuario ter pedido nada,
+        # um popup de erro a cada tentativa falha seria intrusivo
+        # demais; so' loga pra nao falhar silencioso de verdade
+        print(f"[contas_pagar] falha ao atualizar: {erro}")
+
+    def _ao_carregar_finalizado(self):
+        self._carregando = False
 
     def _carregar_combo_lojas(self):
 
         self.combo_loja_filtro.blockSignals(True)
         self.combo_loja_filtro.clear()
         self.combo_loja_filtro.addItem("Todas as lojas", None)
+        self.combo_loja_filtro.blockSignals(False)
 
-        for loja in listar_lojas():
+        rodar_em_thread(
+            self,
+            listar_lojas,
+            ao_sucesso=self._ao_carregar_combo_lojas_sucesso,
+        )
+
+    def _ao_carregar_combo_lojas_sucesso(self, lojas):
+
+        self.combo_loja_filtro.blockSignals(True)
+
+        for loja in lojas:
             self.combo_loja_filtro.addItem(loja["nome"], loja["id"])
 
         self.combo_loja_filtro.blockSignals(False)
@@ -776,8 +822,15 @@ class ContasPagar(QWidget):
         if resposta != QMessageBox.Yes:
             return
 
-        response = excluir_conta_pagar(conta["id"])
+        rodar_em_thread(
+            self,
+            excluir_conta_pagar,
+            conta["id"],
+            ao_sucesso=self._ao_excluir_despesa_sucesso,
+            ao_erro=self._ao_excluir_despesa_erro,
+        )
 
+    def _ao_excluir_despesa_sucesso(self, response):
         if response.status_code == 200:
             self.carregar()
         else:
@@ -786,6 +839,9 @@ class ContasPagar(QWidget):
             except Exception:
                 erro = response.text
             QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_excluir_despesa_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
 
     def pagar_despesa(self, conta):
 

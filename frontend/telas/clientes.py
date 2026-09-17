@@ -31,7 +31,9 @@ from PySide6.QtWidgets import (
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
+from services.worker import rodar_em_thread
 from utils.formatacao import formatar_moeda
+from widgets.estado_async import PainelErro, cartoes_esqueleto
 
 
 # rótulo exibido -> chave interna do filtro
@@ -75,6 +77,51 @@ _CORES_PONTUACAO = {
     "🔵": tokens.PRIMARIA,
     "🟢": tokens.SECUNDARIA,
 }
+
+
+def _buscar_dados_clientes(loja_id):
+    """Roda na worker thread (ver services/worker.py) -- as 3 chamadas
+    de rede + a agregacao de carregar() (nenhuma toca widget, so' monta
+    dict/soma numero, seguro rodar fora da GUI thread)."""
+
+    clientes = listar_clientes(loja_id)
+
+    movimentos_fiado = listar_movimentos()
+
+    movimentos_por_cliente = {}
+    for mov in movimentos_fiado:
+        cid = mov.get("cliente_id")
+        if cid is None:
+            continue
+        movimentos_por_cliente.setdefault(cid, []).append(mov)
+
+    agregados_por_cliente = {}
+    for cliente in clientes:
+        agr = cliente_analise.calcular_agregados(
+            cliente, movimentos_por_cliente.get(cliente["id"], [])
+        )
+        agregados_por_cliente[cliente["id"]] = agr
+        cliente["saldo_fiado"] = agr["saldo_devedor"]
+
+    vendas = listar_vendas()
+
+    vendas_por_cliente = {}
+    for venda in vendas:
+        cid = venda.get("cliente_id")
+        if cid is None:
+            continue
+        vendas_por_cliente[cid] = (
+            vendas_por_cliente.get(cid, 0)
+            + float(venda.get("valor_total", 0) or 0)
+        )
+
+    recebido_fiado_total = sum(
+        float(m.get("valor", 0) or 0)
+        for m in movimentos_fiado
+        if m.get("tipo") == "PAGAMENTO"
+    )
+
+    return clientes, agregados_por_cliente, vendas_por_cliente, recebido_fiado_total
 
 
 class ClienteCard(QFrame):
@@ -278,6 +325,7 @@ class Clientes(QWidget):
         self.vendas_por_cliente = {}
         self.agregados_por_cliente = {}
         self.filtro_status = "TODOS"
+        self._carregando = False
         self.ordenacao = "MOVIMENTO_RECENTE"
         self.prazo_inadimplencia = cliente_analise.PRAZO_INADIMPLENCIA_PADRAO
 
@@ -512,6 +560,10 @@ class Clientes(QWidget):
 
         layout.addWidget(self.lbl_vazio)
 
+        self.painel_erro = PainelErro()
+        self.painel_erro.tentar_novamente.connect(self.carregar)
+        layout.addWidget(self.painel_erro)
+
         # ==========================================
         # ATALHOS DE TECLADO
         # ==========================================
@@ -532,70 +584,101 @@ class Clientes(QWidget):
         self.combo_loja_filtro.blockSignals(True)
         self.combo_loja_filtro.clear()
         self.combo_loja_filtro.addItem("Todas as lojas", None)
+        self.combo_loja_filtro.blockSignals(False)
 
-        for loja in listar_lojas():
+        rodar_em_thread(
+            self,
+            listar_lojas,
+            ao_sucesso=self._ao_carregar_combo_lojas_sucesso,
+        )
+
+    def _ao_carregar_combo_lojas_sucesso(self, lojas):
+
+        self.combo_loja_filtro.blockSignals(True)
+
+        for loja in lojas:
             self.combo_loja_filtro.addItem(loja["nome"], loja["id"])
 
         self.combo_loja_filtro.blockSignals(False)
 
     def carregar(self):
 
+        # trava contra carga dupla sobreposta (ver mesmo comentario em
+        # telas/produtos.py::carregar) -- aqui tambem dispara pelo
+        # combo de loja mudando enquanto uma carga anterior ainda nao
+        # terminou
+        if self._carregando:
+            return
+        self._carregando = True
+
+        self.painel_erro.hide()
+        self.lbl_vazio.setVisible(False)
+        self.scroll.setVisible(True)
+        self._definir_controles_carregando(True)
+
+        cartoes_esqueleto(self.grid_layout)
+        self.lbl_contagem.setText("Carregando...")
+
         loja_id = self.combo_loja_filtro.currentData()
-        self.clientes = listar_clientes(loja_id)
 
-        # todos os movimentos de fiado numa unica chamada -- agrupa
-        # por cliente aqui do lado de fora, em vez de bater 1 endpoint
-        # por cliente (era assim que o saldo de cada card era buscado
-        # antes, uma chamada HTTP por cliente na tela inteira).
-        movimentos_fiado = listar_movimentos()
-
-        movimentos_por_cliente = {}
-        for mov in movimentos_fiado:
-            cid = mov.get("cliente_id")
-            if cid is None:
-                continue
-            movimentos_por_cliente.setdefault(cid, []).append(mov)
-
-        self.agregados_por_cliente = {}
-
-        for cliente in self.clientes:
-
-            agr = cliente_analise.calcular_agregados(
-                cliente, movimentos_por_cliente.get(cliente["id"], [])
-            )
-
-            self.agregados_por_cliente[cliente["id"]] = agr
-            cliente["saldo_fiado"] = agr["saldo_devedor"]
-
-        vendas = listar_vendas()
-
-        self.vendas_por_cliente = {}
-
-        for venda in vendas:
-
-            cid = venda.get("cliente_id")
-
-            if cid is None:
-                continue
-
-            self.vendas_por_cliente[cid] = (
-                self.vendas_por_cliente.get(cid, 0)
-                + float(venda.get("valor_total", 0) or 0)
-            )
-
-        # "Faturamento" somando venda.valor_total so contava vendas
-        # com cliente vinculado (a maioria do PDV nao vincula) e ficava
-        # sempre R$0,00 na pratica -- recebido de fiado e um numero
-        # real que ja existe (MovimentoFiado tipo PAGAMENTO).
-        self.recebido_fiado_total = sum(
-            float(m.get("valor", 0) or 0)
-            for m in movimentos_fiado
-            if m.get("tipo") == "PAGAMENTO"
+        rodar_em_thread(
+            self,
+            _buscar_dados_clientes,
+            loja_id,
+            ao_sucesso=self._ao_carregar_sucesso,
+            ao_erro=self._ao_carregar_erro,
+            ao_finalizar=self._ao_carregar_finalizado,
         )
 
-        self.atualizar_cards_resumo()
+    def _definir_controles_carregando(self, carregando: bool):
+        # bt_novo fica de fora de proposito, mesmo motivo do Produtos:
+        # cadastrar cliente novo nao depende da listagem ja ter
+        # terminado de carregar
+        for widget in (self.bt_exportar, self.combo_ordenacao, self.combo_loja_filtro):
+            widget.setEnabled(not carregando)
+        for botao in self.botoes_status.values():
+            botao.setEnabled(not carregando)
 
-        self.filtrar_clientes()
+    def _ao_carregar_sucesso(self, dados):
+        # a rede respondeu certinho, mas atualizar_cards_resumo/
+        # filtrar_clientes ainda podem estourar por um dado inesperado
+        # -- sem isso, uma excecao aqui deixava o skeleton preso na
+        # tela pra sempre (o "finalizado" ja tinha rodado e reabilitado
+        # os controles, mas nada trocava o skeleton por conteudo real
+        # nem avisava o usuario que algo deu errado)
+        try:
+            (
+                self.clientes,
+                self.agregados_por_cliente,
+                self.vendas_por_cliente,
+                self.recebido_fiado_total,
+            ) = dados
+
+            self.atualizar_cards_resumo()
+            self.filtrar_clientes()
+        except Exception as erro:
+            self._ao_carregar_erro(erro)
+
+    def _ao_carregar_erro(self, erro):
+        self.grid_layout_limpar()
+        self.scroll.setVisible(False)
+        self.lbl_vazio.setVisible(False)
+        self.painel_erro.definir_mensagem(
+            f"Não foi possível carregar os clientes.\n{erro}"
+        )
+        self.painel_erro.show()
+        self.lbl_contagem.setText("")
+
+    def _ao_carregar_finalizado(self):
+        self._carregando = False
+        self._definir_controles_carregando(False)
+
+    def grid_layout_limpar(self):
+        while self.grid_layout.count():
+            item = self.grid_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
 
     # ==========================================
     # CARDS DE RESUMO

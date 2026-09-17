@@ -27,6 +27,7 @@ from services.ean_lookup import buscar_produto_externo
 from services.categoria_service import listar_categorias, criar_categoria
 from telas.gerenciar_categorias import GerenciarCategoriasDialog
 from services.produto_service import obter_foto_produto
+from services.worker import rodar_em_thread
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.responsive import tamanho_fixo_seguro
@@ -39,6 +40,18 @@ _UNIDADES = [
     ("Quilograma (KG)", "KG"),
     ("Litro (L)", "L"),
 ]
+
+
+def _criar_categoria_com_nome(nome):
+    """Roda na worker thread -- o nome viaja junto com a resposta (nao
+    da pra usar lambda/closure como callback, ver services/worker.py)."""
+    return criar_categoria(nome), nome
+
+
+def _buscar_produto_externo_com_flag(codigo, silencioso):
+    """Roda na worker thread -- 'silencioso' viaja junto com o
+    resultado pelo mesmo motivo de _criar_categoria_com_nome."""
+    return buscar_produto_externo(codigo), silencioso
 
 
 class CadastroProdutoWindow(QDialog):
@@ -666,9 +679,15 @@ class CadastroProdutoWindow(QDialog):
         # categorias") apagava a categoria que o usuario ja tinha
         # escolhido pro produto em edicao (mesmo padrao ja usado em
         # cadastro_despesa.py pro mesmo tipo de combobox)
-        selecionada = self.categoria.currentText()
+        self._categoria_selecionada_pendente = self.categoria.currentText()
 
-        categorias = listar_categorias()
+        rodar_em_thread(
+            self,
+            listar_categorias,
+            ao_sucesso=self._ao_carregar_categorias_sucesso,
+        )
+
+    def _ao_carregar_categorias_sucesso(self, categorias):
 
         self.categoria.clear()
 
@@ -676,7 +695,7 @@ class CadastroProdutoWindow(QDialog):
             if c.get("ativo", True):
                 self.categoria.addItem(c["nome"])
 
-        self.categoria.setCurrentText(selecionada)
+        self.categoria.setCurrentText(self._categoria_selecionada_pendente)
 
     def criar_nova_categoria(self):
 
@@ -691,7 +710,17 @@ class CadastroProdutoWindow(QDialog):
 
         nome = nome.strip()
 
-        response = criar_categoria(nome)
+        rodar_em_thread(
+            self,
+            _criar_categoria_com_nome,
+            nome,
+            ao_sucesso=self._ao_criar_categoria_sucesso,
+            ao_erro=self._ao_criar_categoria_erro,
+        )
+
+    def _ao_criar_categoria_sucesso(self, resultado):
+
+        response, nome = resultado
 
         if response.status_code in (200, 201):
 
@@ -708,6 +737,9 @@ class CadastroProdutoWindow(QDialog):
                 erro = response.text
 
             QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_criar_categoria_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
 
     def gerenciar_categorias(self):
 
@@ -773,11 +805,20 @@ class CadastroProdutoWindow(QDialog):
             return
 
         self.bt_buscar.setEnabled(False)
-        QApplication.processEvents()
 
-        resultado = buscar_produto_externo(codigo)
+        rodar_em_thread(
+            self,
+            _buscar_produto_externo_com_flag,
+            codigo,
+            silencioso,
+            ao_sucesso=self._ao_buscar_automatico_sucesso,
+            ao_erro=self._ao_buscar_automatico_erro,
+            ao_finalizar=self._ao_buscar_automatico_finalizado,
+        )
 
-        self.bt_buscar.setEnabled(True)
+    def _ao_buscar_automatico_sucesso(self, resultado_com_flag):
+
+        resultado, silencioso = resultado_com_flag
 
         if resultado is None:
 
@@ -796,6 +837,14 @@ class CadastroProdutoWindow(QDialog):
 
             self.imagem_bytes = resultado["imagem_bytes"]
             self._exibir_imagem(self.imagem_bytes)
+
+    def _ao_buscar_automatico_erro(self, erro):
+        QMessageBox.critical(
+            self, "Erro", f"Não foi possível buscar o produto.\n{erro}"
+        )
+
+    def _ao_buscar_automatico_finalizado(self):
+        self.bt_buscar.setEnabled(True)
 
     def adicionar_imagem(self):
 
@@ -913,10 +962,16 @@ class CadastroProdutoWindow(QDialog):
 
         if self.produto.get("tem_foto"):
 
-            foto_bytes = obter_foto_produto(self.produto["id"])
+            rodar_em_thread(
+                self,
+                obter_foto_produto,
+                self.produto["id"],
+                ao_sucesso=self._ao_carregar_foto_sucesso,
+            )
 
-            if foto_bytes:
-                self._exibir_imagem(foto_bytes)
+    def _ao_carregar_foto_sucesso(self, foto_bytes):
+        if foto_bytes:
+            self._exibir_imagem(foto_bytes)
 
     # ==========================================
     # VALIDAR E SALVAR

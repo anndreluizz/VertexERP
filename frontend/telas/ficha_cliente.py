@@ -50,6 +50,27 @@ from services.cliente_service import (
 from telas import comprovante_acoes
 from services import cliente_analise
 from services import comprovante_service, impressora_termica_service, preferencias_service
+from services.worker import rodar_em_thread
+
+
+def _buscar_dados_recibo_pagamento(cliente_id, valor, momento):
+    """Roda na worker thread -- valor/momento so' viajam de ida e volta
+    junto com o resultado (ver services/worker.py: callback precisa
+    ser metodo vinculado, nao lambda/closure)."""
+    saldo_depois = saldo_cliente(cliente_id)
+    responsavel = (api.me() or {}).get("nome") or "—"
+    config_loja = api.configuracoes()
+    return saldo_depois, responsavel, config_loja, valor, momento
+
+
+def _buscar_dados_ficha_cliente(cliente_id):
+    """Roda na worker thread -- as 4 chamadas que
+    FichaClienteDialog.carregar() precisa."""
+    saldo = saldo_cliente(cliente_id)
+    vendas_por_id = {v["id"]: v for v in listar_vendas()}
+    nomes_produto = {p["id"]: p["nome"] for p in listar_produtos()}
+    movimentos = listar_movimentos_cliente(cliente_id)
+    return saldo, vendas_por_id, nomes_produto, movimentos
 
 from design import tokens
 from design.icons import icone, icone_pixmap
@@ -212,12 +233,12 @@ class LancarFiadoDialog(QDialog):
     onde a loja quer registrar o valor e os itens sem precisar recriar
     a venda inteira no PDV."""
 
-    def __init__(self, cliente, parent=None):
+    def __init__(self, cliente, saldo_atual, parent=None):
 
         super().__init__(parent)
 
         self.cliente = cliente
-        self._saldo_atual = saldo_cliente(cliente["id"])
+        self._saldo_atual = saldo_atual
         self._tipo_registro = "compra"
 
         self.setWindowTitle("Lançar Fiado")
@@ -308,13 +329,13 @@ class LancarFiadoDialog(QDialog):
         bt_cancelar.setAutoDefault(False)
         bt_cancelar.clicked.connect(self.reject)
 
-        bt_confirmar = BotaoSucesso("Lançar Fiado", icone_nome="check")
-        bt_confirmar.setMinimumHeight(46)
-        bt_confirmar.setAutoDefault(False)
-        bt_confirmar.clicked.connect(self.confirmar)
+        self.bt_confirmar = BotaoSucesso("Lançar Fiado", icone_nome="check")
+        self.bt_confirmar.setMinimumHeight(46)
+        self.bt_confirmar.setAutoDefault(False)
+        self.bt_confirmar.clicked.connect(self.confirmar)
 
         botoes.addWidget(bt_cancelar)
-        botoes.addWidget(bt_confirmar)
+        botoes.addWidget(self.bt_confirmar)
 
         layout.addLayout(botoes)
 
@@ -671,29 +692,6 @@ class LancarFiadoDialog(QDialog):
             )
             return
 
-        limite = self.cliente.get("limite_credito")
-
-        if limite is not None:
-
-            saldo_atual = saldo_cliente(self.cliente["id"])
-            saldo_projetado = saldo_atual + valor
-
-            if saldo_projetado > limite:
-
-                resposta = QMessageBox.warning(
-                    self,
-                    "Limite de crédito",
-                    f"Esse lançamento deixa o saldo devedor em "
-                    f"{formatar_moeda(saldo_projetado)}, acima do limite "
-                    f"de crédito cadastrado ({formatar_moeda(limite)}).\n\n"
-                    "Deseja lançar mesmo assim?",
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.No,
-                )
-
-                if resposta != QMessageBox.Yes:
-                    return
-
         itens = self.itens.text().strip() or None
 
         data_qt = self.data.date()
@@ -703,10 +701,69 @@ class LancarFiadoDialog(QDialog):
             + "T00:00:00"
         )
 
-        response = lancar_fiado_manual(
-            self.cliente["id"], valor, itens, data_iso
+        self._fiado_pendente = (valor, itens, data_iso)
+
+        limite = self.cliente.get("limite_credito")
+
+        if limite is not None:
+            self.bt_confirmar.setEnabled(False)
+            rodar_em_thread(
+                self,
+                saldo_cliente,
+                self.cliente["id"],
+                ao_sucesso=self._ao_checar_limite_sucesso,
+                ao_erro=self._ao_fiado_erro,
+                ao_finalizar=self._ao_checar_limite_finalizado,
+            )
+        else:
+            self._enviar_fiado()
+
+    def _ao_checar_limite_finalizado(self):
+        self.bt_confirmar.setEnabled(True)
+
+    def _ao_checar_limite_sucesso(self, saldo_atual):
+
+        valor, _itens, _data_iso = self._fiado_pendente
+        limite = self.cliente.get("limite_credito")
+        saldo_projetado = saldo_atual + valor
+
+        if saldo_projetado > limite:
+
+            resposta = QMessageBox.warning(
+                self,
+                "Limite de crédito",
+                f"Esse lançamento deixa o saldo devedor em "
+                f"{formatar_moeda(saldo_projetado)}, acima do limite "
+                f"de crédito cadastrado ({formatar_moeda(limite)}).\n\n"
+                "Deseja lançar mesmo assim?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+
+            if resposta != QMessageBox.Yes:
+                return
+
+        self._enviar_fiado()
+
+    def _enviar_fiado(self):
+
+        valor, itens, data_iso = self._fiado_pendente
+
+        self.bt_confirmar.setEnabled(False)
+
+        rodar_em_thread(
+            self,
+            lancar_fiado_manual,
+            self.cliente["id"],
+            valor,
+            itens,
+            data_iso,
+            ao_sucesso=self._ao_enviar_fiado_sucesso,
+            ao_erro=self._ao_fiado_erro,
+            ao_finalizar=self._ao_checar_limite_finalizado,
         )
 
+    def _ao_enviar_fiado_sucesso(self, response):
         if response.status_code in (200, 201):
             self.accept()
         else:
@@ -716,6 +773,9 @@ class LancarFiadoDialog(QDialog):
                 erro = response.text
 
             QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_fiado_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
 
 
 class RegistrarPagamentoDialog(QDialog):
@@ -1078,13 +1138,29 @@ class RegistrarPagamentoDialog(QDialog):
             + "T00:00:00"
         )
 
-        response = registrar_pagamento(
+        self._pagamento_valor_pendente = valor
+        self.bt_confirmar.setEnabled(False)
+
+        rodar_em_thread(
+            self,
+            registrar_pagamento,
             self.cliente["id"],
             valor,
             self.forma_pagamento,
             descricao=self.observacao.text().strip() or None,
             data=data_iso,
+            ao_sucesso=self._ao_registrar_pagamento_sucesso,
+            ao_erro=self._ao_pagamento_erro,
+            ao_finalizar=self._ao_registrar_pagamento_finalizado,
         )
+
+    def _ao_registrar_pagamento_finalizado(self):
+        self.bt_confirmar.setEnabled(True)
+
+    def _ao_pagamento_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_registrar_pagamento_sucesso(self, response):
 
         if response.status_code not in (200, 201):
             try:
@@ -1106,7 +1182,7 @@ class RegistrarPagamentoDialog(QDialog):
         )
 
         if resposta == QMessageBox.Yes:
-            self._imprimir_recibo_pagamento(valor)
+            self._imprimir_recibo_pagamento(self._pagamento_valor_pendente)
 
         self.accept()
 
@@ -1120,9 +1196,6 @@ class RegistrarPagamentoDialog(QDialog):
 
     def _imprimir_recibo_pagamento(self, valor):
 
-        saldo_depois = saldo_cliente(self.cliente["id"])
-        responsavel = (api.me() or {}).get("nome") or "—"
-
         # a data escolhida no dialogo (Hoje/Ontem) nao tem hora -- usa
         # o horario atual (momento em que o recibo esta sendo gerado)
         # junto com o dia selecionado, pra nao imprimir "as 00:00"
@@ -1133,7 +1206,20 @@ class RegistrarPagamentoDialog(QDialog):
             agora.hour, agora.minute,
         ).isoformat()
 
-        config_loja = api.configuracoes()
+        rodar_em_thread(
+            self,
+            _buscar_dados_recibo_pagamento,
+            self.cliente["id"],
+            valor,
+            momento,
+            ao_sucesso=self._ao_dados_recibo_sucesso,
+            ao_erro=self._ao_pagamento_erro,
+        )
+
+    def _ao_dados_recibo_sucesso(self, resultado):
+
+        saldo_depois, responsavel, config_loja, valor, momento = resultado
+
         config_impressora = preferencias_service.carregar_impressora_termica()
 
         if config_impressora and config_impressora.get("ativa"):
@@ -1302,13 +1388,13 @@ class LancarHaverDialog(QDialog):
         bt_cancelar.setAutoDefault(False)
         bt_cancelar.clicked.connect(self.reject)
 
-        bt_confirmar = BotaoPrimario("Salvar")
-        bt_confirmar.setMinimumHeight(46)
-        bt_confirmar.setAutoDefault(False)
-        bt_confirmar.clicked.connect(self.confirmar)
+        self.bt_confirmar = BotaoPrimario("Salvar")
+        self.bt_confirmar.setMinimumHeight(46)
+        self.bt_confirmar.setAutoDefault(False)
+        self.bt_confirmar.clicked.connect(self.confirmar)
 
         botoes.addWidget(bt_cancelar)
-        botoes.addWidget(bt_confirmar)
+        botoes.addWidget(self.bt_confirmar)
 
         layout.addLayout(botoes)
 
@@ -1328,11 +1414,26 @@ class LancarHaverDialog(QDialog):
             )
             return
 
-        response = lancar_haver(
+        self.bt_confirmar.setEnabled(False)
+
+        rodar_em_thread(
+            self,
+            lancar_haver,
             self.cliente["id"],
             valor,
             self.descricao.text().strip() or "Haver",
+            ao_sucesso=self._ao_confirmar_sucesso,
+            ao_erro=self._ao_confirmar_erro,
+            ao_finalizar=self._ao_confirmar_finalizado,
         )
+
+    def _ao_confirmar_finalizado(self):
+        self.bt_confirmar.setEnabled(True)
+
+    def _ao_confirmar_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_confirmar_sucesso(self, response):
 
         if response.status_code in (200, 201):
             self.accept()
@@ -1357,6 +1458,7 @@ class FichaClienteDialog(QDialog):
         self._vendas_por_id = {}
         self._nomes_produto = {}
         self._movimentos = []
+        self._carregando = False
 
         self._filtro_timeline = "TODOS"
         self._busca_timeline = ""
@@ -1956,13 +2058,13 @@ class FichaClienteDialog(QDialog):
             "Escreva uma observação..."
         )
 
-        bt_adicionar = BotaoPrimario("Adicionar")
-        bt_adicionar.setFixedHeight(36)
-        bt_adicionar.setAutoDefault(False)
-        bt_adicionar.clicked.connect(self.adicionar_observacao)
+        self.bt_add_observacao = BotaoPrimario("Adicionar")
+        self.bt_add_observacao.setFixedHeight(36)
+        self.bt_add_observacao.setAutoDefault(False)
+        self.bt_add_observacao.clicked.connect(self.adicionar_observacao)
 
         linha_nova.addWidget(self.campo_nova_observacao)
-        linha_nova.addWidget(bt_adicionar)
+        linha_nova.addWidget(self.bt_add_observacao)
 
         layout.addLayout(linha_nova)
 
@@ -2062,8 +2164,12 @@ class FichaClienteDialog(QDialog):
         return linha
 
     def _carregar_observacoes(self):
-        observacoes = listar_observacoes_cliente(self.cliente["id"])
-        self._preencher_observacoes(observacoes)
+        rodar_em_thread(
+            self,
+            listar_observacoes_cliente,
+            self.cliente["id"],
+            ao_sucesso=self._preencher_observacoes,
+        )
 
     def adicionar_observacao(self):
 
@@ -2072,8 +2178,19 @@ class FichaClienteDialog(QDialog):
         if not texto:
             return
 
-        response = criar_observacao_cliente(self.cliente["id"], texto)
+        self.bt_add_observacao.setEnabled(False)
 
+        rodar_em_thread(
+            self,
+            criar_observacao_cliente,
+            self.cliente["id"],
+            texto,
+            ao_sucesso=self._ao_adicionar_observacao_sucesso,
+            ao_erro=self._ao_observacao_erro,
+            ao_finalizar=self._ao_adicionar_observacao_finalizado,
+        )
+
+    def _ao_adicionar_observacao_sucesso(self, response):
         if response.status_code in (200, 201):
             self.campo_nova_observacao.clear()
             self._carregar_observacoes()
@@ -2085,6 +2202,12 @@ class FichaClienteDialog(QDialog):
 
             QMessageBox.critical(self, "Erro", str(erro))
 
+    def _ao_adicionar_observacao_finalizado(self):
+        self.bt_add_observacao.setEnabled(True)
+
+    def _ao_observacao_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
     def excluir_observacao(self, observacao_id):
 
         resposta = QMessageBox.question(
@@ -2094,8 +2217,16 @@ class FichaClienteDialog(QDialog):
         if resposta != QMessageBox.Yes:
             return
 
-        response = excluir_observacao_cliente(self.cliente["id"], observacao_id)
+        rodar_em_thread(
+            self,
+            excluir_observacao_cliente,
+            self.cliente["id"],
+            observacao_id,
+            ao_sucesso=self._ao_excluir_observacao_sucesso,
+            ao_erro=self._ao_observacao_erro,
+        )
 
+    def _ao_excluir_observacao_sucesso(self, response):
         if response.status_code == 200:
             self._carregar_observacoes()
         else:
@@ -2166,7 +2297,16 @@ class FichaClienteDialog(QDialog):
         if not ok:
             return
 
-        response = editar_movimento(mov["id"], valor=novo_valor)
+        rodar_em_thread(
+            self,
+            editar_movimento,
+            mov["id"],
+            valor=novo_valor,
+            ao_sucesso=self._ao_editar_movimento_sucesso,
+            ao_erro=self._ao_movimento_mutacao_erro,
+        )
+
+    def _ao_editar_movimento_sucesso(self, response):
 
         if response.status_code != 200:
             try:
@@ -2189,6 +2329,9 @@ class FichaClienteDialog(QDialog):
 
         self.carregar()
 
+    def _ao_movimento_mutacao_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
     def _excluir_movimento_fiado(self, mov):
 
         resposta = QMessageBox.question(
@@ -2200,7 +2343,15 @@ class FichaClienteDialog(QDialog):
         if resposta != QMessageBox.Yes:
             return
 
-        response = excluir_movimento(mov["id"])
+        rodar_em_thread(
+            self,
+            excluir_movimento,
+            mov["id"],
+            ao_sucesso=self._ao_excluir_movimento_sucesso,
+            ao_erro=self._ao_movimento_mutacao_erro,
+        )
+
+    def _ao_excluir_movimento_sucesso(self, response):
 
         if response.status_code != 200:
             try:
@@ -2779,7 +2930,14 @@ class FichaClienteDialog(QDialog):
         if not cliente.get("tem_foto"):
             return
 
-        foto_bytes = obter_foto_cliente(cliente["id"])
+        rodar_em_thread(
+            self,
+            obter_foto_cliente,
+            cliente["id"],
+            ao_sucesso=self._ao_atualizar_avatar_sucesso,
+        )
+
+    def _ao_atualizar_avatar_sucesso(self, foto_bytes):
 
         if not foto_bytes:
             return
@@ -2817,7 +2975,15 @@ class FichaClienteDialog(QDialog):
         if resposta != QMessageBox.Yes:
             return
 
-        response = excluir_cliente(self.cliente["id"])
+        rodar_em_thread(
+            self,
+            excluir_cliente,
+            self.cliente["id"],
+            ao_sucesso=self._ao_excluir_cliente_sucesso,
+            ao_erro=self._ao_movimento_mutacao_erro,
+        )
+
+    def _ao_excluir_cliente_sucesso(self, response):
 
         if response.status_code == 200:
 
@@ -2953,7 +3119,39 @@ class FichaClienteDialog(QDialog):
 
     def carregar(self):
 
-        saldo = saldo_cliente(self.cliente["id"])
+        if self._carregando:
+            return
+        self._carregando = True
+        self._definir_controles_carregando(True)
+
+        rodar_em_thread(
+            self,
+            _buscar_dados_ficha_cliente,
+            self.cliente["id"],
+            ao_sucesso=self._ao_carregar_sucesso,
+            ao_erro=self._ao_carregar_erro,
+            ao_finalizar=self._ao_carregar_finalizado,
+        )
+
+    def _definir_controles_carregando(self, carregando: bool):
+        self.bt_lancar_fiado.setEnabled(not carregando)
+        self.bt_haver.setEnabled(not carregando)
+        # bt_pagar fica de fora -- carregar() decide se ele deveria
+        # estar habilitado (saldo > 0) assim que o saldo chegar
+
+    def _ao_carregar_erro(self, erro):
+        QMessageBox.critical(
+            self, "Erro", f"Não foi possível carregar a ficha do cliente.\n{erro}"
+        )
+
+    def _ao_carregar_finalizado(self):
+        self._carregando = False
+        self.bt_lancar_fiado.setEnabled(True)
+        self.bt_haver.setEnabled(True)
+
+    def _ao_carregar_sucesso(self, resultado):
+
+        saldo, self._vendas_por_id, self._nomes_produto, movimentos = resultado
 
         self.lbl_saldo_valor.setText(formatar_moeda(saldo))
         self.lbl_saldo_valor.setStyleSheet(f"""
@@ -2963,15 +3161,6 @@ class FichaClienteDialog(QDialog):
         """)
 
         self.bt_pagar.setEnabled(saldo > 0)
-
-        self._vendas_por_id = {
-            v["id"]: v for v in listar_vendas()
-        }
-        self._nomes_produto = {
-            p["id"]: p["nome"] for p in listar_produtos()
-        }
-
-        movimentos = listar_movimentos_cliente(self.cliente["id"])
 
         # ordem cronologica (mais antigo primeiro) pra calcular o saldo
         # corrido — depois inverte só na hora de exibir
@@ -3087,7 +3276,20 @@ class FichaClienteDialog(QDialog):
 
     def registrar_pagamento(self):
 
-        saldo = saldo_cliente(self.cliente["id"])
+        self.bt_pagar.setEnabled(False)
+        rodar_em_thread(
+            self,
+            saldo_cliente,
+            self.cliente["id"],
+            ao_sucesso=self._ao_saldo_para_pagamento_sucesso,
+            ao_erro=self._ao_movimento_mutacao_erro,
+            ao_finalizar=self._ao_saldo_pre_check_finalizado,
+        )
+
+    def _ao_saldo_pre_check_finalizado(self):
+        self.bt_pagar.setEnabled(True)
+
+    def _ao_saldo_para_pagamento_sucesso(self, saldo):
 
         if saldo <= 0:
             QMessageBox.information(
@@ -3110,7 +3312,22 @@ class FichaClienteDialog(QDialog):
 
     def lancar_fiado(self):
 
-        dialogo = LancarFiadoDialog(self.cliente, parent=self)
+        self.bt_lancar_fiado.setEnabled(False)
+        rodar_em_thread(
+            self,
+            saldo_cliente,
+            self.cliente["id"],
+            ao_sucesso=self._ao_saldo_para_fiado_sucesso,
+            ao_erro=self._ao_movimento_mutacao_erro,
+            ao_finalizar=self._ao_saldo_fiado_finalizado,
+        )
+
+    def _ao_saldo_fiado_finalizado(self):
+        self.bt_lancar_fiado.setEnabled(True)
+
+    def _ao_saldo_para_fiado_sucesso(self, saldo_atual):
+
+        dialogo = LancarFiadoDialog(self.cliente, saldo_atual, parent=self)
 
         if dialogo.exec() != QDialog.Accepted:
             return
@@ -3119,7 +3336,20 @@ class FichaClienteDialog(QDialog):
 
     def lancar_haver(self):
 
-        saldo = saldo_cliente(self.cliente["id"])
+        self.bt_haver.setEnabled(False)
+        rodar_em_thread(
+            self,
+            saldo_cliente,
+            self.cliente["id"],
+            ao_sucesso=self._ao_saldo_para_haver_sucesso,
+            ao_erro=self._ao_movimento_mutacao_erro,
+            ao_finalizar=self._ao_saldo_haver_finalizado,
+        )
+
+    def _ao_saldo_haver_finalizado(self):
+        self.bt_haver.setEnabled(True)
+
+    def _ao_saldo_para_haver_sucesso(self, saldo):
 
         if saldo <= 0:
             QMessageBox.information(

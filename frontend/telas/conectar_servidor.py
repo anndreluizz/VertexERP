@@ -13,6 +13,7 @@ from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoPrimario, BotaoSecundario, CampoTexto
 from services import api
 from services.preferencias_service import salvar_servidor, carregar_servidor
+from services.worker import rodar_em_thread
 
 
 class ConectarServidorDialog(QDialog):
@@ -95,15 +96,15 @@ class ConectarServidorDialog(QDialog):
         linha_botoes = QHBoxLayout()
         linha_botoes.setSpacing(10)
 
-        bt_testar = BotaoSecundario("Testar Conexão")
-        bt_testar.setMinimumHeight(44)
-        bt_testar.clicked.connect(self.testar)
+        self.bt_testar = BotaoSecundario("Testar Conexão")
+        self.bt_testar.setMinimumHeight(44)
+        self.bt_testar.clicked.connect(self.testar)
 
         bt_salvar = BotaoPrimario("Salvar")
         bt_salvar.setMinimumHeight(44)
         bt_salvar.clicked.connect(self.salvar)
 
-        linha_botoes.addWidget(bt_testar)
+        linha_botoes.addWidget(self.bt_testar)
         linha_botoes.addWidget(bt_salvar)
 
         layout.addLayout(linha_botoes)
@@ -122,16 +123,20 @@ class ConectarServidorDialog(QDialog):
             self._status("Informe um endereço.", tokens.ALERTA)
             return
 
-        try:
-            resposta = api.testar_conexao(endereco)
-            ok = resposta.status_code == 200
-        except api.CertificadoServidorMudou:
-            self._perguntar_confiar_de_novo()
-            return
-        except Exception:
-            ok = False
+        self.bt_testar.setEnabled(False)
+        self._status("Testando conexão...", tokens.TEXTO_TERCIARIO)
 
-        if ok:
+        rodar_em_thread(
+            self,
+            api.testar_conexao,
+            endereco,
+            ao_sucesso=self._ao_testar_sucesso,
+            ao_erro=self._ao_testar_erro,
+            ao_finalizar=self._ao_testar_finalizado,
+        )
+
+    def _ao_testar_sucesso(self, resposta):
+        if resposta.status_code == 200:
             self._status(f"Conectado com sucesso em {api.URL}!", tokens.SECUNDARIA)
         else:
             self._status(
@@ -140,6 +145,21 @@ class ConectarServidorDialog(QDialog):
                 "tentar de novo depois.",
                 tokens.ALERTA,
             )
+
+    def _ao_testar_erro(self, erro):
+        if isinstance(erro, api.CertificadoServidorMudou):
+            self._perguntar_confiar_de_novo()
+            return
+
+        self._status(
+            "Não foi possível conectar agora — confira se o servidor "
+            "está ligado e na mesma rede. Você ainda pode salvar e "
+            "tentar de novo depois.",
+            tokens.ALERTA,
+        )
+
+    def _ao_testar_finalizado(self):
+        self.bt_testar.setEnabled(True)
 
     def _perguntar_confiar_de_novo(self):
         """O certificado salvo pra esse servidor não bate mais com o

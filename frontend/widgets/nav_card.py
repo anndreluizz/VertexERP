@@ -9,6 +9,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from utils.acessibilidade import movimento_reduzido
+
 
 class NavCard(QFrame):
 
@@ -146,6 +148,11 @@ class NavCard(QFrame):
 
     def _animar_sombra_para(self, alvo):
         self._anim_sombra.stop()
+
+        if movimento_reduzido():
+            self._ao_animar_sombra(alvo)
+            return
+
         self._anim_sombra.setStartValue(self._sombra.blurRadius())
         self._anim_sombra.setEndValue(alvo)
         self._anim_sombra.start()

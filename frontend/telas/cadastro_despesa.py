@@ -24,6 +24,7 @@ from services.conta_pagar_service import (
     remover_documento_conta_pagar,
 )
 from services.categoria_despesa_service import listar_categorias_despesa
+from services.worker import rodar_em_thread
 from telas.gerenciar_categorias_despesa import (
     GerenciarCategoriasDespesaDialog,
 )
@@ -387,16 +388,22 @@ class CadastroDespesaDialog(QDialog):
 
     def _carregar_categorias(self):
 
-        selecionada = self.categoria.currentText()
+        self._categoria_selecionada_pendente = self.categoria.currentText()
+
+        rodar_em_thread(
+            self,
+            listar_categorias_despesa,
+            ao_sucesso=self._ao_carregar_categorias_sucesso,
+        )
+
+    def _ao_carregar_categorias_sucesso(self, categorias):
 
         self.categoria.clear()
 
-        nomes = [
-            c["nome"] for c in listar_categorias_despesa()
-        ]
-
+        nomes = [c["nome"] for c in categorias]
         self.categoria.addItems(nomes)
 
+        selecionada = self._categoria_selecionada_pendente
         if selecionada and self.categoria.findText(selecionada) >= 0:
             self.categoria.setCurrentText(selecionada)
 
@@ -452,20 +459,38 @@ class CadastroDespesaDialog(QDialog):
         # documento que ja estava salvo -- remove de verdade, na hora
         # (mesmo criterio de outras acoes imediatas do app, sem rascunho)
         if self.conta and self.conta.get("tem_documento"):
-            resposta = remover_documento_conta_pagar(self.conta["id"])
+            self.bt_remover_anexo.setEnabled(False)
+            rodar_em_thread(
+                self,
+                remover_documento_conta_pagar,
+                self.conta["id"],
+                ao_sucesso=self._ao_remover_documento_sucesso,
+                ao_erro=self._ao_remover_documento_erro,
+                ao_finalizar=self._ao_remover_documento_finalizado,
+            )
 
-            if resposta.status_code != 200:
-                QMessageBox.critical(
-                    self, "Erro", "Não foi possível remover o documento."
-                )
-                return
+    def _ao_remover_documento_sucesso(self, resposta):
 
-            self.lbl_arquivo_anexado.setText("Nenhum arquivo anexado")
-            self.lbl_arquivo_anexado.setStyleSheet(f"""
-                background:transparent; font-size:{tokens.TAMANHO_SM}px;
-                color:{tokens.TEXTO_TERCIARIO};
-            """)
-            self.bt_remover_anexo.setVisible(False)
+        if resposta.status_code != 200:
+            QMessageBox.critical(
+                self, "Erro", "Não foi possível remover o documento."
+            )
+            return
+
+        self.lbl_arquivo_anexado.setText("Nenhum arquivo anexado")
+        self.lbl_arquivo_anexado.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
+        self.bt_remover_anexo.setVisible(False)
+
+    def _ao_remover_documento_erro(self, erro):
+        QMessageBox.critical(
+            self, "Erro", f"Não foi possível remover o documento.\n{erro}"
+        )
+
+    def _ao_remover_documento_finalizado(self):
+        self.bt_remover_anexo.setEnabled(True)
 
     def _preencher(self, conta, duplicando=False):
 
@@ -553,12 +578,22 @@ class CadastroDespesaDialog(QDialog):
             dados["documento_tipo"] = self.documento_tipo_arquivo
 
         if self.conta:
-            response = atualizar_conta_pagar(
-                self.conta["id"],
-                dados,
-            )
+            func, args = atualizar_conta_pagar, (self.conta["id"], dados)
         else:
-            response = cadastrar_conta_pagar(dados)
+            func, args = cadastrar_conta_pagar, (dados,)
+
+        self.bt_salvar.setEnabled(False)
+
+        rodar_em_thread(
+            self,
+            func,
+            *args,
+            ao_sucesso=self._ao_salvar_sucesso,
+            ao_erro=self._ao_salvar_erro,
+            ao_finalizar=self._ao_salvar_finalizado,
+        )
+
+    def _ao_salvar_sucesso(self, response):
 
         if response.status_code in (200, 201):
 
@@ -572,3 +607,9 @@ class CadastroDespesaDialog(QDialog):
                 erro = response.text
 
             QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_salvar_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_salvar_finalizado(self):
+        self.bt_salvar.setEnabled(True)

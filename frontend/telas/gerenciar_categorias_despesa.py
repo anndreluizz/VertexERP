@@ -18,6 +18,7 @@ from services.categoria_despesa_service import (
     atualizar_categoria_despesa,
     excluir_categoria_despesa,
 )
+from services.worker import rodar_em_thread
 
 from design import tokens
 from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, BotaoSucesso, CampoTexto
@@ -29,6 +30,7 @@ class GerenciarCategoriasDespesaDialog(QDialog):
         super().__init__(parent)
 
         self.categorias = []
+        self._carregando = False
 
         self.setWindowTitle("Gerenciar Categorias de Despesa")
         self.resize(480, 480)
@@ -52,12 +54,12 @@ class GerenciarCategoriasDespesaDialog(QDialog):
         )
         self.novo_nome.returnPressed.connect(self.adicionar)
 
-        bt_adicionar = BotaoSucesso("Adicionar", icone_nome="plus")
-        bt_adicionar.setAutoDefault(False)
-        bt_adicionar.clicked.connect(self.adicionar)
+        self.bt_adicionar = BotaoSucesso("Adicionar", icone_nome="plus")
+        self.bt_adicionar.setAutoDefault(False)
+        self.bt_adicionar.clicked.connect(self.adicionar)
 
         nova_layout.addWidget(self.novo_nome)
-        nova_layout.addWidget(bt_adicionar)
+        nova_layout.addWidget(self.bt_adicionar)
 
         layout.addLayout(nova_layout)
 
@@ -99,20 +101,20 @@ class GerenciarCategoriasDespesaDialog(QDialog):
 
         rodape = QHBoxLayout()
 
-        bt_editar = BotaoPrimario("Editar", icone_nome="edit-2")
-        bt_editar.setAutoDefault(False)
-        bt_editar.clicked.connect(self.editar)
+        self.bt_editar = BotaoPrimario("Editar", icone_nome="edit-2")
+        self.bt_editar.setAutoDefault(False)
+        self.bt_editar.clicked.connect(self.editar)
 
-        bt_excluir = BotaoPerigo("Excluir", icone_nome="trash-2")
-        bt_excluir.setAutoDefault(False)
-        bt_excluir.clicked.connect(self.excluir)
+        self.bt_excluir = BotaoPerigo("Excluir", icone_nome="trash-2")
+        self.bt_excluir.setAutoDefault(False)
+        self.bt_excluir.clicked.connect(self.excluir)
 
         bt_fechar = BotaoSecundario("Fechar")
         bt_fechar.setAutoDefault(False)
         bt_fechar.clicked.connect(self.accept)
 
-        rodape.addWidget(bt_editar)
-        rodape.addWidget(bt_excluir)
+        rodape.addWidget(self.bt_editar)
+        rodape.addWidget(self.bt_excluir)
         rodape.addStretch()
         rodape.addWidget(bt_fechar)
 
@@ -124,7 +126,27 @@ class GerenciarCategoriasDespesaDialog(QDialog):
 
     def carregar(self):
 
-        self.categorias = listar_categorias_despesa()
+        if self._carregando:
+            return
+        self._carregando = True
+        self._definir_controles_carregando(True)
+
+        rodar_em_thread(
+            self,
+            listar_categorias_despesa,
+            ao_sucesso=self._ao_carregar_sucesso,
+            ao_erro=self._ao_carregar_erro,
+            ao_finalizar=self._ao_carregar_finalizado,
+        )
+
+    def _definir_controles_carregando(self, carregando: bool):
+        self.bt_adicionar.setEnabled(not carregando)
+        self.bt_editar.setEnabled(not carregando)
+        self.bt_excluir.setEnabled(not carregando)
+
+    def _ao_carregar_sucesso(self, categorias):
+
+        self.categorias = categorias
 
         self.tabela.setRowCount(len(self.categorias))
 
@@ -132,6 +154,13 @@ class GerenciarCategoriasDespesaDialog(QDialog):
             self.tabela.setItem(
                 linha, 0, QTableWidgetItem(categoria.get("nome", ""))
             )
+
+    def _ao_carregar_erro(self, erro):
+        QMessageBox.critical(self, "Erro", f"Não foi possível carregar as categorias.\n{erro}")
+
+    def _ao_carregar_finalizado(self):
+        self._carregando = False
+        self._definir_controles_carregando(False)
 
     def _categoria_selecionada(self):
 
@@ -152,8 +181,18 @@ class GerenciarCategoriasDespesaDialog(QDialog):
         if not nome:
             return
 
-        response = cadastrar_categoria_despesa(nome)
+        self._definir_controles_carregando(True)
 
+        rodar_em_thread(
+            self,
+            cadastrar_categoria_despesa,
+            nome,
+            ao_sucesso=self._ao_adicionar_sucesso,
+            ao_erro=self._ao_mutacao_erro,
+            ao_finalizar=self._ao_mutacao_finalizada,
+        )
+
+    def _ao_adicionar_sucesso(self, response):
         if response.status_code == 200:
             self.novo_nome.clear()
             self.carregar()
@@ -165,6 +204,13 @@ class GerenciarCategoriasDespesaDialog(QDialog):
             except Exception:
                 erro = response.text
             QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_mutacao_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_mutacao_finalizada(self):
+        if not self._carregando:
+            self._definir_controles_carregando(False)
 
     def editar(self):
 
@@ -189,10 +235,19 @@ class GerenciarCategoriasDespesaDialog(QDialog):
         if not novo_nome:
             return
 
-        response = atualizar_categoria_despesa(
-            categoria["id"], novo_nome
+        self._definir_controles_carregando(True)
+
+        rodar_em_thread(
+            self,
+            atualizar_categoria_despesa,
+            categoria["id"],
+            novo_nome,
+            ao_sucesso=self._ao_editar_sucesso,
+            ao_erro=self._ao_mutacao_erro,
+            ao_finalizar=self._ao_mutacao_finalizada,
         )
 
+    def _ao_editar_sucesso(self, response):
         if response.status_code == 200:
             self.carregar()
         else:
@@ -220,8 +275,18 @@ class GerenciarCategoriasDespesaDialog(QDialog):
         if resposta != QMessageBox.Yes:
             return
 
-        response = excluir_categoria_despesa(categoria["id"])
+        self._definir_controles_carregando(True)
 
+        rodar_em_thread(
+            self,
+            excluir_categoria_despesa,
+            categoria["id"],
+            ao_sucesso=self._ao_excluir_sucesso,
+            ao_erro=self._ao_mutacao_erro,
+            ao_finalizar=self._ao_mutacao_finalizada,
+        )
+
+    def _ao_excluir_sucesso(self, response):
         if response.status_code == 200:
             self.carregar()
         else:

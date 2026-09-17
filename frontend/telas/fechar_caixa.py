@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 
 from services.caixa_service import caixa_aberto, resumo_caixa, fechar_caixa, listar_movimentos_caixa
 from services import api, comprovante_service, impressora_termica_service, preferencias_service
+from services.worker import rodar_em_thread
 
 from design import tokens
 from design.icons import icone, icone_pixmap
@@ -43,13 +44,55 @@ def _formatar_data_curta(texto):
     return texto[:16]
 
 
+def _buscar_dados_fechamento():
+    """Roda na worker thread -- caixa_aberto() + resumo_caixa(), os
+    valores esperados que a pagina 2 (conferencia) vai comparar contra
+    o que a pessoa contou na pagina 1."""
+    return caixa_aberto() or {}, resumo_caixa() or {}
+
+
+def _confirmar_e_preparar_impressao(valor_contado, observacoes, caixa_id):
+    """Roda na worker thread -- fecha o caixa e, se deu certo, ja'
+    busca tudo que imprimir_extrato_dia() vai precisar (movimentos do
+    dia, nome do responsavel, configuracoes da loja) numa tacada so',
+    pra nao ficar re-buscando (e re-bloqueando a GUI thread) depois."""
+
+    response = fechar_caixa(
+        valor_contado=valor_contado,
+        observacoes=observacoes,
+    )
+
+    if response.status_code != 200:
+        return response, None, None, None
+
+    movimentos = []
+    if caixa_id:
+        movimentos = sorted(
+            listar_movimentos_caixa(caixa_id),
+            key=lambda m: m.get("data", ""),
+        )
+
+    responsavel = (api.me() or {}).get("nome") or "—"
+    config = api.configuracoes()
+
+    return response, movimentos, responsavel, config
+
+
 class FecharCaixaWindow(QDialog):
 
     def __init__(self):
         super().__init__()
 
-        self.caixa = caixa_aberto() or {}
-        self.resumo = resumo_caixa() or {}
+        # pagina 1 (contagem cega) nao depende desses dados -- de
+        # proposito, pra nao enviesar quem esta contando o dinheiro
+        # fisico mostrando o valor esperado antes da hora. Busca em
+        # segundo plano enquanto a pessoa conta (o dialogo nao trava
+        # esperando isso); avancar_para_conferencia() confere se ja
+        # chegou antes de usar.
+        self.caixa = {}
+        self.resumo = {}
+        self._dados_prontos = False
+        self._erro_dados = None
         self.valor_contado = 0.0
 
         self.setWindowTitle("Fechar Caixa")
@@ -137,6 +180,20 @@ class FecharCaixaWindow(QDialog):
         self.paginas.addWidget(self.pagina_conferencia)
 
         raiz.addWidget(self.paginas, stretch=1)
+
+        rodar_em_thread(
+            self,
+            _buscar_dados_fechamento,
+            ao_sucesso=self._ao_dados_sucesso,
+            ao_erro=self._ao_dados_erro,
+        )
+
+    def _ao_dados_sucesso(self, resultado):
+        self.caixa, self.resumo = resultado
+        self._dados_prontos = True
+
+    def _ao_dados_erro(self, erro):
+        self._erro_dados = erro
 
     def _marcar_passo_ativo(self, numero):
         """Realça o passo atual (1 ou 2) no indicador de etapa no topo
@@ -241,6 +298,28 @@ class FecharCaixaWindow(QDialog):
                 self,
                 "Atenção",
                 "Informe um valor válido.",
+            )
+            return
+
+        if self._erro_dados is not None:
+            QMessageBox.critical(
+                self,
+                "Erro",
+                f"Não foi possível carregar os dados do caixa "
+                f"pra comparar.\n{self._erro_dados}",
+            )
+            return
+
+        if not self._dados_prontos:
+            # bem raro na pratica (a busca roda desde que o dialogo
+            # abriu, e contar dinheiro fisico leva mais tempo que
+            # isso) -- mas se acontecer, e' melhor avisar do que
+            # avancar com valor esperado zerado
+            QMessageBox.information(
+                self,
+                "Aguarde",
+                "Ainda carregando os dados do caixa. Tente de novo "
+                "em um instante.",
             )
             return
 
@@ -407,12 +486,12 @@ class FecharCaixaWindow(QDialog):
         bt_voltar.setMinimumHeight(46)
         bt_voltar.clicked.connect(self.voltar_para_contagem)
 
-        bt_confirmar = BotaoPerigo("Confirmar Fechamento")
-        bt_confirmar.setMinimumHeight(46)
-        bt_confirmar.clicked.connect(self.confirmar_fechamento)
+        self.bt_confirmar = BotaoPerigo("Confirmar Fechamento")
+        self.bt_confirmar.setMinimumHeight(46)
+        self.bt_confirmar.clicked.connect(self.confirmar_fechamento)
 
         rodape.addWidget(bt_voltar)
-        rodape.addWidget(bt_confirmar)
+        rodape.addWidget(self.bt_confirmar)
 
         layout.addLayout(rodape)
 
@@ -481,10 +560,25 @@ class FecharCaixaWindow(QDialog):
         if resposta != QMessageBox.Yes:
             return
 
-        response = fechar_caixa(
-            valor_contado=self.valor_contado,
-            observacoes=self.observacoes_input.text().strip() or None,
+        # sem UI otimista aqui de proposito: fechar caixa e' uma
+        # mutacao financeira irreversivel (o proprio dialogo ja avisa
+        # isso) -- so' fecha/mostra sucesso depois da resposta real.
+        self.bt_confirmar.setEnabled(False)
+
+        rodar_em_thread(
+            self,
+            _confirmar_e_preparar_impressao,
+            self.valor_contado,
+            self.observacoes_input.text().strip() or None,
+            self.caixa.get("id"),
+            ao_sucesso=self._ao_confirmar_sucesso,
+            ao_erro=self._ao_confirmar_erro,
+            ao_finalizar=self._ao_confirmar_finalizado,
         )
+
+    def _ao_confirmar_sucesso(self, resultado):
+
+        response, movimentos, responsavel, config = resultado
 
         if response.status_code != 200:
             try:
@@ -495,9 +589,15 @@ class FecharCaixaWindow(QDialog):
             QMessageBox.critical(self, "Erro", erro)
             return
 
-        self.imprimir_extrato_dia()
+        self.imprimir_extrato_dia(movimentos, responsavel, config)
 
         self.accept()
+
+    def _ao_confirmar_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_confirmar_finalizado(self):
+        self.bt_confirmar.setEnabled(True)
 
     # ======================================
     # EXTRATO COMPLETO DO DIA -- impresso automaticamente ao
@@ -507,25 +607,11 @@ class FecharCaixaWindow(QDialog):
     # ficha_cliente.py)
     # ======================================
 
-    def _buscar_movimentos_do_dia(self):
+    def _montar_html_extrato_dia(self, movimentos, config, responsavel):
 
-        caixa_id = self.caixa.get("id")
-
-        if not caixa_id:
-            return []
-
-        return sorted(
-            listar_movimentos_caixa(caixa_id),
-            key=lambda m: m.get("data", ""),
-        )
-
-    def _montar_html_extrato_dia(self, movimentos):
-
-        config = api.configuracoes()
         nome_loja = config.get("nome_loja") or "Vertex ERP"
         telefone_loja = config.get("telefone") or ""
 
-        responsavel = (api.me() or {}).get("nome") or "—"
         agora = datetime.now().strftime("%d/%m/%Y %H:%M")
 
         total_previsto = float(self.resumo.get("total_previsto", 0) or 0)
@@ -612,14 +698,14 @@ class FecharCaixaWindow(QDialog):
         {bloco_observacoes}
         """
 
-    def imprimir_extrato_dia(self):
+    def imprimir_extrato_dia(self, movimentos, responsavel, config):
 
-        movimentos = self._buscar_movimentos_do_dia()
+        # impressao em si fica sincrona -- e' I/O de dispositivo local
+        # (porta serial/USB da impressora termica, ou o dialogo de
+        # impressao do Windows), nao rede; fora do escopo deste audit
         config_impressora = preferencias_service.carregar_impressora_termica()
 
         if config_impressora and config_impressora.get("ativa"):
-
-            responsavel = (api.me() or {}).get("nome") or "—"
 
             ok, erro = impressora_termica_service.imprimir_fechamento_caixa(
                 self.caixa,
@@ -629,7 +715,7 @@ class FecharCaixaWindow(QDialog):
                 self.observacoes_input.text().strip(),
                 responsavel,
                 datetime.now().isoformat(),
-                api.configuracoes(),
+                config,
                 config_impressora,
             )
 
@@ -645,4 +731,6 @@ class FecharCaixaWindow(QDialog):
             if resposta != QMessageBox.Yes:
                 return
 
-        comprovante_service.imprimir(self._montar_html_extrato_dia(movimentos), self)
+        comprovante_service.imprimir(
+            self._montar_html_extrato_dia(movimentos, config, responsavel), self
+        )

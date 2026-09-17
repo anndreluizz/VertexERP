@@ -53,18 +53,29 @@ ITENS_MENU = [
 
 class PrincipalWindow(QMainWindow):
 
-    def __init__(self):
+    def __init__(self, info_usuario=None, config=None):
         super().__init__()
 
         self.setWindowTitle("Vertex ERP")
         self.resize(1400, 800)
         self.setStyleSheet(f"QMainWindow {{ background: {tokens.FUNDO}; }}")
 
-        info_usuario = api.me()
+        # info_usuario/config podem vir ja' prontos de quem chamou (ver
+        # telas/login.py e telas/cadastro_inicial.py, que buscam isso
+        # assincrono ANTES de construir a janela) -- None aqui so'
+        # acontece em app.py, no caminho de retomar sessao/primeiro
+        # acesso, que roda antes do event loop do Qt existir (nao da'
+        # pra usar rodar_em_thread la', nao tem fila de eventos rodando
+        # ainda pra entregar o resultado); nesses casos cai de volta
+        # pro fetch sincrono de sempre.
+        if info_usuario is None:
+            info_usuario = api.me()
+        if config is None:
+            config = api.configuracoes()
+
         nome_usuario = info_usuario.get("nome") or "Usuário"
         cargo = "Administrador" if info_usuario.get("admin") else "Operador"
 
-        config = api.configuracoes()
         nome_loja = config.get("nome_loja") or "Vertex ERP"
 
         central = QWidget()
@@ -110,7 +121,7 @@ class PrincipalWindow(QMainWindow):
         self.paginas = QStackedWidget()
         layout_central.addWidget(self.paginas, stretch=1)
 
-        self.dashboard = Dashboard()
+        self.dashboard = Dashboard(usuario_id=info_usuario.get("id"))
         self.pdv = PDV()
         self.produtos = Produtos()
         self.ajuste_estoque = AjusteEstoque()

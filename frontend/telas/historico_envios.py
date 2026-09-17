@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from services import comprovante_service
+from services.worker import rodar_em_thread
 
 
 class HistoricoEnviosDialog(QDialog):
@@ -73,7 +74,28 @@ class HistoricoEnviosDialog(QDialog):
 
     def carregar(self):
 
-        envios = comprovante_service.buscar_historico_envios(self.venda_id)
+        self.tabela.setRowCount(1)
+        item = QTableWidgetItem("Carregando...")
+        item.setForeground(QColor(tokens.TEXTO_TERCIARIO))
+        self.tabela.setItem(0, 0, item)
+        self.tabela.setSpan(0, 0, 1, 5)
+
+        rodar_em_thread(
+            self,
+            comprovante_service.buscar_historico_envios,
+            self.venda_id,
+            ao_sucesso=self._ao_carregar_sucesso,
+            ao_erro=self._ao_carregar_erro,
+        )
+
+    def _ao_carregar_erro(self, erro):
+        self.tabela.setRowCount(1)
+        item = QTableWidgetItem(f"Não foi possível carregar o histórico. {erro}")
+        item.setForeground(QColor(tokens.ERRO))
+        self.tabela.setItem(0, 0, item)
+        self.tabela.setSpan(0, 0, 1, 5)
+
+    def _ao_carregar_sucesso(self, envios):
 
         self.tabela.setRowCount(len(envios))
 

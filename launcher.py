@@ -595,6 +595,44 @@ def iniciar_backup_diario():
     threading.Thread(target=_loop_backup_diario, daemon=True).start()
 
 
+# ==========================================
+# WATCHDOG DO BACKEND -- reinicia sozinho se o processo cair no meio
+# da sessao (ex.: um crash por falta de memoria, ver boleto/anexo sem
+# limite de tamanho corrigido em cadastro_despesa.py). Sem isso, o
+# unico jeito de voltar ao ar era o usuario perceber que parou de
+# funcionar e fechar/reabrir o Vertex inteiro na mao -- pior ainda no
+# modo Servidor, onde ninguem necessariamente esta olhando pra tela
+# desse PC quando o backend cai.
+# ==========================================
+
+_INTERVALO_WATCHDOG_SEGUNDOS = 30
+
+
+def _loop_watchdog_backend(processo_inicial):
+    processo = processo_inicial
+
+    while True:
+        time.sleep(_INTERVALO_WATCHDOG_SEGUNDOS)
+
+        # so' age quando o PROCESSO de verdade morreu (poll() != None
+        # -- sinal inequivoco) -- nao usa backend_pronto() aqui pra nao
+        # confundir "backend momentaneamente lento" com "caiu" e subir
+        # um segundo processo duplicado brigando pela mesma porta.
+        if processo.poll() is None:
+            continue
+
+        novo_processo = iniciar_backend()
+
+        if novo_processo is not None:
+            processo = novo_processo
+
+
+def iniciar_watchdog_backend(processo):
+    threading.Thread(
+        target=_loop_watchdog_backend, args=(processo,), daemon=True
+    ).start()
+
+
 def _mostrar_erro(titulo, mensagem):
     ctypes.windll.user32.MessageBoxW(None, mensagem, titulo, 0x10)
 
@@ -602,6 +640,15 @@ def _mostrar_erro(titulo, mensagem):
 def main():
     if not obter_trava():
         return
+
+    # Se esse PC foi configurado como "Servidor" (ver garantir_env()),
+    # outros caixas da loja dependem do backend dele pra funcionar --
+    # fechar a janela do Vertex aqui nao pode derrubar backend/Postgres
+    # junto, senao a loja inteira para porque alguem fechou o app no
+    # PC errado. So sabemos com certeza depois de garantir_env() rodar
+    # (ela cria o .env na primeira execucao), entao comeca assumindo
+    # que NAO e servidor e corrige antes de decidir o que encerrar.
+    modo_servidor = False
 
     if caminho_tem_caractere_nao_ascii():
         _mostrar_erro(
@@ -626,6 +673,7 @@ def main():
 
     try:
         garantir_env()
+        modo_servidor = _ler_env("VERTEXERP_HOST") == "0.0.0.0"
         inicializar_cluster_se_necessario()
         iniciar_postgres()
         garantir_banco_vertexerp()
@@ -642,12 +690,25 @@ def main():
             return
 
         iniciar_backup_diario()
+        iniciar_watchdog_backend(backend)
 
         frontend = iniciar_frontend()
         frontend.wait()
 
         encerrar_processo(FRONTEND_EXE)
-        encerrar_processo(BACKEND_EXE)
+
+        if not modo_servidor:
+            encerrar_processo(BACKEND_EXE)
+        else:
+            # Backend/Postgres continuam de pe pros outros caixas da
+            # loja -- o launcher tambem precisa continuar vivo (nao
+            # sair de main()), senao a thread do backup diario
+            # (daemon: some junto com o processo que a criou) para de
+            # rodar mesmo com o backend ainda de pe. So termina esse
+            # loop matando o processo do launcher (Gerenciador de
+            # Tarefas) ou desligando o PC.
+            while True:
+                time.sleep(3600)
 
     except Exception as e:
         # Sem isso, qualquer erro aqui (initdb falhar, pg_ctl falhar,
@@ -674,7 +735,8 @@ def main():
         )
 
     finally:
-        parar_postgres()
+        if not modo_servidor:
+            parar_postgres()
 
         if os.path.exists(LOCK_FILE):
             os.remove(LOCK_FILE)

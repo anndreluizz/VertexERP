@@ -7,7 +7,11 @@ final produtosProvider = FutureProvider.autoDispose<List<Produto>>((
   ref,
 ) async {
   final api = ref.watch(apiClientProvider);
-  final resposta = await api.dio.get('/produtos/');
+  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final resposta = await api.dio.get(
+    '/produtos/',
+    queryParameters: lojaId != null ? {'loja_id': lojaId} : null,
+  );
 
   final produtos = (resposta.data as List<dynamic>)
       .map((json) => Produto.fromJson(json as Map<String, dynamic>))

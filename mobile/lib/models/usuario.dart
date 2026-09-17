@@ -5,6 +5,7 @@ class Usuario {
     required this.email,
     required this.ativo,
     required this.admin,
+    this.lojaId,
   });
 
   factory Usuario.fromJson(Map<String, dynamic> json) {
@@ -14,6 +15,7 @@ class Usuario {
       email: json['email'] as String,
       ativo: json['ativo'] as bool,
       admin: json['admin'] as bool,
+      lojaId: json['loja_id'] as int?,
     );
   }
 
@@ -22,6 +24,9 @@ class Usuario {
   final String email;
   final bool ativo;
   final bool admin;
+  // null pra admin sem loja de origem fixa -- ver
+  // app/auth/dependencies.resolver_loja_id no backend.
+  final int? lojaId;
 
   String get cargo => admin ? 'Administrador' : 'Operador';
 }

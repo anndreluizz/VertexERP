@@ -59,20 +59,18 @@ class ContaReceberRepository:
         )
 
     @staticmethod
-    def listar_pendentes(db: Session):
+    def listar_pendentes(db: Session, loja_id: int | None = None):
         # Sem paginação: usado internamente por FinanceiroService.fluxo_caixa,
         # que precisa do total real de contas pendentes para o cálculo do
         # saldo projetado, não só da primeira página.
-        return (
-            db.query(ContaReceber)
-            .filter(
-                ContaReceber.status == "PENDENTE"
-            )
-            .order_by(
-                ContaReceber.data_vencimento
-            )
-            .all()
+        query = db.query(ContaReceber).filter(
+            ContaReceber.status == "PENDENTE"
         )
+
+        if loja_id is not None:
+            query = query.filter(ContaReceber.loja_id == loja_id)
+
+        return query.order_by(ContaReceber.data_vencimento).all()
 
     @staticmethod
     def listar_recebidas(db: Session, skip: int = 0, limit: int = 100):

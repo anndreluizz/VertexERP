@@ -22,7 +22,7 @@ class _RespostaOk:
         return {}
 
 
-def test_icone_do_cabecalho_muda_para_check_ao_confirmar_pagamento():
+def test_icone_do_cabecalho_muda_para_check_ao_confirmar_pagamento(esperar_threads):
 
     # configuracoes() e' chamada tanto na hora de montar o dialogo
     # quanto de novo dentro de confirmar() (pra montar o texto do
@@ -43,6 +43,7 @@ def test_icone_do_cabecalho_muda_para_check_ao_confirmar_pagamento():
             return_value=_RespostaOk(),
         ):
             dialogo.confirmar()
+            esperar_threads(dialogo)
 
     assert dialogo.paginas.currentWidget() is dialogo.pagina_comprovante
     assert not dialogo.cabecalho.icone.pixmap().isNull()

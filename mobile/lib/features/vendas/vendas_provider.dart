@@ -43,7 +43,11 @@ final periodoVendasProvider = StateProvider<PeriodoVendas>(
 
 final vendasProvider = FutureProvider.autoDispose<List<Venda>>((ref) async {
   final api = ref.watch(apiClientProvider);
-  final resposta = await api.dio.get('/vendas/');
+  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final resposta = await api.dio.get(
+    '/vendas/',
+    queryParameters: lojaId != null ? {'loja_id': lojaId} : null,
+  );
 
   final vendas = (resposta.data as List<dynamic>)
       .map((json) => Venda.fromJson(json as Map<String, dynamic>))
@@ -59,7 +63,11 @@ final produtosLookupProvider = FutureProvider.autoDispose<Map<int, String>>((
   ref,
 ) async {
   final api = ref.watch(apiClientProvider);
-  final resposta = await api.dio.get('/produtos/');
+  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final resposta = await api.dio.get(
+    '/produtos/',
+    queryParameters: lojaId != null ? {'loja_id': lojaId} : null,
+  );
 
   final produtos = (resposta.data as List<dynamic>)
       .map((json) => ProdutoResumo.fromJson(json as Map<String, dynamic>))
@@ -102,8 +110,13 @@ final atividadeVendasProvider = FutureProvider.autoDispose<
   List<ItemAtividadeVendas>
 >((ref) async {
   final api = ref.watch(apiClientProvider);
+  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final filtroLoja = lojaId != null ? {'loja_id': lojaId} : null;
 
-  final respostaVendas = await api.dio.get('/vendas/');
+  final respostaVendas = await api.dio.get(
+    '/vendas/',
+    queryParameters: filtroLoja,
+  );
   final vendas = (respostaVendas.data as List<dynamic>)
       .map((json) => Venda.fromJson(json as Map<String, dynamic>))
       .toList();

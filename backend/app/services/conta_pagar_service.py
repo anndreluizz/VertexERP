@@ -95,8 +95,8 @@ class ContaPagarService:
         return ContaPagarRepository.listar(db, skip, limit, loja_id)
 
     @staticmethod
-    def listar_pendentes(db: Session):
-        return ContaPagarRepository.listar_pendentes(db)
+    def listar_pendentes(db: Session, loja_id: int | None = None):
+        return ContaPagarRepository.listar_pendentes(db, loja_id)
 
     @staticmethod
     def listar_pagas(db: Session, skip: int = 0, limit: int = 100):

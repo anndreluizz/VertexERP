@@ -8,7 +8,15 @@ from unittest import mock
 
 import pytest
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QCheckBox, QDialog, QLineEdit, QMessageBox, QTableWidget, QWidget
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QDialog,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QWidget,
+)
 
 from services import api, preferencias_service
 
@@ -99,7 +107,7 @@ def test_dialogo_2fa_constroi_e_limita_o_codigo_a_6_digitos():
     assert dialogo.codigo.maxLength() == 6
 
 
-def test_dialogo_2fa_confirmar_com_codigo_certo_aceita():
+def test_dialogo_2fa_confirmar_com_codigo_certo_aceita(esperar_threads):
     from telas.verificar_2fa import Verificar2FADialog
 
     dialogo = Verificar2FADialog("verif-abc", "dono@loja.com")
@@ -107,12 +115,13 @@ def test_dialogo_2fa_confirmar_com_codigo_certo_aceita():
     with mock.patch("telas.verificar_2fa.verificar_codigo_2fa", return_value=(True, None)) as m:
         dialogo.codigo.setText("123456")
         dialogo.confirmar()
+        esperar_threads(dialogo)
 
     assert dialogo.result() == QDialog.Accepted
     assert m.call_args[0] == ("verif-abc", "123456")
 
 
-def test_dialogo_2fa_confirmar_com_codigo_errado_nao_aceita():
+def test_dialogo_2fa_confirmar_com_codigo_errado_nao_aceita(esperar_threads):
     from telas.verificar_2fa import Verificar2FADialog
 
     dialogo = Verificar2FADialog("verif-def", "dono@loja.com")
@@ -122,6 +131,7 @@ def test_dialogo_2fa_confirmar_com_codigo_errado_nao_aceita():
     ), mock.patch.object(QMessageBox, "warning") as aviso_mock:
         dialogo.codigo.setText("000000")
         dialogo.confirmar()
+        esperar_threads(dialogo)
 
     assert dialogo.result() != QDialog.Accepted
     assert aviso_mock.called
@@ -152,14 +162,16 @@ def _tela_login():
     tela.usuario = QLineEdit("dono@loja.com")
     tela.senha = QLineEdit("123456")
     tela.manter_conectado = QCheckBox()
+    tela.botao = QPushButton("Entrar")
     return tela
 
 
-def test_login_pendente_de_2fa_abre_o_dialogo_com_verificacao_id_certo():
+def test_login_pendente_de_2fa_abre_o_dialogo_com_verificacao_id_certo(esperar_threads):
     tela = _tela_login()
 
     with mock.patch("telas.login.login", return_value=(False, None, "verif-123")), \
          mock.patch("telas.login.Verificar2FADialog") as dialogo_mock, \
+         mock.patch("telas.login._buscar_info_principal", return_value=({}, {})), \
          mock.patch("telas.login.PrincipalWindow") as principal_mock:
 
         instancia = mock.MagicMock()
@@ -168,13 +180,14 @@ def test_login_pendente_de_2fa_abre_o_dialogo_com_verificacao_id_certo():
         dialogo_mock.Accepted = QDialog.Accepted
 
         tela.entrar()
+        esperar_threads(tela)
 
     assert dialogo_mock.called
     assert dialogo_mock.call_args[0][0] == "verif-123"
     assert principal_mock.called
 
 
-def test_login_2fa_cancelado_nao_abre_janela_principal():
+def test_login_2fa_cancelado_nao_abre_janela_principal(esperar_threads):
     tela = _tela_login()
 
     with mock.patch("telas.login.login", return_value=(False, None, "verif-456")), \
@@ -187,18 +200,21 @@ def test_login_2fa_cancelado_nao_abre_janela_principal():
         dialogo_mock.Accepted = QDialog.Accepted
 
         tela.entrar()
+        esperar_threads(tela)
 
     assert not principal_mock.called
 
 
 @pytest.mark.parametrize("marcado", [True, False])
-def test_login_repassa_o_estado_do_checkbox_manter_conectado(marcado):
+def test_login_repassa_o_estado_do_checkbox_manter_conectado(marcado, esperar_threads):
     tela = _tela_login()
     tela.manter_conectado.setChecked(marcado)
 
     with mock.patch("telas.login.login", return_value=(True, None, None)) as login_mock, \
+         mock.patch("telas.login._buscar_info_principal", return_value=({}, {})), \
          mock.patch("telas.login.PrincipalWindow"):
         tela.entrar()
+        esperar_threads(tela)
 
     assert login_mock.call_args.kwargs.get("lembrar") == marcado
 
@@ -319,16 +335,21 @@ def test_logout_limpa_token_e_sessao_guardada(configuracao_isolada):
 # ==================================================
 
 
-def test_alternar_2fa_liga_pra_usuario_desativado():
+def test_alternar_2fa_liga_pra_usuario_desativado(esperar_threads):
     from telas.gerenciar_usuarios import GerenciarUsuariosDialog
 
     tela = GerenciarUsuariosDialog.__new__(GerenciarUsuariosDialog)
+    QDialog.__init__(tela)
     tela.usuarios = [
         {"id": 1, "nome": "Fulano", "email": "fulano@loja.com", "ativo": True,
          "admin": False, "dois_fatores_ativo": False},
     ]
     tela.tabela = QTableWidget(1, 5)
     tela.tabela.setCurrentCell(0, 0)
+    tela.bt_ativar_desativar = QPushButton()
+    tela.bt_admin = QPushButton()
+    tela.bt_redefinir_senha = QPushButton()
+    tela.bt_2fa = QPushButton()
 
     with mock.patch("telas.gerenciar_usuarios.atualizar_usuario") as atualizar_mock, \
          mock.patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
@@ -336,6 +357,7 @@ def test_alternar_2fa_liga_pra_usuario_desativado():
 
         atualizar_mock.return_value = _RespostaFalsa(200, {})
         tela.alternar_2fa()
+        esperar_threads(tela)
 
     assert atualizar_mock.call_args[0][1] == {"dois_fatores_ativo": True}
     assert carregar_mock.called

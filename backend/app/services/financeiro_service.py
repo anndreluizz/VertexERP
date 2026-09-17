@@ -35,13 +35,13 @@ class FinanceiroService:
 
         receber = [
             conta
-            for conta in ContaReceberRepository.listar_pendentes(db)
+            for conta in ContaReceberRepository.listar_pendentes(db, loja_id)
             if conta.data_vencimento <= limite
         ]
 
         pagar = [
             conta
-            for conta in ContaPagarRepository.listar_pendentes(db)
+            for conta in ContaPagarRepository.listar_pendentes(db, loja_id)
             if conta.data_vencimento <= limite
         ]
 

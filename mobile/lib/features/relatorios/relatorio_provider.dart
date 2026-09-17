@@ -17,8 +17,13 @@ final relatorioProvider = FutureProvider.autoDispose<RelatorioDados>((
 ) async {
   final periodo = ref.watch(relatorioPeriodoProvider);
   final api = ref.watch(apiClientProvider);
+  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final filtroLoja = lojaId != null ? {'loja_id': lojaId} : null;
 
-  final vendasResp = await api.dio.get('/vendas/');
+  final vendasResp = await api.dio.get(
+    '/vendas/',
+    queryParameters: filtroLoja,
+  );
   final vendas = (vendasResp.data as List<dynamic>)
       .map((json) => Venda.fromJson(json as Map<String, dynamic>))
       .where((venda) => periodo.contem(venda.data))
@@ -44,17 +49,26 @@ final relatorioProvider = FutureProvider.autoDispose<RelatorioDados>((
     }
   }
 
-  final contasPagarResp = await api.dio.get('/contas-pagar/pendentes');
+  final contasPagarResp = await api.dio.get(
+    '/contas-pagar/pendentes',
+    queryParameters: filtroLoja,
+  );
   final contasPagarPendente = (contasPagarResp.data as List<dynamic>)
       .map((json) => ContaPagar.fromJson(json as Map<String, dynamic>))
       .fold<double>(0, (soma, conta) => soma + conta.valor);
 
-  final contasReceberResp = await api.dio.get('/contas-receber/pendentes');
+  final contasReceberResp = await api.dio.get(
+    '/contas-receber/pendentes',
+    queryParameters: filtroLoja,
+  );
   final contasReceberPendente = (contasReceberResp.data as List<dynamic>)
       .map((json) => ContaReceber.fromJson(json as Map<String, dynamic>))
       .fold<double>(0, (soma, conta) => soma + conta.valor);
 
-  final produtosResp = await api.dio.get('/produtos/');
+  final produtosResp = await api.dio.get(
+    '/produtos/',
+    queryParameters: filtroLoja,
+  );
   final produtos = (produtosResp.data as List<dynamic>)
       .map((json) => Produto.fromJson(json as Map<String, dynamic>))
       .where((produto) => produto.ativo)

@@ -28,9 +28,13 @@ final dashboardProvider = FutureProvider.autoDispose<DashboardCarregado>((
   ref,
 ) async {
   final api = ref.watch(apiClientProvider);
+  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
 
   try {
-    final resposta = await api.dio.get('/dashboard');
+    final resposta = await api.dio.get(
+      '/dashboard',
+      queryParameters: lojaId != null ? {'loja_id': lojaId} : null,
+    );
     final resumo = DashboardResumo.fromJson(
       resposta.data as Map<String, dynamic>,
     );

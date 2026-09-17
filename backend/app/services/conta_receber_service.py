@@ -58,8 +58,8 @@ class ContaReceberService:
         return ContaReceberRepository.listar(db, skip, limit, loja_id)
 
     @staticmethod
-    def listar_pendentes(db: Session):
-        return ContaReceberRepository.listar_pendentes(db)
+    def listar_pendentes(db: Session, loja_id: int | None = None):
+        return ContaReceberRepository.listar_pendentes(db, loja_id)
 
     @staticmethod
     def listar_recebidas(db: Session, skip: int = 0, limit: int = 100):

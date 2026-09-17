@@ -80,11 +80,12 @@ def listar(
     response_model=list[ContaPagarResponse],
 )
 def listar_pendentes(
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
 
-    contas = ContaPagarService.listar_pendentes(db)
+    contas = ContaPagarService.listar_pendentes(db, loja_id)
 
     return [
         ContaPagarResponse.from_orm(c)

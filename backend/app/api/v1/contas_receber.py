@@ -70,12 +70,13 @@ def listar(
     response_model=list[ContaReceberResponse],
 )
 def listar_pendentes(
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
     # Sem paginação de propósito: essa lista também alimenta o cálculo
     # do fluxo de caixa (financeiro_service), que precisa do total real.
-    contas = ContaReceberService.listar_pendentes(db)
+    contas = ContaReceberService.listar_pendentes(db, loja_id)
 
     return [
         ContaReceberResponse.from_orm(c)

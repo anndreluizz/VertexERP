@@ -62,6 +62,10 @@ class UserResponse(BaseModel):
     ativo: bool
     admin: bool
     dois_fatores_ativo: bool = False
+    # None pra admin sem loja de origem fixa (ver resolver_loja_id) --
+    # o app mobile usa isso pra saber de qual loja mostrar os dados,
+    # já que (ao contrário do Desktop) não tem terminal fixo por loja.
+    loja_id: int | None = None
 
     class Config:
         orm_mode = True

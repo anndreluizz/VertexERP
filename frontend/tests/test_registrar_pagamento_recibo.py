@@ -24,7 +24,7 @@ def _dialogo():
     return dialogo
 
 
-def test_nao_imprime_recibo_se_usuario_recusar():
+def test_nao_imprime_recibo_se_usuario_recusar(esperar_threads):
 
     dialogo = _dialogo()
 
@@ -36,11 +36,12 @@ def test_nao_imprime_recibo_se_usuario_recusar():
         dialogo, "_imprimir_recibo_pagamento"
     ) as mock_imprimir:
         dialogo.confirmar()
+        esperar_threads(dialogo)
 
     mock_imprimir.assert_not_called()
 
 
-def test_imprime_recibo_apenas_se_usuario_confirmar():
+def test_imprime_recibo_apenas_se_usuario_confirmar(esperar_threads):
 
     dialogo = _dialogo()
 
@@ -52,5 +53,6 @@ def test_imprime_recibo_apenas_se_usuario_confirmar():
         dialogo, "_imprimir_recibo_pagamento"
     ) as mock_imprimir:
         dialogo.confirmar()
+        esperar_threads(dialogo)
 
     mock_imprimir.assert_called_once()

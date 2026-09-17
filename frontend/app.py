@@ -1,19 +1,56 @@
 import os
 import sys
+import traceback
+from datetime import datetime
 
 if getattr(sys, "frozen", False):
     os.chdir(os.path.dirname(sys.executable))
+    _CAMINHO_LOG_CRASH = os.path.join(
+        os.path.dirname(sys.executable), "frontend_log.txt"
+    )
 
     # Build --noconsole: sys.stdout/stderr vêm como None (sem console
     # anexado) — qualquer print() ou traceback não capturado tentaria
     # escrever em None e estouraria AttributeError, matando o processo
     # em silêncio. Precisa de um objeto de arquivo de verdade.
-    log_path = os.path.join(
-        os.path.dirname(sys.executable), "frontend_log.txt"
-    )
-    log_file = open(log_path, "a", encoding="utf-8", buffering=1)
+    log_file = open(_CAMINHO_LOG_CRASH, "a", encoding="utf-8", buffering=1)
     sys.stdout = log_file
     sys.stderr = log_file
+else:
+    _CAMINHO_LOG_CRASH = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "frontend_log.txt"
+    )
+
+
+def _instalar_handler_de_crash():
+    """Grava qualquer excecao nao tratada (ex.: um bug dentro de um
+    callback de tela, ver services/worker.py) no mesmo log do build
+    empacotado, com timestamp -- sem isso, o unico rastro de um crash
+    era o Visualizador de Eventos do Windows, sem nenhum detalhe do
+    que quebrou no codigo Python. NAO cobre crash nativo (violacao de
+    acesso, processo morto por falta de memoria) -- nesses casos o
+    processo morre antes de qualquer excecao Python ser levantada, e
+    o Visualizador de Eventos continua sendo a unica fonte."""
+
+    gancho_padrao = sys.excepthook
+
+    def _gancho(tipo, valor, tb):
+        try:
+            with open(_CAMINHO_LOG_CRASH, "a", encoding="utf-8") as arquivo:
+                arquivo.write(
+                    f"\n[{datetime.now().isoformat(timespec='seconds')}] "
+                    "Excecao nao tratada:\n"
+                )
+                traceback.print_exception(tipo, valor, tb, file=arquivo)
+        except Exception:
+            pass
+
+        gancho_padrao(tipo, valor, tb)
+
+    sys.excepthook = _gancho
+
+
+_instalar_handler_de_crash()
 
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 

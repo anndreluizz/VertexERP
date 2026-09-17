@@ -6,7 +6,11 @@ import '../../models/usuario.dart';
 
 final caixasProvider = FutureProvider.autoDispose<List<Caixa>>((ref) async {
   final api = ref.watch(apiClientProvider);
-  final resposta = await api.dio.get('/caixa/historico');
+  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final resposta = await api.dio.get(
+    '/caixa/historico',
+    queryParameters: lojaId != null ? {'loja_id': lojaId} : null,
+  );
 
   final caixas = (resposta.data as List<dynamic>)
       .map((json) => Caixa.fromJson(json as Map<String, dynamic>))

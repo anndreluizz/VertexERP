@@ -38,7 +38,11 @@ final contasPagarProvider = FutureProvider.autoDispose<List<ContaPagar>>((
   ref,
 ) async {
   final api = ref.watch(apiClientProvider);
-  final resposta = await api.dio.get('/contas-pagar/');
+  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final resposta = await api.dio.get(
+    '/contas-pagar/',
+    queryParameters: lojaId != null ? {'loja_id': lojaId} : null,
+  );
 
   final contas = (resposta.data as List<dynamic>)
       .map((json) => ContaPagar.fromJson(json as Map<String, dynamic>))
@@ -67,7 +71,11 @@ final contasReceberProvider = FutureProvider.autoDispose<List<ContaReceber>>((
   ref,
 ) async {
   final api = ref.watch(apiClientProvider);
-  final resposta = await api.dio.get('/contas-receber/');
+  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final resposta = await api.dio.get(
+    '/contas-receber/',
+    queryParameters: lojaId != null ? {'loja_id': lojaId} : null,
+  );
 
   final contas = (resposta.data as List<dynamic>)
       .map((json) => ContaReceber.fromJson(json as Map<String, dynamic>))

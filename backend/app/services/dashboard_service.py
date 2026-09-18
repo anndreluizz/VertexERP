@@ -7,6 +7,7 @@ from app.models.caixa import Caixa
 from app.models.cliente import Cliente
 from app.models.compra import Compra
 from app.models.conta_pagar import ContaPagar
+from app.models.estoque_loja import EstoqueLoja
 from app.models.fornecedor import Fornecedor
 from app.models.movimento_fiado import MovimentoFiado
 from app.models.produto import Produto
@@ -227,10 +228,30 @@ class DashboardService:
 
         produtos = db.query(Produto).filter(filtro_loja_produto).count()
 
+        # Produto.estoque e' a soma entre todas as lojas (ver
+        # EstoqueLojaRepository.ajustar) -- pra saber se ESTA loja
+        # especifica esta com pouco estoque, precisa da quantidade
+        # dela em EstoqueLoja, nao do agregado (senao a filial podia
+        # estar zerada de um produto e o alerta nao disparar so'
+        # porque a matriz ainda tem estoque dele).
+        if loja_id is not None:
+            coluna_estoque_loja = func.coalesce(
+                db.query(EstoqueLoja.quantidade)
+                .filter(
+                    EstoqueLoja.produto_id == Produto.id,
+                    EstoqueLoja.loja_id == loja_id,
+                )
+                .correlate(Produto)
+                .scalar_subquery(),
+                0,
+            )
+        else:
+            coluna_estoque_loja = Produto.estoque
+
         estoque_baixo = (
             db.query(Produto)
             .filter(
-                Produto.estoque <= Produto.estoque_minimo,
+                coluna_estoque_loja <= Produto.estoque_minimo,
                 filtro_loja_produto,
             )
             .count()

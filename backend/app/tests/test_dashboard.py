@@ -150,3 +150,49 @@ def test_dashboard_total_fiado_devedor(client, auth_headers, cliente):
 
     assert response.status_code == 200
     assert response.json()["total_fiado_devedor"] == 100.0
+
+
+def test_dashboard_estoque_baixo_usa_quantidade_da_loja_nao_o_agregado(
+    client, auth_headers, db
+):
+    """Produto compartilhado entre lojas (loja_id=None): o agregado
+    (Produto.estoque) pode estar OK mesmo com uma das lojas zerada --
+    o alerta de estoque baixo de CADA loja precisa olhar pra
+    EstoqueLoja daquela loja especifica, nao pro agregado."""
+    from app.models.estoque_loja import EstoqueLoja
+    from app.models.loja import Loja
+    from app.models.produto import Produto
+
+    loja_a = Loja(nome="Loja A")
+    loja_b = Loja(nome="Loja B")
+    db.add_all([loja_a, loja_b])
+    db.commit()
+
+    produto = Produto(
+        codigo="P901",
+        nome="Produto Compartilhado",
+        categoria="Geral",
+        unidade="UN",
+        preco_custo=1.0,
+        preco_venda=2.0,
+        estoque=20,  # agregado: bem acima do minimo
+        estoque_minimo=5,
+        loja_id=None,
+    )
+    db.add(produto)
+    db.commit()
+
+    # so' a Loja A tem estoque de verdade desse produto -- Loja B nunca
+    # recebeu (sem linha nenhuma em EstoqueLoja pra ela).
+    db.add(EstoqueLoja(produto_id=produto.id, loja_id=loja_a.id, quantidade=20))
+    db.commit()
+
+    resposta_a = client.get(
+        f"/dashboard/?loja_id={loja_a.id}", headers=auth_headers
+    )
+    resposta_b = client.get(
+        f"/dashboard/?loja_id={loja_b.id}", headers=auth_headers
+    )
+
+    assert resposta_a.json()["estoque_baixo"] == 0
+    assert resposta_b.json()["estoque_baixo"] == 1

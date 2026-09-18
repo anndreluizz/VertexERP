@@ -304,3 +304,36 @@ def test_relatorio_vendas_sem_periodo_retorna_erro(client, auth_headers):
     response = client.get("/relatorios/vendas", headers=auth_headers)
 
     assert response.status_code == 422
+
+
+def test_comparativo_lojas_soma_cada_loja_separado(
+    client, auth_headers, db, produto
+):
+    from app.models.loja import Loja
+
+    matriz = Loja(nome="Matriz")
+    filial = Loja(nome="Filial")
+    db.add_all([matriz, filial])
+    db.commit()
+
+    venda_matriz = _criar_venda(db, produto, quantidade=2)
+    venda_matriz.loja_id = matriz.id
+
+    venda_filial = _criar_venda(db, produto, quantidade=1)
+    venda_filial.loja_id = filial.id
+
+    db.commit()
+
+    response = client.get(
+        "/relatorios/comparativo-lojas",
+        params=_periodo_hoje(),
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    dados = {item["loja_nome"]: item for item in response.json()}
+
+    assert dados["Matriz"]["quantidade_vendas"] == 1
+    assert dados["Matriz"]["receita_total"] == float(venda_matriz.valor_total)
+    assert dados["Filial"]["quantidade_vendas"] == 1
+    assert dados["Filial"]["receita_total"] == float(venda_filial.valor_total)

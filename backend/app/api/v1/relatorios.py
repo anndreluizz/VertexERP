@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
 from app.database.session import SessionLocal
-from app.schemas.relatorio import RelatorioVendasResponse
+from app.schemas.relatorio import ComparativoLojaItem, RelatorioVendasResponse
 from app.services.relatorio_service import RelatorioService
 
 router = APIRouter(
@@ -54,3 +54,13 @@ def relatorio_vendas(
         top_produtos_limite=top_produtos_limite,
         top_produtos_ordenar_por=top_produtos_ordenar_por,
     )
+
+
+@router.get("/comparativo-lojas", response_model=list[ComparativoLojaItem])
+def comparativo_lojas(
+    data_inicio: date | None = None,
+    data_fim: date = Query(...),
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return RelatorioService.comparativo_lojas(db, data_inicio, data_fim)

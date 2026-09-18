@@ -36,6 +36,16 @@ class VendaResumo(BaseModel):
     status: str
 
 
+class ComparativoLojaItem(BaseModel):
+    loja_id: int
+    loja_nome: str
+    receita_total: Decimal
+    lucro: Decimal
+    quantidade_vendas: int
+    ticket_medio: Decimal
+    margem_lucro: Decimal
+
+
 class RelatorioVendasResponse(BaseModel):
     receita_total: KpiValor
     lucro: KpiValor

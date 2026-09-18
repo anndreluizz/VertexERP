@@ -8,6 +8,7 @@ from app.models.venda import Venda
 from app.models.item_venda import ItemVenda
 from app.models.produto import Produto
 from app.models.cliente import Cliente
+from app.models.loja import Loja
 from app.services.venda_service import _parcelas_pagamento
 
 
@@ -110,6 +111,51 @@ class RelatorioService:
             "vendas_total": vendas_total,
             "vendas": vendas,
         }
+
+    # ==================================================
+    # COMPARATIVO ENTRE LOJAS (matriz x filial etc.)
+    # ==================================================
+
+    @staticmethod
+    def comparativo_lojas(
+        db: Session,
+        data_inicio: date | None,
+        data_fim: date,
+    ):
+        """Mesmos KPIs de vendas_geral, um conjunto por loja ativa --
+        pensado pra comparar desempenho entre lojas lado a lado (ex.:
+        matriz x filial), sem precisar trocar o filtro de loja e olhar
+        os números um de cada vez."""
+
+        inicio = (
+            datetime.combine(data_inicio, time.min)
+            if data_inicio is not None else None
+        )
+        fim = datetime.combine(data_fim, time.min) + timedelta(days=1)
+
+        lojas = (
+            db.query(Loja)
+            .filter(Loja.ativa.is_(True))
+            .order_by(Loja.id)
+            .all()
+        )
+
+        resultado = []
+
+        for loja in lojas:
+            kpis = RelatorioService._kpis(db, inicio, fim, loja_id=loja.id)
+
+            resultado.append({
+                "loja_id": loja.id,
+                "loja_nome": loja.nome,
+                "receita_total": kpis["receita_total"],
+                "lucro": kpis["lucro"],
+                "quantidade_vendas": kpis["quantidade_vendas"],
+                "ticket_medio": kpis["ticket_medio"],
+                "margem_lucro": kpis["margem_lucro"],
+            })
+
+        return resultado
 
     # ==================================================
     # IDS DAS VENDAS NO ESCOPO (aplica todos os filtros)

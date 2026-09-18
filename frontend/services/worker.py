@@ -21,7 +21,34 @@ PRECISAM ser métodos vinculados a um QObject -- ver nota no fim):
     )
 """
 
+from concurrent.futures import ThreadPoolExecutor
+
 from PySide6.QtCore import QObject, QThread, Signal
+
+
+def em_paralelo(*chamadas):
+    """Roda varias chamadas de rede independentes entre si ao mesmo
+    tempo em vez de em fila, e devolve os resultados na mesma ordem.
+
+    Uso -- DENTRO de uma funcao que ja roda na worker thread (ver
+    rodar_em_thread acima), quando ela mesma precisa fazer N chamadas
+    que nao dependem uma da outra:
+
+        usuario, dados = em_paralelo((me,), (configuracoes,))
+        vendas, produtos = em_paralelo(
+            (listar_vendas, loja_id), (listar_produtos,)
+        )
+
+    Cada item e' uma tupla (func, *args). Numa conexao de latencia
+    alta (ex.: terminal remoto via VPN, ver Tailscale sem UPnP), isso
+    e' a diferenca entre "soma das N idas-e-voltas" e "o tempo da mais
+    lenta das N". Nao tem restricao de metodo-vinculado igual
+    rodar_em_thread -- nao mexe com sinal do Qt, so' concurrent.futures
+    puro, entao lambda/closure funciona normalmente aqui."""
+
+    with ThreadPoolExecutor(max_workers=len(chamadas)) as executor:
+        futuros = [executor.submit(func, *args) for func, *args in chamadas]
+        return [futuro.result() for futuro in futuros]
 
 
 class _Worker(QObject):

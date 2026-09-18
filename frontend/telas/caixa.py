@@ -38,7 +38,7 @@ from services.movimento_caixa_service import (
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import Badge, BotaoPerigo, BotaoSecundario, BotaoSucesso, CardKPI
-from services.worker import rodar_em_thread
+from services.worker import rodar_em_thread, em_paralelo
 from utils.formatacao import formatar_moeda
 
 
@@ -129,16 +129,20 @@ def _pill_tipo_movimento(tipo):
 def _buscar_dados_caixa():
     """Roda na worker thread -- caixa_aberto() + resumo_caixa() +
     listar_movimentos_caixa(), as 3 chamadas que Caixa.carregar()
-    precisa."""
+    precisa. caixa_aberto() precisa vir primeiro (movimentos depende
+    do id dele, e' o que decide se tem caixa aberto) -- as outras 2
+    dependem so' desse resultado, nao uma da outra, entao disparam
+    juntas."""
     caixa = caixa_aberto()
 
     if caixa is None:
         return caixa, None, []
 
-    resumo = resumo_caixa() or {}
-    movimentos = listar_movimentos_caixa(caixa["id"])
+    resumo, movimentos = em_paralelo(
+        (resumo_caixa,), (listar_movimentos_caixa, caixa["id"])
+    )
 
-    return caixa, resumo, movimentos
+    return caixa, resumo or {}, movimentos
 
 
 class Caixa(QWidget):

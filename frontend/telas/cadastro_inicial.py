@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 from requests.exceptions import ConnectionError
 
 from services.api import cadastrar_usuario, login, me, configuracoes
-from services.worker import rodar_em_thread
+from services.worker import rodar_em_thread, em_paralelo
 
 
 def _criar_conta_e_logar(nome, email, senha):
@@ -40,8 +40,9 @@ def _buscar_info_principal():
     """Roda na worker thread -- mesmo raciocinio de
     telas/login.py::_buscar_info_principal (duplicado aqui de proposito
     em vez de importar de lá, pra nao criar acoplamento entre as duas
-    telas de entrada por causa de uma funcao de 1 linha)."""
-    return me(), configuracoes()
+    telas de entrada por causa de uma funcao de 1 linha). As duas sao
+    independentes, entao disparam em paralelo."""
+    return em_paralelo((me,), (configuracoes,))
 
 
 class CadastroInicialWindow(QWidget):

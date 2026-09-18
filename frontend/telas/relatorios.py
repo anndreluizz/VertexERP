@@ -21,7 +21,7 @@ from services.relatorio_service import relatorio_vendas
 from services.produto_service import listar_produtos
 from services.caixa_service import historico_caixa
 from services.loja_service import listar_lojas
-from services.worker import rodar_em_thread
+from services.worker import rodar_em_thread, em_paralelo
 
 
 def _listar_lojas_para_combo(combo):
@@ -35,8 +35,9 @@ def _listar_lojas_para_combo(combo):
 def _buscar_dados_relatorio_geral(loja_id_caixa):
     """Roda na worker thread -- as 2 chamadas que carregar() precisa
     (a 3a, relatorio_vendas, fica em _atualizar_financeiro, que ja e'
-    independente/refeita sozinha quando o filtro financeiro muda)."""
-    return listar_produtos(), historico_caixa(loja_id_caixa)
+    independente/refeita sozinha quando o filtro financeiro muda).
+    As 2 sao independentes, entao disparam em paralelo."""
+    return em_paralelo((listar_produtos,), (historico_caixa, loja_id_caixa))
 
 from design import tokens
 from design.icons import icone

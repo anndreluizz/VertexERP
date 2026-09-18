@@ -12,21 +12,24 @@ from design.animations import fade_in
 from design.widgets import BotaoPrimario, BotaoSecundario
 from services import comprovante_service
 from services.api import configuracoes
-from services.worker import rodar_em_thread
+from services.worker import rodar_em_thread, em_paralelo
 from telas import comprovante_acoes
 from telas.historico_envios import HistoricoEnviosDialog
 
 
 def _buscar_dados_comprovante(venda_id):
     """Roda na worker thread -- as 3 chamadas que
-    ComprovanteDialog.carregar() precisa."""
+    ComprovanteDialog.carregar() precisa. A 1a decide se tem o que
+    montar; as outras 2 nao dependem uma da outra, entao disparam
+    juntas."""
     dados = comprovante_service.buscar_dados_comprovante(venda_id)
 
     if not dados:
         return None
 
-    config = configuracoes()
-    logo = comprovante_service.obter_logo_loja()
+    config, logo = em_paralelo(
+        (configuracoes,), (comprovante_service.obter_logo_loja,)
+    )
 
     return comprovante_service.gerar_html_comprovante(dados, config, logo)
 

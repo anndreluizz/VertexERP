@@ -16,16 +16,17 @@ from PySide6.QtWidgets import (
 
 from services.produto_service import listar_produtos
 from services.estoque_service import listar_movimentos, ajustar_estoque
-from services.worker import rodar_em_thread
+from services.worker import rodar_em_thread, em_paralelo
 from widgets.dialogs.pesquisa_window import PesquisaWindow
 from widgets.tables.standard_table import StandardTable
 from design import tokens
 
 
 def _buscar_historico_estoque():
-    """Roda na worker thread -- as 2 chamadas que carregar() precisa."""
-    produtos_map = {p["id"]: p["nome"] for p in listar_produtos()}
-    movimentos = listar_movimentos()
+    """Roda na worker thread -- as 2 chamadas que carregar() precisa,
+    independentes entre si, disparadas em paralelo."""
+    produtos, movimentos = em_paralelo((listar_produtos,), (listar_movimentos,))
+    produtos_map = {p["id"]: p["nome"] for p in produtos}
     return produtos_map, movimentos
 
 

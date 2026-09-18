@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
-from services.worker import rodar_em_thread
+from services.worker import rodar_em_thread, em_paralelo
 from utils.formatacao import formatar_moeda
 from widgets.estado_async import PainelErro, cartoes_esqueleto
 
@@ -82,11 +82,19 @@ _CORES_PONTUACAO = {
 def _buscar_dados_clientes(loja_id):
     """Roda na worker thread (ver services/worker.py) -- as 3 chamadas
     de rede + a agregacao de carregar() (nenhuma toca widget, so' monta
-    dict/soma numero, seguro rodar fora da GUI thread)."""
+    dict/soma numero, seguro rodar fora da GUI thread).
 
-    clientes = listar_clientes(loja_id)
+    As 3 chamadas nao dependem uma da outra (cada uma busca uma lista
+    inteira separada), entao disparam em paralelo em vez de em fila --
+    numa conexao com latencia alta (ex.: terminal remoto via VPN), 3
+    chamadas sequenciais somam 3x a latencia por chamada; em paralelo
+    o tempo total fica perto do da mais lenta das 3."""
 
-    movimentos_fiado = listar_movimentos()
+    clientes, movimentos_fiado, vendas = em_paralelo(
+        (listar_clientes, loja_id),
+        (listar_movimentos,),
+        (listar_vendas,),
+    )
 
     movimentos_por_cliente = {}
     for mov in movimentos_fiado:
@@ -102,8 +110,6 @@ def _buscar_dados_clientes(loja_id):
         )
         agregados_por_cliente[cliente["id"]] = agr
         cliente["saldo_fiado"] = agr["saldo_devedor"]
-
-    vendas = listar_vendas()
 
     vendas_por_cliente = {}
     for venda in vendas:

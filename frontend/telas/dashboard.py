@@ -30,7 +30,7 @@ from services.conta_pagar_service import listar_contas_pagar
 from services.cliente_service import listar_clientes
 from services.movimento_fiado_service import listar_movimentos
 from services.user_service import listar_usuarios
-from services.worker import rodar_em_thread
+from services.worker import rodar_em_thread, em_paralelo
 from services import preferencias_service
 
 from telas.relatorios import NOMES_FORMA_PAGAMENTO, CORES_FORMA_PAGAMENTO
@@ -95,33 +95,39 @@ def _reordenar_por_preferencia(registro, ordem_salva):
     return ordenado + restantes
 
 
+def _com_fallback(func, *args):
+    """Roda func(*args) engolindo exception -- mesmo fallback silencioso
+    que contas_pagar/clientes/movimentos_fiado ja tinham antes (ver
+    _buscar_dados_dashboard), so' virou funcao pra poder ser passada
+    pro em_paralelo igual as chamadas sem fallback."""
+    try:
+        return func(*args)
+    except Exception:
+        return []
+
+
 def _buscar_dados_dashboard():
     """Roda na worker thread (ver services/worker.py) -- as 7 chamadas
     de rede que Dashboard.carregar() precisa, incluindo os fallbacks
     silenciosos ja existentes (contas_pagar/clientes/movimentos_fiado
-    nao devem travar o painel inteiro se falharem sozinhos)."""
+    nao devem travar o painel inteiro se falharem sozinhos).
+
+    Nenhuma das 7 depende do resultado de outra, entao disparam todas
+    em paralelo em vez de em fila -- numa conexao de latencia alta
+    (ex.: terminal remoto via VPN) isso e' a diferenca entre "soma de
+    7 idas-e-voltas" e "o tempo da mais lenta das 7"."""
 
     loja_id = preferencias_service.carregar_loja_id()
 
-    usuario = me()
-    dados = dashboard()
-    vendas = listar_vendas(loja_id)
-    produtos = listar_produtos()
-
-    try:
-        contas_pagar = listar_contas_pagar(loja_id)
-    except Exception:
-        contas_pagar = []
-
-    try:
-        clientes = listar_clientes()
-    except Exception:
-        clientes = []
-
-    try:
-        movimentos_fiado = listar_movimentos()
-    except Exception:
-        movimentos_fiado = []
+    usuario, dados, vendas, produtos, contas_pagar, clientes, movimentos_fiado = em_paralelo(
+        (me,),
+        (dashboard,),
+        (listar_vendas, loja_id),
+        (listar_produtos,),
+        (_com_fallback, listar_contas_pagar, loja_id),
+        (_com_fallback, listar_clientes),
+        (_com_fallback, listar_movimentos),
+    )
 
     usuarios_por_id = {}
     if usuario.get("admin"):

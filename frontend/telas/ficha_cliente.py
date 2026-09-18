@@ -50,26 +50,33 @@ from services.cliente_service import (
 from telas import comprovante_acoes
 from services import cliente_analise
 from services import comprovante_service, impressora_termica_service, preferencias_service
-from services.worker import rodar_em_thread
+from services.worker import rodar_em_thread, em_paralelo
 
 
 def _buscar_dados_recibo_pagamento(cliente_id, valor, momento):
     """Roda na worker thread -- valor/momento so' viajam de ida e volta
     junto com o resultado (ver services/worker.py: callback precisa
-    ser metodo vinculado, nao lambda/closure)."""
-    saldo_depois = saldo_cliente(cliente_id)
-    responsavel = (api.me() or {}).get("nome") or "—"
-    config_loja = api.configuracoes()
+    ser metodo vinculado, nao lambda/closure). As 3 chamadas de rede
+    sao independentes, entao disparam em paralelo."""
+    saldo_depois, usuario, config_loja = em_paralelo(
+        (saldo_cliente, cliente_id), (api.me,), (api.configuracoes,)
+    )
+    responsavel = (usuario or {}).get("nome") or "—"
     return saldo_depois, responsavel, config_loja, valor, momento
 
 
 def _buscar_dados_ficha_cliente(cliente_id):
     """Roda na worker thread -- as 4 chamadas que
-    FichaClienteDialog.carregar() precisa."""
-    saldo = saldo_cliente(cliente_id)
-    vendas_por_id = {v["id"]: v for v in listar_vendas()}
-    nomes_produto = {p["id"]: p["nome"] for p in listar_produtos()}
-    movimentos = listar_movimentos_cliente(cliente_id)
+    FichaClienteDialog.carregar() precisa, independentes entre si,
+    disparadas em paralelo."""
+    saldo, vendas, produtos, movimentos = em_paralelo(
+        (saldo_cliente, cliente_id),
+        (listar_vendas,),
+        (listar_produtos,),
+        (listar_movimentos_cliente, cliente_id),
+    )
+    vendas_por_id = {v["id"]: v for v in vendas}
+    nomes_produto = {p["id"]: p["nome"] for p in produtos}
     return saldo, vendas_por_id, nomes_produto, movimentos
 
 from design import tokens

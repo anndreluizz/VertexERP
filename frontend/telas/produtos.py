@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
-from services.worker import rodar_em_thread
+from services.worker import rodar_em_thread, em_paralelo
 from utils.formatacao import formatar_moeda
 from widgets.estado_async import PainelErro, linhas_esqueleto_tabela
 
@@ -66,10 +66,10 @@ def _excluir_produtos_em_lote(ids, nomes):
 
 def _buscar_dados_produtos():
     """Roda na worker thread (ver services/worker.py) -- as duas
-    chamadas de rede que carregar() precisa, sequenciais aqui dentro
-    porque quem chama so' quer o par pronto no final, sem travar a
-    janela esperando nenhuma das duas."""
-    return listar_produtos(), listar_categorias()
+    chamadas de rede que carregar() precisa, em paralelo aqui dentro
+    porque sao independentes entre si e quem chama so' quer o par
+    pronto no final, sem travar a janela esperando nenhuma das duas."""
+    return em_paralelo((listar_produtos,), (listar_categorias,))
 
 
 class _CardKPIClicavel(CardKPI):

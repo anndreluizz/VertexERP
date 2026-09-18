@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 
 from services.caixa_service import caixa_aberto, resumo_caixa, fechar_caixa, listar_movimentos_caixa
 from services import api, comprovante_service, impressora_termica_service, preferencias_service
-from services.worker import rodar_em_thread
+from services.worker import rodar_em_thread, em_paralelo
 
 from design import tokens
 from design.icons import icone, icone_pixmap
@@ -47,8 +47,10 @@ def _formatar_data_curta(texto):
 def _buscar_dados_fechamento():
     """Roda na worker thread -- caixa_aberto() + resumo_caixa(), os
     valores esperados que a pagina 2 (conferencia) vai comparar contra
-    o que a pessoa contou na pagina 1."""
-    return caixa_aberto() or {}, resumo_caixa() or {}
+    o que a pessoa contou na pagina 1. As 2 sao independentes, entao
+    disparam em paralelo."""
+    caixa, resumo = em_paralelo((caixa_aberto,), (resumo_caixa,))
+    return caixa or {}, resumo or {}
 
 
 def _confirmar_e_preparar_impressao(valor_contado, observacoes, caixa_id):
@@ -65,15 +67,16 @@ def _confirmar_e_preparar_impressao(valor_contado, observacoes, caixa_id):
     if response.status_code != 200:
         return response, None, None, None
 
-    movimentos = []
-    if caixa_id:
-        movimentos = sorted(
-            listar_movimentos_caixa(caixa_id),
-            key=lambda m: m.get("data", ""),
-        )
+    # as 3 chamadas abaixo so' dependem do fechamento ja' ter dado
+    # certo (acima), nao uma da outra -- disparam em paralelo
+    movimentos_brutos, usuario, config = em_paralelo(
+        (listar_movimentos_caixa, caixa_id) if caixa_id else (lambda: [],),
+        (api.me,),
+        (api.configuracoes,),
+    )
 
-    responsavel = (api.me() or {}).get("nome") or "—"
-    config = api.configuracoes()
+    movimentos = sorted(movimentos_brutos, key=lambda m: m.get("data", ""))
+    responsavel = (usuario or {}).get("nome") or "—"
 
     return response, movimentos, responsavel, config
 

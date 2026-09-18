@@ -26,7 +26,7 @@ from design.icons import icone, icone_pixmap
 from design.widgets import BotaoPrimario, BotaoSecundario, Card
 from services.api import login, me, configuracoes
 from services.preferencias_service import carregar_tema_escuro, salvar_tema_escuro
-from services.worker import rodar_em_thread
+from services.worker import rodar_em_thread, em_paralelo
 from utils.acessibilidade import movimento_reduzido
 from telas.verificar_2fa import Verificar2FADialog
 from telas.principal import PrincipalWindow
@@ -213,8 +213,9 @@ def _buscar_info_principal():
     PrincipalWindow precisa pra se montar (Header/Sidebar), buscados
     ANTES de construir a janela em vez de dentro do __init__ dela (ver
     telas/principal.py) -- assim a janela nao trava a GUI thread
-    esperando essas 2 chamadas."""
-    return me(), configuracoes()
+    esperando essas 2 chamadas. As duas sao independentes, entao
+    disparam em paralelo (ver services/worker.py::em_paralelo)."""
+    return em_paralelo((me,), (configuracoes,))
 
 
 class LoginWindow(QWidget):

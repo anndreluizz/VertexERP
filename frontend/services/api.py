@@ -291,6 +291,20 @@ def retomar_sessao():
     return True
 
 
+def servidor_online():
+    """Checagem leve de conectividade (rota / , sem autenticacao) --
+    usada pelo indicador de "sem conexao" do Header (ver
+    PrincipalWindow), rodando em segundo plano a cada alguns segundos.
+    Nunca levanta excecao: qualquer falha (rede, timeout, certificado)
+    so' significa "offline" pra quem esta perguntando."""
+
+    try:
+        response = _requisitar(requests.get, f"{URL}/", timeout=3)
+        return response.status_code == 200
+    except Exception:
+        return False
+
+
 def existe_usuario():
 
     # timeout curto de proposito -- essa chamada roda no arranque do

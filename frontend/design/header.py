@@ -249,6 +249,24 @@ class Header(QFrame):
         layout.addWidget(self.lbl_titulo)
 
         # ======================
+        # STATUS DE CONEXAO -- escondido por padrao (assume online, ver
+        # PrincipalWindow); some/aparece sozinho conforme a checagem
+        # periodica de fundo, nunca precisa de acao do usuario.
+        # ======================
+
+        self.lbl_status_conexao = QLabel("⏺  Sem conexão com o servidor — tentando reconectar…")
+        self.lbl_status_conexao.setStyleSheet(f"""
+            background: {tokens.ERRO_CLARO};
+            color: {tokens.ERRO};
+            font-size: {tokens.TAMANHO_SM}px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: {tokens.RADIUS_SM}px;
+        """)
+        self.lbl_status_conexao.setVisible(False)
+        layout.addWidget(self.lbl_status_conexao)
+
+        # ======================
         # BUSCA GLOBAL
         # ======================
 
@@ -423,6 +441,13 @@ class Header(QFrame):
 
     def definir_titulo(self, texto):
         self.lbl_titulo.setText(texto)
+
+    def definir_online(self, online: bool):
+        """Chamado pela checagem periodica de conectividade em segundo
+        plano (ver PrincipalWindow) -- so troca a visibilidade do
+        aviso, nada mais (nunca desabilita nada aqui: cada tela ja
+        trata falha de rede na hora H, isso e so um indicador)."""
+        self.lbl_status_conexao.setVisible(not online)
 
     def _atualizar_relogio(self):
         agora = datetime.now()

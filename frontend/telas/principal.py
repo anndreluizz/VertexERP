@@ -15,6 +15,7 @@ from telas.trocar_senha import TrocarSenhaDialog
 import os
 import sys
 
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QShortcut, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
@@ -33,6 +34,13 @@ from design.header import Header
 from services import api
 from services.caixa_service import caixa_aberto, abrir_caixa
 from services.preferencias_service import salvar_tema_escuro
+from services.worker import rodar_em_thread
+
+# intervalo da checagem de "sem conexao com o servidor" em segundo
+# plano (ver Header.definir_online) -- nao precisa ser rapido, e so'
+# um indicador; 20s equilibra perceber a queda logo sem gerar trafego
+# nenhum digno de nota.
+_INTERVALO_CONEXAO_MS = 20_000
 
 
 # (chave, ícone lucide, rótulo) — única fonte de verdade pra montar tanto
@@ -205,6 +213,26 @@ class PrincipalWindow(QMainWindow):
 
         self.atalho_pdv = QShortcut(QKeySequence("F3"), self)
         self.atalho_pdv.activated.connect(self.atalho_f3)
+
+        # ======================
+        # STATUS DE CONEXAO -- checagem leve em segundo plano, so pra
+        # acender/apagar o aviso do Header (ver design/header.py); cada
+        # tela ja trata falha de rede na hora H sozinha, isso e so um
+        # indicador de fundo pra avisar cedo quando a rede cai no meio
+        # da sessao (ex.: filial perdendo conexao com o servidor da
+        # matriz).
+        # ======================
+
+        self._timer_conexao = QTimer(self)
+        self._timer_conexao.timeout.connect(self._checar_conexao)
+        self._timer_conexao.start(_INTERVALO_CONEXAO_MS)
+
+    def _checar_conexao(self):
+        rodar_em_thread(
+            self,
+            api.servidor_online,
+            ao_sucesso=self.header.definir_online,
+        )
 
     def _exibir_pagina(self, chave, pagina):
 

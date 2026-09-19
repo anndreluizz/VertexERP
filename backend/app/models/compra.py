@@ -51,6 +51,11 @@ class Compra(Base):
         nullable=True,
     )
 
+    cancelado_em: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
     fornecedor = relationship(
         "Fornecedor",
         back_populates="compras",

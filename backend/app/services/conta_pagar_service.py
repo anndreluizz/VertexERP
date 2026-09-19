@@ -91,6 +91,53 @@ class ContaPagarService:
         return conta
 
     @staticmethod
+    def criar_compra_prazo(
+        db: Session,
+        compra,
+        usuario_id: int | None = None,
+        loja_id: int | None = None,
+    ):
+        """Gera automaticamente a conta a pagar de uma Compra feita a
+        prazo (ver CompraService.criar) -- sem isso, uma compra PRAZO
+        ficaria sem nenhum rastro em Contas a Pagar."""
+
+        if compra.fornecedor_id is None:
+            raise Exception(
+                "Compra a prazo exige um fornecedor."
+            )
+
+        if compra.data_vencimento is None:
+            raise Exception(
+                "Informe a data de vencimento."
+            )
+
+        conta = ContaPagar(
+            fornecedor_id=compra.fornecedor_id,
+            compra_id=compra.id,
+            data_emissao=datetime.utcnow(),
+            data_vencimento=compra.data_vencimento,
+            data_pagamento=None,
+            valor=compra.valor_total,
+            descricao=f"Compra #{compra.id}",
+            categoria="Compra de mercadoria",
+            observacao="Gerada automaticamente pela compra.",
+            status=StatusContaPagar.PENDENTE.value,
+            loja_id=loja_id,
+        )
+
+        conta = ContaPagarRepository.criar(
+            db,
+            conta,
+        )
+
+        ContaPagarEventoService.registrar(
+            db, conta.id, "CRIADA",
+            usuario_id=usuario_id,
+        )
+
+        return conta
+
+    @staticmethod
     def listar(db: Session, skip: int = 0, limit: int = 100, loja_id: int | None = None):
         return ContaPagarRepository.listar(db, skip, limit, loja_id)
 

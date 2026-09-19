@@ -1,8 +1,11 @@
 from datetime import datetime
 
+from decimal import Decimal
+
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Numeric,
     String,
 )
 
@@ -64,14 +67,25 @@ class Fornecedor(Base):
         default=True,
     )
 
+    # percentual aplicado sobre o custo pra sugerir preco_venda na
+    # importacao de NF-e (ex.: 15.00 = +15%) -- server_default pra nao
+    # quebrar fornecedores ja existentes em producao (ver migration).
+    margem_padrao: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2),
+        default=Decimal("0"),
+    )
+
     criado_em: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,
     )
 
     # Relacionamentos
+    # SEM cascade delete-orphan de proposito: excluir() e' soft-delete
+    # (ativo=False), nunca remove a linha -- um cascade aqui so' faria
+    # sentido se algum dia alguem reintroduzir hard-delete, e nesse caso
+    # apagaria o historico de Compras junto, o que nunca e' o que se quer.
     compras = relationship(
         "Compra",
         back_populates="fornecedor",
-        cascade="all, delete-orphan",
     )

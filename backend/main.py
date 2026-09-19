@@ -31,6 +31,8 @@ from app.api.v1.configuracoes import router as configuracoes_router
 from app.api.v1.notificacoes import router as notificacoes_router
 from app.api.v1.aprovacoes import router as aprovacoes_router
 from app.api.v1.lojas import router as lojas_router
+from app.api.v1.fornecedores import router as fornecedores_router
+from app.api.v1.compras import router as compras_router
 from app.services.aviso_vencimento_service import iniciar_verificacao_diaria
 from app.services.whatsapp_lembrete_service import (
     iniciar_verificacao_diaria as iniciar_lembrete_whatsapp,
@@ -80,6 +82,8 @@ app.include_router(configuracoes_router)
 app.include_router(notificacoes_router)
 app.include_router(aprovacoes_router)
 app.include_router(lojas_router)
+app.include_router(fornecedores_router)
+app.include_router(compras_router)
 
 # Quando empacotado com PyInstaller (--onefile), __file__ aponta pra dentro
 # da pasta temporária de extração (sys._MEIPASS) — certo pra achar arquivos

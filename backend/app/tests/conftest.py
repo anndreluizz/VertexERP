@@ -69,6 +69,8 @@ from app.api.v1 import (
     configuracoes as configuracoes_router,
     relatorios as relatorios_router,
     lojas as lojas_router,
+    fornecedores as fornecedores_router,
+    compras as compras_router,
 )
 from app.auth import dependencies as auth_dependencies
 
@@ -93,6 +95,8 @@ MODULOS_COM_GET_DB = [
     configuracoes_router,
     relatorios_router,
     lojas_router,
+    fornecedores_router,
+    compras_router,
     auth_dependencies,
 ]
 
@@ -270,6 +274,23 @@ def produto(db):
         preco_venda=20.0,
         estoque=50,
         estoque_minimo=5,
+        ativo=True,
+    )
+    db.add(novo)
+    db.commit()
+    db.refresh(novo)
+    return novo
+
+
+@pytest.fixture()
+def fornecedor(db):
+    from app.models.fornecedor import Fornecedor
+
+    novo = Fornecedor(
+        razao_social="Fornecedor Teste Ltda",
+        nome_fantasia="Fornecedor Teste",
+        cnpj="12345678000199",
+        margem_padrao=20,
         ativo=True,
     )
     db.add(novo)

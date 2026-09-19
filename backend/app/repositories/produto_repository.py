@@ -33,6 +33,25 @@ class ProdutoRepository:
         ).first()
 
     @staticmethod
+    def buscar_por_codigo(
+        db: Session, codigo: str, loja_id: int | None = None
+    ):
+        """Mesmo escopo de listar(): produto global (loja_id NULL) ou
+        exclusivo DESSA loja -- usado pra casar o cProd de uma NF-e com
+        um produto ja cadastrado (ver ImportacaoNfeService)."""
+
+        query = db.query(Produto).filter(Produto.codigo == codigo)
+
+        if loja_id is not None:
+            query = query.filter(
+                or_(Produto.loja_id.is_(None), Produto.loja_id == loja_id)
+            )
+        else:
+            query = query.filter(Produto.loja_id.is_(None))
+
+        return query.first()
+
+    @staticmethod
     def criar(db: Session, produto: Produto):
         db.add(produto)
         db.commit()

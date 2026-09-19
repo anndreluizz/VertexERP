@@ -9,11 +9,12 @@ class EstoqueLojaRepository:
 
     @staticmethod
     def obter_ou_criar(db: Session, produto_id: int, loja_id: int):
-        # sempre comeca em 0 -- NUNCA herda produto.estoque aqui. Se
-        # herdasse, a primeira loja nova que tocasse num produto
-        # "roubaria" uma copia fantasma do estoque que fisicamente so
-        # existe na Matriz (que ja foi semeada por uma migracao de
-        # dados especifica, ver 7596e4010a1f -> proxima migration).
+        # quantidade sempre comeca em 0 -- NUNCA herda produto.estoque
+        # aqui. Se herdasse, a primeira loja nova que tocasse num
+        # produto "roubaria" uma copia fantasma do estoque que
+        # fisicamente so existe na Matriz (que ja foi semeada por uma
+        # migracao de dados especifica, ver 7596e4010a1f -> proxima
+        # migration).
         registro = (
             db.query(EstoqueLoja)
             .filter(
@@ -24,16 +25,53 @@ class EstoqueLojaRepository:
         )
 
         if registro is None:
+            # estoque_minimo, diferente de quantidade, e' uma
+            # CONFIGURACAO (nao uma quantidade fisica real) -- copiar o
+            # minimo global do produto como ponto de partida da loja
+            # nova e' um default razoavel, nao um "roubo" de estoque.
+            # Sem isso, toda loja nova comecaria com minimo 0 e o
+            # alerta de estoque baixo ficaria desligado ate alguem
+            # configurar na mao.
+            minimo_padrao = (
+                db.query(Produto.estoque_minimo)
+                .filter(Produto.id == produto_id)
+                .scalar()
+            ) or 0
+
             registro = EstoqueLoja(
                 produto_id=produto_id,
                 loja_id=loja_id,
                 quantidade=0,
-                estoque_minimo=0,
+                estoque_minimo=minimo_padrao,
             )
             db.add(registro)
             db.flush()
 
         return registro
+
+    @staticmethod
+    def minimos_por_loja(
+        db: Session, produto_ids: list[int], loja_id: int
+    ) -> dict[int, int]:
+        """Estoque minimo configurado de cada produto NESSA loja
+        especifica. Produto sem linha em EstoqueLoja ainda (nunca foi
+        tocado nessa loja) fica de fora do dict -- quem chama deve
+        cair pro minimo GLOBAL (Produto.estoque_minimo) como fallback,
+        nao pra 0, senao "nunca configurou" vira "nunca alerta"."""
+
+        if not produto_ids:
+            return {}
+
+        linhas = (
+            db.query(EstoqueLoja.produto_id, EstoqueLoja.estoque_minimo)
+            .filter(
+                EstoqueLoja.produto_id.in_(produto_ids),
+                EstoqueLoja.loja_id == loja_id,
+            )
+            .all()
+        )
+
+        return {produto_id: minimo for produto_id, minimo in linhas}
 
     @staticmethod
     def quantidades_por_loja(

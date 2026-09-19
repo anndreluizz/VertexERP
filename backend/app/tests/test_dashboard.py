@@ -196,3 +196,60 @@ def test_dashboard_estoque_baixo_usa_quantidade_da_loja_nao_o_agregado(
 
     assert resposta_a.json()["estoque_baixo"] == 0
     assert resposta_b.json()["estoque_baixo"] == 1
+
+
+def test_dashboard_estoque_baixo_usa_minimo_da_loja_com_fallback_pro_global(
+    client, auth_headers, db
+):
+    """EstoqueLoja.estoque_minimo (Onda 1 da Fase 2) precisa ser usado
+    quando a loja configurou o dela; loja que nunca configurou (sem
+    linha em EstoqueLoja) cai pro minimo GLOBAL do produto, nao pra 0
+    -- senao "nunca configurou" viraria "nunca alerta"."""
+    from app.models.estoque_loja import EstoqueLoja
+    from app.models.loja import Loja
+    from app.models.produto import Produto
+
+    loja_configurada = Loja(nome="Loja Configurada")
+    loja_sem_config = Loja(nome="Loja Sem Config")
+    db.add_all([loja_configurada, loja_sem_config])
+    db.commit()
+
+    produto = Produto(
+        codigo="P902",
+        nome="Produto Minimo Por Loja",
+        categoria="Geral",
+        unidade="UN",
+        preco_custo=1.0,
+        preco_venda=2.0,
+        estoque=10,
+        estoque_minimo=5,  # minimo global
+        loja_id=None,
+    )
+    db.add(produto)
+    db.commit()
+
+    # Loja Configurada: quantidade 8, minimo proprio configurado em 10
+    # -- 8 <= 10, deveria contar como estoque baixo mesmo estando ACIMA
+    # do minimo global (5).
+    db.add(
+        EstoqueLoja(
+            produto_id=produto.id,
+            loja_id=loja_configurada.id,
+            quantidade=8,
+            estoque_minimo=10,
+        )
+    )
+    # Loja Sem Config: nunca teve linha em EstoqueLoja -- quantidade
+    # cai pra 0 (fallback existente), minimo cai pro global (5) -- 0 <=
+    # 5, tambem conta como estoque baixo.
+    db.commit()
+
+    resposta_configurada = client.get(
+        f"/dashboard/?loja_id={loja_configurada.id}", headers=auth_headers
+    )
+    resposta_sem_config = client.get(
+        f"/dashboard/?loja_id={loja_sem_config.id}", headers=auth_headers
+    )
+
+    assert resposta_configurada.json()["estoque_baixo"] == 1
+    assert resposta_sem_config.json()["estoque_baixo"] == 1

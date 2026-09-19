@@ -14,6 +14,11 @@
 $ErrorActionPreference = "Stop"
 
 $Raiz = Resolve-Path (Join-Path $PSScriptRoot "..")
+$Python = "$Raiz\.venv\Scripts\python.exe"
+
+if (-not (Test-Path $Python)) {
+    throw "Nao achei $Python -- confirme que o .venv da raiz do projeto existe e tem PyInstaller instalado."
+}
 
 Write-Host "=== Vertex ERP - montagem dos pacotes ===" -ForegroundColor Cyan
 
@@ -23,17 +28,17 @@ Write-Host "=== Vertex ERP - montagem dos pacotes ===" -ForegroundColor Cyan
 
 Write-Host "`n[1/4] Build do launcher (Servidor)..." -ForegroundColor Yellow
 Push-Location $Raiz
-& "$Raiz\frontend\.venv\Scripts\python.exe" -m PyInstaller "VertexERP.spec" --clean --noconfirm
+& $Python -m PyInstaller "VertexERP.spec" --clean --noconfirm
 Pop-Location
 
 Write-Host "`n[2/4] Build do backend..." -ForegroundColor Yellow
 Push-Location "$Raiz\backend"
-& "$Raiz\backend\.venv\Scripts\python.exe" -m PyInstaller "VertexERP-Backend.spec" --clean --noconfirm
+& $Python -m PyInstaller "VertexERP-Backend.spec" --clean --noconfirm
 Pop-Location
 
 Write-Host "`n[3/4] Build do frontend..." -ForegroundColor Yellow
 Push-Location "$Raiz\frontend"
-& "$Raiz\frontend\.venv\Scripts\python.exe" -m PyInstaller "VertexERP-Frontend.spec" --clean --noconfirm
+& $Python -m PyInstaller "VertexERP-Frontend.spec" --clean --noconfirm
 Pop-Location
 
 # ==========================================

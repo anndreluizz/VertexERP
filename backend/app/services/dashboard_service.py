@@ -245,13 +245,29 @@ class DashboardService:
                 .scalar_subquery(),
                 0,
             )
+            # mesmo raciocinio da quantidade: o minimo configurado
+            # PRA ESSA LOJA (EstoqueLoja.estoque_minimo), nao o global
+            # -- com fallback pro minimo global quando a loja nunca
+            # configurou o dela (nao pra 0, senao "nunca configurou"
+            # vira "nunca alerta").
+            coluna_minimo_loja = func.coalesce(
+                db.query(EstoqueLoja.estoque_minimo)
+                .filter(
+                    EstoqueLoja.produto_id == Produto.id,
+                    EstoqueLoja.loja_id == loja_id,
+                )
+                .correlate(Produto)
+                .scalar_subquery(),
+                Produto.estoque_minimo,
+            )
         else:
             coluna_estoque_loja = Produto.estoque
+            coluna_minimo_loja = Produto.estoque_minimo
 
         estoque_baixo = (
             db.query(Produto)
             .filter(
-                coluna_estoque_loja <= Produto.estoque_minimo,
+                coluna_estoque_loja <= coluna_minimo_loja,
                 filtro_loja_produto,
             )
             .count()

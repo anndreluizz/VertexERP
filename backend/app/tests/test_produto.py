@@ -84,3 +84,51 @@ def test_excluir_produto(client, auth_headers, produto):
 
     assert depois.status_code == 200
     assert depois.json()["ativo"] is False
+
+
+def test_estoque_minimo_e_por_loja_com_fallback_pro_global(
+    client, auth_headers, produto, db
+):
+    """Onda 1 da Fase 2: editar 'estoque mínimo' com loja_id resolvido
+    grava em EstoqueLoja.estoque_minimo daquela loja, não no
+    Produto.estoque_minimo global -- outra loja que nunca configurou o
+    dela continua vendo o mínimo global como fallback."""
+    from app.models.loja import Loja
+
+    loja_a = Loja(nome="Loja Estoque A")
+    loja_b = Loja(nome="Loja Estoque B")
+    db.add_all([loja_a, loja_b])
+    db.commit()
+
+    minimo_global_original = produto.estoque_minimo
+
+    response = client.put(
+        f"/produtos/{produto.id}?loja_id={loja_a.id}",
+        json={
+            "codigo": produto.codigo,
+            "nome": produto.nome,
+            "categoria": produto.categoria,
+            "preco_custo": str(produto.preco_custo),
+            "preco_venda": str(produto.preco_venda),
+            "estoque_minimo": minimo_global_original + 50,
+            "ativo": True,
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["estoque_minimo"] == minimo_global_original + 50
+
+    # Loja B nunca configurou o próprio mínimo -- deve continuar vendo
+    # o global (inalterado pela edição da Loja A).
+    resposta_loja_b = client.get(
+        f"/produtos/{produto.id}?loja_id={loja_b.id}", headers=auth_headers
+    )
+    assert resposta_loja_b.json()["estoque_minimo"] == minimo_global_original
+
+    # Sem loja_id (visão agregada/admin) o global também não deve ter
+    # sido sobrescrito pela edição feita na Loja A.
+    resposta_global = client.get(
+        f"/produtos/{produto.id}", headers=auth_headers
+    )
+    assert resposta_global.json()["estoque_minimo"] == minimo_global_original

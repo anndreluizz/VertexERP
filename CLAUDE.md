@@ -21,8 +21,8 @@ Backend (executar a partir de `backend/`, usando o `.venv` do repositório):
   ```
   (o pacote final usa o mesmo mecanismo, ver `backend/backend_entry.py`, só que na porta `58734` por padrão em vez de `8000` — ver comentário em `frontend/services/api.py` sobre `_PORTA_PADRAO`). `uvicorn main:app --reload` sem TLS ainda serve pra bater direto na API (`/docs`, testes manuais de rota via curl/Postman), só não serve pro frontend desktop.
 - Rodar migrações: `alembic upgrade head`
-- Criar uma migração: `alembic revision --autogenerate -m "descricao"` — **novos models precisam ser importados manualmente em `backend/migrations/env.py`**, ou o autogenerate não vai enxergá-los (veja a lista de imports já existente lá).
-- Rodar testes: `pytest` (teste único: `pytest app/tests/test_venda.py::nome_do_teste`) — suíte real cobrindo todos os módulos do backend (~78 testes). Usa um banco Postgres de teste separado (`vertexerp_test`, mesmas credenciais do `.env`), criado e recriado do zero automaticamente por `app/tests/conftest.py` a cada execução — não precisa de setup manual.
+- Criar uma migração: `alembic revision --autogenerate -m "descricao"` — **novos models precisam ser importados manualmente em `backend/app/models/__init__.py`**, ou o autogenerate não vai enxergá-los (`migrations/env.py` não importa cada model individualmente, só faz `from app import models`, então é o `__init__.py` do pacote que precisa listar o novo arquivo).
+- Rodar testes: `pytest` (teste único: `pytest app/tests/test_venda.py::nome_do_teste`) — suíte real cobrindo todos os módulos do backend (194 testes). Usa um banco Postgres de teste separado (`vertexerp_test`, mesmas credenciais do `.env`), criado e recriado do zero automaticamente por `app/tests/conftest.py` a cada execução — não precisa de setup manual.
 
 Frontend (executar a partir de `frontend/`):
 - Rodar o app desktop: `python app.py` (requer o backend rodando em `https://127.0.0.1:8000` com TLS, ver acima; sem ele, o login falha com um diálogo "Servidor Offline" — e se o backend estiver em HTTP puro, falha com erro de SSL em vez disso)
@@ -31,7 +31,7 @@ Notas de setup:
 - O `requirements.txt` na raiz está em UTF-16 e lista apenas dependências do backend (FastAPI, SQLAlchemy, Alembic, psycopg, python-jose, passlib, pytest, etc.). Pacotes exclusivos do frontend (`PySide6`, `requests`) não estão listados ali e precisam ser instalados separadamente.
 - A configuração do backend vem de `backend/.env` (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `SECRET_KEY`, ...), carregada diretamente via `python-dotenv` + `os.getenv` em `app/database/session.py` e `migrations/env.py`. `app/config/settings.py` define uma classe `Settings` (pydantic), mas ela está sem uso atualmente — não assuma que é a fonte de verdade.
 - Postgres é o único banco suportado (URL `postgresql+psycopg://` montada manualmente em dois lugares, citados acima).
-- `backend/migrations/` está no `.gitignore` — os arquivos de migração existem em disco mas não são versionados no git.
+- `backend/migrations/` (incluindo `versions/`) é normalmente versionado no git, não está no `.gitignore` — toda migração nova precisa ser commitada junto com o código que depende dela.
 
 ## Arquitetura do backend (`backend/app/`)
 

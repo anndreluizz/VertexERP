@@ -16,11 +16,18 @@ class ProdutoService:
         produtos = ProdutoRepository.listar(db, skip, limit, loja_id)
 
         if loja_id is not None:
-            mapa = EstoqueLojaRepository.quantidades_por_loja(
-                db, [p.id for p in produtos], loja_id
+            ids = [p.id for p in produtos]
+            mapa_quantidade = EstoqueLojaRepository.quantidades_por_loja(
+                db, ids, loja_id
+            )
+            mapa_minimo = EstoqueLojaRepository.minimos_por_loja(
+                db, ids, loja_id
             )
             for produto in produtos:
-                produto.estoque = mapa.get(produto.id, 0)
+                produto.estoque = mapa_quantidade.get(produto.id, 0)
+                produto.estoque_minimo = mapa_minimo.get(
+                    produto.id, produto.estoque_minimo
+                )
 
         return produtos
 
@@ -45,6 +52,9 @@ class ProdutoService:
             produto.estoque = EstoqueLojaRepository.quantidades_por_loja(
                 db, [produto.id], loja_id
             ).get(produto.id, 0)
+            produto.estoque_minimo = EstoqueLojaRepository.minimos_por_loja(
+                db, [produto.id], loja_id
+            ).get(produto.id, produto.estoque_minimo)
 
         return produto
 
@@ -139,6 +149,14 @@ class ProdutoService:
         campos = dados.dict(exclude_unset=True, exclude={"foto_base64"})
         novo_estoque = campos.pop("estoque", None)
 
+        # mesmo motivo do "estoque" acima: com loja_id resolvido, o
+        # minimo editado na tela e' o minimo DAQUELA loja
+        # (EstoqueLoja.estoque_minimo), nao o global -- sem isso,
+        # editar o produto numa loja sobrescreveria o minimo global
+        # que outras lojas ainda usam como fallback (ver
+        # ProdutoService.listar/buscar).
+        novo_estoque_minimo = campos.pop("estoque_minimo", None)
+
         # mesma checagem que ja existe em criar() -- codigo_barras e'
         # editavel na tela (o codigo em si nao, mas a API aceita
         # qualquer chamador). Sem isso, mudar pra um valor que ja
@@ -185,10 +203,31 @@ class ProdutoService:
             else:
                 produto.estoque = novo_estoque
 
+        if novo_estoque_minimo is not None:
+            if loja_id is not None:
+                registro = EstoqueLojaRepository.obter_ou_criar(
+                    db, produto.id, loja_id
+                )
+                registro.estoque_minimo = novo_estoque_minimo
+                db.add(registro)
+            else:
+                produto.estoque_minimo = novo_estoque_minimo
+
         if dados.foto_base64:
             produto.foto = base64.b64decode(dados.foto_base64)
 
-        return ProdutoRepository.atualizar(db, produto)
+        produto = ProdutoRepository.atualizar(db, produto)
+
+        # sobrescreve so' o objeto em memoria pra resposta refletir o
+        # minimo DAQUELA loja -- feito DEPOIS do commit/refresh acima
+        # de proposito, senao "produto.estoque_minimo = X" antes do
+        # commit gravaria X no Produto.estoque_minimo GLOBAL por engano
+        # (e o refresh() que vem logo depois recarregaria esse valor
+        # errado do banco). Mesmo padrao ja usado em listar()/buscar().
+        if novo_estoque_minimo is not None and loja_id is not None:
+            produto.estoque_minimo = novo_estoque_minimo
+
+        return produto
 
     @staticmethod
     def excluir(db: Session, produto_id: int):

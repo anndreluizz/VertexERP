@@ -3,6 +3,7 @@ from telas.pdv import PDV
 from telas.caixa import Caixa
 from telas.produtos import Produtos
 from telas.ajuste_estoque import AjusteEstoque
+from telas.transferencia_estoque import TransferenciaEstoque
 from telas.clientes import Clientes
 from telas.fornecedores import Fornecedores
 from telas.relatorios import Relatorios
@@ -51,6 +52,7 @@ ITENS_MENU = [
     ("pdv", "shopping-cart", "PDV"),
     ("produtos", "package", "Produtos"),
     ("ajuste_estoque", "refresh-cw", "Ajuste de Estoque"),
+    ("transferencia_estoque", "store", "Transferência entre Lojas"),
     ("clientes", "users", "Clientes"),
     ("fornecedores", "truck", "Fornecedores"),
     ("caixa", "wallet", "Caixa"),
@@ -135,6 +137,7 @@ class PrincipalWindow(QMainWindow):
         self.pdv = PDV()
         self.produtos = Produtos()
         self.ajuste_estoque = AjusteEstoque()
+        self.transferencia_estoque = TransferenciaEstoque()
 
         self.clientes = Clientes()
 
@@ -154,6 +157,7 @@ class PrincipalWindow(QMainWindow):
         self.paginas.addWidget(self.pdv)
         self.paginas.addWidget(self.produtos)
         self.paginas.addWidget(self.ajuste_estoque)
+        self.paginas.addWidget(self.transferencia_estoque)
         self.paginas.addWidget(self.clientes)
         self.paginas.addWidget(self.fornecedores)
         self.paginas.addWidget(self.caixa)
@@ -253,6 +257,8 @@ class PrincipalWindow(QMainWindow):
             self.fornecedores.carregar()
         elif chave == "ajuste_estoque":
             self.ajuste_estoque.carregar()
+        elif chave == "transferencia_estoque":
+            self.transferencia_estoque.carregar()
 
         self.paginas.setCurrentWidget(pagina)
         self.header.definir_titulo(self._titulos.get(chave, ""))
@@ -275,6 +281,7 @@ class PrincipalWindow(QMainWindow):
             "dashboard": self.dashboard,
             "produtos": self.produtos,
             "ajuste_estoque": self.ajuste_estoque,
+            "transferencia_estoque": self.transferencia_estoque,
             "clientes": self.clientes,
             "fornecedores": self.fornecedores,
             "caixa": self.caixa,

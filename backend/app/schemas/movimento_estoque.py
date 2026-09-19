@@ -17,6 +17,7 @@ class MovimentoEstoqueCreate(MovimentoEstoqueBase):
 class MovimentoEstoqueResponse(MovimentoEstoqueBase):
     id: int
     usuario_id: int
+    transferencia_id: int | None = None
     data: datetime
 
     class Config:

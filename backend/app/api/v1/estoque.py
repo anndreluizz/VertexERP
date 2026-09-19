@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user, resolver_loja_id
@@ -7,7 +7,14 @@ from app.schemas.movimento_estoque import (
     MovimentoEstoqueCreate,
     MovimentoEstoqueResponse,
 )
+from app.schemas.transferencia_estoque import (
+    TransferenciaEstoqueCreate,
+    TransferenciaEstoqueResponse,
+)
 from app.services.movimento_estoque_service import MovimentoEstoqueService
+from app.services.transferencia_estoque_service import (
+    TransferenciaEstoqueService,
+)
 
 router = APIRouter(
     prefix="/estoque",
@@ -58,6 +65,48 @@ def listar_movimentos(
     return [
         MovimentoEstoqueResponse.from_orm(m)
         for m in movimentos
+    ]
+
+
+@router.post(
+    "/transferencias",
+    response_model=TransferenciaEstoqueResponse,
+    status_code=201,
+)
+def criar_transferencia(
+    dados: TransferenciaEstoqueCreate,
+    loja_id: int | None = None,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        transferencia = TransferenciaEstoqueService.criar(
+            db,
+            dados,
+            usuario.id,
+            resolver_loja_id(db, usuario, loja_id),
+        )
+
+        return TransferenciaEstoqueResponse.from_orm(transferencia)
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get(
+    "/transferencias", response_model=list[TransferenciaEstoqueResponse]
+)
+def listar_transferencias(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    transferencias = TransferenciaEstoqueService.listar(db, skip, limit)
+
+    return [
+        TransferenciaEstoqueResponse.from_orm(t)
+        for t in transferencias
     ]
 
 

@@ -47,6 +47,15 @@ class MovimentoEstoque(Base):
         nullable=True
     )
 
+    # so' preenchido nos 2 movimentos (SAIDA+ENTRADA) gerados por uma
+    # transferencia entre lojas -- movimento manual (ajuste de estoque
+    # avulso) fica NULL, sem relacao com nenhuma transferencia.
+    transferencia_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transferencias_estoque.id"),
+        index=True,
+        nullable=True,
+    )
+
     data: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow

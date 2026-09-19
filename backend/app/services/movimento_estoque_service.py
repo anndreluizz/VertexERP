@@ -17,6 +17,7 @@ class MovimentoEstoqueService:
         dados: MovimentoEstoqueCreate,
         usuario_id: int,
         loja_id: int | None = None,
+        transferencia_id: int | None = None,
     ):
 
         produto = ProdutoRepository.buscar_por_id(db, dados.produto_id)
@@ -61,6 +62,7 @@ class MovimentoEstoqueService:
             tipo=tipo,
             quantidade=dados.quantidade,
             motivo=dados.motivo,
+            transferencia_id=transferencia_id,
         )
 
         ProdutoRepository.atualizar(db, produto)

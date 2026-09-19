@@ -16,6 +16,7 @@ from app.models.conta_pagar_evento import ContaPagarEvento
 from app.models.categoria_despesa import CategoriaDespesa
 from app.models.conta_receber import ContaReceber
 from app.models.movimento_estoque import MovimentoEstoque
+from app.models.transferencia_estoque import TransferenciaEstoque
 from app.models.movimento_fiado import MovimentoFiado
 from app.models.configuracao import Configuracao
 from app.models.cliente_observacao import ClienteObservacao

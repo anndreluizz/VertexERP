@@ -40,7 +40,9 @@ Exemplo: `GET /produtos/?skip=100&limit=50` retorna os registros 101–150. Sem 
 
 **Exceção**: `GET /contas-pagar/pendentes` e `GET /contas-receber/pendentes` **não são paginadas** de propósito — essas duas listas alimentam o cálculo do fluxo de caixa (`GET /financeiro/fluxo-caixa`), que precisa do total real de contas pendentes, não só da primeira página.
 
-**Limitação conhecida**: o frontend desktop ainda não tem controles de "próxima página" em nenhuma tela — ele simplesmente recebe os primeiros 100 registros de cada listagem. Para catálogos/históricos que ultrapassem esse número, os registros excedentes ficam invisíveis na UI até que uma navegação de páginas seja implementada no frontend (ver `docs/06-roadmap.md`).
+**Limitação conhecida**: o frontend desktop ainda não tem controles de "próxima página" em nenhuma tela. Pra compensar isso, os services de `produtos`, `clientes`, `vendas` e `caixa` já fazem um loop interno buscando todas as páginas da API automaticamente (não ficam mais presos a 100). Os services de `contas_pagar`, `contas_receber`, `users`, `movimento_caixa` e `estoque` ainda fazem uma única chamada, então ficam presos aos 100 primeiros registros em lojas com mais que isso (ver `docs/06-roadmap.md`).
+
+**Módulos sem paginação nenhuma**: `categorias-despesa`, `fiado`, `aprovações` e `lojas` (documentados abaixo) não aceitam `skip`/`limit` — os repositories correspondentes fazem `listar()` sem `.limit()`, ou seja, **sempre retornam todas as linhas**, sem risco de corte, mas também sem proteção nenhuma contra uma tabela muito grande no futuro.
 
 ## Rotas por módulo
 
@@ -70,16 +72,11 @@ Exemplo: `GET /produtos/?skip=100&limit=50` retorna os registros 101–150. Sem 
 | PUT | `/clientes/{id}` | Atualiza (`nome` e `ativo` obrigatórios no payload) |
 | DELETE | `/clientes/{id}` 🔒 | **Soft-delete** (`ativo=False`) |
 
-### Fornecedores — `/fornecedores`
-| Método | Rota | Descrição |
-|---|---|---|
-| POST | `/fornecedores/` | Cria fornecedor. CNPJ duplicado → `409` |
-| GET | `/fornecedores/` 📄 | Lista todos |
-| GET | `/fornecedores/{id}` | Busca por id (404 se não existir) |
-| PUT | `/fornecedores/{id}` | Atualiza |
-| DELETE | `/fornecedores/{id}` 🔒 | **Hard-delete** |
+### Fornecedores e Compras — **removidos**
 
-### Categorias — `/categorias`
+`/fornecedores` e `/compras` existiam nesta doc mas **não existem mais** — os routers `fornecedores_router`/`compras_router` não são registrados em `main.py` (módulo desativado a pedido do usuário). Os models `Fornecedor`/`Compra`/`ItemCompra` ainda existem no banco/código mas estão órfãos — não trate como domínio ativo (ver `CLAUDE.md`).
+
+### Categorias (de produto) — `/categorias`
 | Método | Rota | Descrição |
 |---|---|---|
 | POST | `/categorias/` | Cria. Nome duplicado → erro |
@@ -101,25 +98,6 @@ Exemplo: `GET /produtos/?skip=100&limit=50` retorna os registros 101–150. Sem 
 | Método | Rota | Descrição |
 |---|---|---|
 | GET | `/pdv/produto/{codigo}` | Busca produto por `codigo` ou `codigo_barras`. 400 se não encontrado |
-
-### Compras — `/compras`
-| Método | Rota | Descrição |
-|---|---|---|
-| POST | `/compras/` | Cria compra com itens; **aumenta o estoque** dos produtos; se `forma_pagamento="PRAZO"`, gera uma `ContaPagar` automaticamente |
-| GET | `/compras/` 📄 | Lista |
-| GET | `/compras/{id}` | Busca (404) |
-| DELETE | `/compras/{id}` 🔒 | Cancela: **devolve o estoque** e faz hard-delete |
-
-Payload de criação:
-```json
-{
-  "fornecedor_id": 1,
-  "observacao": "opcional",
-  "forma_pagamento": "DINHEIRO | PIX | DEBITO | CREDITO | BOLETO | PRAZO",
-  "data_vencimento": "obrigatório se PRAZO",
-  "itens": [{"produto_id": 1, "quantidade": 2, "valor_unitario": "10.00"}]
-}
-```
 
 ### Vendas — `/vendas`
 | Método | Rota | Descrição |
@@ -169,6 +147,75 @@ Mesmo formato de payload das compras, mas com `cliente_id` (opcional) e `descont
 | POST | `/contas-receber/{id}/receber` | Marca como recebida e lança `RECEBIMENTO` no caixa aberto (exige caixa aberto) |
 | POST | `/contas-receber/{id}/cancelar` 🔒 | Cancela (não permite se já recebida) |
 
+### Categorias de Despesa — `/categorias-despesa`
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/categorias-despesa/` | sim | Lista todas (sem paginação, ver nota acima) |
+| POST | `/categorias-despesa/` | sim | Cria |
+| PUT | `/categorias-despesa/{id}` | sim | Atualiza |
+| DELETE | `/categorias-despesa/{id}` 🔒 | admin | Exclui |
+
+### Fiado — `/fiado`
+
+Crediário de cliente (compra/pagamento avulso, fora do fluxo normal de venda/conta a receber). Implementado em `app/api/v1/financeiro.py`, apesar do nome do arquivo — não confundir com `/financeiro` (fluxo de caixa, seção própria abaixo).
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| POST | `/fiado/movimentos` | sim | Cria movimento (`tipo`: COMPRA/PAGAMENTO, `cliente_id`, `valor`, ...) |
+| GET | `/fiado/movimentos` | sim | Lista todos (sem paginação) |
+| GET | `/fiado/movimentos/cliente/{cliente_id}` | sim | Lista de um cliente |
+| PUT | `/fiado/movimentos/{id}` | sim | Atualiza; pode ajustar o caixa retroativamente (`caixa_ajustado` na resposta) |
+| DELETE | `/fiado/movimentos/{id}` | sim | Exclui; idem, pode reverter ajuste no caixa |
+| GET | `/fiado/saldo/{cliente_id}` | sim | Saldo devedor de um cliente |
+| GET | `/fiado/saldos` | sim | Saldo devedor de **todos** os clientes com movimento, numa chamada só (evita N+1 na tela de Clientes) |
+| GET | `/fiado/cliente/{cliente_id}` | sim | Ficha completa do cliente no fiado (usada por `frontend/telas/ficha_cliente.py`) |
+| POST | `/fiado/pagamento` | sim | Atalho pra registrar pagamento sem passar `tipo`; **não** lança no caixa físico (para isso, usar `/fiado/movimentos` com `forma_pagamento`) |
+| POST | `/fiado/compra` | sim | Atalho pra lançar uma compra fiado manual (ex.: dívida migrada de ficha em papel) |
+
+### Relatórios — `/relatorios`
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/relatorios/vendas` 📄 | sim | Relatório de vendas com filtros (`data_inicio`, `data_fim` obrigatório, `cliente_id`, `produto_id`, `categoria`, `forma_pagamento`, `status`, `loja_id`) + ranking de top produtos (`top_produtos_limite`, `top_produtos_ordenar_por`) |
+| GET | `/relatorios/comparativo-lojas` | sim | Compara vendas entre lojas num período (`data_inicio`, `data_fim` obrigatório) |
+
+### Configurações — `/configuracoes`
+
+Configuração única da loja (não é uma lista — um registro global).
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/configuracoes/` | sim | Busca a configuração atual |
+| PUT | `/configuracoes/` 🔒 | admin | Atualiza |
+| GET | `/configuracoes/logo` | sim | Retorna a logo cadastrada como imagem PNG (`404` se não houver) |
+
+### Notificações — `/notificacoes`
+
+Registro de device tokens (push notification), não uma caixa de notificações.
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| POST | `/notificacoes/registrar-token` | sim | Registra um device token pro usuário logado |
+| DELETE | `/notificacoes/token/{token}` | sim | Remove um token |
+
+### Aprovações — `/aprovacoes`
+
+Fila de solicitações que exigem aprovação de um admin (o que gera uma solicitação é definido em `SolicitacaoAprovacaoService`/pelos services de negócio, não neste router).
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/aprovacoes/pendentes` 🔒 | admin | Lista pendentes (sem paginação) |
+| POST | `/aprovacoes/{id}/aprovar` 🔒 | admin | Aprova a solicitação |
+| POST | `/aprovacoes/{id}/rejeitar` 🔒 | admin | Rejeita a solicitação |
+
+### Lojas — `/lojas`
+
+Suporte a múltiplas lojas (a maioria das outras rotas de listagem aceita um `loja_id` opcional pra filtrar, ex.: `/financeiro/fluxo-caixa`, `/relatorios/vendas`).
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/lojas/` | sim | Lista todas (sem paginação) |
+| POST | `/lojas/` 🔒 | admin | Cria. Nome duplicado → erro |
+
 ### Estoque — `/estoque`
 | Método | Rota | Descrição |
 |---|---|---|
@@ -177,9 +224,12 @@ Mesmo formato de payload das compras, mas com `cliente_id` (opcional) e `descont
 | GET | `/estoque/movimentos/{produto_id}` 📄 | Histórico de um produto |
 
 ### Financeiro — `/financeiro`
-| Método | Rota | Descrição |
-|---|---|---|
-| GET | `/financeiro/fluxo-caixa?dias=N` | Saldo atual do caixa + contas a pagar/receber pendentes com vencimento nos próximos N dias (padrão 30) + saldo projetado |
+
+Implementado em `app/api/v1/financeiro_fluxo_caixa.py` (não confundir com `app/api/v1/financeiro.py`, que apesar do nome implementa o router de `/fiado`, seção própria acima).
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/financeiro/fluxo-caixa?dias=N&loja_id=M` | sim | Saldo atual do caixa + contas a pagar/receber pendentes com vencimento nos próximos N dias (padrão 30) + saldo projetado. `loja_id` opcional filtra por loja; sem ele, usa a loja resolvida pro usuário logado (`resolver_loja_id`) |
 
 ## Documentação interativa
 

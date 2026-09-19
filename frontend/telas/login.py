@@ -728,6 +728,8 @@ class LoginWindow(QWidget):
         self.bt_ver_senha.setAutoDefault(False)
         self.bt_ver_senha.setCheckable(True)
         self.bt_ver_senha.setIcon(icone("eye", cor=tokens.TEXTO_TERCIARIO, tamanho=18))
+        self.bt_ver_senha.setToolTip("Mostrar senha")
+        self.bt_ver_senha.setAccessibleName("Mostrar senha")
         self.bt_ver_senha.setStyleSheet("""
             QPushButton { background:transparent; border:none; }
         """)
@@ -789,11 +791,15 @@ class LoginWindow(QWidget):
             self.bt_ver_senha.setIcon(
                 icone("eye-off", cor=tokens.TEXTO_TERCIARIO, tamanho=18)
             )
+            self.bt_ver_senha.setToolTip("Ocultar senha")
+            self.bt_ver_senha.setAccessibleName("Ocultar senha")
         else:
             self.senha.setEchoMode(QLineEdit.Password)
             self.bt_ver_senha.setIcon(
                 icone("eye", cor=tokens.TEXTO_TERCIARIO, tamanho=18)
             )
+            self.bt_ver_senha.setToolTip("Mostrar senha")
+            self.bt_ver_senha.setAccessibleName("Mostrar senha")
 
     def esqueceu_senha(self):
 

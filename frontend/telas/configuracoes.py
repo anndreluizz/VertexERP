@@ -104,6 +104,8 @@ class Configuracoes(QWidget):
         self.bt_voltar.setFixedSize(36, 36)
         self.bt_voltar.setCursor(Qt.PointingHandCursor)
         self.bt_voltar.setIcon(icone("chevron-left", cor=tokens.TEXTO_SECUNDARIO, tamanho=18))
+        self.bt_voltar.setToolTip("Voltar")
+        self.bt_voltar.setAccessibleName("Voltar")
         self.bt_voltar.setStyleSheet(f"""
             QPushButton {{
                 background:{tokens.CARD}; border:1px solid {tokens.BORDA};

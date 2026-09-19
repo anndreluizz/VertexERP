@@ -47,6 +47,8 @@ class ProdutoCriadoDialog(QDialog):
         bt_fechar.setFixedSize(34, 34)
         bt_fechar.setCursor(Qt.PointingHandCursor)
         bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        bt_fechar.setToolTip("Fechar")
+        bt_fechar.setAccessibleName("Fechar")
         bt_fechar.setStyleSheet(f"""
             QPushButton {{
                 background:{tokens.CARD}; border:1px solid {tokens.BORDA};

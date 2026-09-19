@@ -213,6 +213,8 @@ class ClienteCard(QFrame):
         bt_menu.setFixedSize(28, 28)
         bt_menu.setCursor(Qt.PointingHandCursor)
         bt_menu.setIcon(icone("more-vertical", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        bt_menu.setToolTip("Mais opções")
+        bt_menu.setAccessibleName("Mais opções")
         bt_menu.setStyleSheet(f"""
             QPushButton {{ background:transparent; border:none; border-radius:6px; }}
             QPushButton:hover {{ background:{tokens.FUNDO}; }}
@@ -352,6 +354,8 @@ class Clientes(QWidget):
         self.bt_voltar.setFixedSize(36, 36)
         self.bt_voltar.setCursor(Qt.PointingHandCursor)
         self.bt_voltar.setIcon(icone("chevron-left", cor=tokens.TEXTO_SECUNDARIO, tamanho=18))
+        self.bt_voltar.setToolTip("Voltar")
+        self.bt_voltar.setAccessibleName("Voltar")
         self.bt_voltar.setStyleSheet(f"""
             QPushButton {{
                 background:{tokens.CARD}; border:1px solid {tokens.BORDA};

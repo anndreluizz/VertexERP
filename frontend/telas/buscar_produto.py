@@ -170,6 +170,7 @@ class ItemResultado(QWidget):
         self.bt_favorito.setFixedSize(30, 30)
         self.bt_favorito.setCursor(Qt.PointingHandCursor)
         self.bt_favorito.setToolTip("Marcar/desmarcar como favorito")
+        self.bt_favorito.setAccessibleName("Marcar ou desmarcar como favorito")
         self.bt_favorito.setStyleSheet(f"""
             QPushButton {{ background:transparent; border:none; border-radius:15px; }}
             QPushButton:hover {{ background:{tokens.FUNDO}; }}
@@ -284,6 +285,8 @@ class BuscarProdutoDialog(QDialog):
         bt_fechar.setFixedSize(34, 34)
         bt_fechar.setCursor(Qt.PointingHandCursor)
         bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        bt_fechar.setToolTip("Fechar")
+        bt_fechar.setAccessibleName("Fechar")
         bt_fechar.setStyleSheet(f"""
             QPushButton {{
                 background:{tokens.CARD}; border:1px solid {tokens.BORDA};

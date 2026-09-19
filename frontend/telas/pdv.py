@@ -345,6 +345,8 @@ class PDV(QWidget):
         self.bt_voltar.setFixedSize(38, 38)
         self.bt_voltar.setCursor(Qt.PointingHandCursor)
         self.bt_voltar.setIcon(icone("chevron-left", cor=tokens.TEXTO_SECUNDARIO, tamanho=18))
+        self.bt_voltar.setToolTip("Voltar")
+        self.bt_voltar.setAccessibleName("Voltar")
         self.bt_voltar.setStyleSheet(f"""
             QPushButton {{
                 background:{tokens.CARD};
@@ -1535,6 +1537,8 @@ class PDV(QWidget):
         bt_excluir.setFixedSize(28, 28)
         bt_excluir.setCursor(Qt.PointingHandCursor)
         bt_excluir.setIcon(icone("trash-2", cor=tokens.TEXTO_TERCIARIO, tamanho=15))
+        bt_excluir.setToolTip("Remover item")
+        bt_excluir.setAccessibleName("Remover item")
         bt_excluir.setStyleSheet(f"""
             QPushButton {{
                 background:transparent;

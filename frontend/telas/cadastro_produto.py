@@ -126,6 +126,8 @@ class CadastroProdutoWindow(QDialog):
         bt_fechar.setFixedSize(34, 34)
         bt_fechar.setCursor(Qt.PointingHandCursor)
         bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        bt_fechar.setToolTip("Fechar")
+        bt_fechar.setAccessibleName("Fechar")
         bt_fechar.setStyleSheet(f"""
             QPushButton {{ background:transparent; border:none; border-radius:8px; }}
             QPushButton:hover {{ background:{tokens.BORDA}; }}
@@ -185,6 +187,7 @@ class CadastroProdutoWindow(QDialog):
         self.bt_buscar.setCursor(Qt.PointingHandCursor)
         self.bt_buscar.setFixedSize(42, 42)
         self.bt_buscar.setToolTip("Consultar produto pelo código (Open Food Facts)")
+        self.bt_buscar.setAccessibleName("Consultar produto pelo código")
         self.bt_buscar.setIcon(icone("search", cor="white", tamanho=18))
         self.bt_buscar.setStyleSheet(f"""
             QPushButton {{
@@ -228,6 +231,7 @@ class CadastroProdutoWindow(QDialog):
         self.bt_nova_categoria.setCursor(Qt.PointingHandCursor)
         self.bt_nova_categoria.setFixedSize(42, 42)
         self.bt_nova_categoria.setToolTip("Criar nova categoria")
+        self.bt_nova_categoria.setAccessibleName("Criar nova categoria")
         self.bt_nova_categoria.setIcon(icone("plus", cor=tokens.TEXTO, tamanho=16))
         self.bt_nova_categoria.setStyleSheet(f"""
             QPushButton {{
@@ -246,6 +250,9 @@ class CadastroProdutoWindow(QDialog):
         self.bt_gerenciar_categorias.setFixedSize(42, 42)
         self.bt_gerenciar_categorias.setToolTip(
             "Gerenciar categorias (editar/excluir)"
+        )
+        self.bt_gerenciar_categorias.setAccessibleName(
+            "Gerenciar categorias"
         )
         self.bt_gerenciar_categorias.setIcon(
             icone("menu", cor=tokens.TEXTO, tamanho=17)

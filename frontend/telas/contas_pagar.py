@@ -241,6 +241,17 @@ class DespesaCard(Card):
         cor = tokens.ERRO if perigo else tokens.TEXTO_SECUNDARIO
         fundo_hover = tokens.ERRO_CLARO if perigo else tokens.FUNDO
 
+        nomes_acessiveis = {
+            "eye": "Ver documento",
+            "check": "Ver comprovante de pagamento",
+            "edit-2": "Editar",
+            "file-text": "Duplicar",
+            "trash-2": "Excluir",
+        }
+        nome_acessivel = nomes_acessiveis.get(icone_nome, icone_nome)
+        bt.setToolTip(nome_acessivel)
+        bt.setAccessibleName(nome_acessivel)
+
         bt.setIcon(icone(icone_nome, cor=cor, tamanho=15))
         bt.setStyleSheet(f"""
             QPushButton {{
@@ -291,6 +302,8 @@ class ContasPagar(QWidget):
         self.bt_voltar.setFixedSize(36, 36)
         self.bt_voltar.setCursor(Qt.PointingHandCursor)
         self.bt_voltar.setIcon(icone("chevron-left", cor=tokens.TEXTO_SECUNDARIO, tamanho=18))
+        self.bt_voltar.setToolTip("Voltar")
+        self.bt_voltar.setAccessibleName("Voltar")
         self.bt_voltar.setStyleSheet(f"""
             QPushButton {{
                 background:{tokens.CARD}; border:1px solid {tokens.BORDA};

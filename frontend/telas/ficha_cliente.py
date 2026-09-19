@@ -388,6 +388,8 @@ class LancarFiadoDialog(QDialog):
         bt_fechar.setCursor(Qt.PointingHandCursor)
         bt_fechar.setAutoDefault(False)
         bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        bt_fechar.setToolTip("Fechar")
+        bt_fechar.setAccessibleName("Fechar")
         bt_fechar.setStyleSheet(f"""
             QPushButton {{ background:transparent; border:none; border-radius:6px; }}
             QPushButton:hover {{ background:{tokens.FUNDO}; }}
@@ -852,6 +854,7 @@ class RegistrarPagamentoDialog(QDialog):
         bt_valor_total.setCursor(Qt.PointingHandCursor)
         bt_valor_total.setAutoDefault(False)
         bt_valor_total.setToolTip("Preencher com o saldo devedor inteiro")
+        bt_valor_total.setAccessibleName("Preencher com o saldo devedor inteiro")
         bt_valor_total.setIcon(icone("refresh-cw", cor=tokens.TEXTO_TERCIARIO, tamanho=15))
         bt_valor_total.setStyleSheet(f"""
             QPushButton {{ background:{tokens.CARD}; border:none; border-radius:{tokens.RADIUS_SM}px; }}
@@ -1015,6 +1018,8 @@ class RegistrarPagamentoDialog(QDialog):
         bt_fechar.setCursor(Qt.PointingHandCursor)
         bt_fechar.setAutoDefault(False)
         bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        bt_fechar.setToolTip("Fechar")
+        bt_fechar.setAccessibleName("Fechar")
         bt_fechar.setStyleSheet(f"""
             QPushButton {{ background:transparent; border:none; border-radius:6px; }}
             QPushButton:hover {{ background:{tokens.FUNDO}; }}
@@ -2261,6 +2266,7 @@ class FichaClienteDialog(QDialog):
         bt_editar.setFixedSize(26, 26)
         bt_editar.setCursor(Qt.PointingHandCursor)
         bt_editar.setToolTip("Corrigir lançamento")
+        bt_editar.setAccessibleName("Corrigir lançamento")
         bt_editar.setStyleSheet(
             "QPushButton { background:transparent; border:none; }"
             f"QPushButton:hover {{ background:{tokens.FUNDO}; border-radius:6px; }}"
@@ -2274,6 +2280,7 @@ class FichaClienteDialog(QDialog):
         bt_excluir.setFixedSize(26, 26)
         bt_excluir.setCursor(Qt.PointingHandCursor)
         bt_excluir.setToolTip("Excluir lançamento")
+        bt_excluir.setAccessibleName("Excluir lançamento")
         bt_excluir.setStyleSheet(
             "QPushButton { background:transparent; border:none; }"
             f"QPushButton:hover {{ background:{tokens.ERRO_CLARO}; border-radius:6px; }}"

@@ -85,6 +85,8 @@ class AbrirCaixaWindow(QDialog):
         bt_fechar.setCursor(Qt.PointingHandCursor)
         bt_fechar.setAutoDefault(False)
         bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        bt_fechar.setToolTip("Fechar")
+        bt_fechar.setAccessibleName("Fechar")
         bt_fechar.setStyleSheet(f"""
             QPushButton {{ background:transparent; border:none; border-radius:6px; }}
             QPushButton:hover {{ background:{tokens.FUNDO}; }}

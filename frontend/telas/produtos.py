@@ -152,6 +152,8 @@ class Produtos(QWidget):
         self.bt_voltar.setFixedSize(36, 36)
         self.bt_voltar.setCursor(Qt.PointingHandCursor)
         self.bt_voltar.setIcon(icone("chevron-left", cor=tokens.TEXTO_SECUNDARIO, tamanho=18))
+        self.bt_voltar.setToolTip("Voltar")
+        self.bt_voltar.setAccessibleName("Voltar")
         self.bt_voltar.setStyleSheet(f"""
             QPushButton {{
                 background:{tokens.CARD}; border:1px solid {tokens.BORDA};
@@ -1028,6 +1030,7 @@ class Produtos(QWidget):
         bt_editar.setFixedSize(28, 28)
         bt_editar.setCursor(Qt.PointingHandCursor)
         bt_editar.setToolTip("Editar produto")
+        bt_editar.setAccessibleName("Editar produto")
         bt_editar.setIcon(icone("edit-2", cor=tokens.PRIMARIA, tamanho=15))
         bt_editar.setStyleSheet(f"""
             QPushButton {{ background:transparent; border:none; border-radius:6px; }}
@@ -1039,6 +1042,7 @@ class Produtos(QWidget):
         bt_excluir.setFixedSize(28, 28)
         bt_excluir.setCursor(Qt.PointingHandCursor)
         bt_excluir.setToolTip("Excluir produto")
+        bt_excluir.setAccessibleName("Excluir produto")
         bt_excluir.setIcon(icone("trash-2", cor=tokens.ERRO, tamanho=15))
         bt_excluir.setStyleSheet(f"""
             QPushButton {{ background:transparent; border:none; border-radius:6px; }}

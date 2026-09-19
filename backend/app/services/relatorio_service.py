@@ -9,6 +9,7 @@ from app.models.item_venda import ItemVenda
 from app.models.produto import Produto
 from app.models.cliente import Cliente
 from app.models.loja import Loja
+from app.models.estoque_loja import EstoqueLoja
 from app.services.venda_service import _parcelas_pagamento
 
 
@@ -156,6 +157,200 @@ class RelatorioService:
             })
 
         return resultado
+
+    # ==================================================
+    # CURVA ABC (classificacao de produto por receita)
+    # ==================================================
+
+    @staticmethod
+    def curva_abc(
+        db: Session,
+        data_inicio: date | None,
+        data_fim: date,
+        loja_id: int | None = None,
+        skip: int = 0,
+        limit: int = 100,
+    ):
+        """Classifica cada produto pela participacao acumulada na
+        receita do periodo: A = ate 80% da receita acumulada, B = ate
+        95%, C = o resto -- classificacao classica de curva ABC, usada
+        pra saber quais produtos merecem mais atencao (giro, reposicao,
+        negociacao com fornecedor)."""
+
+        inicio = (
+            datetime.combine(data_inicio, time.min)
+            if data_inicio is not None else None
+        )
+        fim = datetime.combine(data_fim, time.min) + timedelta(days=1)
+
+        ids = RelatorioService._ids_vendas(db, inicio, fim, loja_id=loja_id)
+
+        if not ids:
+            return []
+
+        resultados = (
+            db.query(
+                Produto.id,
+                Produto.nome,
+                func.sum(ItemVenda.quantidade),
+                func.sum(ItemVenda.subtotal),
+            )
+            .join(Produto, ItemVenda.produto_id == Produto.id)
+            .filter(ItemVenda.venda_id.in_(ids))
+            .group_by(Produto.id, Produto.nome)
+            .order_by(func.sum(ItemVenda.subtotal).desc())
+            .all()
+        )
+
+        receita_total = sum(float(total) for _, _, _, total in resultados)
+
+        if receita_total <= 0:
+            return []
+
+        itens = []
+        acumulado = 0.0
+
+        for produto_id, nome, quantidade, total in resultados:
+            total = float(total)
+            percentual = (total / receita_total) * 100
+            acumulado += percentual
+
+            if acumulado <= 80:
+                classe = "A"
+            elif acumulado <= 95:
+                classe = "B"
+            else:
+                classe = "C"
+
+            itens.append({
+                "produto_id": produto_id,
+                "produto": nome,
+                "quantidade": int(quantidade),
+                "total": total,
+                "percentual": round(percentual, 2),
+                "percentual_acumulado": round(acumulado, 2),
+                "classe": classe,
+            })
+
+        return itens[skip:skip + limit]
+
+    # ==================================================
+    # COMPARATIVO DE ESTOQUE ENTRE LOJAS
+    # ==================================================
+
+    @staticmethod
+    def comparativo_estoque_lojas(db: Session):
+        """Mesmo espirito de comparativo_lojas, mas de estoque fisico
+        em vez de vendas -- quantidade total, valor parado em estoque
+        (pelo custo) e quantos produtos estao abaixo do minimo, um
+        conjunto por loja ativa."""
+
+        lojas = (
+            db.query(Loja)
+            .filter(Loja.ativa.is_(True))
+            .order_by(Loja.id)
+            .all()
+        )
+
+        resultado = []
+
+        for loja in lojas:
+            linhas = (
+                db.query(EstoqueLoja, Produto.preco_custo)
+                .join(Produto, EstoqueLoja.produto_id == Produto.id)
+                .filter(EstoqueLoja.loja_id == loja.id)
+                .all()
+            )
+
+            quantidade_total = sum(e.quantidade for e, _ in linhas)
+            valor_em_estoque = sum(
+                float(e.quantidade) * float(preco_custo)
+                for e, preco_custo in linhas
+            )
+            produtos_abaixo_minimo = sum(
+                1 for e, _ in linhas if e.quantidade <= e.estoque_minimo
+            )
+
+            resultado.append({
+                "loja_id": loja.id,
+                "loja_nome": loja.nome,
+                "quantidade_total": quantidade_total,
+                "valor_em_estoque": valor_em_estoque,
+                "produtos_abaixo_minimo": produtos_abaixo_minimo,
+            })
+
+        return resultado
+
+    # ==================================================
+    # SUGESTAO DE REPOSICAO (esboco v1 -- so' lista quem esta abaixo do
+    # minimo e sugere completar ate o minimo; NAO e' um motor de compra
+    # automatica, nao considera lead time de fornecedor, sazonalidade,
+    # nem gera pedido nenhum sozinho)
+    # ==================================================
+
+    @staticmethod
+    def sugestao_reposicao(
+        db: Session,
+        loja_id: int | None = None,
+        skip: int = 0,
+        limit: int = 100,
+    ):
+        if loja_id is not None:
+            linhas = (
+                db.query(EstoqueLoja, Produto.nome)
+                .join(Produto, EstoqueLoja.produto_id == Produto.id)
+                .filter(
+                    EstoqueLoja.loja_id == loja_id,
+                    EstoqueLoja.quantidade <= EstoqueLoja.estoque_minimo,
+                )
+                .all()
+            )
+
+            itens = [
+                {
+                    "produto_id": e.produto_id,
+                    "produto": nome,
+                    "quantidade_atual": e.quantidade,
+                    "estoque_minimo": e.estoque_minimo,
+                    "quantidade_sugerida": max(
+                        0, e.estoque_minimo - e.quantidade
+                    ),
+                }
+                for e, nome in linhas
+            ]
+        else:
+            produtos = (
+                db.query(Produto)
+                .filter(
+                    Produto.ativo.is_(True),
+                    Produto.estoque <= Produto.estoque_minimo,
+                )
+                .all()
+            )
+
+            itens = [
+                {
+                    "produto_id": p.id,
+                    "produto": p.nome,
+                    "quantidade_atual": p.estoque,
+                    "estoque_minimo": p.estoque_minimo,
+                    "quantidade_sugerida": max(
+                        0, p.estoque_minimo - p.estoque
+                    ),
+                }
+                for p in produtos
+            ]
+
+        # mais critico primeiro (quem tem menos proporcao do minimo
+        # ainda em estoque, ou ja zerado)
+        itens.sort(
+            key=lambda i: (
+                i["quantidade_atual"] / i["estoque_minimo"]
+                if i["estoque_minimo"] else 0
+            )
+        )
+
+        return itens[skip:skip + limit]
 
     # ==================================================
     # IDS DAS VENDAS NO ESCOPO (aplica todos os filtros)

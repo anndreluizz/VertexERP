@@ -5,7 +5,13 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
 from app.database.session import SessionLocal
-from app.schemas.relatorio import ComparativoLojaItem, RelatorioVendasResponse
+from app.schemas.relatorio import (
+    ComparativoEstoqueLojaItem,
+    ComparativoLojaItem,
+    CurvaAbcItem,
+    RelatorioVendasResponse,
+    SugestaoReposicaoItem,
+)
 from app.services.relatorio_service import RelatorioService
 
 router = APIRouter(
@@ -64,3 +70,39 @@ def comparativo_lojas(
     usuario=Depends(get_current_user),
 ):
     return RelatorioService.comparativo_lojas(db, data_inicio, data_fim)
+
+
+@router.get("/curva-abc", response_model=list[CurvaAbcItem])
+def curva_abc(
+    data_inicio: date | None = None,
+    data_fim: date = Query(...),
+    loja_id: int | None = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return RelatorioService.curva_abc(
+        db, data_inicio, data_fim, loja_id, skip, limit
+    )
+
+
+@router.get(
+    "/comparativo-estoque", response_model=list[ComparativoEstoqueLojaItem]
+)
+def comparativo_estoque(
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return RelatorioService.comparativo_estoque_lojas(db)
+
+
+@router.get("/sugestao-reposicao", response_model=list[SugestaoReposicaoItem])
+def sugestao_reposicao(
+    loja_id: int | None = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return RelatorioService.sugestao_reposicao(db, loja_id, skip, limit)

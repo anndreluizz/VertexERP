@@ -46,6 +46,32 @@ class ComparativoLojaItem(BaseModel):
     margem_lucro: Decimal
 
 
+class CurvaAbcItem(BaseModel):
+    produto_id: int
+    produto: str
+    quantidade: int
+    total: Decimal
+    percentual: float
+    percentual_acumulado: float
+    classe: str
+
+
+class ComparativoEstoqueLojaItem(BaseModel):
+    loja_id: int
+    loja_nome: str
+    quantidade_total: int
+    valor_em_estoque: Decimal
+    produtos_abaixo_minimo: int
+
+
+class SugestaoReposicaoItem(BaseModel):
+    produto_id: int
+    produto: str
+    quantidade_atual: int
+    estoque_minimo: int
+    quantidade_sugerida: int
+
+
 class RelatorioVendasResponse(BaseModel):
     receita_total: KpiValor
     lucro: KpiValor

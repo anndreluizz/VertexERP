@@ -133,6 +133,69 @@ def test_cancelar_compra_duas_vezes_falha(client, auth_headers, fornecedor, prod
     assert segunda.status_code == 400
 
 
+def test_compra_prazo_gera_uma_conta_a_pagar(
+    client, auth_headers, fornecedor, produto
+):
+    criada = client.post(
+        "/compras/",
+        json={
+            "fornecedor_id": fornecedor.id,
+            "forma_pagamento": "PRAZO",
+            "data_vencimento": "2026-12-01T00:00:00",
+            "itens": [
+                {"produto_id": produto.id, "quantidade": 2, "valor_unitario": "10.00"}
+            ],
+        },
+        headers=auth_headers,
+    ).json()
+
+    contas = client.get("/contas-pagar/", headers=auth_headers).json()
+    da_compra = [
+        c for c in contas if c["descricao"] == f"Compra #{criada['id']}"
+    ]
+
+    assert len(da_compra) == 1
+    assert float(da_compra[0]["valor"]) == 20.0
+
+
+def test_compra_prazo_com_parcelas_divide_o_valor(
+    client, auth_headers, fornecedor, produto
+):
+    criada = client.post(
+        "/compras/",
+        json={
+            "fornecedor_id": fornecedor.id,
+            "forma_pagamento": "PRAZO",
+            "data_vencimento": "2026-12-01T00:00:00",
+            "numero_parcelas": 3,
+            "itens": [
+                {"produto_id": produto.id, "quantidade": 1, "valor_unitario": "100.00"}
+            ],
+        },
+        headers=auth_headers,
+    ).json()
+
+    contas = client.get("/contas-pagar/", headers=auth_headers).json()
+    da_compra = sorted(
+        (c for c in contas if c["descricao"].startswith(f"Compra #{criada['id']} -")),
+        key=lambda c: c["descricao"],
+    )
+
+    assert len(da_compra) == 3
+    assert [c["descricao"].split(" - ")[1] for c in da_compra] == [
+        "Parcela 1/3", "Parcela 2/3", "Parcela 3/3",
+    ]
+
+    valores = [float(c["valor"]) for c in da_compra]
+    assert sum(valores) == 100.0
+    assert valores[0] == 33.33
+    assert valores[1] == 33.33
+    assert valores[2] == 33.34
+
+    vencimentos = [c["data_vencimento"][:10] for c in da_compra]
+    assert vencimentos == ["2026-12-01", "2026-12-31", "2027-01-30"]
+
+
 def test_cancelar_compra_requer_admin(client, auth_headers_comum, fornecedor, produto):
     response = client.delete(
         f"/compras/999999", headers=auth_headers_comum

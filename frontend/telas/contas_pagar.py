@@ -9,10 +9,12 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QGridLayout,
+    QFrame,
     QLabel,
     QPushButton,
     QComboBox,
     QScrollArea,
+    QMenu,
     QMessageBox,
 )
 
@@ -32,6 +34,9 @@ from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import Badge, BotaoPerigo, BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
 from utils.formatacao import formatar_moeda
+
+
+_COLUNAS_GRID = 3
 
 
 def _status_real(conta):
@@ -95,15 +100,15 @@ class DespesaCard(Card):
 
         self.conta = conta
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(18, 14, 18, 14)
-        layout.setSpacing(14)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
 
         status = _status_real(conta)
 
         # despesa paga ganha destaque no card inteiro, nao so no badge
         # pequeno -- fica facil bater o olho e separar do que ainda
-        # esta pendente/vencido na mesma lista.
+        # esta pendente/vencido na mesma grade.
         if status == "PAGO":
             self.setStyleSheet(f"""
                 Card {{
@@ -112,35 +117,17 @@ class DespesaCard(Card):
                     border: 1.5px solid {tokens.SECUNDARIA};
                 }}
             """)
-
-        icone_cor = {
-            "PAGO": tokens.SECUNDARIA,
-            "PENDENTE": tokens.ALERTA,
-            "VENCIDA": tokens.ERRO,
-            "CANCELADO": tokens.TEXTO_TERCIARIO,
-        }.get(status, tokens.TEXTO_TERCIARIO)
-
-        icone_fundo = {
-            "PAGO": tokens.SUCESSO_CLARO,
-            "PENDENTE": tokens.ALERTA_CLARO,
-            "VENCIDA": tokens.ERRO_CLARO,
-            "CANCELADO": tokens.FUNDO,
-        }.get(status, tokens.FUNDO)
-
-        lbl_icone = QLabel()
-        lbl_icone.setFixedSize(40, 40)
-        lbl_icone.setAlignment(Qt.AlignCenter)
-        lbl_icone.setStyleSheet(f"""
-            background:{icone_fundo}; border-radius:20px;
-        """)
-        lbl_icone.setPixmap(
-            icone("arrow-down", cor=icone_cor, tamanho=18).pixmap(18, 18)
-        )
-
-        layout.addWidget(lbl_icone)
-
-        col_texto = QVBoxLayout()
-        col_texto.setSpacing(4)
+        else:
+            self.setStyleSheet(f"""
+                Card {{
+                    background: {tokens.CARD};
+                    border-radius: {tokens.RADIUS_LG}px;
+                    border: 1px solid {tokens.BORDA};
+                }}
+                Card:hover {{
+                    border: 1px solid {tokens.PRIMARIA};
+                }}
+            """)
 
         topo = QHBoxLayout()
         topo.setSpacing(8)
@@ -150,27 +137,40 @@ class DespesaCard(Card):
             self.VARIANTE_STATUS.get(status, "neutro"),
         )
         topo.addWidget(badge_status)
-
-        categoria = conta.get("categoria")
-
-        if categoria:
-            badge_categoria = QLabel(categoria.upper())
-            badge_categoria.setStyleSheet(f"""
-                background:transparent; color:{tokens.TEXTO_TERCIARIO};
-                font-size:{tokens.TAMANHO_XS}px; font-weight:700; border:none;
-            """)
-            topo.addWidget(badge_categoria)
-
         topo.addStretch()
 
-        col_texto.addLayout(topo)
+        bt_menu = QPushButton()
+        bt_menu.setFixedSize(28, 28)
+        bt_menu.setCursor(Qt.PointingHandCursor)
+        bt_menu.setIcon(icone("more-vertical", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        bt_menu.setToolTip("Mais opções")
+        bt_menu.setAccessibleName("Mais opções")
+        bt_menu.setStyleSheet(f"""
+            QPushButton {{ background:transparent; border:none; border-radius:6px; }}
+            QPushButton:hover {{ background:{tokens.FUNDO}; }}
+        """)
+        bt_menu.setMenu(self._construir_menu())
+        topo.addWidget(bt_menu)
+
+        layout.addLayout(topo)
 
         descricao = QLabel(conta.get("descricao") or "Despesa")
+        descricao.setWordWrap(True)
         descricao.setStyleSheet(f"""
             background:transparent; border:none; font-size:{tokens.TAMANHO_MD}px;
             font-weight:700; color:{tokens.TEXTO};
         """)
-        col_texto.addWidget(descricao)
+        layout.addWidget(descricao)
+
+        categoria = conta.get("categoria")
+
+        if categoria:
+            lbl_categoria = QLabel(categoria.upper())
+            lbl_categoria.setStyleSheet(f"""
+                background:transparent; color:{tokens.TEXTO_TERCIARIO};
+                font-size:{tokens.TAMANHO_XS}px; font-weight:700; border:none;
+            """)
+            layout.addWidget(lbl_categoria)
 
         vencimento_formatado = _vencimento(conta)
         texto_vencimento = (
@@ -189,79 +189,95 @@ class DespesaCard(Card):
 
         cor_vencimento = tokens.ERRO if vence_em_breve else tokens.TEXTO
 
-        lbl_vencimento = QLabel(f"Vencimento: {texto_vencimento}")
-        lbl_vencimento.setStyleSheet(f"""
-            background:transparent; border:none; font-size:{tokens.TAMANHO_MD}px;
-            font-weight:700; color:{cor_vencimento};
-        """)
-        col_texto.addWidget(lbl_vencimento)
-
-        layout.addLayout(col_texto, stretch=1)
-
-        lbl_valor = QLabel(formatar_moeda(conta.get("valor", 0)))
-        lbl_valor.setStyleSheet(f"""
-            background:transparent; border:none; font-size:{tokens.TAMANHO_LG}px;
-            font-weight:800; color:{tokens.TEXTO};
-        """)
-        layout.addWidget(lbl_valor)
-
-        acoes = QHBoxLayout()
-        acoes.setSpacing(6)
+        linha_stats = QHBoxLayout()
+        linha_stats.setSpacing(10)
+        linha_stats.addWidget(
+            self._caixinha("calendar", "Vencimento", texto_vencimento, cor_vencimento)
+        )
+        linha_stats.addWidget(
+            self._caixinha(
+                "dollar-sign", "Valor",
+                formatar_moeda(conta.get("valor", 0)), tokens.TEXTO,
+            )
+        )
+        layout.addLayout(linha_stats)
 
         if status in ("PENDENTE", "VENCIDA"):
 
             bt_pagar = BotaoSecundario("Pagar", icone_nome="check")
+            bt_pagar.setMinimumHeight(38)
             bt_pagar.clicked.connect(
                 lambda: self.pagar_solicitado.emit(self.conta)
             )
-            acoes.addWidget(bt_pagar)
+            layout.addWidget(bt_pagar)
 
-        if conta.get("tem_documento"):
-            acoes.addWidget(
-                self._botao_icone("eye", self.ver_documento_solicitado)
-            )
+    def _caixinha(self, icone_nome, rotulo, valor, cor_valor):
 
-        if conta.get("tem_comprovante_pagamento"):
-            acoes.addWidget(
-                self._botao_icone("check", self.ver_comprovante_solicitado)
-            )
-
-        acoes.addWidget(self._botao_icone("edit-2", self.editar_solicitado))
-        acoes.addWidget(self._botao_icone("file-text", self.duplicar_solicitado))
-        acoes.addWidget(self._botao_icone("trash-2", self.excluir_solicitado, perigo=True))
-
-        layout.addLayout(acoes)
-
-    def _botao_icone(self, icone_nome, sinal, perigo=False):
-
-        bt = QPushButton()
-        bt.setFixedSize(34, 34)
-        bt.setCursor(Qt.PointingHandCursor)
-
-        cor = tokens.ERRO if perigo else tokens.TEXTO_SECUNDARIO
-        fundo_hover = tokens.ERRO_CLARO if perigo else tokens.FUNDO
-
-        nomes_acessiveis = {
-            "eye": "Ver documento",
-            "check": "Ver comprovante de pagamento",
-            "edit-2": "Editar",
-            "file-text": "Duplicar",
-            "trash-2": "Excluir",
-        }
-        nome_acessivel = nomes_acessiveis.get(icone_nome, icone_nome)
-        bt.setToolTip(nome_acessivel)
-        bt.setAccessibleName(nome_acessivel)
-
-        bt.setIcon(icone(icone_nome, cor=cor, tamanho=15))
-        bt.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px; border:none;
-            }}
-            QPushButton:hover {{ background:{fundo_hover}; }}
+        caixa = QFrame()
+        caixa.setStyleSheet(f"""
+            QFrame {{ background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px; }}
         """)
-        bt.clicked.connect(lambda: sinal.emit(self.conta))
 
-        return bt
+        cx_layout = QVBoxLayout(caixa)
+        cx_layout.setContentsMargins(10, 8, 10, 8)
+        cx_layout.setSpacing(3)
+
+        topo_caixa = QHBoxLayout()
+        topo_caixa.setSpacing(5)
+
+        lbl_icone = QLabel()
+        lbl_icone.setPixmap(icone_pixmap(icone_nome, cor=tokens.TEXTO_TERCIARIO, tamanho=12))
+        lbl_icone.setStyleSheet("background:transparent; border:none;")
+        topo_caixa.addWidget(lbl_icone)
+
+        lbl_rotulo = QLabel(rotulo)
+        lbl_rotulo.setStyleSheet(f"""
+            background:transparent; border:none;
+            font-size:10px; color:{tokens.TEXTO_TERCIARIO};
+        """)
+        topo_caixa.addWidget(lbl_rotulo)
+        topo_caixa.addStretch()
+
+        cx_layout.addLayout(topo_caixa)
+
+        lbl_valor = QLabel(str(valor))
+        lbl_valor.setWordWrap(True)
+        lbl_valor.setStyleSheet(f"""
+            background:transparent; border:none;
+            font-size:13px; font-weight:800; color:{cor_valor};
+        """)
+        cx_layout.addWidget(lbl_valor)
+
+        return caixa
+
+    def _construir_menu(self):
+
+        menu = QMenu(self)
+
+        if self.conta.get("tem_documento"):
+            menu.addAction(
+                "Ver documento",
+                lambda: self.ver_documento_solicitado.emit(self.conta),
+            )
+
+        if self.conta.get("tem_comprovante_pagamento"):
+            menu.addAction(
+                "Ver comprovante de pagamento",
+                lambda: self.ver_comprovante_solicitado.emit(self.conta),
+            )
+
+        menu.addAction(
+            "Editar", lambda: self.editar_solicitado.emit(self.conta)
+        )
+        menu.addAction(
+            "Duplicar", lambda: self.duplicar_solicitado.emit(self.conta)
+        )
+        menu.addSeparator()
+        menu.addAction(
+            "Excluir", lambda: self.excluir_solicitado.emit(self.conta)
+        )
+
+        return menu
 
 
 class ContasPagar(QWidget):
@@ -498,8 +514,8 @@ class ContasPagar(QWidget):
 
         conteudo_layout.addLayout(kpis_layout)
 
-        self.lista_layout = QVBoxLayout()
-        self.lista_layout.setSpacing(10)
+        self.lista_layout = QGridLayout()
+        self.lista_layout.setSpacing(14)
         self.lista_layout.setAlignment(Qt.AlignTop)
 
         conteudo_layout.addLayout(self.lista_layout)
@@ -779,7 +795,7 @@ class ContasPagar(QWidget):
                 color:{tokens.TEXTO_TERCIARIO}; font-size:{tokens.TAMANHO_BASE}px;
                 padding:40px; background:transparent;
             """)
-            self.lista_layout.addWidget(lbl_vazio)
+            self.lista_layout.addWidget(lbl_vazio, 0, 0, 1, _COLUNAS_GRID)
             return
 
         contas_ordenadas = sorted(
@@ -787,7 +803,7 @@ class ContasPagar(QWidget):
             key=lambda c: c.get("data_vencimento", ""),
         )
 
-        for conta in contas_ordenadas:
+        for indice, conta in enumerate(contas_ordenadas):
 
             card = DespesaCard(conta)
             card.editar_solicitado.connect(self.editar_despesa)
@@ -797,7 +813,9 @@ class ContasPagar(QWidget):
             card.ver_documento_solicitado.connect(self.ver_documento)
             card.ver_comprovante_solicitado.connect(self.ver_comprovante)
 
-            self.lista_layout.addWidget(card)
+            self.lista_layout.addWidget(
+                card, indice // _COLUNAS_GRID, indice % _COLUNAS_GRID
+            )
 
     # ==========================================
     # AÇÕES

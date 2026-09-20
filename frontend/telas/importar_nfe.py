@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QComboBox,
     QDateEdit,
+    QSpinBox,
     QDoubleSpinBox,
     QFileDialog,
     QFrame,
@@ -177,8 +178,22 @@ class ImportarNFeDialog(QDialog):
         self.data_vencimento.setDate(QDate.currentDate())
         self.data_vencimento.setVisible(False)
 
+        self.lbl_parcelas = QLabel("Parcelas:")
+        self.lbl_parcelas.setVisible(False)
+
+        self.numero_parcelas = QSpinBox()
+        self.numero_parcelas.setRange(1, 24)
+        self.numero_parcelas.setValue(1)
+        self.numero_parcelas.setToolTip(
+            "Cada parcela vence 30 dias após a anterior, a partir da "
+            "data de vencimento informada."
+        )
+        self.numero_parcelas.setVisible(False)
+
         linha_pagamento.addWidget(self.combo_forma_pagamento)
         linha_pagamento.addWidget(self.data_vencimento)
+        linha_pagamento.addWidget(self.lbl_parcelas)
+        linha_pagamento.addWidget(self.numero_parcelas)
         linha_pagamento.addStretch()
 
         raiz.addLayout(linha_pagamento)
@@ -335,6 +350,8 @@ class ImportarNFeDialog(QDialog):
 
     def _ao_mudar_forma_pagamento(self, forma):
         self.data_vencimento.setVisible(forma == "PRAZO")
+        self.lbl_parcelas.setVisible(forma == "PRAZO")
+        self.numero_parcelas.setVisible(forma == "PRAZO")
 
     # ======================
     # CONFIRMACAO
@@ -381,6 +398,7 @@ class ImportarNFeDialog(QDialog):
             payload["data_vencimento"] = self.data_vencimento.date().toString(
                 "yyyy-MM-dd"
             )
+            payload["numero_parcelas"] = self.numero_parcelas.value()
 
         if fornecedor.get("encontrado"):
             payload["fornecedor_id"] = fornecedor["id"]

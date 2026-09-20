@@ -172,6 +172,7 @@ class ImportacaoNfeService:
                 observacao=dados.observacao,
                 forma_pagamento=dados.forma_pagamento,
                 data_vencimento=dados.data_vencimento,
+                numero_parcelas=dados.numero_parcelas,
                 itens=itens_compra,
             ),
             usuario_id,

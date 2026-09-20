@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -96,10 +96,15 @@ class ContaPagarService:
         compra,
         usuario_id: int | None = None,
         loja_id: int | None = None,
+        numero_parcelas: int = 1,
     ):
-        """Gera automaticamente a conta a pagar de uma Compra feita a
-        prazo (ver CompraService.criar) -- sem isso, uma compra PRAZO
-        ficaria sem nenhum rastro em Contas a Pagar."""
+        """Gera automaticamente a(s) conta(s) a pagar de uma Compra feita
+        a prazo (ver CompraService.criar) -- sem isso, uma compra PRAZO
+        ficaria sem nenhum rastro em Contas a Pagar. numero_parcelas > 1
+        divide compra.valor_total em N contas iguais (o resto de
+        arredondamento fica na ULTIMA parcela, nao na primeira -- evita
+        centavo sumindo/sobrando sem explicacao), uma a cada 30 dias a
+        partir de compra.data_vencimento."""
 
         if compra.fornecedor_id is None:
             raise Exception(
@@ -111,31 +116,58 @@ class ContaPagarService:
                 "Informe a data de vencimento."
             )
 
-        conta = ContaPagar(
-            fornecedor_id=compra.fornecedor_id,
-            compra_id=compra.id,
-            data_emissao=datetime.utcnow(),
-            data_vencimento=compra.data_vencimento,
-            data_pagamento=None,
-            valor=compra.valor_total,
-            descricao=f"Compra #{compra.id}",
-            categoria="Compra de mercadoria",
-            observacao="Gerada automaticamente pela compra.",
-            status=StatusContaPagar.PENDENTE.value,
-            loja_id=loja_id,
+        if numero_parcelas < 1:
+            raise Exception(
+                "O número de parcelas precisa ser pelo menos 1."
+            )
+
+        valor_parcela = round(compra.valor_total / numero_parcelas, 2)
+        valor_ultima_parcela = compra.valor_total - (
+            valor_parcela * (numero_parcelas - 1)
         )
 
-        conta = ContaPagarRepository.criar(
-            db,
-            conta,
-        )
+        contas = []
 
-        ContaPagarEventoService.registrar(
-            db, conta.id, "CRIADA",
-            usuario_id=usuario_id,
-        )
+        for indice in range(numero_parcelas):
 
-        return conta
+            valor = (
+                valor_ultima_parcela
+                if indice == numero_parcelas - 1
+                else valor_parcela
+            )
+
+            descricao = f"Compra #{compra.id}"
+            if numero_parcelas > 1:
+                descricao += f" - Parcela {indice + 1}/{numero_parcelas}"
+
+            conta = ContaPagar(
+                fornecedor_id=compra.fornecedor_id,
+                compra_id=compra.id,
+                data_emissao=datetime.utcnow(),
+                data_vencimento=compra.data_vencimento
+                + timedelta(days=30 * indice),
+                data_pagamento=None,
+                valor=valor,
+                descricao=descricao,
+                categoria="Compra de mercadoria",
+                observacao="Gerada automaticamente pela compra.",
+                status=StatusContaPagar.PENDENTE.value,
+                loja_id=loja_id,
+            )
+
+            conta = ContaPagarRepository.criar(
+                db,
+                conta,
+            )
+
+            ContaPagarEventoService.registrar(
+                db, conta.id, "CRIADA",
+                usuario_id=usuario_id,
+            )
+
+            contas.append(conta)
+
+        return contas
 
     @staticmethod
     def listar(db: Session, skip: int = 0, limit: int = 100, loja_id: int | None = None):

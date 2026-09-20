@@ -33,6 +33,8 @@ class CompraCreate(BaseModel):
 
     data_vencimento: datetime | None = None
 
+    numero_parcelas: int = 1
+
     itens: list[ItemCompraCreate]
 
 

@@ -65,5 +65,6 @@ class ImportarNFeConfirmarRequest(BaseModel):
     fornecedor_novo: FornecedorNovoRequest | None = None
     forma_pagamento: FormaPagamento
     data_vencimento: datetime | None = None
+    numero_parcelas: int = 1
     observacao: str | None = None
     itens: list[ItemImportacaoRequest]

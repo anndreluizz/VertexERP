@@ -117,6 +117,7 @@ class CompraService:
                     compra,
                     usuario_id,
                     loja_id,
+                    dados.numero_parcelas,
                 )
 
             CompraRepository.salvar(db)

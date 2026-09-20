@@ -25,8 +25,17 @@ import base64
 
 from services.ean_lookup import buscar_produto_externo
 from services.categoria_service import listar_categorias, criar_categoria
+from services.marca_service import listar_marcas, criar_marca
 from telas.gerenciar_categorias import GerenciarCategoriasDialog
+from telas.gerenciar_marcas import GerenciarMarcasDialog
 from services.produto_service import obter_foto_produto
+from services.produto_foto_service import (
+    listar_fotos_produto,
+    obter_imagem_foto,
+    adicionar_foto_produto,
+    remover_foto_produto,
+    marcar_foto_principal,
+)
 from services.worker import rodar_em_thread
 from design import tokens
 from design.icons import icone, icone_pixmap
@@ -48,10 +57,22 @@ def _criar_categoria_com_nome(nome):
     return criar_categoria(nome), nome
 
 
+def _criar_marca_com_nome(nome):
+    """Mesmo motivo de _criar_categoria_com_nome."""
+    return criar_marca(nome), nome
+
+
 def _buscar_produto_externo_com_flag(codigo, silencioso):
     """Roda na worker thread -- 'silencioso' viaja junto com o
     resultado pelo mesmo motivo de _criar_categoria_com_nome."""
     return buscar_produto_externo(codigo), silencioso
+
+
+def _buscar_miniatura_com_info(produto_id, foto):
+    """Roda na worker thread -- 'foto' (os metadados, id/ordem/
+    principal) viaja junto com os bytes da imagem baixada, mesmo
+    motivo de _criar_categoria_com_nome."""
+    return foto, obter_imagem_foto(produto_id, foto["id"])
 
 
 class CadastroProdutoWindow(QDialog):
@@ -277,6 +298,70 @@ class CadastroProdutoWindow(QDialog):
 
         corpo_info.addLayout(linha_categoria)
 
+        corpo_info.addWidget(self._rotulo_campo("Marca (opcional)"))
+
+        linha_marca = QHBoxLayout()
+        linha_marca.setSpacing(8)
+
+        self.marca = QComboBox()
+        self.marca.setEditable(False)
+        self.marca.setMinimumHeight(42)
+        self.marca.setStyleSheet(self._estilo_input("QComboBox"))
+        self._carregar_marcas()
+
+        self.bt_nova_marca = QPushButton()
+        self.bt_nova_marca.setCursor(Qt.PointingHandCursor)
+        self.bt_nova_marca.setFixedSize(42, 42)
+        self.bt_nova_marca.setToolTip("Criar nova marca")
+        self.bt_nova_marca.setAccessibleName("Criar nova marca")
+        self.bt_nova_marca.setIcon(icone("plus", cor=tokens.TEXTO, tamanho=16))
+        self.bt_nova_marca.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.FUNDO};
+                color:{tokens.TEXTO};
+                border-radius:{tokens.RADIUS_SM}px;
+            }}
+            QPushButton:hover {{
+                background:{tokens.BORDA};
+            }}
+        """)
+        self.bt_nova_marca.clicked.connect(self.criar_nova_marca)
+
+        self.bt_gerenciar_marcas = QPushButton()
+        self.bt_gerenciar_marcas.setCursor(Qt.PointingHandCursor)
+        self.bt_gerenciar_marcas.setFixedSize(42, 42)
+        self.bt_gerenciar_marcas.setToolTip("Gerenciar marcas (editar/excluir)")
+        self.bt_gerenciar_marcas.setAccessibleName("Gerenciar marcas")
+        self.bt_gerenciar_marcas.setIcon(
+            icone("menu", cor=tokens.TEXTO, tamanho=17)
+        )
+        self.bt_gerenciar_marcas.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.FUNDO};
+                color:{tokens.TEXTO};
+                border-radius:{tokens.RADIUS_SM}px;
+            }}
+            QPushButton:hover {{
+                background:{tokens.BORDA};
+            }}
+        """)
+        self.bt_gerenciar_marcas.clicked.connect(self.gerenciar_marcas)
+
+        linha_marca.addWidget(self.marca)
+        linha_marca.addWidget(self.bt_nova_marca)
+        linha_marca.addWidget(self.bt_gerenciar_marcas)
+
+        corpo_info.addLayout(linha_marca)
+
+        corpo_info.addWidget(self._rotulo_campo("Coleção (opcional)"))
+
+        self.colecao = QLineEdit()
+        self.colecao.setPlaceholderText("Ex.: Verão 2026, Linha Premium...")
+        self.colecao.setMinimumHeight(42)
+        self.colecao.setStyleSheet(self._estilo_input())
+
+        corpo_info.addWidget(self.colecao)
+
         corpo_info.addWidget(self._rotulo_campo("Descrição (opcional)"))
 
         self.descricao = QPlainTextEdit()
@@ -486,6 +571,55 @@ class CadastroProdutoWindow(QDialog):
         linha_foto.addLayout(col_previa)
 
         corpo_foto.addLayout(linha_foto)
+
+        # ---- galeria de fotos adicionais -- so' funciona editando um
+        # produto ja existente, porque anexar foto extra usa
+        # POST /produtos/{id}/fotos, que precisa de um id que produto
+        # novo ainda nao tem (a foto principal acima continua indo
+        # pelo caminho de sempre, funciona pra produto novo tambem) ----
+        if self.produto:
+
+            lbl_galeria = QLabel(
+                "Fotos adicionais (clique na estrela pra tornar principal)"
+            )
+            lbl_galeria.setWordWrap(True)
+            lbl_galeria.setStyleSheet(f"""
+                background:transparent; color:{tokens.TEXTO_TERCIARIO};
+                font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+                margin-top:8px;
+            """)
+            corpo_foto.addWidget(lbl_galeria)
+
+            self.linha_galeria = QHBoxLayout()
+            self.linha_galeria.setSpacing(8)
+
+            self.bt_adicionar_foto_extra = QPushButton()
+            self.bt_adicionar_foto_extra.setFixedSize(56, 56)
+            self.bt_adicionar_foto_extra.setCursor(Qt.PointingHandCursor)
+            self.bt_adicionar_foto_extra.setToolTip("Adicionar mais uma foto")
+            self.bt_adicionar_foto_extra.setAccessibleName(
+                "Adicionar mais uma foto"
+            )
+            self.bt_adicionar_foto_extra.setIcon(
+                icone("plus", cor=tokens.TEXTO_SECUNDARIO, tamanho=18)
+            )
+            self.bt_adicionar_foto_extra.setStyleSheet(f"""
+                QPushButton {{
+                    background:{tokens.FUNDO}; border:1.5px dashed {tokens.BORDA_FORTE};
+                    border-radius:{tokens.RADIUS_SM}px;
+                }}
+                QPushButton:hover {{ background:{tokens.BORDA}; }}
+            """)
+            self.bt_adicionar_foto_extra.clicked.connect(
+                self.adicionar_foto_extra
+            )
+
+            self.linha_galeria.addWidget(self.bt_adicionar_foto_extra)
+            self.linha_galeria.addStretch()
+
+            corpo_foto.addLayout(self.linha_galeria)
+
+            self._carregar_galeria_fotos()
 
         direita.addWidget(cartao_valores)
         direita.addWidget(cartao_foto)
@@ -756,6 +890,88 @@ class CadastroProdutoWindow(QDialog):
         self._carregar_categorias()
 
     # ==========================================
+    # MARCA
+    # ==========================================
+
+    def _carregar_marcas(self):
+
+        # preserva a marca ja selecionada (mesmo motivo de
+        # _carregar_categorias) -- guarda o ID, nao o texto, porque o
+        # combo de marca nao e' editavel (item sempre tem itemData)
+        self._marca_selecionada_pendente = self.marca.currentData()
+
+        rodar_em_thread(
+            self,
+            listar_marcas,
+            ao_sucesso=self._ao_carregar_marcas_sucesso,
+        )
+
+    def _ao_carregar_marcas_sucesso(self, marcas):
+
+        self.marca.clear()
+        self.marca.addItem("Sem marca", None)
+
+        for m in marcas:
+            if m.get("ativo", True):
+                self.marca.addItem(m["nome"], m["id"])
+
+        indice = self.marca.findData(self._marca_selecionada_pendente)
+        self.marca.setCurrentIndex(indice if indice >= 0 else 0)
+
+    def criar_nova_marca(self):
+
+        nome, ok = QInputDialog.getText(
+            self,
+            "Nova Marca",
+            "Nome da nova marca:"
+        )
+
+        if not ok or not nome.strip():
+            return
+
+        nome = nome.strip()
+
+        rodar_em_thread(
+            self,
+            _criar_marca_com_nome,
+            nome,
+            ao_sucesso=self._ao_criar_marca_sucesso,
+            ao_erro=self._ao_criar_marca_erro,
+        )
+
+    def _ao_criar_marca_sucesso(self, resultado):
+
+        response, nome = resultado
+
+        if response.status_code in (200, 201):
+
+            marca_id = response.json()["id"]
+
+            if self.marca.findData(marca_id) < 0:
+                self.marca.addItem(nome, marca_id)
+
+            self.marca.setCurrentIndex(self.marca.findData(marca_id))
+
+        else:
+
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+
+            QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_criar_marca_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def gerenciar_marcas(self):
+
+        dialogo = GerenciarMarcasDialog(parent=self)
+        dialogo.exec()
+
+        self._carregar_marcas()
+
+    # ==========================================
     # MODO DE VENDA (UNID / PESO / LITRO)
     # ==========================================
 
@@ -926,6 +1142,212 @@ class CadastroProdutoWindow(QDialog):
         )
 
     # ==========================================
+    # GALERIA DE FOTOS (edição apenas)
+    # ==========================================
+
+    def _carregar_galeria_fotos(self):
+        rodar_em_thread(
+            self,
+            listar_fotos_produto,
+            self.produto["id"],
+            ao_sucesso=self._ao_carregar_galeria_sucesso,
+        )
+
+    def _ao_carregar_galeria_sucesso(self, fotos):
+
+        # remove todas as miniaturas antigas, mantendo so' o botao "+"
+        # (sempre o primeiro item do layout)
+        while self.linha_galeria.count() > 2:
+            item = self.linha_galeria.takeAt(1)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        for foto in fotos:
+            rodar_em_thread(
+                self,
+                _buscar_miniatura_com_info,
+                self.produto["id"],
+                foto,
+                ao_sucesso=self._ao_carregar_miniatura_sucesso,
+            )
+
+    def _ao_carregar_miniatura_sucesso(self, resultado):
+
+        foto, imagem_bytes = resultado
+
+        if not imagem_bytes:
+            return
+
+        miniatura = self._construir_miniatura_foto(foto, imagem_bytes)
+        # insere antes do addStretch() (ultimo item do layout)
+        self.linha_galeria.insertWidget(
+            self.linha_galeria.count() - 1, miniatura
+        )
+
+    def _construir_miniatura_foto(self, foto, imagem_bytes):
+
+        quadro = QFrame()
+        quadro.setFixedSize(56, 76)
+        quadro.setStyleSheet("background:transparent; border:none;")
+
+        col = QVBoxLayout(quadro)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(2)
+
+        lbl_img = QLabel()
+        lbl_img.setFixedSize(56, 56)
+        lbl_img.setAlignment(Qt.AlignCenter)
+        borda = tokens.PRIMARIA if foto.get("principal") else tokens.BORDA
+        lbl_img.setStyleSheet(f"""
+            background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px;
+            border:2px solid {borda};
+        """)
+
+        pixmap = QPixmap()
+        pixmap.loadFromData(imagem_bytes)
+        if not pixmap.isNull():
+            lbl_img.setPixmap(
+                pixmap.scaled(
+                    52, 52, Qt.KeepAspectRatio, Qt.SmoothTransformation,
+                )
+            )
+
+        linha_acoes = QHBoxLayout()
+        linha_acoes.setSpacing(2)
+        linha_acoes.setContentsMargins(0, 0, 0, 0)
+
+        bt_principal = QPushButton()
+        bt_principal.setFixedSize(20, 18)
+        bt_principal.setCursor(Qt.PointingHandCursor)
+        bt_principal.setToolTip(
+            "Foto principal" if foto.get("principal")
+            else "Tornar principal"
+        )
+        bt_principal.setAccessibleName(bt_principal.toolTip())
+        bt_principal.setIcon(
+            icone(
+                "star-filled" if foto.get("principal") else "star",
+                cor=tokens.ALERTA if foto.get("principal") else tokens.TEXTO_TERCIARIO,
+                tamanho=12,
+            )
+        )
+        bt_principal.setEnabled(not foto.get("principal"))
+        bt_principal.setStyleSheet(
+            "background:transparent; border:none;"
+        )
+        bt_principal.clicked.connect(
+            lambda: self._tornar_foto_principal(foto["id"])
+        )
+
+        bt_excluir = QPushButton()
+        bt_excluir.setFixedSize(20, 18)
+        bt_excluir.setCursor(Qt.PointingHandCursor)
+        bt_excluir.setToolTip("Remover foto")
+        bt_excluir.setAccessibleName("Remover foto")
+        bt_excluir.setIcon(icone("trash-2", cor=tokens.ERRO, tamanho=12))
+        bt_excluir.setStyleSheet("background:transparent; border:none;")
+        bt_excluir.clicked.connect(
+            lambda: self._remover_foto_extra(foto["id"])
+        )
+
+        linha_acoes.addWidget(bt_principal)
+        linha_acoes.addWidget(bt_excluir)
+
+        col.addWidget(lbl_img)
+        col.addLayout(linha_acoes)
+
+        return quadro
+
+    def adicionar_foto_extra(self):
+
+        caminho, _ = QFileDialog.getOpenFileName(
+            self,
+            "Selecionar Imagem",
+            "",
+            "Imagens (*.png *.jpg *.jpeg *.bmp *.webp)",
+        )
+
+        if not caminho:
+            return
+
+        imagem_comprimida = self._comprimir_imagem(caminho)
+
+        if imagem_comprimida is None:
+            QMessageBox.warning(
+                self, "Imagem inválida", "Não foi possível abrir essa imagem."
+            )
+            return
+
+        imagem_base64 = base64.b64encode(imagem_comprimida).decode("ascii")
+
+        self.bt_adicionar_foto_extra.setEnabled(False)
+
+        rodar_em_thread(
+            self,
+            adicionar_foto_produto,
+            self.produto["id"],
+            imagem_base64,
+            False,
+            ao_sucesso=self._ao_mutar_galeria_sucesso,
+            ao_erro=self._ao_mutar_galeria_erro,
+            ao_finalizar=self._ao_mutar_galeria_finalizado,
+        )
+
+    def _tornar_foto_principal(self, foto_id):
+        rodar_em_thread(
+            self,
+            marcar_foto_principal,
+            self.produto["id"],
+            foto_id,
+            ao_sucesso=self._ao_mutar_galeria_sucesso,
+            ao_erro=self._ao_mutar_galeria_erro,
+        )
+
+    def _remover_foto_extra(self, foto_id):
+
+        resposta = QMessageBox.question(
+            self, "Remover foto", "Remover essa foto do produto?"
+        )
+
+        if resposta != QMessageBox.Yes:
+            return
+
+        rodar_em_thread(
+            self,
+            remover_foto_produto,
+            self.produto["id"],
+            foto_id,
+            ao_sucesso=self._ao_mutar_galeria_sucesso,
+            ao_erro=self._ao_mutar_galeria_erro,
+        )
+
+    def _ao_mutar_galeria_sucesso(self, response):
+
+        if response.status_code in (200, 201):
+            self._carregar_galeria_fotos()
+            # a principal pode ter mudado (marcar/remover) -- recarrega
+            # tambem a previa grande de cima, que le da mesma fonte
+            rodar_em_thread(
+                self,
+                obter_foto_produto,
+                self.produto["id"],
+                ao_sucesso=self._ao_carregar_foto_sucesso,
+            )
+        else:
+            try:
+                erro = response.json()["detail"]
+            except Exception:
+                erro = response.text
+            QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_mutar_galeria_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_mutar_galeria_finalizado(self):
+        self.bt_adicionar_foto_extra.setEnabled(True)
+
+    # ==========================================
     # PREENCHER CAMPOS (EDIÇÃO)
     # ==========================================
 
@@ -941,6 +1363,12 @@ class CadastroProdutoWindow(QDialog):
         self.categoria.setCurrentText(
             self.produto.get("categoria") or ""
         )
+
+        indice_marca = self.marca.findData(self.produto.get("marca_id"))
+        self.marca.setCurrentIndex(indice_marca if indice_marca >= 0 else 0)
+
+        self.colecao.setText(self.produto.get("colecao") or "")
+
         self.descricao.setPlainText(
             self.produto.get("descricao") or ""
         )
@@ -1044,6 +1472,10 @@ class CadastroProdutoWindow(QDialog):
             "descricao": self.descricao.toPlainText().strip() or None,
 
             "categoria": self.categoria.currentText().strip() or None,
+
+            "marca_id": self.marca.currentData(),
+
+            "colecao": self.colecao.text().strip() or None,
 
             "unidade": self.modo_venda,
 

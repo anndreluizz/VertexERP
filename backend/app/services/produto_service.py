@@ -4,9 +4,37 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.produto import Produto
+from app.models.produto_foto import ProdutoFoto
 from app.repositories.produto_repository import ProdutoRepository
 from app.repositories.estoque_loja_repository import EstoqueLojaRepository
+from app.repositories.produto_foto_repository import ProdutoFotoRepository
 from app.schemas.produto import ProdutoCreate, ProdutoUpdate
+
+
+def _sincronizar_foto_principal(db: Session, produto: Produto, imagem: bytes):
+    """Mantem Produto.foto (campo legado) e a foto PRINCIPAL de
+    produto_fotos em sincronia sempre que alguem salva pelo caminho
+    antigo (foto_base64 direto no cadastro) -- assim quem so' usa uma
+    foto (a grande maioria) nunca fica com produto_fotos vazio, e a
+    galeria nova sempre reflete o que a tela de cadastro mostra como
+    "a" foto do produto."""
+
+    fotos = ProdutoFotoRepository.listar_por_produto(db, produto.id)
+    principal = next((f for f in fotos if f.principal), None)
+
+    if principal:
+        principal.imagem = imagem
+        ProdutoFotoRepository.atualizar(db, principal)
+    else:
+        ProdutoFotoRepository.criar(
+            db,
+            ProdutoFoto(
+                produto_id=produto.id,
+                imagem=imagem,
+                ordem=ProdutoFotoRepository.maior_ordem(db, produto.id) + 1,
+                principal=True,
+            ),
+        )
 
 
 class ProdutoService:
@@ -97,6 +125,9 @@ class ProdutoService:
             produto.foto = base64.b64decode(dados.foto_base64)
 
         produto = ProdutoRepository.criar(db, produto)
+
+        if dados.foto_base64:
+            _sincronizar_foto_principal(db, produto, produto.foto)
 
         # semeia o estoque inicial na loja de quem cadastrou -- sem
         # isso, o proximo ajuste/venda feito em QUALQUER loja recalcula
@@ -215,6 +246,7 @@ class ProdutoService:
 
         if dados.foto_base64:
             produto.foto = base64.b64decode(dados.foto_base64)
+            _sincronizar_foto_principal(db, produto, produto.foto)
 
         produto = ProdutoRepository.atualizar(db, produto)
 

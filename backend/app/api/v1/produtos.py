@@ -7,8 +7,11 @@ from app.schemas.produto import (
     ProdutoCreate,
     ProdutoUpdate,
     ProdutoResponse,
+    ProdutoFotoCreate,
+    ProdutoFotoResponse,
 )
 from app.services.produto_service import ProdutoService
+from app.services.produto_foto_service import ProdutoFotoService
 
 router = APIRouter(
     prefix="/produtos",
@@ -83,6 +86,75 @@ def obter_foto(
         )
 
     return Response(content=produto.foto, media_type="image/jpeg")
+
+
+@router.get("/{produto_id}/fotos", response_model=list[ProdutoFotoResponse])
+def listar_fotos(
+    produto_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return ProdutoFotoService.listar(db, produto_id)
+
+
+@router.get("/{produto_id}/fotos/{foto_id}/imagem")
+def obter_imagem_foto(
+    produto_id: int,
+    foto_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    fotos = ProdutoFotoService.listar(db, produto_id)
+    foto = next((f for f in fotos if f.id == foto_id), None)
+
+    if not foto:
+        raise HTTPException(status_code=404, detail="Foto não encontrada.")
+
+    return Response(content=foto.imagem, media_type="image/jpeg")
+
+
+@router.post(
+    "/{produto_id}/fotos", response_model=ProdutoFotoResponse, status_code=201
+)
+def adicionar_foto(
+    produto_id: int,
+    dados: ProdutoFotoCreate,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        return ProdutoFotoService.adicionar(db, produto_id, dados)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{produto_id}/fotos/{foto_id}")
+def remover_foto(
+    produto_id: int,
+    foto_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        return ProdutoFotoService.remover(db, produto_id, foto_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put(
+    "/{produto_id}/fotos/{foto_id}/principal",
+    response_model=ProdutoFotoResponse,
+)
+def marcar_foto_principal(
+    produto_id: int,
+    foto_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        return ProdutoFotoService.marcar_principal(db, produto_id, foto_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.put("/{produto_id}", response_model=ProdutoResponse)

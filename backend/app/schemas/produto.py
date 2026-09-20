@@ -8,6 +8,8 @@ class ProdutoBase(BaseModel):
     descricao: str | None = None
     codigo_barras: str | None = None
     categoria: str | None = None
+    marca_id: int | None = None
+    colecao: str | None = None
     unidade: str = "UN"
     preco_custo: Decimal = Decimal("0.00")
     preco_venda: Decimal = Decimal("0.00")
@@ -35,6 +37,8 @@ class ProdutoResponse(BaseModel):
     descricao: str | None = None
     codigo_barras: str | None = None
     categoria: str | None = None
+    marca_id: int | None = None
+    colecao: str | None = None
     unidade: str = "UN"
     preco_custo: Decimal
     preco_venda: Decimal
@@ -43,6 +47,21 @@ class ProdutoResponse(BaseModel):
     ativo: bool
     favorito: bool = False
     tem_foto: bool = False
+
+    class Config:
+        orm_mode = True
+
+
+class ProdutoFotoCreate(BaseModel):
+    imagem_base64: str
+    principal: bool = False
+
+
+class ProdutoFotoResponse(BaseModel):
+    id: int
+    produto_id: int
+    ordem: int
+    principal: bool
 
     class Config:
         orm_mode = True

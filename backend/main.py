@@ -17,6 +17,7 @@ from app.api.v1.caixa import router as caixa_router
 from app.api.v1.vendas import router as vendas_router
 from app.api.v1.produtos import router as produtos_router
 from app.api.v1.categorias import router as categorias_router
+from app.api.v1.marcas import router as marcas_router
 from app.api.v1.clientes import router as clientes_router
 from app.api.v1.users import router as users_router
 from app.api.v1.auth import router as auth_router
@@ -66,6 +67,7 @@ app.include_router(users_router)
 app.include_router(dashboard_router)
 app.include_router(clientes_router)
 app.include_router(categorias_router)
+app.include_router(marcas_router)
 app.include_router(produtos_router)
 app.include_router(vendas_router)
 app.include_router(caixa_router)

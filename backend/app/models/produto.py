@@ -86,6 +86,17 @@ class Produto(Base):
         nullable=True
     )
 
+    marca_id: Mapped[int | None] = mapped_column(
+        ForeignKey("marcas.id"),
+        index=True,
+        nullable=True,
+    )
+
+    colecao: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
     preco_custo: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         default=0
@@ -135,6 +146,20 @@ class Produto(Base):
     @property
     def tem_foto(self) -> bool:
         return self.foto is not None
+
+    # foto (LargeBinary acima) continua existindo por compatibilidade
+    # com o que ja le GET /produtos/{id}/foto -- fotos, o novo suporte
+    # a multiplas fotos, e' a fonte de verdade daqui pra frente (ver
+    # migration que copia Produto.foto pra uma linha aqui com
+    # principal=True na hora de introduzir esse model).
+    fotos = relationship(
+        "ProdutoFoto",
+        back_populates="produto",
+        cascade="all, delete-orphan",
+        order_by="ProdutoFoto.ordem",
+    )
+
+    marca = relationship("Marca")
 
     itens_compra = relationship(
         "ItemCompra",

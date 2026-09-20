@@ -10,6 +10,7 @@ class ContaPagarBase(BaseModel):
     descricao: str | None = None
     categoria: str | None = None
     centro_custo: str | None = None
+    plano_conta_id: int | None = None
     observacao: str | None = None
     numero_boleto: str | None = None
 
@@ -28,6 +29,7 @@ class ContaPagarUpdate(BaseModel):
     descricao: str | None = None
     categoria: str | None = None
     centro_custo: str | None = None
+    plano_conta_id: int | None = None
     observacao: str | None = None
     numero_boleto: str | None = None
     status: str | None = None
@@ -54,6 +56,10 @@ class ContaPagarResponse(BaseModel):
     categoria: str | None
 
     centro_custo: str | None = None
+
+    plano_conta_id: int | None = None
+
+    plano_conta_nome: str | None = None
 
     observacao: str | None
 

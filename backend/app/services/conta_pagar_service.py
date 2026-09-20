@@ -56,6 +56,7 @@ class ContaPagarService:
             descricao=dados.descricao,
             categoria=dados.categoria,
             centro_custo=dados.centro_custo,
+            plano_conta_id=dados.plano_conta_id,
             observacao=dados.observacao,
             numero_boleto=dados.numero_boleto,
             status=StatusContaPagar.PENDENTE.value,

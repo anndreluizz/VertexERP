@@ -80,6 +80,14 @@ class ContaPagar(Base):
         nullable=True,
     )
 
+    # categorizacao contabil estruturada (ver app/models/plano_conta.py)
+    # -- opcional, coexiste com 'categoria' (free text) acima.
+    plano_conta_id: Mapped[int | None] = mapped_column(
+        ForeignKey("planos_conta.id"),
+        index=True,
+        nullable=True,
+    )
+
     observacao: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
@@ -165,3 +173,9 @@ class ContaPagar(Base):
     fornecedor = relationship(
         "Fornecedor"
     )
+
+    plano_conta = relationship("PlanoConta")
+
+    @property
+    def plano_conta_nome(self) -> str | None:
+        return self.plano_conta.nome if self.plano_conta else None

@@ -73,6 +73,7 @@ from app.api.v1 import (
     fornecedores as fornecedores_router,
     compras as compras_router,
     centros_custo as centros_custo_router,
+    plano_contas as plano_contas_router,
 )
 from app.auth import dependencies as auth_dependencies
 
@@ -101,6 +102,7 @@ MODULOS_COM_GET_DB = [
     fornecedores_router,
     compras_router,
     centros_custo_router,
+    plano_contas_router,
     auth_dependencies,
 ]
 

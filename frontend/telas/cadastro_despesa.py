@@ -25,11 +25,13 @@ from services.conta_pagar_service import (
 )
 from services.categoria_despesa_service import listar_categorias_despesa
 from services.centro_custo_service import listar_centros_custo
+from services.plano_conta_service import listar_planos_conta
 from services.worker import rodar_em_thread
 from telas.gerenciar_categorias_despesa import (
     GerenciarCategoriasDespesaDialog,
 )
 from telas.gerenciar_centros_custo import GerenciarCentrosCustoDialog
+from telas.gerenciar_plano_contas import GerenciarPlanoContasDialog
 
 from design import tokens
 from design.widgets import BotaoPerigo, BotaoSecundario, CabecalhoDialogo, CampoTexto
@@ -183,6 +185,44 @@ class CadastroDespesaDialog(QDialog):
 
         corpo_scroll_layout.addLayout(cabecalho_centro_custo)
         corpo_scroll_layout.addWidget(self.centro_custo)
+
+        cabecalho_plano_conta = QHBoxLayout()
+
+        lbl_plano_conta = QLabel("Plano de Contas (opcional)")
+        lbl_plano_conta.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
+
+        bt_gerenciar_plano_contas = QPushButton("Gerenciar")
+        bt_gerenciar_plano_contas.setAutoDefault(False)
+        bt_gerenciar_plano_contas.setCursor(Qt.PointingHandCursor)
+        bt_gerenciar_plano_contas.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; border:none;
+                color:{tokens.PRIMARIA}; font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+            }}
+            QPushButton:hover {{ color:{tokens.PRIMARIA_HOVER}; }}
+        """)
+        bt_gerenciar_plano_contas.clicked.connect(self.gerenciar_plano_contas)
+
+        cabecalho_plano_conta.addWidget(lbl_plano_conta)
+        cabecalho_plano_conta.addStretch()
+        cabecalho_plano_conta.addWidget(bt_gerenciar_plano_contas)
+
+        self.plano_conta = QComboBox()
+        self.plano_conta.setMinimumHeight(44)
+        self.plano_conta.setCursor(Qt.PointingHandCursor)
+        self.plano_conta.setStyleSheet(f"""
+            QComboBox {{
+                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
+            }}
+        """)
+        self._carregar_planos_conta()
+
+        corpo_scroll_layout.addLayout(cabecalho_plano_conta)
+        corpo_scroll_layout.addWidget(self.plano_conta)
 
         self.valor = self._campo(corpo_scroll_layout, "Valor (R$)", "0,00")
         self.valor.textChanged.connect(self._atualizar_valor_final)
@@ -485,6 +525,55 @@ class CadastroDespesaDialog(QDialog):
 
         self._carregar_centros_custo()
 
+    def _carregar_planos_conta(self):
+
+        self._plano_conta_selecionado_pendente = (
+            self.plano_conta.currentData()
+        )
+
+        rodar_em_thread(
+            self,
+            listar_planos_conta,
+            ao_sucesso=self._ao_carregar_planos_conta_sucesso,
+        )
+
+    def _ao_carregar_planos_conta_sucesso(self, contas):
+
+        self.plano_conta.clear()
+        self.plano_conta.addItem("Nenhum", None)
+
+        por_id = {c["id"]: c for c in contas}
+
+        def caminho(conta):
+            partes = [conta["nome"]]
+            pai_id = conta.get("conta_pai_id")
+            while pai_id in por_id:
+                pai = por_id[pai_id]
+                partes.insert(0, pai["nome"])
+                pai_id = pai.get("conta_pai_id")
+            return " > ".join(partes)
+
+        despesas = sorted(
+            (c for c in contas if c["tipo"] == "DESPESA"),
+            key=caminho,
+        )
+
+        for conta in despesas:
+            self.plano_conta.addItem(caminho(conta), conta["id"])
+
+        selecionado = self._plano_conta_selecionado_pendente
+        if selecionado is not None:
+            indice = self.plano_conta.findData(selecionado)
+            if indice >= 0:
+                self.plano_conta.setCurrentIndex(indice)
+
+    def gerenciar_plano_contas(self):
+
+        dialogo = GerenciarPlanoContasDialog(parent=self)
+        dialogo.exec()
+
+        self._carregar_planos_conta()
+
     # limite pra nao mandar um JSON gigante num POST so' -- um boleto/
     # nota legivel nunca passa disso; sem esse limite, uma foto de
     # celular (5-15MB, ~33% maior em base64) pode derrubar o backend
@@ -591,6 +680,12 @@ class CadastroDespesaDialog(QDialog):
         if centro_custo and self.centro_custo.findText(centro_custo) >= 0:
             self.centro_custo.setCurrentText(centro_custo)
 
+        plano_conta_id = conta.get("plano_conta_id")
+        if plano_conta_id is not None:
+            indice = self.plano_conta.findData(plano_conta_id)
+            if indice >= 0:
+                self.plano_conta.setCurrentIndex(indice)
+
         if not duplicando:
             self.numero_boleto.setText(conta.get("numero_boleto") or "")
             self.observacoes.setText(conta.get("observacao") or "")
@@ -657,6 +752,7 @@ class CadastroDespesaDialog(QDialog):
                 None if centro_custo_texto in ("", "Nenhum")
                 else centro_custo_texto
             ),
+            "plano_conta_id": self.plano_conta.currentData(),
             "valor": valor,
             "data_vencimento": data_vencimento,
             "numero_boleto": self.numero_boleto.text().strip() or None,

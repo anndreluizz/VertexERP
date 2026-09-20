@@ -27,6 +27,15 @@ class ProdutoRepository:
         )
 
     @staticmethod
+    def listar_variacoes(db: Session, produto_pai_id: int):
+        return (
+            db.query(Produto)
+            .filter(Produto.produto_pai_id == produto_pai_id)
+            .order_by(Produto.id)
+            .all()
+        )
+
+    @staticmethod
     def buscar_por_id(db: Session, produto_id: int):
         return db.query(Produto).filter(
             Produto.id == produto_id

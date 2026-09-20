@@ -98,6 +98,27 @@ class Produto(Base):
         nullable=True,
     )
 
+    cor: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    tamanho: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    # variacao (cor/tamanho) de outro produto -- so' 1 nivel, ver
+    # ProdutoService.criar (bloqueia variacao-de-variacao). Sem
+    # relationship ORM de proposito (self-referencial em duas direcoes
+    # complicaria mais do que ajuda); quem precisa das variacoes de um
+    # produto usa ProdutoRepository.listar_variacoes.
+    produto_pai_id: Mapped[int | None] = mapped_column(
+        ForeignKey("produtos.id"),
+        index=True,
+        nullable=True,
+    )
+
     preco_custo: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         default=0

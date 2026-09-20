@@ -11,6 +11,9 @@ class ProdutoBase(BaseModel):
     categoria: str | None = None
     marca_id: int | None = None
     colecao: str | None = None
+    cor: str | None = None
+    tamanho: str | None = None
+    produto_pai_id: int | None = None
     unidade: str = "UN"
     preco_custo: Decimal = Decimal("0.00")
     preco_venda: Decimal = Decimal("0.00")
@@ -44,6 +47,9 @@ class ProdutoResponse(BaseModel):
     categoria: str | None = None
     marca_id: int | None = None
     colecao: str | None = None
+    cor: str | None = None
+    tamanho: str | None = None
+    produto_pai_id: int | None = None
     unidade: str = "UN"
     preco_custo: Decimal
     preco_venda: Decimal

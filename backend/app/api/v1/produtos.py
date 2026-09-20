@@ -197,6 +197,23 @@ def historico_precos(
     return ProdutoService.historico_precos(db, produto_id)
 
 
+@router.get(
+    "/{produto_id}/variacoes",
+    response_model=list[ProdutoResponse],
+)
+def listar_variacoes(
+    produto_id: int,
+    loja_id: int | None = None,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return ProdutoService.listar_variacoes(
+        db,
+        produto_id,
+        resolver_loja_id(db, usuario, loja_id),
+    )
+
+
 @router.delete("/{produto_id}")
 def excluir(
     produto_id: int,

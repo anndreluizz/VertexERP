@@ -151,3 +151,17 @@ def listar_historico_precos(produto_id):
         return []
 
     return response.json()
+
+
+# ==========================================
+# VARIACOES (COR/TAMANHO)
+# ==========================================
+
+def listar_variacoes(produto_id):
+
+    response = get(endpoint_com_loja(f"/produtos/{produto_id}/variacoes"))
+
+    if response.status_code != 200:
+        return []
+
+    return response.json()

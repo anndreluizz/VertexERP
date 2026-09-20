@@ -41,6 +41,22 @@ def _sincronizar_foto_principal(db: Session, produto: Produto, imagem: bytes):
         )
 
 
+def _aplicar_estoque_por_loja(db: Session, produtos, loja_id: int):
+    ids = [p.id for p in produtos]
+    mapa_quantidade = EstoqueLojaRepository.quantidades_por_loja(
+        db, ids, loja_id
+    )
+    mapa_minimo = EstoqueLojaRepository.minimos_por_loja(
+        db, ids, loja_id
+    )
+    for produto in produtos:
+        produto.estoque = mapa_quantidade.get(produto.id, 0)
+        produto.estoque_minimo = mapa_minimo.get(
+            produto.id, produto.estoque_minimo
+        )
+    return produtos
+
+
 class ProdutoService:
 
     @staticmethod
@@ -48,20 +64,20 @@ class ProdutoService:
         produtos = ProdutoRepository.listar(db, skip, limit, loja_id)
 
         if loja_id is not None:
-            ids = [p.id for p in produtos]
-            mapa_quantidade = EstoqueLojaRepository.quantidades_por_loja(
-                db, ids, loja_id
-            )
-            mapa_minimo = EstoqueLojaRepository.minimos_por_loja(
-                db, ids, loja_id
-            )
-            for produto in produtos:
-                produto.estoque = mapa_quantidade.get(produto.id, 0)
-                produto.estoque_minimo = mapa_minimo.get(
-                    produto.id, produto.estoque_minimo
-                )
+            produtos = _aplicar_estoque_por_loja(db, produtos, loja_id)
 
         return produtos
+
+    @staticmethod
+    def listar_variacoes(
+        db: Session, produto_pai_id: int, loja_id: int | None = None
+    ):
+        variacoes = ProdutoRepository.listar_variacoes(db, produto_pai_id)
+
+        if loja_id is not None:
+            variacoes = _aplicar_estoque_por_loja(db, variacoes, loja_id)
+
+        return variacoes
 
     @staticmethod
     def buscar(db: Session, produto_id: int, loja_id: int | None = None):
@@ -120,6 +136,18 @@ class ProdutoService:
                 f'Já existe um produto ("{existente.nome}") '
                 f'cadastrado com esse código de barras.'
             )
+
+        if dados.produto_pai_id is not None:
+            pai = ProdutoRepository.buscar_por_id(db, dados.produto_pai_id)
+
+            if not pai:
+                raise Exception("Produto pai não encontrado.")
+
+            if pai.produto_pai_id is not None:
+                raise Exception(
+                    "Uma variação não pode ser criada a partir de outra "
+                    "variação."
+                )
 
         campos = dados.dict(exclude={"foto_base64"})
         produto = Produto(**campos)
@@ -185,6 +213,26 @@ class ProdutoService:
         # isso, editar o produto sobrescrevia direto o agregado entre
         # lojas com o que a tela mostrava (que, pelo mesmo motivo, podia
         # nem ser o estoque real da loja de quem estava editando).
+        if (
+            dados.produto_pai_id is not None
+            and dados.produto_pai_id != produto.produto_pai_id
+        ):
+            if dados.produto_pai_id == produto_id:
+                raise Exception(
+                    "Um produto não pode ser variação de si mesmo."
+                )
+
+            pai = ProdutoRepository.buscar_por_id(db, dados.produto_pai_id)
+
+            if not pai:
+                raise Exception("Produto pai não encontrado.")
+
+            if pai.produto_pai_id is not None:
+                raise Exception(
+                    "Uma variação não pode ser criada a partir de outra "
+                    "variação."
+                )
+
         campos = dados.dict(exclude_unset=True, exclude={"foto_base64"})
         novo_estoque = campos.pop("estoque", None)
 

@@ -33,7 +33,12 @@ from services.marca_service import listar_marcas, criar_marca
 from telas.gerenciar_categorias import GerenciarCategoriasDialog
 from telas.gerenciar_marcas import GerenciarMarcasDialog
 from telas.historico_precos import HistoricoPrecosDialog
-from services.produto_service import obter_foto_produto, listar_produtos
+from services.produto_service import (
+    obter_foto_produto,
+    listar_produtos,
+    cadastrar_produto,
+    listar_variacoes,
+)
 from services.produto_foto_service import (
     listar_fotos_produto,
     obter_imagem_foto,
@@ -89,10 +94,18 @@ def _buscar_miniatura_com_info(produto_id, foto):
 
 class CadastroProdutoWindow(QDialog):
 
-    def __init__(self, produto=None):
+    def __init__(self, produto=None, produto_pai=None):
         super().__init__()
 
         self.produto = produto
+        self.produto_pai = produto_pai
+        self.produto_pai_id = (
+            produto_pai["id"] if produto_pai
+            else (produto.get("produto_pai_id") if produto else None)
+        )
+        # variacao de variacao nao e' permitido -- so' produto "raiz"
+        # (sem pai) pode ganhar o painel de gerenciar variacoes
+        self._pode_ter_variacoes = self.produto_pai_id is None
         self.imagem_bytes = None
         self.modo_venda = "UN"
 
@@ -123,7 +136,12 @@ class CadastroProdutoWindow(QDialog):
         col_titulo = QVBoxLayout()
         col_titulo.setSpacing(2)
 
-        titulo_texto = "Editar Produto" if produto else "Novo Produto"
+        if produto:
+            titulo_texto = "Editar Produto"
+        elif produto_pai:
+            titulo_texto = f"Nova Variação de \"{produto_pai['nome']}\""
+        else:
+            titulo_texto = "Novo Produto"
 
         titulo = QLabel(titulo_texto)
         titulo.setStyleSheet(f"""
@@ -373,6 +391,32 @@ class CadastroProdutoWindow(QDialog):
         self.colecao.setStyleSheet(self._estilo_input())
 
         corpo_info.addWidget(self.colecao)
+
+        linha_variacao = QHBoxLayout()
+        linha_variacao.setSpacing(12)
+
+        col_cor = QVBoxLayout()
+        col_cor.setSpacing(6)
+        col_cor.addWidget(self._rotulo_campo("Cor (opcional)"))
+        self.cor = QLineEdit()
+        self.cor.setPlaceholderText("Ex.: Azul")
+        self.cor.setMinimumHeight(42)
+        self.cor.setStyleSheet(self._estilo_input())
+        col_cor.addWidget(self.cor)
+
+        col_tamanho = QVBoxLayout()
+        col_tamanho.setSpacing(6)
+        col_tamanho.addWidget(self._rotulo_campo("Tamanho (opcional)"))
+        self.tamanho = QLineEdit()
+        self.tamanho.setPlaceholderText("Ex.: P, M, 42...")
+        self.tamanho.setMinimumHeight(42)
+        self.tamanho.setStyleSheet(self._estilo_input())
+        col_tamanho.addWidget(self.tamanho)
+
+        linha_variacao.addLayout(col_cor)
+        linha_variacao.addLayout(col_tamanho)
+
+        corpo_info.addLayout(linha_variacao)
 
         corpo_info.addWidget(self._rotulo_campo("Descrição (opcional)"))
 
@@ -784,6 +828,52 @@ class CadastroProdutoWindow(QDialog):
 
         self._alternar_kit(False)
 
+        if self._pode_ter_variacoes:
+
+            cartao_variacoes, corpo_variacoes = self._construir_cartao_secao(
+                "Variações",
+                "Mesmo produto em cores/tamanhos diferentes, cada um "
+                "com código e estoque próprios.",
+                "package", tokens.SECUNDARIA,
+            )
+
+            self.tabela_variacoes = StandardTable(
+                ["Nome", "Cor", "Tamanho", "Estoque"]
+            )
+            self.tabela_variacoes.setMaximumHeight(140)
+            corpo_variacoes.addWidget(self.tabela_variacoes)
+
+            self.bt_nova_variacao = QPushButton("Nova variação")
+            self.bt_nova_variacao.setCursor(Qt.PointingHandCursor)
+            self.bt_nova_variacao.setStyleSheet(f"""
+                QPushButton {{
+                    background:{tokens.FUNDO}; color:{tokens.TEXTO};
+                    border:1px solid {tokens.BORDA};
+                    border-radius:{tokens.RADIUS_SM}px; padding:8px 14px;
+                }}
+                QPushButton:hover {{ background:{tokens.BORDA}; }}
+            """)
+            self.bt_nova_variacao.clicked.connect(self.nova_variacao)
+            corpo_variacoes.addWidget(self.bt_nova_variacao)
+
+            if self.produto is None:
+                aviso_variacoes = QLabel(
+                    "Salve o produto primeiro pra poder cadastrar "
+                    "variações."
+                )
+                aviso_variacoes.setWordWrap(True)
+                aviso_variacoes.setStyleSheet(
+                    f"background:transparent; "
+                    f"color:{tokens.TEXTO_TERCIARIO}; "
+                    f"font-size:{tokens.TAMANHO_XS}px;"
+                )
+                corpo_variacoes.addWidget(aviso_variacoes)
+                self.bt_nova_variacao.setEnabled(False)
+            else:
+                self._carregar_variacoes()
+
+            direita.addWidget(cartao_variacoes)
+
         direita.addWidget(cartao_valores)
         direita.addWidget(cartao_kit)
         direita.addWidget(cartao_foto)
@@ -848,6 +938,9 @@ class CadastroProdutoWindow(QDialog):
         if self.produto:
             self.preencher_campos()
             self.codigo_barras.setFocus()
+        elif self.produto_pai:
+            self._preencher_a_partir_do_pai()
+            self.cor.setFocus()
         else:
             self.codigo_barras.setFocus()
 
@@ -1272,6 +1365,72 @@ class CadastroProdutoWindow(QDialog):
             QMessageBox.critical(self, "Erro", str(erro))
 
     # ==========================================
+    # VARIACOES (COR/TAMANHO)
+    # ==========================================
+
+    def _carregar_variacoes(self):
+        rodar_em_thread(
+            self,
+            listar_variacoes,
+            self.produto["id"],
+            ao_sucesso=self._ao_carregar_variacoes_sucesso,
+            ao_erro=self._ao_carregar_variacoes_erro,
+        )
+
+    def _ao_carregar_variacoes_sucesso(self, variacoes):
+        self.tabela_variacoes.setRowCount(len(variacoes))
+
+        for linha, v in enumerate(variacoes):
+            self.tabela_variacoes.setItem(
+                linha, 0, QTableWidgetItem(v.get("nome") or "")
+            )
+            self.tabela_variacoes.setItem(
+                linha, 1, QTableWidgetItem(v.get("cor") or "")
+            )
+            self.tabela_variacoes.setItem(
+                linha, 2, QTableWidgetItem(v.get("tamanho") or "")
+            )
+            self.tabela_variacoes.setItem(
+                linha, 3, QTableWidgetItem(str(v.get("estoque", 0)))
+            )
+
+    def _ao_carregar_variacoes_erro(self, erro):
+        QMessageBox.critical(
+            self, "Erro",
+            f"Não foi possível carregar as variações.\n{erro}"
+        )
+
+    def nova_variacao(self):
+
+        if not self.produto:
+            return
+
+        tela = CadastroProdutoWindow(produto_pai=self.produto)
+
+        if tela.exec() != QDialog.Accepted:
+            return
+
+        self._nova_variacao_tela = tela
+
+        rodar_em_thread(
+            self,
+            cadastrar_produto,
+            tela.dados,
+            ao_sucesso=self._ao_nova_variacao_sucesso,
+            ao_erro=self._ao_carregar_variacoes_erro,
+        )
+
+    def _ao_nova_variacao_sucesso(self, response):
+        if response.status_code == 201:
+            self._carregar_variacoes()
+        else:
+            try:
+                erro = response.json().get("detail") or str(response.json())
+            except Exception:
+                erro = response.text
+            QMessageBox.critical(self, "Erro", str(erro))
+
+    # ==========================================
     # MODO DE VENDA (UNID / PESO / LITRO)
     # ==========================================
 
@@ -1651,6 +1810,26 @@ class CadastroProdutoWindow(QDialog):
     # PREENCHER CAMPOS (EDIÇÃO)
     # ==========================================
 
+    def _preencher_a_partir_do_pai(self):
+        """Nova variacao: copia nome/preco/categoria/marca/colecao do
+        produto pai como ponto de partida -- so' cor/tamanho/codigo
+        ficam pra quem esta cadastrando preencher."""
+
+        pai = self.produto_pai
+
+        self.nome.setText(pai["nome"])
+        self.categoria.setCurrentText(pai.get("categoria") or "")
+
+        indice_marca = self.marca.findData(pai.get("marca_id"))
+        self.marca.setCurrentIndex(indice_marca if indice_marca >= 0 else 0)
+
+        self.colecao.setText(pai.get("colecao") or "")
+
+        self.preco_custo.setValue(float(pai.get("preco_custo") or 0))
+        self.preco_venda.setValue(float(pai.get("preco_venda") or 0))
+
+        self.selecionar_modo(pai.get("unidade") or "UN")
+
     def preencher_campos(self):
 
         if not self.produto:
@@ -1668,6 +1847,9 @@ class CadastroProdutoWindow(QDialog):
         self.marca.setCurrentIndex(indice_marca if indice_marca >= 0 else 0)
 
         self.colecao.setText(self.produto.get("colecao") or "")
+
+        self.cor.setText(self.produto.get("cor") or "")
+        self.tamanho.setText(self.produto.get("tamanho") or "")
 
         self.descricao.setPlainText(
             self.produto.get("descricao") or ""
@@ -1810,6 +1992,12 @@ class CadastroProdutoWindow(QDialog):
             "marca_id": self.marca.currentData(),
 
             "colecao": self.colecao.text().strip() or None,
+
+            "cor": self.cor.text().strip() or None,
+
+            "tamanho": self.tamanho.text().strip() or None,
+
+            "produto_pai_id": self.produto_pai_id,
 
             "unidade": self.modo_venda,
 

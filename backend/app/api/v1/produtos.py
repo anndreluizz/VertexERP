@@ -11,8 +11,10 @@ from app.schemas.produto import (
     ProdutoFotoResponse,
 )
 from app.schemas.historico_preco import HistoricoPrecoResponse
+from app.schemas.kit_item import KitItemCreate, KitItemResponse
 from app.services.produto_service import ProdutoService
 from app.services.produto_foto_service import ProdutoFotoService
+from app.services.kit_item_service import KitItemService
 
 router = APIRouter(
     prefix="/produtos",
@@ -213,3 +215,46 @@ def excluir(
         "success": True,
         "message": "Produto excluído com sucesso."
     }
+
+
+@router.get(
+    "/{kit_id}/itens-kit",
+    response_model=list[KitItemResponse],
+)
+def listar_itens_kit(
+    kit_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return KitItemService.listar(db, kit_id)
+
+
+@router.post(
+    "/{kit_id}/itens-kit",
+    response_model=KitItemResponse,
+    status_code=201,
+)
+def adicionar_item_kit(
+    kit_id: int,
+    dados: KitItemCreate,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        return KitItemService.adicionar(db, kit_id, dados)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{kit_id}/itens-kit/{item_id}")
+def remover_item_kit(
+    kit_id: int,
+    item_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        KitItemService.remover(db, kit_id, item_id)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

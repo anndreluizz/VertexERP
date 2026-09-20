@@ -163,6 +163,15 @@ class Produto(Base):
         server_default="false",
     )
 
+    # kit/combo: vendido como 1 produto, mas o estoque baixado/devolvido
+    # na venda e' o dos componentes (ver KitItem) -- o kit em si nunca
+    # tem Produto.estoque/EstoqueLoja proprio debitado.
+    eh_kit: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+    )
+
     @property
     def tem_foto(self) -> bool:
         return self.foto is not None

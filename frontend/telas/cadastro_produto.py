@@ -17,10 +17,12 @@ from PySide6.QtWidgets import (
     QPushButton,
     QCheckBox,
     QDateEdit,
+    QWidget,
     QVBoxLayout,
     QHBoxLayout,
     QInputDialog,
     QFileDialog,
+    QTableWidgetItem,
 )
 
 import base64
@@ -31,7 +33,7 @@ from services.marca_service import listar_marcas, criar_marca
 from telas.gerenciar_categorias import GerenciarCategoriasDialog
 from telas.gerenciar_marcas import GerenciarMarcasDialog
 from telas.historico_precos import HistoricoPrecosDialog
-from services.produto_service import obter_foto_produto
+from services.produto_service import obter_foto_produto, listar_produtos
 from services.produto_foto_service import (
     listar_fotos_produto,
     obter_imagem_foto,
@@ -39,7 +41,14 @@ from services.produto_foto_service import (
     remover_foto_produto,
     marcar_foto_principal,
 )
+from services.kit_item_service import (
+    listar_itens_kit,
+    adicionar_item_kit,
+    remover_item_kit,
+)
 from services.worker import rodar_em_thread
+from widgets.dialogs.pesquisa_window import PesquisaWindow
+from widgets.tables.standard_table import StandardTable
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.responsive import tamanho_fixo_seguro
@@ -696,7 +705,87 @@ class CadastroProdutoWindow(QDialog):
 
             self._carregar_galeria_fotos()
 
+        cartao_kit, corpo_kit = self._construir_cartao_secao(
+            "Kit / Combo",
+            "Venda vários produtos como um só -- o estoque baixado é "
+            "o dos componentes, não o do kit.",
+            "package", tokens.ALERTA,
+        )
+
+        self.eh_kit_check = QCheckBox("Este produto é um kit/combo")
+        self.eh_kit_check.setStyleSheet(
+            f"background:transparent; color:{tokens.TEXTO}; "
+            f"font-weight:700; font-size:{tokens.TAMANHO_SM}px;"
+        )
+        self.eh_kit_check.toggled.connect(self._alternar_kit)
+        corpo_kit.addWidget(self.eh_kit_check)
+
+        self.painel_kit = QWidget()
+        layout_painel_kit = QVBoxLayout(self.painel_kit)
+        layout_painel_kit.setContentsMargins(0, 0, 0, 0)
+        layout_painel_kit.setSpacing(8)
+
+        self.tabela_kit = StandardTable(["Componente", "Quantidade"])
+        self.tabela_kit.setMaximumHeight(140)
+        layout_painel_kit.addWidget(self.tabela_kit)
+
+        linha_botoes_kit = QHBoxLayout()
+        linha_botoes_kit.setSpacing(8)
+
+        self.bt_adicionar_componente = QPushButton("Adicionar componente")
+        self.bt_adicionar_componente.setCursor(Qt.PointingHandCursor)
+        self.bt_adicionar_componente.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.FUNDO}; color:{tokens.TEXTO};
+                border:1px solid {tokens.BORDA};
+                border-radius:{tokens.RADIUS_SM}px; padding:8px 14px;
+            }}
+            QPushButton:hover {{ background:{tokens.BORDA}; }}
+        """)
+        self.bt_adicionar_componente.clicked.connect(
+            self.adicionar_componente_kit
+        )
+        linha_botoes_kit.addWidget(self.bt_adicionar_componente)
+
+        self.bt_remover_componente = QPushButton("Remover selecionado")
+        self.bt_remover_componente.setCursor(Qt.PointingHandCursor)
+        self.bt_remover_componente.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.ERRO_CLARO}; color:{tokens.ERRO};
+                border-radius:{tokens.RADIUS_SM}px; padding:8px 14px;
+            }}
+            QPushButton:hover {{ background:{tokens.ERRO}; color:{tokens.TEXTO_CLARO}; }}
+        """)
+        self.bt_remover_componente.clicked.connect(
+            self.remover_componente_kit
+        )
+        linha_botoes_kit.addWidget(self.bt_remover_componente)
+        linha_botoes_kit.addStretch()
+
+        layout_painel_kit.addLayout(linha_botoes_kit)
+
+        corpo_kit.addWidget(self.painel_kit)
+
+        if self.produto is None:
+            aviso_kit = QLabel(
+                "Salve o produto primeiro pra poder adicionar os "
+                "componentes do kit."
+            )
+            aviso_kit.setWordWrap(True)
+            aviso_kit.setStyleSheet(
+                f"background:transparent; color:{tokens.TEXTO_TERCIARIO}; "
+                f"font-size:{tokens.TAMANHO_XS}px;"
+            )
+            corpo_kit.addWidget(aviso_kit)
+            self.painel_kit.setVisible(False)
+        else:
+            self.kit_itens = []
+            self._carregar_itens_kit()
+
+        self._alternar_kit(False)
+
         direita.addWidget(cartao_valores)
+        direita.addWidget(cartao_kit)
         direita.addWidget(cartao_foto)
 
         corpo.addWidget(cartao_info, 1)
@@ -1064,6 +1153,123 @@ class CadastroProdutoWindow(QDialog):
             self.produto["id"], self.produto["nome"], parent=self
         )
         dialogo.exec()
+
+    # ==========================================
+    # KIT / COMBO
+    # ==========================================
+
+    def _alternar_kit(self, marcado):
+        habilitado = marcado and self.produto is not None
+        self.bt_adicionar_componente.setEnabled(habilitado)
+        self.bt_remover_componente.setEnabled(habilitado)
+
+    def _carregar_itens_kit(self):
+        rodar_em_thread(
+            self,
+            listar_itens_kit,
+            self.produto["id"],
+            ao_sucesso=self._ao_carregar_itens_kit_sucesso,
+            ao_erro=self._ao_carregar_itens_kit_erro,
+        )
+
+    def _ao_carregar_itens_kit_sucesso(self, itens):
+        self.kit_itens = itens
+
+        self.tabela_kit.setRowCount(len(itens))
+
+        for linha, item in enumerate(itens):
+            self.tabela_kit.setItem(
+                linha, 0,
+                QTableWidgetItem(item.get("produto_componente_nome") or ""),
+            )
+            self.tabela_kit.setItem(
+                linha, 1, QTableWidgetItem(str(item["quantidade"]))
+            )
+
+    def _ao_carregar_itens_kit_erro(self, erro):
+        QMessageBox.critical(
+            self, "Erro",
+            f"Não foi possível carregar os componentes do kit.\n{erro}"
+        )
+
+    def adicionar_componente_kit(self):
+
+        if not self.produto:
+            return
+
+        rodar_em_thread(
+            self,
+            listar_produtos,
+            ao_sucesso=self._ao_listar_produtos_para_kit,
+            ao_erro=self._ao_carregar_itens_kit_erro,
+        )
+
+    def _ao_listar_produtos_para_kit(self, produtos):
+
+        candidatos = [
+            p for p in produtos
+            if p["id"] != self.produto["id"] and not p.get("eh_kit")
+        ]
+
+        tela = PesquisaWindow(
+            titulo="Adicionar componente do kit",
+            colunas=["Código", "Nome", "Estoque"],
+            campos=["codigo", "nome", "estoque"],
+            dados=candidatos,
+            chave_pesquisa="nome",
+        )
+
+        if tela.exec() != QDialog.Accepted:
+            return
+
+        quantidade, ok = QInputDialog.getInt(
+            self, "Quantidade",
+            f"Quantos \"{tela.selecionado['nome']}\" entram em 1 unidade "
+            "do kit?",
+            1, 1, 999999,
+        )
+
+        if not ok:
+            return
+
+        rodar_em_thread(
+            self,
+            adicionar_item_kit,
+            self.produto["id"],
+            tela.selecionado["id"],
+            quantidade,
+            ao_sucesso=self._ao_mutar_kit_sucesso,
+            ao_erro=self._ao_carregar_itens_kit_erro,
+        )
+
+    def remover_componente_kit(self):
+
+        linha = self.tabela_kit.currentRow()
+
+        if linha < 0:
+            QMessageBox.warning(self, "Aviso", "Selecione um componente.")
+            return
+
+        item = self.kit_itens[linha]
+
+        rodar_em_thread(
+            self,
+            remover_item_kit,
+            self.produto["id"],
+            item["id"],
+            ao_sucesso=self._ao_mutar_kit_sucesso,
+            ao_erro=self._ao_carregar_itens_kit_erro,
+        )
+
+    def _ao_mutar_kit_sucesso(self, response):
+        if response.status_code in (200, 201):
+            self._carregar_itens_kit()
+        else:
+            try:
+                erro = response.json().get("detail") or str(response.json())
+            except Exception:
+                erro = response.text
+            QMessageBox.critical(self, "Erro", str(erro))
 
     # ==========================================
     # MODO DE VENDA (UNID / PESO / LITRO)
@@ -1489,6 +1695,8 @@ class CadastroProdutoWindow(QDialog):
 
         self.favorito.setChecked(self.produto.get("favorito", False))
 
+        self.eh_kit_check.setChecked(self.produto.get("eh_kit", False))
+
         preco_promocional = self.produto.get("preco_promocional")
         self.em_promocao_check.setChecked(preco_promocional is not None)
 
@@ -1636,4 +1844,6 @@ class CadastroProdutoWindow(QDialog):
             "estoque_minimo": self.estoque_minimo.value(),
 
             "favorito": self.favorito.isChecked(),
+
+            "eh_kit": self.eh_kit_check.isChecked(),
         }

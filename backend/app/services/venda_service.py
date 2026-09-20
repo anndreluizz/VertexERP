@@ -18,6 +18,7 @@ from app.repositories.item_venda_repository import (
 )
 from app.repositories.caixa_repository import CaixaRepository
 from app.repositories.estoque_loja_repository import EstoqueLojaRepository
+from app.repositories.kit_item_repository import KitItemRepository
 from app.repositories.movimento_fiado_repository import (
     MovimentoFiadoRepository,
 )
@@ -29,6 +30,24 @@ from app.services.movimento_fiado_service import (
 from app.services.notificacao_service import NotificacaoService
 from app.services.configuracao_service import ConfiguracaoService
 from app.services.whatsapp_service import WhatsappService
+
+
+def _itens_para_baixa_estoque(db: Session, produto: Produto, quantidade: int):
+    """Quem de fato tem estoque debitado/devolvido por essa venda --
+    pra um produto normal e' ele mesmo; pra um kit/combo (Produto.eh_kit),
+    sao os componentes (KitItem), cada um multiplicado pela quantidade
+    configurada no kit. O kit em si nunca tem estoque proprio tocado."""
+
+    if not produto.eh_kit:
+        return [(produto, quantidade)]
+
+    itens_kit = KitItemRepository.listar_por_kit(db, produto.id)
+
+    return [
+        (item.componente, item.quantidade * quantidade)
+        for item in itens_kit
+        if item.componente is not None
+    ]
 
 
 def _moeda(valor: float) -> str:
@@ -308,18 +327,24 @@ class VendaService:
                 # checa/baixa o estoque da LOJA que esta vendendo, nao
                 # o agregado entre lojas -- senao a Filial conseguiria
                 # vender um produto que so tem estoque na Matriz (ou
-                # vice-versa)
-                estoque_atual_loja = (
-                    EstoqueLojaRepository.obter_ou_criar(
-                        db, produto.id, loja_id
-                    ).quantidade
-                    if loja_id is not None else produto.estoque
-                )
+                # vice-versa). Pra kit/combo, quem baixa e' os
+                # componentes (ver _itens_para_baixa_estoque), nao o
+                # kit em si.
+                for produto_baixa, quantidade_baixa in _itens_para_baixa_estoque(
+                    db, produto, item.quantidade
+                ):
 
-                if estoque_atual_loja < item.quantidade:
-                    raise Exception(
-                        f"Estoque insuficiente para {produto.nome}."
+                    estoque_atual_loja = (
+                        EstoqueLojaRepository.obter_ou_criar(
+                            db, produto_baixa.id, loja_id
+                        ).quantidade
+                        if loja_id is not None else produto_baixa.estoque
                     )
+
+                    if estoque_atual_loja < quantidade_baixa:
+                        raise Exception(
+                            f"Estoque insuficiente para {produto_baixa.nome}."
+                        )
 
                 subtotal = item.valor_unitario * item.quantidade
 
@@ -337,25 +362,39 @@ class VendaService:
                 )
 
                 # Baixa do estoque (automatica, registrada no historico)
-                EstoqueLojaRepository.ajustar(
-                    db, produto, loja_id, -item.quantidade
-                )
+                for produto_baixa, quantidade_baixa in _itens_para_baixa_estoque(
+                    db, produto, item.quantidade
+                ):
 
-                if estoque_atual_loja - item.quantidade <= produto.estoque_minimo:
-                    produtos_com_estoque_baixo.append(produto)
-
-                db.add(produto)
-
-                db.add(
-                    MovimentoEstoque(
-                        produto_id=produto.id,
-                        usuario_id=usuario_id,
-                        loja_id=loja_id,
-                        tipo="SAIDA",
-                        quantidade=item.quantidade,
-                        motivo=f"Venda #{venda.id}",
+                    estoque_atual_loja = (
+                        EstoqueLojaRepository.obter_ou_criar(
+                            db, produto_baixa.id, loja_id
+                        ).quantidade
+                        if loja_id is not None else produto_baixa.estoque
                     )
-                )
+
+                    EstoqueLojaRepository.ajustar(
+                        db, produto_baixa, loja_id, -quantidade_baixa
+                    )
+
+                    if (
+                        estoque_atual_loja - quantidade_baixa
+                        <= produto_baixa.estoque_minimo
+                    ):
+                        produtos_com_estoque_baixo.append(produto_baixa)
+
+                    db.add(produto_baixa)
+
+                    db.add(
+                        MovimentoEstoque(
+                            produto_id=produto_baixa.id,
+                            usuario_id=usuario_id,
+                            loja_id=loja_id,
+                            tipo="SAIDA",
+                            quantidade=quantidade_baixa,
+                            motivo=f"Venda #{venda.id}",
+                        )
+                    )
 
                 valor_total += subtotal
 
@@ -520,22 +559,26 @@ class VendaService:
 
             if produto:
 
-                EstoqueLojaRepository.ajustar(
-                    db, produto, venda.loja_id, item.quantidade
-                )
+                for produto_devolve, quantidade_devolve in _itens_para_baixa_estoque(
+                    db, produto, item.quantidade
+                ):
 
-                db.add(produto)
-
-                db.add(
-                    MovimentoEstoque(
-                        produto_id=produto.id,
-                        usuario_id=usuario_id,
-                        loja_id=venda.loja_id,
-                        tipo="ENTRADA",
-                        quantidade=item.quantidade,
-                        motivo=f"Estorno da venda #{venda_id}",
+                    EstoqueLojaRepository.ajustar(
+                        db, produto_devolve, venda.loja_id, quantidade_devolve
                     )
-                )
+
+                    db.add(produto_devolve)
+
+                    db.add(
+                        MovimentoEstoque(
+                            produto_id=produto_devolve.id,
+                            usuario_id=usuario_id,
+                            loja_id=venda.loja_id,
+                            tipo="ENTRADA",
+                            quantidade=quantidade_devolve,
+                            motivo=f"Estorno da venda #{venda_id}",
+                        )
+                    )
 
         # Estorna cada parcela do pagamento — normalmente so 1, mas
         # pode ser 2 quando a venda foi dividida entre duas formas

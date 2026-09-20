@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 from pydantic import BaseModel
 
@@ -13,6 +14,9 @@ class ProdutoBase(BaseModel):
     unidade: str = "UN"
     preco_custo: Decimal = Decimal("0.00")
     preco_venda: Decimal = Decimal("0.00")
+    preco_promocional: Decimal | None = None
+    promocao_inicio: date | None = None
+    promocao_fim: date | None = None
     estoque: int = 0
     estoque_minimo: int = 0
     favorito: bool = False
@@ -42,6 +46,11 @@ class ProdutoResponse(BaseModel):
     unidade: str = "UN"
     preco_custo: Decimal
     preco_venda: Decimal
+    preco_promocional: Decimal | None = None
+    promocao_inicio: date | None = None
+    promocao_fim: date | None = None
+    preco_efetivo: Decimal
+    em_promocao: bool = False
     estoque: int
     estoque_minimo: int
     ativo: bool

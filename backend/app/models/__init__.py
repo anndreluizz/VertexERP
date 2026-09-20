@@ -6,6 +6,7 @@ from app.models.categoria import Categoria
 from app.models.marca import Marca
 from app.models.produto import Produto
 from app.models.produto_foto import ProdutoFoto
+from app.models.historico_preco import HistoricoPreco
 from app.models.estoque_loja import EstoqueLoja
 from app.models.compra import Compra
 from app.models.item_compra import ItemCompra

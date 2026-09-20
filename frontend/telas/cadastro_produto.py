@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from PySide6.QtWidgets import QMessageBox
-from PySide6.QtCore import Qt, QTimer, QBuffer, QIODevice, QSize
+from PySide6.QtCore import Qt, QTimer, QBuffer, QIODevice, QSize, QDate
 from PySide6.QtGui import QColor, QPixmap
 
 from PySide6.QtWidgets import (
@@ -15,6 +15,8 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QSpinBox,
     QPushButton,
+    QCheckBox,
+    QDateEdit,
     QVBoxLayout,
     QHBoxLayout,
     QInputDialog,
@@ -28,6 +30,7 @@ from services.categoria_service import listar_categorias, criar_categoria
 from services.marca_service import listar_marcas, criar_marca
 from telas.gerenciar_categorias import GerenciarCategoriasDialog
 from telas.gerenciar_marcas import GerenciarMarcasDialog
+from telas.historico_precos import HistoricoPrecosDialog
 from services.produto_service import obter_foto_produto
 from services.produto_foto_service import (
     listar_fotos_produto,
@@ -514,6 +517,78 @@ class CadastroProdutoWindow(QDialog):
         """)
         corpo_valores.addWidget(banner_info)
 
+        linha_promocao_titulo = QHBoxLayout()
+        linha_promocao_titulo.setSpacing(8)
+
+        self.em_promocao_check = QCheckBox("Preço promocional")
+        self.em_promocao_check.setStyleSheet(
+            f"background:transparent; color:{tokens.TEXTO}; "
+            f"font-weight:700; font-size:{tokens.TAMANHO_SM}px;"
+        )
+        self.em_promocao_check.toggled.connect(self._alternar_promocao)
+        linha_promocao_titulo.addWidget(self.em_promocao_check)
+        linha_promocao_titulo.addStretch()
+
+        self.bt_historico_precos = QPushButton("Histórico de preços")
+        self.bt_historico_precos.setCursor(Qt.PointingHandCursor)
+        self.bt_historico_precos.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; color:{tokens.SECUNDARIA};
+                font-weight:700; font-size:{tokens.TAMANHO_SM}px;
+                border:none; padding:0;
+            }}
+            QPushButton:hover {{ color:{tokens.SECUNDARIA_HOVER}; }}
+        """)
+        self.bt_historico_precos.clicked.connect(self.ver_historico_precos)
+        self.bt_historico_precos.setVisible(self.produto is not None)
+        linha_promocao_titulo.addWidget(self.bt_historico_precos)
+
+        corpo_valores.addLayout(linha_promocao_titulo)
+
+        linha_promocao = QHBoxLayout()
+        linha_promocao.setSpacing(16)
+
+        col_preco_promo = QVBoxLayout()
+        col_preco_promo.setSpacing(6)
+        col_preco_promo.addWidget(self._rotulo_campo("Preço promocional (R$)"))
+        self.preco_promocional = QDoubleSpinBox()
+        self.preco_promocional.setMaximum(999999.99)
+        self.preco_promocional.setDecimals(2)
+        self.preco_promocional.setPrefix("R$ ")
+        self.preco_promocional.setMinimumHeight(42)
+        self.preco_promocional.setStyleSheet(self._estilo_input("QDoubleSpinBox"))
+        col_preco_promo.addWidget(self.preco_promocional)
+
+        col_promo_inicio = QVBoxLayout()
+        col_promo_inicio.setSpacing(6)
+        col_promo_inicio.addWidget(self._rotulo_campo("Válida de"))
+        self.promocao_inicio = QDateEdit()
+        self.promocao_inicio.setCalendarPopup(True)
+        self.promocao_inicio.setDisplayFormat("dd/MM/yyyy")
+        self.promocao_inicio.setDate(QDate.currentDate())
+        self.promocao_inicio.setMinimumHeight(42)
+        self.promocao_inicio.setStyleSheet(self._estilo_input("QDateEdit"))
+        col_promo_inicio.addWidget(self.promocao_inicio)
+
+        col_promo_fim = QVBoxLayout()
+        col_promo_fim.setSpacing(6)
+        col_promo_fim.addWidget(self._rotulo_campo("Até"))
+        self.promocao_fim = QDateEdit()
+        self.promocao_fim.setCalendarPopup(True)
+        self.promocao_fim.setDisplayFormat("dd/MM/yyyy")
+        self.promocao_fim.setDate(QDate.currentDate().addDays(7))
+        self.promocao_fim.setMinimumHeight(42)
+        self.promocao_fim.setStyleSheet(self._estilo_input("QDateEdit"))
+        col_promo_fim.addWidget(self.promocao_fim)
+
+        linha_promocao.addLayout(col_preco_promo)
+        linha_promocao.addLayout(col_promo_inicio)
+        linha_promocao.addLayout(col_promo_fim)
+
+        corpo_valores.addLayout(linha_promocao)
+
+        self._alternar_promocao(False)
+
         cartao_foto, corpo_foto = self._construir_cartao_secao(
             "Foto do produto",
             "Adicione uma imagem para facilitar a identificação.",
@@ -972,6 +1047,25 @@ class CadastroProdutoWindow(QDialog):
         self._carregar_marcas()
 
     # ==========================================
+    # PRECO PROMOCIONAL / HISTORICO
+    # ==========================================
+
+    def _alternar_promocao(self, marcado):
+        self.preco_promocional.setEnabled(marcado)
+        self.promocao_inicio.setEnabled(marcado)
+        self.promocao_fim.setEnabled(marcado)
+
+    def ver_historico_precos(self):
+
+        if not self.produto:
+            return
+
+        dialogo = HistoricoPrecosDialog(
+            self.produto["id"], self.produto["nome"], parent=self
+        )
+        dialogo.exec()
+
+    # ==========================================
     # MODO DE VENDA (UNID / PESO / LITRO)
     # ==========================================
 
@@ -1395,6 +1489,22 @@ class CadastroProdutoWindow(QDialog):
 
         self.favorito.setChecked(self.produto.get("favorito", False))
 
+        preco_promocional = self.produto.get("preco_promocional")
+        self.em_promocao_check.setChecked(preco_promocional is not None)
+
+        if preco_promocional is not None:
+            self.preco_promocional.setValue(float(preco_promocional))
+
+        if self.produto.get("promocao_inicio"):
+            self.promocao_inicio.setDate(
+                QDate.fromString(self.produto["promocao_inicio"], "yyyy-MM-dd")
+            )
+
+        if self.produto.get("promocao_fim"):
+            self.promocao_fim.setDate(
+                QDate.fromString(self.produto["promocao_fim"], "yyyy-MM-dd")
+            )
+
         if self.produto.get("tem_foto"):
 
             rodar_em_thread(
@@ -1431,6 +1541,22 @@ class CadastroProdutoWindow(QDialog):
             )
             self.preco_venda.setFocus()
             return
+
+        if self.em_promocao_check.isChecked():
+
+            if self.preco_promocional.value() <= 0:
+                QMessageBox.warning(
+                    self, "Aviso", "Informe um preço promocional válido."
+                )
+                self.preco_promocional.setFocus()
+                return
+
+            if self.promocao_inicio.date() > self.promocao_fim.date():
+                QMessageBox.warning(
+                    self, "Aviso",
+                    "A data \"Válida de\" não pode ser depois de \"Até\"."
+                )
+                return
 
         self.accept()
 
@@ -1485,6 +1611,24 @@ class CadastroProdutoWindow(QDialog):
 
             "preco_venda": float(
                 self.preco_venda.value()
+            ),
+
+            "preco_promocional": (
+                float(self.preco_promocional.value())
+                if self.em_promocao_check.isChecked()
+                else None
+            ),
+
+            "promocao_inicio": (
+                self.promocao_inicio.date().toString("yyyy-MM-dd")
+                if self.em_promocao_check.isChecked()
+                else None
+            ),
+
+            "promocao_fim": (
+                self.promocao_fim.date().toString("yyyy-MM-dd")
+                if self.em_promocao_check.isChecked()
+                else None
             ),
 
             "estoque": self.estoque.value(),

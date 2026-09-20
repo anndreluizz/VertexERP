@@ -137,3 +137,17 @@ def obter_foto_produto(produto_id):
         return None
 
     return response.content
+
+
+# ==========================================
+# HISTORICO DE PRECOS
+# ==========================================
+
+def listar_historico_precos(produto_id):
+
+    response = get(f"/produtos/{produto_id}/historico-precos")
+
+    if response.status_code != 200:
+        return []
+
+    return response.json()

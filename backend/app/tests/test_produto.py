@@ -86,6 +86,118 @@ def test_excluir_produto(client, auth_headers, produto):
     assert depois.json()["ativo"] is False
 
 
+def test_atualizar_preco_registra_historico(client, auth_headers, produto):
+    response = client.put(
+        f"/produtos/{produto.id}",
+        json={
+            "codigo": produto.codigo,
+            "nome": produto.nome,
+            "categoria": produto.categoria,
+            "preco_custo": "12.00",
+            "preco_venda": "25.00",
+            "estoque": produto.estoque,
+            "estoque_minimo": produto.estoque_minimo,
+            "ativo": True,
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+
+    historico = client.get(
+        f"/produtos/{produto.id}/historico-precos", headers=auth_headers
+    ).json()
+
+    assert len(historico) == 1
+    assert historico[0]["preco_venda_anterior"] == 20.0
+    assert historico[0]["preco_venda_novo"] == 25.0
+    assert historico[0]["preco_custo_anterior"] == 10.0
+    assert historico[0]["preco_custo_novo"] == 12.0
+
+
+def test_atualizar_sem_mudar_preco_nao_gera_historico(
+    client, auth_headers, produto
+):
+    client.put(
+        f"/produtos/{produto.id}",
+        json={
+            "codigo": produto.codigo,
+            "nome": "Outro nome",
+            "categoria": produto.categoria,
+            "preco_custo": str(produto.preco_custo),
+            "preco_venda": str(produto.preco_venda),
+            "estoque": produto.estoque,
+            "estoque_minimo": produto.estoque_minimo,
+            "ativo": True,
+        },
+        headers=auth_headers,
+    )
+
+    historico = client.get(
+        f"/produtos/{produto.id}/historico-precos", headers=auth_headers
+    ).json()
+
+    assert historico == []
+
+
+def test_preco_promocional_vigente_vira_preco_efetivo(
+    client, auth_headers, produto
+):
+    from datetime import date, timedelta
+
+    response = client.put(
+        f"/produtos/{produto.id}",
+        json={
+            "codigo": produto.codigo,
+            "nome": produto.nome,
+            "categoria": produto.categoria,
+            "preco_custo": str(produto.preco_custo),
+            "preco_venda": str(produto.preco_venda),
+            "preco_promocional": "15.00",
+            "promocao_inicio": str(date.today() - timedelta(days=1)),
+            "promocao_fim": str(date.today() + timedelta(days=1)),
+            "estoque": produto.estoque,
+            "estoque_minimo": produto.estoque_minimo,
+            "ativo": True,
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    dados = response.json()
+    assert dados["em_promocao"] is True
+    assert dados["preco_efetivo"] == 15.0
+
+
+def test_preco_promocional_fora_da_vigencia_nao_conta(
+    client, auth_headers, produto
+):
+    from datetime import date, timedelta
+
+    response = client.put(
+        f"/produtos/{produto.id}",
+        json={
+            "codigo": produto.codigo,
+            "nome": produto.nome,
+            "categoria": produto.categoria,
+            "preco_custo": str(produto.preco_custo),
+            "preco_venda": str(produto.preco_venda),
+            "preco_promocional": "15.00",
+            "promocao_inicio": str(date.today() + timedelta(days=5)),
+            "promocao_fim": str(date.today() + timedelta(days=10)),
+            "estoque": produto.estoque,
+            "estoque_minimo": produto.estoque_minimo,
+            "ativo": True,
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    dados = response.json()
+    assert dados["em_promocao"] is False
+    assert dados["preco_efetivo"] == 20.0
+
+
 def test_estoque_minimo_e_por_loja_com_fallback_pro_global(
     client, auth_headers, produto, db
 ):

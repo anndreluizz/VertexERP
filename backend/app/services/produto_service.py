@@ -5,9 +5,13 @@ from sqlalchemy.orm import Session
 
 from app.models.produto import Produto
 from app.models.produto_foto import ProdutoFoto
+from app.models.historico_preco import HistoricoPreco
 from app.repositories.produto_repository import ProdutoRepository
 from app.repositories.estoque_loja_repository import EstoqueLojaRepository
 from app.repositories.produto_foto_repository import ProdutoFotoRepository
+from app.repositories.historico_preco_repository import (
+    HistoricoPrecoRepository,
+)
 from app.schemas.produto import ProdutoCreate, ProdutoUpdate
 
 
@@ -151,11 +155,15 @@ class ProdutoService:
         produto_id: int,
         dados: ProdutoUpdate,
         loja_id: int | None = None,
+        usuario_id: int | None = None,
     ):
         produto = ProdutoRepository.buscar_por_id(db, produto_id)
 
         if not produto:
             return None
+
+        preco_custo_anterior = produto.preco_custo
+        preco_venda_anterior = produto.preco_venda
 
         # mesmo guard de visibilidade do buscar() -- terminal de uma
         # loja nao edita produto exclusivo de outra so' por adivinhar o
@@ -248,6 +256,27 @@ class ProdutoService:
             produto.foto = base64.b64decode(dados.foto_base64)
             _sincronizar_foto_principal(db, produto, produto.foto)
 
+        # so' registra historico quando o preco de fato mudou -- editar
+        # o produto por outro motivo (nome, categoria, foto...) sem
+        # mexer no preco nao deveria gerar entrada nenhuma
+        preco_mudou = (
+            produto.preco_custo != preco_custo_anterior
+            or produto.preco_venda != preco_venda_anterior
+        )
+
+        if preco_mudou and usuario_id is not None:
+            HistoricoPrecoRepository.criar(
+                db,
+                HistoricoPreco(
+                    produto_id=produto.id,
+                    usuario_id=usuario_id,
+                    preco_custo_anterior=preco_custo_anterior,
+                    preco_custo_novo=produto.preco_custo,
+                    preco_venda_anterior=preco_venda_anterior,
+                    preco_venda_novo=produto.preco_venda,
+                ),
+            )
+
         produto = ProdutoRepository.atualizar(db, produto)
 
         # sobrescreve so' o objeto em memoria pra resposta refletir o
@@ -260,6 +289,10 @@ class ProdutoService:
             produto.estoque_minimo = novo_estoque_minimo
 
         return produto
+
+    @staticmethod
+    def historico_precos(db: Session, produto_id: int):
+        return HistoricoPrecoRepository.listar_por_produto(db, produto_id)
 
     @staticmethod
     def excluir(db: Session, produto_id: int):

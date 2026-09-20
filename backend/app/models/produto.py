@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -8,6 +8,7 @@ from sqlalchemy import (
     Index,
     Numeric,
     Integer,
+    Date,
     DateTime,
     LargeBinary,
     text,
@@ -107,6 +108,25 @@ class Produto(Base):
         default=0
     )
 
+    # preco_promocional so' vale de fato dentro de [promocao_inicio,
+    # promocao_fim] (ver em_promocao/preco_efetivo abaixo) -- ambas as
+    # datas sao opcionais: sem elas, uma promocao com preco preenchido
+    # fica valendo indefinidamente ate alguem apagar o preco.
+    preco_promocional: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
+        nullable=True,
+    )
+
+    promocao_inicio: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+
+    promocao_fim: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+
     estoque: Mapped[int] = mapped_column(
         Integer,
         default=0
@@ -146,6 +166,25 @@ class Produto(Base):
     @property
     def tem_foto(self) -> bool:
         return self.foto is not None
+
+    @property
+    def em_promocao(self) -> bool:
+        if self.preco_promocional is None:
+            return False
+
+        hoje = date.today()
+
+        if self.promocao_inicio and hoje < self.promocao_inicio:
+            return False
+
+        if self.promocao_fim and hoje > self.promocao_fim:
+            return False
+
+        return True
+
+    @property
+    def preco_efetivo(self) -> Decimal:
+        return self.preco_promocional if self.em_promocao else self.preco_venda
 
     # foto (LargeBinary acima) continua existindo por compatibilidade
     # com o que ja le GET /produtos/{id}/foto -- fotos, o novo suporte

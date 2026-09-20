@@ -10,6 +10,7 @@ from app.schemas.produto import (
     ProdutoFotoCreate,
     ProdutoFotoResponse,
 )
+from app.schemas.historico_preco import HistoricoPrecoResponse
 from app.services.produto_service import ProdutoService
 from app.services.produto_foto_service import ProdutoFotoService
 
@@ -170,6 +171,7 @@ def atualizar(
         produto_id,
         dados,
         resolver_loja_id(db, usuario, loja_id),
+        usuario.id,
     )
 
     if not produto:
@@ -179,6 +181,18 @@ def atualizar(
         )
 
     return produto
+
+
+@router.get(
+    "/{produto_id}/historico-precos",
+    response_model=list[HistoricoPrecoResponse],
+)
+def historico_precos(
+    produto_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return ProdutoService.historico_precos(db, produto_id)
 
 
 @router.delete("/{produto_id}")

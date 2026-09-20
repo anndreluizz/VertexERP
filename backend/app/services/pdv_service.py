@@ -11,7 +11,7 @@ def _para_dict(produto: Produto, estoque: int):
         "codigo": produto.codigo,
         "codigo_barras": produto.codigo_barras,
         "nome": produto.nome,
-        "preco": produto.preco_venda,
+        "preco": produto.preco_efetivo,
         "estoque": estoque,
         "tem_foto": produto.tem_foto,
         "favorito": produto.favorito,

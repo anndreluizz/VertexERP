@@ -9,6 +9,7 @@ from telas.clientes import Clientes
 from telas.fornecedores import Fornecedores
 from telas.relatorios import Relatorios
 from telas.contas_pagar import ContasPagar
+from telas.conciliacao_bancaria import ConciliacaoBancaria
 from telas.visao_geral import VisaoGeral
 from telas.configuracoes import Configuracoes
 from telas.caixa_bloqueado import CaixaBloqueadoDialog
@@ -59,6 +60,7 @@ ITENS_MENU = [
     ("fornecedores", "truck", "Fornecedores"),
     ("caixa", "wallet", "Caixa"),
     ("contas_pagar", "file-text", "Contas a Pagar"),
+    ("conciliacao_bancaria", "credit-card", "Conciliação Bancária"),
     ("visao_geral", "trending-up", "Visão Geral"),
     ("relatorios", "bar-chart-2", "Relatórios"),
     ("config", "settings", "Configurações"),
@@ -150,6 +152,8 @@ class PrincipalWindow(QMainWindow):
 
         self.contas_pagar = ContasPagar()
 
+        self.conciliacao_bancaria = ConciliacaoBancaria()
+
         self.visao_geral = VisaoGeral()
 
         self.relatorios = Relatorios()
@@ -166,6 +170,7 @@ class PrincipalWindow(QMainWindow):
         self.paginas.addWidget(self.fornecedores)
         self.paginas.addWidget(self.caixa)
         self.paginas.addWidget(self.contas_pagar)
+        self.paginas.addWidget(self.conciliacao_bancaria)
         self.paginas.addWidget(self.visao_geral)
         self.paginas.addWidget(self.relatorios)
         self.paginas.addWidget(self.config)
@@ -265,6 +270,8 @@ class PrincipalWindow(QMainWindow):
             self.transferencia_estoque.carregar()
         elif chave == "contagem_estoque":
             self.contagem_estoque.carregar()
+        elif chave == "conciliacao_bancaria":
+            self.conciliacao_bancaria.carregar()
 
         self.paginas.setCurrentWidget(pagina)
         self.header.definir_titulo(self._titulos.get(chave, ""))
@@ -289,6 +296,7 @@ class PrincipalWindow(QMainWindow):
             "ajuste_estoque": self.ajuste_estoque,
             "transferencia_estoque": self.transferencia_estoque,
             "contagem_estoque": self.contagem_estoque,
+            "conciliacao_bancaria": self.conciliacao_bancaria,
             "clientes": self.clientes,
             "fornecedores": self.fornecedores,
             "caixa": self.caixa,

@@ -4,6 +4,7 @@ from telas.caixa import Caixa
 from telas.produtos import Produtos
 from telas.ajuste_estoque import AjusteEstoque
 from telas.transferencia_estoque import TransferenciaEstoque
+from telas.contagem_estoque import ContagemEstoque
 from telas.clientes import Clientes
 from telas.fornecedores import Fornecedores
 from telas.relatorios import Relatorios
@@ -53,6 +54,7 @@ ITENS_MENU = [
     ("produtos", "package", "Produtos"),
     ("ajuste_estoque", "refresh-cw", "Ajuste de Estoque"),
     ("transferencia_estoque", "store", "Transferência entre Lojas"),
+    ("contagem_estoque", "check", "Contagem de Inventário"),
     ("clientes", "users", "Clientes"),
     ("fornecedores", "truck", "Fornecedores"),
     ("caixa", "wallet", "Caixa"),
@@ -138,6 +140,7 @@ class PrincipalWindow(QMainWindow):
         self.produtos = Produtos()
         self.ajuste_estoque = AjusteEstoque()
         self.transferencia_estoque = TransferenciaEstoque()
+        self.contagem_estoque = ContagemEstoque()
 
         self.clientes = Clientes()
 
@@ -158,6 +161,7 @@ class PrincipalWindow(QMainWindow):
         self.paginas.addWidget(self.produtos)
         self.paginas.addWidget(self.ajuste_estoque)
         self.paginas.addWidget(self.transferencia_estoque)
+        self.paginas.addWidget(self.contagem_estoque)
         self.paginas.addWidget(self.clientes)
         self.paginas.addWidget(self.fornecedores)
         self.paginas.addWidget(self.caixa)
@@ -259,6 +263,8 @@ class PrincipalWindow(QMainWindow):
             self.ajuste_estoque.carregar()
         elif chave == "transferencia_estoque":
             self.transferencia_estoque.carregar()
+        elif chave == "contagem_estoque":
+            self.contagem_estoque.carregar()
 
         self.paginas.setCurrentWidget(pagina)
         self.header.definir_titulo(self._titulos.get(chave, ""))
@@ -282,6 +288,7 @@ class PrincipalWindow(QMainWindow):
             "produtos": self.produtos,
             "ajuste_estoque": self.ajuste_estoque,
             "transferencia_estoque": self.transferencia_estoque,
+            "contagem_estoque": self.contagem_estoque,
             "clientes": self.clientes,
             "fornecedores": self.fornecedores,
             "caixa": self.caixa,

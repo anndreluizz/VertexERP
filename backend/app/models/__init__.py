@@ -18,6 +18,7 @@ from app.models.movimento_caixa import MovimentoCaixa
 from app.models.conta_pagar import ContaPagar
 from app.models.conta_pagar_evento import ContaPagarEvento
 from app.models.categoria_despesa import CategoriaDespesa
+from app.models.centro_custo import CentroCusto
 from app.models.conta_receber import ContaReceber
 from app.models.movimento_estoque import MovimentoEstoque
 from app.models.transferencia_estoque import TransferenciaEstoque

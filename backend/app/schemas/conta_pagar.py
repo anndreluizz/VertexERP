@@ -9,6 +9,7 @@ class ContaPagarBase(BaseModel):
     valor: Decimal
     descricao: str | None = None
     categoria: str | None = None
+    centro_custo: str | None = None
     observacao: str | None = None
     numero_boleto: str | None = None
 
@@ -26,6 +27,7 @@ class ContaPagarUpdate(BaseModel):
     valor: Decimal | None = None
     descricao: str | None = None
     categoria: str | None = None
+    centro_custo: str | None = None
     observacao: str | None = None
     numero_boleto: str | None = None
     status: str | None = None
@@ -50,6 +52,8 @@ class ContaPagarResponse(BaseModel):
     descricao: str | None
 
     categoria: str | None
+
+    centro_custo: str | None = None
 
     observacao: str | None
 

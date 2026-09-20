@@ -12,6 +12,9 @@ from app.api.v1.contas_receber import router as contas_receber_router
 from app.api.v1.categorias_despesa import (
     router as categorias_despesa_router,
 )
+from app.api.v1.centros_custo import (
+    router as centros_custo_router,
+)
 from app.api.v1.movimento_caixa import router as movimento_caixa_router
 from app.api.v1.caixa import router as caixa_router
 from app.api.v1.vendas import router as vendas_router
@@ -75,6 +78,7 @@ app.include_router(movimento_caixa_router)
 app.include_router(contas_pagar_router)
 app.include_router(contas_receber_router)
 app.include_router(categorias_despesa_router)
+app.include_router(centros_custo_router)
 app.include_router(pdv_router)
 app.include_router(estoque_router)
 app.include_router(fiado_router)

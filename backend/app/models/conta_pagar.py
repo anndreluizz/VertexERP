@@ -71,6 +71,15 @@ class ContaPagar(Base):
         nullable=True,
     )
 
+    # agrupa despesas por area/departamento (ex.: "Loja Centro",
+    # "Marketing") pra relatorio de gasto por centro de custo -- mesmo
+    # padrao free-text de 'categoria' acima (nao FK), so' que pro
+    # CentroCusto (ver app/models/centro_custo.py).
+    centro_custo: Mapped[str | None] = mapped_column(
+        String(60),
+        nullable=True,
+    )
+
     observacao: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,

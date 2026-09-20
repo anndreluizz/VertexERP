@@ -24,10 +24,12 @@ from services.conta_pagar_service import (
     remover_documento_conta_pagar,
 )
 from services.categoria_despesa_service import listar_categorias_despesa
+from services.centro_custo_service import listar_centros_custo
 from services.worker import rodar_em_thread
 from telas.gerenciar_categorias_despesa import (
     GerenciarCategoriasDespesaDialog,
 )
+from telas.gerenciar_centros_custo import GerenciarCentrosCustoDialog
 
 from design import tokens
 from design.widgets import BotaoPerigo, BotaoSecundario, CabecalhoDialogo, CampoTexto
@@ -143,6 +145,44 @@ class CadastroDespesaDialog(QDialog):
 
         corpo_scroll_layout.addLayout(cabecalho_categoria)
         corpo_scroll_layout.addWidget(self.categoria)
+
+        cabecalho_centro_custo = QHBoxLayout()
+
+        lbl_centro_custo = QLabel("Centro de Custo (opcional)")
+        lbl_centro_custo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
+
+        bt_gerenciar_centros_custo = QPushButton("Gerenciar")
+        bt_gerenciar_centros_custo.setAutoDefault(False)
+        bt_gerenciar_centros_custo.setCursor(Qt.PointingHandCursor)
+        bt_gerenciar_centros_custo.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; border:none;
+                color:{tokens.PRIMARIA}; font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+            }}
+            QPushButton:hover {{ color:{tokens.PRIMARIA_HOVER}; }}
+        """)
+        bt_gerenciar_centros_custo.clicked.connect(self.gerenciar_centros_custo)
+
+        cabecalho_centro_custo.addWidget(lbl_centro_custo)
+        cabecalho_centro_custo.addStretch()
+        cabecalho_centro_custo.addWidget(bt_gerenciar_centros_custo)
+
+        self.centro_custo = QComboBox()
+        self.centro_custo.setMinimumHeight(44)
+        self.centro_custo.setCursor(Qt.PointingHandCursor)
+        self.centro_custo.setStyleSheet(f"""
+            QComboBox {{
+                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
+            }}
+        """)
+        self._carregar_centros_custo()
+
+        corpo_scroll_layout.addLayout(cabecalho_centro_custo)
+        corpo_scroll_layout.addWidget(self.centro_custo)
 
         self.valor = self._campo(corpo_scroll_layout, "Valor (R$)", "0,00")
         self.valor.textChanged.connect(self._atualizar_valor_final)
@@ -414,6 +454,37 @@ class CadastroDespesaDialog(QDialog):
 
         self._carregar_categorias()
 
+    def _carregar_centros_custo(self):
+
+        self._centro_custo_selecionado_pendente = (
+            self.centro_custo.currentText()
+        )
+
+        rodar_em_thread(
+            self,
+            listar_centros_custo,
+            ao_sucesso=self._ao_carregar_centros_custo_sucesso,
+        )
+
+    def _ao_carregar_centros_custo_sucesso(self, centros):
+
+        self.centro_custo.clear()
+        self.centro_custo.addItem("Nenhum")
+
+        nomes = [c["nome"] for c in centros]
+        self.centro_custo.addItems(nomes)
+
+        selecionado = self._centro_custo_selecionado_pendente
+        if selecionado and self.centro_custo.findText(selecionado) >= 0:
+            self.centro_custo.setCurrentText(selecionado)
+
+    def gerenciar_centros_custo(self):
+
+        dialogo = GerenciarCentrosCustoDialog(parent=self)
+        dialogo.exec()
+
+        self._carregar_centros_custo()
+
     # limite pra nao mandar um JSON gigante num POST so' -- um boleto/
     # nota legivel nunca passa disso; sem esse limite, uma foto de
     # celular (5-15MB, ~33% maior em base64) pode derrubar o backend
@@ -516,6 +587,10 @@ class CadastroDespesaDialog(QDialog):
         if categoria and self.categoria.findText(categoria) >= 0:
             self.categoria.setCurrentText(categoria)
 
+        centro_custo = conta.get("centro_custo")
+        if centro_custo and self.centro_custo.findText(centro_custo) >= 0:
+            self.centro_custo.setCurrentText(centro_custo)
+
         if not duplicando:
             self.numero_boleto.setText(conta.get("numero_boleto") or "")
             self.observacoes.setText(conta.get("observacao") or "")
@@ -573,9 +648,15 @@ class CadastroDespesaDialog(QDialog):
             data_qt.year(), data_qt.month(), data_qt.day()
         ).isoformat() + "T00:00:00"
 
+        centro_custo_texto = self.centro_custo.currentText()
+
         dados = {
             "descricao": descricao,
             "categoria": self.categoria.currentText(),
+            "centro_custo": (
+                None if centro_custo_texto in ("", "Nenhum")
+                else centro_custo_texto
+            ),
             "valor": valor,
             "data_vencimento": data_vencimento,
             "numero_boleto": self.numero_boleto.text().strip() or None,

@@ -18,6 +18,7 @@ from services.plano_conta_service import (
     excluir_plano_conta,
 )
 from services.worker import rodar_em_thread
+from services import api
 
 from design import tokens
 from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, BotaoSucesso
@@ -103,6 +104,9 @@ class GerenciarPlanoContasDialog(QDialog):
 
         self.arvore.currentItemChanged.connect(self._ao_selecionar)
         self._ao_selecionar(None, None)
+
+        if not api.usuario_tem_permissao("plano_contas.excluir"):
+            self.bt_excluir.setVisible(False)
 
         self.carregar()
 

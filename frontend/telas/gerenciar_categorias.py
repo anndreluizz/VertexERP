@@ -20,6 +20,7 @@ from services.categoria_service import (
     excluir_categoria,
 )
 from services.worker import rodar_em_thread
+from services import api
 
 from design import tokens
 
@@ -188,6 +189,9 @@ class GerenciarCategoriasDialog(QDialog):
         rodape.addWidget(bt_fechar)
 
         layout.addLayout(rodape)
+
+        if not api.usuario_tem_permissao("categorias.excluir"):
+            self.bt_excluir.setVisible(False)
 
         self.carregar()
 

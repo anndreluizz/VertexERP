@@ -19,6 +19,7 @@ from services.centro_custo_service import (
     excluir_centro_custo,
 )
 from services.worker import rodar_em_thread
+from services import api
 
 from design import tokens
 from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, BotaoSucesso, CampoTexto
@@ -122,6 +123,9 @@ class GerenciarCentrosCustoDialog(QDialog):
         rodape.addWidget(bt_fechar)
 
         layout.addLayout(rodape)
+
+        if not api.usuario_tem_permissao("centros_custo.excluir"):
+            self.bt_excluir.setVisible(False)
 
         self.carregar()
 

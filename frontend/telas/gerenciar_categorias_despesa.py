@@ -19,6 +19,7 @@ from services.categoria_despesa_service import (
     excluir_categoria_despesa,
 )
 from services.worker import rodar_em_thread
+from services import api
 
 from design import tokens
 from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, BotaoSucesso, CampoTexto
@@ -119,6 +120,9 @@ class GerenciarCategoriasDespesaDialog(QDialog):
         rodape.addWidget(bt_fechar)
 
         layout.addLayout(rodape)
+
+        if not api.usuario_tem_permissao("categorias_despesa.excluir"):
+            self.bt_excluir.setVisible(False)
 
         self.carregar()
 

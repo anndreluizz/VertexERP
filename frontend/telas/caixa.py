@@ -39,6 +39,7 @@ from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import Badge, BotaoPerigo, BotaoSecundario, BotaoSucesso, CardKPI
 from services.worker import rodar_em_thread, em_paralelo
+from services import api
 from utils.formatacao import formatar_moeda
 
 
@@ -422,6 +423,7 @@ class Caixa(QWidget):
             QPushButton:hover {{ background:{tokens.SIDEBAR_HOVER}; }}
         """)
         self.bt_encerrar.clicked.connect(self.fechar_caixa)
+        self.bt_encerrar.setVisible(api.usuario_tem_permissao("caixa.fechar"))
 
         acoes_layout.addWidget(self.bt_suprimento)
         acoes_layout.addWidget(self.bt_sangria)

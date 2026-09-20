@@ -45,6 +45,7 @@ from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
 from services.worker import rodar_em_thread, em_paralelo
+from services import api
 from utils.formatacao import formatar_moeda
 from widgets.estado_async import PainelErro, linhas_esqueleto_tabela
 
@@ -134,6 +135,7 @@ class Produtos(QWidget):
         self.botoes_status = {}
         self._cache_fotos = {}
         self._carregando = False
+        self._pode_excluir_produto = api.usuario_tem_permissao("produtos.excluir")
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
@@ -451,6 +453,7 @@ class Produtos(QWidget):
             "Excluir Selecionados", icone_nome="trash-2"
         )
         self.bt_excluir_selecionados.clicked.connect(self.excluir_selecionados)
+        self.bt_excluir_selecionados.setVisible(self._pode_excluir_produto)
 
         self.lbl_resumo_rodape = QLabel("")
         self.lbl_resumo_rodape.setStyleSheet(f"""
@@ -1049,6 +1052,7 @@ class Produtos(QWidget):
             QPushButton:hover {{ background:{tokens.ERRO_CLARO}; }}
         """)
         bt_excluir.clicked.connect(lambda checked=False, p=produto: self._excluir_um(p))
+        bt_excluir.setVisible(self._pode_excluir_produto)
 
         layout.addWidget(bt_editar)
         layout.addWidget(bt_excluir)

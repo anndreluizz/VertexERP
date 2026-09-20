@@ -20,6 +20,7 @@ from services.marca_service import (
     excluir_marca,
 )
 from services.worker import rodar_em_thread
+from services import api
 
 from design import tokens
 
@@ -188,6 +189,9 @@ class GerenciarMarcasDialog(QDialog):
         rodape.addWidget(bt_fechar)
 
         layout.addLayout(rodape)
+
+        if not api.usuario_tem_permissao("marcas.excluir"):
+            self.bt_excluir.setVisible(False)
 
         self.carregar()
 

@@ -19,6 +19,12 @@ URL = f"https://127.0.0.1:{os.getenv('VERTEXERP_PORT', _PORTA_PADRAO)}"
 
 TOKEN = None
 
+# populado por me() (chamado sempre no login/retomada de sessao, ver
+# login.py::_buscar_info_principal e PrincipalWindow.__init__) -- deixa
+# usuario_tem_permissao()/usuario_e_admin() responderem sem bater na
+# rede de novo toda vez que uma tela quiser esconder um botao restrito
+_INFO_USUARIO_CACHE = {}
+
 
 class _AdaptadorSemChecagemDeHostname(HTTPAdapter):
     """O pin do TOFU (ver tls_confianca.py) já garante que o
@@ -250,9 +256,10 @@ def verificar_codigo_2fa(verificacao_id: str, codigo: str, lembrar: bool = False
 
 def logout():
 
-    global TOKEN
+    global TOKEN, _INFO_USUARIO_CACHE
 
     TOKEN = None
+    _INFO_USUARIO_CACHE = {}
     preferencias_service.limpar_sessao()
 
 
@@ -427,10 +434,13 @@ def dashboard():
 
 def me():
 
+    global _INFO_USUARIO_CACHE
+
     response = get("/auth/me")
 
     if response.status_code == 200:
-        return response.json()
+        _INFO_USUARIO_CACHE = response.json()
+        return _INFO_USUARIO_CACHE
 
     return {}
 
@@ -438,9 +448,23 @@ def me():
 def usuario_e_admin():
     """Se o usuário logado é administrador -- usado pra esconder ações
     restritas (cancelar venda, gerenciar usuários etc.) de quem não
-    tem permissão, além da checagem que o backend já faz."""
+    tem permissão, além da checagem que o backend já faz. Le do cache
+    (ver _INFO_USUARIO_CACHE) em vez de bater na rede de novo -- me()
+    ja' roda sempre no login/retomada de sessao."""
 
-    return bool(me().get("admin"))
+    return bool(_INFO_USUARIO_CACHE.get("admin"))
+
+
+def usuario_tem_permissao(chave: str) -> bool:
+    """Se o usuario logado pode fazer 'chave' (ver
+    app/auth/permissoes.py no backend pro catalogo) -- admin sempre
+    True. So' pra esconder/desabilitar botao na hora certa; o backend
+    continua sendo quem de fato barra (ver exigir_permissao)."""
+
+    if _INFO_USUARIO_CACHE.get("admin"):
+        return True
+
+    return chave in (_INFO_USUARIO_CACHE.get("permissoes") or [])
 
 
 def configuracoes():

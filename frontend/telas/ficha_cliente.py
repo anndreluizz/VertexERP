@@ -2819,17 +2819,19 @@ class FichaClienteDialog(QDialog):
         bt_excluir.clicked.connect(self.excluir_cliente_atual)
         self.painel_lateral.corpo.addWidget(bt_excluir)
 
-        bt_lgpd_exportar = BotaoSecundario("Exportar (LGPD)", icone_nome="download")
-        bt_lgpd_exportar.setMinimumHeight(38)
-        bt_lgpd_exportar.setAutoDefault(False)
-        bt_lgpd_exportar.clicked.connect(self.exportar_dados_lgpd_atual)
-        self.painel_lateral.corpo.addWidget(bt_lgpd_exportar)
+        if api.usuario_tem_permissao("clientes.lgpd"):
 
-        bt_lgpd_remover = BotaoPerigo("Remover (LGPD)", icone_nome="lock")
-        bt_lgpd_remover.setMinimumHeight(38)
-        bt_lgpd_remover.setAutoDefault(False)
-        bt_lgpd_remover.clicked.connect(self.remover_dados_lgpd_atual)
-        self.painel_lateral.corpo.addWidget(bt_lgpd_remover)
+            bt_lgpd_exportar = BotaoSecundario("Exportar (LGPD)", icone_nome="download")
+            bt_lgpd_exportar.setMinimumHeight(38)
+            bt_lgpd_exportar.setAutoDefault(False)
+            bt_lgpd_exportar.clicked.connect(self.exportar_dados_lgpd_atual)
+            self.painel_lateral.corpo.addWidget(bt_lgpd_exportar)
+
+            bt_lgpd_remover = BotaoPerigo("Remover (LGPD)", icone_nome="lock")
+            bt_lgpd_remover.setMinimumHeight(38)
+            bt_lgpd_remover.setAutoDefault(False)
+            bt_lgpd_remover.clicked.connect(self.remover_dados_lgpd_atual)
+            self.painel_lateral.corpo.addWidget(bt_lgpd_remover)
 
         # o painel inteiro (Resumo + Observações) fica dentro da sua
         # própria rolagem vertical -- em telas mais baixas (ex.:

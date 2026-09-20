@@ -16,6 +16,7 @@ from design.icons import icone, icone_pixmap
 from design.widgets import BotaoPrimario, BotaoSecundario
 from services.fornecedor_service import listar_fornecedores, excluir_fornecedor
 from services.worker import rodar_em_thread
+from services import api
 from telas.cadastro_fornecedor import CadastroFornecedorDialog
 from telas.importar_nfe import ImportarNFeDialog
 
@@ -158,6 +159,9 @@ class Fornecedores(QWidget):
         rodape.addWidget(self.bt_editar)
         rodape.addWidget(self.bt_excluir)
         rodape.addStretch()
+
+        if not api.usuario_tem_permissao("fornecedores.excluir"):
+            self.bt_excluir.setVisible(False)
 
         layout.addLayout(rodape)
 

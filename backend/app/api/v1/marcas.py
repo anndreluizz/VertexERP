@@ -8,7 +8,7 @@ from app.schemas.marca import (
     MarcaResponse
 )
 from app.services.marca_service import MarcaService
-from app.auth.dependencies import get_current_admin, get_current_user
+from app.auth.dependencies import exigir_permissao, get_current_user
 
 router = APIRouter(
     prefix="/marcas",
@@ -82,7 +82,7 @@ def atualizar_marca(
 def excluir_marca(
     marca_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_admin)
+    usuario=Depends(exigir_permissao("marcas.excluir"))
 ):
     try:
         return MarcaService.excluir(

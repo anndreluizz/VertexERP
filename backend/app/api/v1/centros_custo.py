@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_admin, get_current_user
+from app.auth.dependencies import exigir_permissao, get_current_user
 from app.database.session import SessionLocal
 from app.schemas.centro_custo import (
     CentroCustoCreate,
@@ -65,7 +65,7 @@ def atualizar(
 def excluir(
     centro_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_admin),
+    usuario=Depends(exigir_permissao("centros_custo.excluir")),
 ):
     try:
         CentroCustoService.excluir(db, centro_id)

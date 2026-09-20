@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.auth.jwt import SECRET_KEY, ALGORITHM
 from app.database.session import SessionLocal
 from app.models.loja import Loja
+from app.models.perfil import Perfil
 from app.models.user import User
 
 security = HTTPBearer()
@@ -106,6 +107,42 @@ def get_current_admin(
         )
 
     return usuario
+
+
+def exigir_permissao(chave: str):
+    """Dependency factory -- Depends(exigir_permissao("produtos.excluir"))
+    numa rota. Admin sempre passa (superusuario); usuario comum passa
+    so' se o Perfil dele tiver essa chave (ver app/models/perfil.py e
+    app/auth/permissoes.py pro catalogo valido)."""
+
+    def dependencia(
+        usuario: User = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ):
+        if usuario.admin:
+            return usuario
+
+        tem_permissao = False
+
+        if usuario.perfil_id is not None:
+            perfil = (
+                db.query(Perfil)
+                .filter(Perfil.id == usuario.perfil_id)
+                .first()
+            )
+            tem_permissao = bool(
+                perfil and chave in (perfil.permissoes or [])
+            )
+
+        if not tem_permissao:
+            raise HTTPException(
+                status_code=403,
+                detail="Você não tem permissão para realizar essa ação.",
+            )
+
+        return usuario
+
+    return dependencia
 
 
 def exigir_admin_apos_primeiro_usuario(

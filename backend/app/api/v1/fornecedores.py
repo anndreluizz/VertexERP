@@ -11,7 +11,7 @@ from app.schemas.nfe_importacao import NFeImportarRequest, NFePreviewResponse
 from app.services.fornecedor_service import FornecedorService
 from app.services.importacao_nfe_service import ImportacaoNfeService
 from app.auth.dependencies import (
-    get_current_admin,
+    exigir_permissao,
     get_current_user,
     resolver_loja_id,
 )
@@ -76,7 +76,7 @@ def atualizar(
 def excluir(
     fornecedor_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_admin),
+    usuario=Depends(exigir_permissao("fornecedores.excluir")),
 ):
     return FornecedorService.excluir(
         db,

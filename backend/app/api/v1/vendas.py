@@ -3,7 +3,7 @@ import base64
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_admin, get_current_user, resolver_loja_id
+from app.auth.dependencies import exigir_permissao, get_current_user, resolver_loja_id
 from app.database.session import SessionLocal
 from app.models.cliente import Cliente
 from app.schemas.venda import (
@@ -80,7 +80,7 @@ def excluir(
     venda_id: int,
     motivo: str | None = Query(None, max_length=255),
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_admin),
+    usuario=Depends(exigir_permissao("vendas.cancelar")),
 ):
 
     try:

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_admin
+from app.auth.dependencies import exigir_permissao
 from app.database.session import SessionLocal
 from app.schemas.solicitacao_aprovacao import SolicitacaoAprovacaoResponse
 from app.services.aprovacao_service import AprovacaoService
@@ -26,7 +26,7 @@ def get_db():
 )
 def listar_pendentes(
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_admin),
+    usuario=Depends(exigir_permissao("aprovacoes.gerenciar")),
 ):
     return AprovacaoService.listar_pendentes(db)
 
@@ -38,7 +38,7 @@ def listar_pendentes(
 def aprovar(
     solicitacao_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_admin),
+    usuario=Depends(exigir_permissao("aprovacoes.gerenciar")),
 ):
     try:
         return AprovacaoService.aprovar(db, solicitacao_id, usuario.id)
@@ -53,7 +53,7 @@ def aprovar(
 def rejeitar(
     solicitacao_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_admin),
+    usuario=Depends(exigir_permissao("aprovacoes.gerenciar")),
 ):
     try:
         return AprovacaoService.rejeitar(db, solicitacao_id, usuario.id)

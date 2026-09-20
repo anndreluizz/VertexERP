@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, get_current_admin, resolver_loja_id
+from app.auth.dependencies import get_current_user, exigir_permissao, resolver_loja_id
 from app.database.session import SessionLocal
 from app.schemas.caixa import (
     CaixaCreate,
@@ -62,7 +62,7 @@ def fechar_caixa(
     dados: FecharCaixaRequest,
     loja_id: int | None = None,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_admin),
+    usuario=Depends(exigir_permissao("caixa.fechar")),
 ):
     try:
         loja_efetiva = resolver_loja_id(db, usuario, loja_id)

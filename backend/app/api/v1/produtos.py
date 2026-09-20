@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_admin, get_current_user, resolver_loja_id
+from app.auth.dependencies import exigir_permissao, get_current_user, resolver_loja_id
 from app.database.session import SessionLocal
 from app.schemas.produto import (
     ProdutoCreate,
@@ -218,7 +218,7 @@ def listar_variacoes(
 def excluir(
     produto_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_admin),
+    usuario=Depends(exigir_permissao("produtos.excluir")),
 ):
     ok = ProdutoService.excluir(db, produto_id)
 

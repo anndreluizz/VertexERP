@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.hash import gerar_hash, verificar_hash
 from app.models.user import User
+from app.models.perfil import Perfil
 from app.schemas.user import UserCreate
 from app.repositories.user_repository import UserRepository
 
@@ -54,6 +55,12 @@ class UserService:
             )
 
         campos = dados.dict(exclude_unset=True)
+
+        if campos.get("perfil_id") is not None:
+            if not db.query(Perfil).filter(
+                Perfil.id == campos["perfil_id"]
+            ).first():
+                raise Exception("Perfil não encontrado.")
 
         # Se essa troca tira o admin (por remocao explicita da
         # administracao ou por desativar a conta) de quem hoje e' um

@@ -16,7 +16,7 @@ from app.services.cliente_service import ClienteService
 from app.services.cliente_observacao_service import ClienteObservacaoService
 from app.services.aprovacao_service import AprovacaoService
 from app.services.whatsapp_service import WhatsappService
-from app.auth.dependencies import get_current_user, get_current_admin, resolver_loja_id
+from app.auth.dependencies import get_current_user, exigir_permissao, resolver_loja_id
 
 router = APIRouter(
     prefix="/clientes",
@@ -241,7 +241,7 @@ def reativar_cliente(
 def exportar_dados_lgpd(
     cliente_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_admin),
+    usuario=Depends(exigir_permissao("clientes.lgpd")),
 ):
     """Todos os dados pessoais guardados sobre o cliente, numa
     resposta só -- atende um pedido de acesso/portabilidade (LGPD,
@@ -258,7 +258,7 @@ def exportar_dados_lgpd(
 def remover_dados_lgpd(
     cliente_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_admin),
+    usuario=Depends(exigir_permissao("clientes.lgpd")),
 ):
     """Direito ao esquecimento (LGPD, art. 18, VI) -- apaga os dados
     pessoais do cliente, mantendo vendas/fiado no histórico contábil

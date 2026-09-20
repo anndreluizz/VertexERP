@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_admin, get_current_user
+from app.auth.dependencies import exigir_permissao, get_current_user
 from app.database.session import SessionLocal
 from app.schemas.plano_conta import (
     PlanoContaCreate,
@@ -61,7 +61,7 @@ def atualizar(
 def excluir(
     conta_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_admin),
+    usuario=Depends(exigir_permissao("plano_contas.excluir")),
 ):
     try:
         PlanoContaService.excluir(db, conta_id)

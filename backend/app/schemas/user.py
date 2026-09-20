@@ -21,6 +21,7 @@ class UserUpdate(BaseModel):
     ativo: bool | None = None
     admin: bool | None = None
     dois_fatores_ativo: bool | None = None
+    perfil_id: int | None = None
 
 
 class UserAdminUpdate(BaseModel):
@@ -66,6 +67,9 @@ class UserResponse(BaseModel):
     # o app mobile usa isso pra saber de qual loja mostrar os dados,
     # já que (ao contrário do Desktop) não tem terminal fixo por loja.
     loja_id: int | None = None
+    perfil_id: int | None = None
+    perfil_nome: str | None = None
+    permissoes: list[str] = []
 
     class Config:
         orm_mode = True

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import (
-    get_current_admin,
+    exigir_permissao,
     get_current_user,
     resolver_loja_id,
 )
@@ -126,7 +126,7 @@ def cancelar(
     compra_id: int,
     loja_id: int | None = None,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_admin),
+    usuario=Depends(exigir_permissao("compras.cancelar")),
 ):
     try:
 

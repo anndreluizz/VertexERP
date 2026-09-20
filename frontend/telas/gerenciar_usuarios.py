@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QMessageBox,
+    QInputDialog,
 )
 
 from utils.validacao import email_valido
@@ -19,7 +20,9 @@ from services.user_service import (
     criar_usuario,
     redefinir_senha,
 )
+from services.perfil_service import listar_perfis
 from services.worker import rodar_em_thread
+from telas.gerenciar_perfis import GerenciarPerfisDialog
 
 from design import tokens
 from design.responsive import tamanho_fixo_seguro
@@ -324,9 +327,9 @@ class GerenciarUsuariosDialog(QDialog):
         layout.addLayout(cabecalho)
 
         self.tabela = QTableWidget()
-        self.tabela.setColumnCount(5)
+        self.tabela.setColumnCount(6)
         self.tabela.setHorizontalHeaderLabels(
-            ["Nome", "E-mail", "Status", "Admin", "2FA"]
+            ["Nome", "E-mail", "Status", "Admin", "Perfil", "2FA"]
         )
         self.tabela.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch
@@ -377,6 +380,10 @@ class GerenciarUsuariosDialog(QDialog):
         self.bt_admin.setAutoDefault(False)
         self.bt_admin.clicked.connect(self.alternar_admin)
 
+        self.bt_perfil = BotaoSecundario("Definir Perfil")
+        self.bt_perfil.setAutoDefault(False)
+        self.bt_perfil.clicked.connect(self.definir_perfil)
+
         self.bt_redefinir_senha = BotaoSecundario("Redefinir Senha")
         self.bt_redefinir_senha.setAutoDefault(False)
         self.bt_redefinir_senha.clicked.connect(self.redefinir_senha_usuario)
@@ -385,14 +392,20 @@ class GerenciarUsuariosDialog(QDialog):
         self.bt_2fa.setAutoDefault(False)
         self.bt_2fa.clicked.connect(self.alternar_2fa)
 
+        bt_gerenciar_perfis = BotaoSecundario("Gerenciar Perfis")
+        bt_gerenciar_perfis.setAutoDefault(False)
+        bt_gerenciar_perfis.clicked.connect(self.gerenciar_perfis)
+
         bt_fechar = BotaoSecundario("Fechar")
         bt_fechar.setAutoDefault(False)
         bt_fechar.clicked.connect(self.accept)
 
         rodape.addWidget(self.bt_ativar_desativar)
         rodape.addWidget(self.bt_admin)
+        rodape.addWidget(self.bt_perfil)
         rodape.addWidget(self.bt_redefinir_senha)
         rodape.addWidget(self.bt_2fa)
+        rodape.addWidget(bt_gerenciar_perfis)
         rodape.addStretch()
         rodape.addWidget(bt_fechar)
 
@@ -420,6 +433,7 @@ class GerenciarUsuariosDialog(QDialog):
     def _definir_controles_carregando(self, carregando: bool):
         self.bt_ativar_desativar.setEnabled(not carregando)
         self.bt_admin.setEnabled(not carregando)
+        self.bt_perfil.setEnabled(not carregando)
         self.bt_redefinir_senha.setEnabled(not carregando)
         self.bt_2fa.setEnabled(not carregando)
 
@@ -459,12 +473,16 @@ class GerenciarUsuariosDialog(QDialog):
             )
             self.tabela.setItem(linha, 3, item_admin)
 
+            self.tabela.setItem(
+                linha, 4, QTableWidgetItem(usuario.get("perfil_nome") or "—")
+            )
+
             dois_fatores = usuario.get("dois_fatores_ativo")
             item_2fa = QTableWidgetItem("Ativo" if dois_fatores else "Desativado")
             item_2fa.setForeground(
                 QColor(tokens.SECUNDARIA_HOVER if dois_fatores else tokens.TEXTO_TERCIARIO)
             )
-            self.tabela.setItem(linha, 4, item_2fa)
+            self.tabela.setItem(linha, 5, item_2fa)
 
         self.tabela.setCurrentCell(-1, -1)
         self.tabela.clearSelection()
@@ -571,6 +589,54 @@ class GerenciarUsuariosDialog(QDialog):
             return
 
         self._atualizar_usuario_async(usuario["id"], {"admin": novo_admin})
+
+    def definir_perfil(self):
+
+        usuario = self._usuario_selecionado()
+
+        if usuario is None:
+            return
+
+        self._definir_controles_carregando(True)
+
+        rodar_em_thread(
+            self,
+            listar_perfis,
+            ao_sucesso=self._ao_listar_perfis_para_definir_sucesso,
+            ao_erro=self._ao_mutacao_erro,
+            ao_finalizar=self._ao_mutacao_finalizada,
+        )
+
+    def _ao_listar_perfis_para_definir_sucesso(self, perfis):
+
+        usuario = self._usuario_selecionado()
+        if usuario is None:
+            return
+
+        opcoes = ["Sem perfil"] + [p["nome"] for p in perfis]
+
+        perfil_atual = usuario.get("perfil_nome")
+        indice_atual = opcoes.index(perfil_atual) if perfil_atual in opcoes else 0
+
+        escolha, ok = QInputDialog.getItem(
+            self, "Definir perfil",
+            f"Perfil de {usuario['nome']}:",
+            opcoes, indice_atual, False,
+        )
+        if not ok:
+            return
+
+        perfil_id = next(
+            (p["id"] for p in perfis if p["nome"] == escolha), None
+        )
+
+        self._atualizar_usuario_async(usuario["id"], {"perfil_id": perfil_id})
+
+    def gerenciar_perfis(self):
+
+        dialogo = GerenciarPerfisDialog(parent=self)
+        dialogo.exec()
+        self.carregar()
 
     def alternar_2fa(self):
 

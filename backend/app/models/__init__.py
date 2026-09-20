@@ -1,5 +1,6 @@
 from app.models.loja import Loja
 from app.models.perfil import Perfil
+from app.models.log_auditoria import LogAuditoria
 from app.models.user import User
 from app.models.cliente import Cliente
 from app.models.fornecedor import Fornecedor

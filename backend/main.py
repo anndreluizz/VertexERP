@@ -24,6 +24,9 @@ from app.api.v1.extrato_bancario import (
 from app.api.v1.perfis import (
     router as perfis_router,
 )
+from app.api.v1.auditoria import (
+    router as auditoria_router,
+)
 from app.api.v1.movimento_caixa import router as movimento_caixa_router
 from app.api.v1.caixa import router as caixa_router
 from app.api.v1.vendas import router as vendas_router
@@ -91,6 +94,7 @@ app.include_router(centros_custo_router)
 app.include_router(plano_contas_router)
 app.include_router(extrato_bancario_router)
 app.include_router(perfis_router)
+app.include_router(auditoria_router)
 app.include_router(pdv_router)
 app.include_router(estoque_router)
 app.include_router(fiado_router)

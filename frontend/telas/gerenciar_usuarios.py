@@ -23,6 +23,7 @@ from services.user_service import (
 from services.perfil_service import listar_perfis
 from services.worker import rodar_em_thread
 from telas.gerenciar_perfis import GerenciarPerfisDialog
+from telas.log_auditoria import LogAuditoriaDialog
 
 from design import tokens
 from design.responsive import tamanho_fixo_seguro
@@ -396,6 +397,10 @@ class GerenciarUsuariosDialog(QDialog):
         bt_gerenciar_perfis.setAutoDefault(False)
         bt_gerenciar_perfis.clicked.connect(self.gerenciar_perfis)
 
+        bt_auditoria = BotaoSecundario("Ver Auditoria")
+        bt_auditoria.setAutoDefault(False)
+        bt_auditoria.clicked.connect(self.ver_auditoria)
+
         bt_fechar = BotaoSecundario("Fechar")
         bt_fechar.setAutoDefault(False)
         bt_fechar.clicked.connect(self.accept)
@@ -406,6 +411,7 @@ class GerenciarUsuariosDialog(QDialog):
         rodape.addWidget(self.bt_redefinir_senha)
         rodape.addWidget(self.bt_2fa)
         rodape.addWidget(bt_gerenciar_perfis)
+        rodape.addWidget(bt_auditoria)
         rodape.addStretch()
         rodape.addWidget(bt_fechar)
 
@@ -637,6 +643,11 @@ class GerenciarUsuariosDialog(QDialog):
         dialogo = GerenciarPerfisDialog(parent=self)
         dialogo.exec()
         self.carregar()
+
+    def ver_auditoria(self):
+
+        dialogo = LogAuditoriaDialog(parent=self)
+        dialogo.exec()
 
     def alternar_2fa(self):
 

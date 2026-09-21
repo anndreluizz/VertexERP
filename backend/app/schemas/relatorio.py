@@ -46,6 +46,13 @@ class ComparativoLojaItem(BaseModel):
     margem_lucro: Decimal
 
 
+class FunilVendasResponse(BaseModel):
+    suspensas_agora: int
+    finalizadas: int
+    canceladas: int
+    taxa_cancelamento: Decimal
+
+
 class CurvaAbcItem(BaseModel):
     produto_id: int
     produto: str

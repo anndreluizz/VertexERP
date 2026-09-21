@@ -337,3 +337,56 @@ def test_comparativo_lojas_soma_cada_loja_separado(
     assert dados["Matriz"]["receita_total"] == float(venda_matriz.valor_total)
     assert dados["Filial"]["quantidade_vendas"] == 1
     assert dados["Filial"]["receita_total"] == float(venda_filial.valor_total)
+
+
+def test_funil_vendas_conta_finalizadas_canceladas_e_abertas(
+    client, auth_headers, db, produto
+):
+    _criar_venda(db, produto, quantidade=1, status="FINALIZADA")
+    _criar_venda(db, produto, quantidade=1, status="FINALIZADA")
+    _criar_venda(db, produto, quantidade=1, status="CANCELADA")
+
+    client.post(
+        "/vendas/suspender",
+        json={
+            "itens": [
+                {
+                    "produto_id": produto.id,
+                    "quantidade": 1,
+                    "valor_unitario": "20.00",
+                }
+            ],
+        },
+        headers=auth_headers,
+    )
+
+    response = client.get(
+        "/relatorios/funil-vendas",
+        params=_periodo_hoje(),
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+
+    dados = response.json()
+    assert dados["finalizadas"] == 2
+    assert dados["canceladas"] == 1
+    assert dados["suspensas_agora"] == 1
+    assert float(dados["taxa_cancelamento"]) == round(1 / 3 * 100, 2)
+
+
+def test_funil_vendas_fora_do_periodo_nao_conta(client, auth_headers, db, produto):
+    _criar_venda(
+        db, produto, quantidade=1, status="FINALIZADA",
+        data=datetime.utcnow() - timedelta(days=10),
+    )
+
+    response = client.get(
+        "/relatorios/funil-vendas",
+        params=_periodo_hoje(),
+        headers=auth_headers,
+    )
+
+    dados = response.json()
+    assert dados["finalizadas"] == 0
+    assert dados["canceladas"] == 0

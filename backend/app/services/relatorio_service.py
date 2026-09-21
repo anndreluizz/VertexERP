@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from app.enums.status_venda import StatusVenda
 from app.models.venda import Venda
 from app.models.item_venda import ItemVenda
 from app.models.produto import Produto
@@ -157,6 +158,69 @@ class RelatorioService:
             })
 
         return resultado
+
+    # ==================================================
+    # FUNIL DE VENDAS (carrinho aberto agora x finalizadas/canceladas
+    # no periodo)
+    # ==================================================
+
+    @staticmethod
+    def funil_vendas(
+        db: Session,
+        data_inicio: date | None,
+        data_fim: date,
+        loja_id: int | None = None,
+    ):
+        """Nao existe uma cadeia real ABERTA->FINALIZADA->CANCELADA por
+        venda: uma venda suspensa (ABERTA) retomada vira uma Venda NOVA
+        ao ser finalizada (ver VendaService.criar/suspender), o
+        rascunho original e' so' apagado -- entao "carrinhos em aberto"
+        e' uma contagem AO VIVO (agora), sem recorte de periodo, ja que
+        rascunhos excluidos nao deixam rastro. Finalizadas/canceladas
+        sim sao do periodo pedido (mesmo Venda.data de todo o resto
+        deste service)."""
+
+        inicio = (
+            datetime.combine(data_inicio, time.min)
+            if data_inicio is not None else None
+        )
+        fim = datetime.combine(data_fim, time.min) + timedelta(days=1)
+
+        query = db.query(Venda.status, func.count(Venda.id)).filter(
+            Venda.status.in_([
+                StatusVenda.FINALIZADA.value,
+                StatusVenda.CANCELADA.value,
+            ]),
+            Venda.data < fim,
+        )
+
+        if inicio is not None:
+            query = query.filter(Venda.data >= inicio)
+
+        if loja_id is not None:
+            query = query.filter(Venda.loja_id == loja_id)
+
+        contagens = dict(query.group_by(Venda.status).all())
+
+        finalizadas = contagens.get(StatusVenda.FINALIZADA.value, 0)
+        canceladas = contagens.get(StatusVenda.CANCELADA.value, 0)
+        total = finalizadas + canceladas
+
+        suspensas_query = db.query(func.count(Venda.id)).filter(
+            Venda.status == StatusVenda.ABERTA.value
+        )
+
+        if loja_id is not None:
+            suspensas_query = suspensas_query.filter(Venda.loja_id == loja_id)
+
+        return {
+            "suspensas_agora": suspensas_query.scalar() or 0,
+            "finalizadas": finalizadas,
+            "canceladas": canceladas,
+            "taxa_cancelamento": (
+                round(canceladas / total * 100, 2) if total else 0
+            ),
+        }
 
     # ==================================================
     # CURVA ABC (classificacao de produto por receita)

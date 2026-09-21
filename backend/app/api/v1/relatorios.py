@@ -9,6 +9,7 @@ from app.schemas.relatorio import (
     ComparativoEstoqueLojaItem,
     ComparativoLojaItem,
     CurvaAbcItem,
+    FunilVendasResponse,
     RelatorioVendasResponse,
     SugestaoReposicaoItem,
 )
@@ -70,6 +71,17 @@ def comparativo_lojas(
     usuario=Depends(get_current_user),
 ):
     return RelatorioService.comparativo_lojas(db, data_inicio, data_fim)
+
+
+@router.get("/funil-vendas", response_model=FunilVendasResponse)
+def funil_vendas(
+    data_inicio: date | None = None,
+    data_fim: date = Query(...),
+    loja_id: int | None = None,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return RelatorioService.funil_vendas(db, data_inicio, data_fim, loja_id)
 
 
 @router.get("/curva-abc", response_model=list[CurvaAbcItem])

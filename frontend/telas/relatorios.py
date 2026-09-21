@@ -20,6 +20,7 @@ from services.api import configuracoes
 from services.relatorio_service import (
     relatorio_vendas,
     curva_abc,
+    funil_vendas,
     comparativo_lojas,
     comparativo_estoque,
     sugestao_reposicao,
@@ -498,6 +499,25 @@ class Relatorios(QWidget):
 
         layout.addLayout(grid_layout)
 
+        self.painel_funil = PainelSecao("🔻", "Funil de Vendas")
+
+        subtitulo_funil = QLabel(
+            "Carrinhos em aberto é uma contagem ao vivo (agora), sem "
+            "recorte de período — rascunhos excluídos não deixam "
+            "rastro. Finalizadas/canceladas são do período selecionado "
+            "acima."
+        )
+        subtitulo_funil.setWordWrap(True)
+        subtitulo_funil.setStyleSheet(
+            f"background:transparent; color:{tokens.TEXTO_TERCIARIO}; "
+            f"font-size:{tokens.TAMANHO_XS}px; border:none;"
+        )
+        # fora de self.painel_funil.corpo de proposito -- mesmo motivo
+        # do self.grafico_mix acima, corpo e' limpo a cada refresh
+        self.painel_funil.layout_externo.insertWidget(1, subtitulo_funil)
+
+        layout.addWidget(self.painel_funil)
+
         self.painel_comparativo_lojas = PainelSecao("🏬", "Comparativo entre Lojas")
 
         self.tabela_comparativo_lojas = QTableWidget()
@@ -613,6 +633,45 @@ class Relatorios(QWidget):
             ao_sucesso=self._ao_atualizar_comparativo_lojas_sucesso,
             ao_erro=self._ao_atualizar_secao_secundaria_erro,
         )
+
+        rodar_em_thread(
+            self,
+            funil_vendas,
+            inicio.isoformat() if inicio else None,
+            fim.isoformat(),
+            ao_sucesso=self._ao_atualizar_funil_sucesso,
+            ao_erro=self._ao_atualizar_secao_secundaria_erro,
+        )
+
+    def _ao_atualizar_funil_sucesso(self, dados):
+
+        self.painel_funil.limpar_corpo()
+
+        maior_valor = max(
+            dados["suspensas_agora"], dados["finalizadas"], dados["canceladas"], 1
+        )
+
+        self.painel_funil.corpo.addWidget(LinhaBarra(
+            "Carrinhos em aberto agora",
+            None,
+            str(dados["suspensas_agora"]),
+            dados["suspensas_agora"] / maior_valor * 100,
+            tokens.TEXTO_SECUNDARIO,
+        ))
+        self.painel_funil.corpo.addWidget(LinhaBarra(
+            "Vendas finalizadas",
+            "no período selecionado",
+            str(dados["finalizadas"]),
+            dados["finalizadas"] / maior_valor * 100,
+            tokens.SECUNDARIA_HOVER,
+        ))
+        self.painel_funil.corpo.addWidget(LinhaBarra(
+            "Vendas canceladas",
+            f"{float(dados['taxa_cancelamento']):.1f}% das vendas do período",
+            str(dados["canceladas"]),
+            dados["canceladas"] / maior_valor * 100,
+            tokens.ERRO,
+        ))
 
     def _ao_atualizar_comparativo_lojas_sucesso(self, itens):
 

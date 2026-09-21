@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QFrame,
@@ -233,6 +233,69 @@ class GraficoArea(QWidget):
 
             painter.setBrush(cor_linha)
             painter.drawEllipse(x_hover - 4, y_hover - 4, 8, 8)
+
+        painter.end()
+
+
+class GraficoPizza(QWidget):
+    """Anel (donut) simples desenhado com QPainter -- mesma abordagem
+    e mesmo motivo de GraficoArea (sem depender de QtCharts). Não
+    desenha rótulo/legenda: pensado pra ficar ao lado de uma lista de
+    LinhaProgresso/LinhaBarra, que já mostra nome e valor de cada
+    fatia com a mesma cor."""
+
+    def __init__(self, parent=None):
+
+        super().__init__(parent)
+
+        self.setMinimumSize(120, 120)
+
+        self._fatias = []
+
+    def definir_dados(self, fatias):
+        """fatias: lista de (valor, cor_hex), na mesma ordem/cor da
+        legenda externa. Fatias com valor <= 0 são ignoradas."""
+
+        self._fatias = [(valor, cor) for valor, cor in fatias if valor > 0]
+        self.update()
+
+    def paintEvent(self, event):
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        lado = min(self.width(), self.height())
+        espessura = max(14, lado * 0.18)
+        margem = espessura / 2 + 2
+
+        retangulo = QRectF(
+            (self.width() - lado) / 2 + margem,
+            (self.height() - lado) / 2 + margem,
+            lado - margem * 2,
+            lado - margem * 2,
+        )
+
+        total = sum(valor for valor, _ in self._fatias)
+
+        if not total or retangulo.width() <= 0:
+            pen_vazio = QPen(QColor(tokens.BORDA), espessura)
+            pen_vazio.setCapStyle(Qt.FlatCap)
+            painter.setPen(pen_vazio)
+            painter.drawArc(retangulo, 0, 360 * 16)
+            painter.end()
+            return
+
+        # comeca no topo (12h) e anda em sentido horario -- angulo em
+        # 1/16 de grau, como o resto da API de arco do Qt
+        angulo_atual = 90 * 16
+
+        for valor, cor in self._fatias:
+            extensao = -round(360 * 16 * (valor / total))
+            pen = QPen(QColor(cor), espessura)
+            pen.setCapStyle(Qt.FlatCap)
+            painter.setPen(pen)
+            painter.drawArc(retangulo, angulo_atual, extensao)
+            angulo_atual += extensao
 
         painter.end()
 

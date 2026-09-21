@@ -46,7 +46,7 @@ def _buscar_dados_relatorio_geral(loja_id_caixa):
     return em_paralelo((listar_produtos,), (historico_caixa, loja_id_caixa))
 
 from design import tokens
-from design.charts import GraficoArea
+from design.charts import GraficoArea, GraficoPizza
 from design.icons import icone
 from design.widgets import BotaoSecundario, CardKPI, SecaoCard
 from utils.formatacao import formatar_moeda
@@ -485,6 +485,14 @@ class Relatorios(QWidget):
         self.painel_ranking = PainelSecao("📦", "Ranking de Produtos")
         self.painel_mix = PainelSecao("💳", "Mix de Pagamentos")
 
+        self.grafico_mix = GraficoPizza()
+        self.grafico_mix.setFixedHeight(140)
+        # entra entre o cabecalho do painel e o corpo (lista de
+        # LinhaBarra) -- fora de self.painel_mix.corpo de proposito,
+        # pra nao ser apagado toda vez que _atualizar_mix_pagamentos
+        # chama limpar_corpo()
+        self.painel_mix.layout_externo.insertWidget(1, self.grafico_mix)
+
         grid_layout.addWidget(self.painel_ranking, stretch=1)
         grid_layout.addWidget(self.painel_mix, stretch=1)
 
@@ -711,6 +719,14 @@ class Relatorios(QWidget):
         self.painel_mix.limpar_corpo()
 
         total_geral = sum(float(item["total"]) for item in formas_pagamento)
+
+        self.grafico_mix.definir_dados([
+            (
+                float(item["total"]),
+                CORES_FORMA_PAGAMENTO.get(item["forma_pagamento"], tokens.TEXTO),
+            )
+            for item in formas_pagamento
+        ])
 
         if not total_geral:
             self.painel_mix.adicionar_vazio(

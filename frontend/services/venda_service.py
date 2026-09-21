@@ -64,6 +64,44 @@ def cancelar_venda(venda_id, motivo=None):
     return delete(endpoint)
 
 
+def suspender_venda(itens, cliente_id=None, desconto=0):
+    """Salva o carrinho atual como rascunho (Venda.status=ABERTA) pra
+    retomar depois -- sem forma de pagamento, nao mexe em estoque nem
+    caixa (ver VendaService.suspender no backend)."""
+
+    dados = {
+        "cliente_id": cliente_id,
+        "desconto": desconto,
+        "itens": [
+            {
+                "produto_id": item["id"],
+                "quantidade": item["quantidade"],
+                "valor_unitario": item["preco"],
+            }
+            for item in itens
+        ],
+    }
+
+    return post(endpoint_com_loja("/vendas/suspender"), dados)
+
+
+def listar_vendas_suspensas():
+
+    response = get(endpoint_com_loja("/vendas/suspensas"))
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Falha ao carregar as vendas suspensas "
+            f"(HTTP {response.status_code}): {response.text}"
+        )
+
+    return response.json()
+
+
+def excluir_venda_suspensa(venda_id):
+    return delete(f"/vendas/{venda_id}/suspensa")
+
+
 def finalizar_venda(
     itens,
     forma_pagamento,

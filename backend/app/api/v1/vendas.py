@@ -9,6 +9,8 @@ from app.models.cliente import Cliente
 from app.schemas.venda import (
     VendaCreate,
     VendaResponse,
+    VendaSuspensaCreate,
+    VendaSuspensaResponse,
     ComprovanteVendaResponse,
     ComprovanteEnvioResponse,
     ComprovanteEnviarWhatsappRequest,
@@ -44,6 +46,16 @@ def listar(
     return VendaService.listar(db, skip, limit, loja_id)
 
 
+@router.get("/suspensas", response_model=list[VendaSuspensaResponse])
+def listar_suspensas(
+    loja_id: int | None = None,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    loja_efetiva = resolver_loja_id(db, usuario, loja_id)
+    return VendaService.listar_suspensas(db, loja_efetiva)
+
+
 @router.get("/{venda_id}", response_model=VendaResponse)
 def buscar(
     venda_id: int,
@@ -73,6 +85,40 @@ def criar(
         return VendaService.criar(db, dados, usuario.id, loja_efetiva)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/suspender", response_model=VendaSuspensaResponse, status_code=201)
+def suspender(
+    dados: VendaSuspensaCreate,
+    loja_id: int | None = None,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        loja_efetiva = resolver_loja_id(db, usuario, loja_id)
+        return VendaService.suspender(db, dados, usuario.id, loja_efetiva)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{venda_id}/suspensa")
+def excluir_suspensa(
+    venda_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        ok = VendaService.excluir_suspensa(db, venda_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not ok:
+        raise HTTPException(
+            status_code=404,
+            detail="Venda não encontrada"
+        )
+
+    return {"success": True, "message": "Venda suspensa excluída."}
 
 
 @router.delete("/{venda_id}")

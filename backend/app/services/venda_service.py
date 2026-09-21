@@ -515,6 +515,123 @@ class VendaService:
 
             raise Exception(str(e))
 
+    # ==================================================
+    # VENDA SUSPENSA (carrinho salvo pra retomar depois -- status
+    # ABERTA, nunca mexe em estoque/caixa/notificacao, so' vira
+    # "de verdade" quando for retomada e finalizada via criar())
+    # ==================================================
+
+    @staticmethod
+    def suspender(
+        db: Session,
+        dados,
+        usuario_id: int,
+        loja_id: int | None = None,
+    ):
+        venda = Venda(
+            cliente_id=dados.cliente_id,
+            usuario_id=usuario_id,
+            loja_id=loja_id,
+            desconto=dados.desconto,
+            status=StatusVenda.ABERTA.value,
+        )
+
+        VendaRepository.criar(db, venda)
+
+        valor_total = 0
+
+        for item in dados.itens:
+
+            subtotal = item.valor_unitario * item.quantidade
+
+            ItemVendaRepository.criar(
+                db,
+                ItemVenda(
+                    venda_id=venda.id,
+                    produto_id=item.produto_id,
+                    quantidade=item.quantidade,
+                    valor_unitario=item.valor_unitario,
+                    subtotal=subtotal,
+                ),
+            )
+
+            valor_total += subtotal
+
+        venda.valor_total = valor_total - dados.desconto
+
+        db.add(venda)
+        db.commit()
+        db.refresh(venda)
+
+        # response_model da rota e' VendaSuspensaResponse, nao
+        # VendaResponse: uma venda ABERTA nao tem forma_pagamento
+        # de verdade ainda (esse campo nem e' setado aqui, fica no
+        # default "AVISTA" da coluna, que nao e' um valor valido do
+        # enum FormaPagamento usado por VendaResponse)
+        return VendaService._serializar_suspensa(db, venda)
+
+    @staticmethod
+    def listar_suspensas(db: Session, loja_id: int | None = None):
+
+        query = db.query(Venda).filter(
+            Venda.status == StatusVenda.ABERTA.value
+        )
+
+        if loja_id is not None:
+            query = query.filter(Venda.loja_id == loja_id)
+
+        vendas = query.order_by(Venda.id.desc()).all()
+
+        return [
+            VendaService._serializar_suspensa(db, venda) for venda in vendas
+        ]
+
+    @staticmethod
+    def _serializar_suspensa(db: Session, venda: Venda):
+
+        itens = []
+
+        for item in venda.itens:
+
+            produto = (
+                db.query(Produto)
+                .filter(Produto.id == item.produto_id)
+                .first()
+            )
+
+            itens.append({
+                "produto_id": item.produto_id,
+                "codigo": produto.codigo if produto else None,
+                "nome": produto.nome if produto else "Produto removido",
+                "quantidade": item.quantidade,
+                "valor_unitario": item.valor_unitario,
+                "estoque": produto.estoque if produto else None,
+            })
+
+        return {
+            "id": venda.id,
+            "cliente_id": venda.cliente_id,
+            "cliente_nome": venda.cliente.nome if venda.cliente else None,
+            "data": venda.data,
+            "desconto": venda.desconto,
+            "itens": itens,
+        }
+
+    @staticmethod
+    def excluir_suspensa(db: Session, venda_id: int):
+
+        venda = VendaRepository.buscar_por_id(db, venda_id)
+
+        if venda is None:
+            return False
+
+        if venda.status != StatusVenda.ABERTA.value:
+            raise Exception("Essa venda não está suspensa.")
+
+        VendaRepository.excluir(db, venda)
+
+        return True
+
     @staticmethod
     def excluir(
         db: Session,

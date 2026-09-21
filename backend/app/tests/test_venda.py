@@ -358,3 +358,147 @@ def test_cancelar_venda_com_caixa_fechado_e_bloqueada(
         f"/produtos/{produto.id}", headers=auth_headers
     ).json()
     assert produto_inalterado["estoque"] == estoque_apos_venda
+
+
+def test_suspender_venda_nao_mexe_no_estoque_e_nao_exige_caixa(
+    client, auth_headers, produto
+):
+    # de proposito sem a fixture caixa_aberto -- suspender e' so' um
+    # rascunho de carrinho, nao pode exigir caixa aberto igual a venda
+    # de verdade exige
+    estoque_inicial = produto.estoque
+
+    response = client.post(
+        "/vendas/suspender",
+        json={
+            "itens": [
+                {
+                    "produto_id": produto.id,
+                    "quantidade": 3,
+                    "valor_unitario": "20.00",
+                }
+            ],
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 201
+
+    dados = response.json()
+    assert dados["itens"][0]["quantidade"] == 3
+    assert dados["itens"][0]["nome"] == produto.nome
+
+    produto_inalterado = client.get(
+        f"/produtos/{produto.id}", headers=auth_headers
+    ).json()
+    assert produto_inalterado["estoque"] == estoque_inicial
+
+
+def test_listar_suspensas_traz_nome_do_produto_e_ignora_finalizadas(
+    client, auth_headers, produto, caixa_aberto
+):
+    suspensa = client.post(
+        "/vendas/suspender",
+        json={
+            "itens": [
+                {
+                    "produto_id": produto.id,
+                    "quantidade": 1,
+                    "valor_unitario": "20.00",
+                }
+            ],
+        },
+        headers=auth_headers,
+    ).json()
+
+    client.post(
+        "/vendas/",
+        json={
+            "forma_pagamento": "DINHEIRO",
+            "itens": [
+                {
+                    "produto_id": produto.id,
+                    "quantidade": 1,
+                    "valor_unitario": "20.00",
+                }
+            ],
+        },
+        headers=auth_headers,
+    )
+
+    response = client.get("/vendas/suspensas", headers=auth_headers)
+
+    assert response.status_code == 200
+
+    itens = response.json()
+    ids = [v["id"] for v in itens]
+
+    assert suspensa["id"] in ids
+    assert len(itens) == 1  # a FINALIZADA acima nao aparece aqui
+
+    # produto.estoque (objeto Python) ficou desatualizado depois da
+    # venda FINALIZADA acima baixar o estoque de verdade no banco --
+    # busca o valor atual em vez de comparar com o objeto obsoleto
+    estoque_atual = client.get(
+        f"/produtos/{produto.id}", headers=auth_headers
+    ).json()["estoque"]
+
+    venda_suspensa = next(v for v in itens if v["id"] == suspensa["id"])
+    assert venda_suspensa["itens"][0]["nome"] == produto.nome
+    assert venda_suspensa["itens"][0]["estoque"] == estoque_atual
+
+
+def test_excluir_suspensa_remove_o_rascunho(client, auth_headers, produto):
+    suspensa = client.post(
+        "/vendas/suspender",
+        json={
+            "itens": [
+                {
+                    "produto_id": produto.id,
+                    "quantidade": 1,
+                    "valor_unitario": "20.00",
+                }
+            ],
+        },
+        headers=auth_headers,
+    ).json()
+
+    response = client.delete(
+        f"/vendas/{suspensa['id']}/suspensa", headers=auth_headers
+    )
+
+    assert response.status_code == 200
+
+    ids_restantes = [
+        v["id"]
+        for v in client.get(
+            "/vendas/suspensas", headers=auth_headers
+        ).json()
+    ]
+    assert suspensa["id"] not in ids_restantes
+
+
+def test_excluir_suspensa_recusa_venda_ja_finalizada(
+    client, auth_headers, produto, caixa_aberto
+):
+    finalizada = client.post(
+        "/vendas/",
+        json={
+            "forma_pagamento": "DINHEIRO",
+            "itens": [
+                {
+                    "produto_id": produto.id,
+                    "quantidade": 1,
+                    "valor_unitario": "20.00",
+                }
+            ],
+        },
+        headers=auth_headers,
+    ).json()
+
+    response = client.delete(
+        f"/vendas/{finalizada['id']}/suspensa", headers=auth_headers
+    )
+
+    assert response.status_code == 400
+    assert "não está suspensa" in response.json()["detail"]

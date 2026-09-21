@@ -42,6 +42,42 @@ class VendaCreate(BaseModel):
     itens: list[ItemVendaCreate]
 
 
+class VendaSuspensaCreate(BaseModel):
+    """Carrinho salvo pra retomar depois (status=ABERTA) -- sem forma
+    de pagamento, sem data de vencimento: nada disso foi decidido
+    ainda, a venda so vira de verdade quando for retomada e finalizada
+    via POST /vendas/ normal."""
+
+    cliente_id: int | None = None
+
+    desconto: Decimal = Decimal("0.00")
+
+    itens: list[ItemVendaCreate]
+
+
+class ItemVendaSuspensaResponse(BaseModel):
+    produto_id: int
+    codigo: str | None = None
+    nome: str
+    quantidade: int
+    valor_unitario: Decimal
+    estoque: int | None = None
+
+
+class VendaSuspensaResponse(BaseModel):
+    """Mesma ideia de VendaResponse, mas com nome/codigo/estoque atual
+    do produto já embutidos em cada item -- pra tela de PDV conseguir
+    repopular o carrinho ao retomar sem precisar de uma chamada extra
+    por produto."""
+
+    id: int
+    cliente_id: int | None
+    cliente_nome: str | None
+    data: datetime
+    desconto: Decimal
+    itens: list[ItemVendaSuspensaResponse]
+
+
 class VendaResponse(BaseModel):
     id: int
 

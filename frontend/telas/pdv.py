@@ -5,7 +5,12 @@ from telas.buscar_produto import BuscarProdutoDialog
 from telas.venda_concluida import VendaConcluidaDialog
 from telas.cadastro_produto import CadastroProdutoWindow
 from telas.selecionar_cliente import SelecionarClienteDialog
-from services.venda_service import finalizar_venda as enviar_venda
+from services.venda_service import (
+    finalizar_venda as enviar_venda,
+    suspender_venda as enviar_suspensao,
+    listar_vendas_suspensas,
+    excluir_venda_suspensa,
+)
 from services.worker import rodar_em_thread
 from services.produto_service import listar_produtos, cadastrar_produto
 from services.pdv_service import buscar_produto
@@ -81,10 +86,15 @@ def _parse_valor(texto):
 
 
 class VendasSuspensasDialog(QDialog):
-    """Lista as vendas suspensas do carrinho atual (só em memória — não
-    sobrevivem a fechar o app, apenas a navegar entre telas, já que o
-    PDV nunca é recriado enquanto o app está aberto). Permite retomar
-    ou excluir uma venda suspensa."""
+    """Lista as vendas suspensas (persistidas no backend como
+    Venda.status=ABERTA -- sobrevivem a fechar o app e aparecem pra
+    qualquer terminal da mesma loja, ver VendaService.suspender/
+    listar_suspensas). Permite retomar ou excluir uma venda suspensa.
+
+    `vendas_suspensas` vem de GET /vendas/suspensas -- cada item ja
+    traz nome/codigo/estoque atual do produto embutido (ver
+    VendaSuspensaResponse no backend), pra retomar nao precisar de
+    uma chamada extra por produto."""
 
     def __init__(self, vendas_suspensas, parent=None):
 
@@ -128,11 +138,17 @@ class VendasSuspensasDialog(QDialog):
         for linha, venda in enumerate(vendas_suspensas):
 
             total = sum(
-                item["preco"] * item["quantidade"] for item in venda["itens"]
+                float(item["valor_unitario"]) * item["quantidade"]
+                for item in venda["itens"]
             )
-            hora_texto = venda["hora"].strftime("%H:%M")
+            hora_texto = _parse_data(venda["data"]).strftime("%H:%M")
+
+            rotulo = f"Venda #{venda['id']}"
+            if venda.get("cliente_nome"):
+                rotulo += f" — {venda['cliente_nome']}"
+
             texto = (
-                f"{venda['rotulo']}   ·   {len(venda['itens'])} item(ns)   ·   "
+                f"{rotulo}   ·   {len(venda['itens'])} item(ns)   ·   "
                 f"{formatar_moeda(total)}   ·   {hora_texto}"
             )
 
@@ -193,8 +209,8 @@ class PDV(QWidget):
         self.cliente_nome = None
         self.desconto_valor = 0.0
         self.acrescimo_valor = 0.0
-        self.vendas_suspensas = []
         self._finalizando_venda = False
+        self._suspendendo_venda = False
 
         self._usuario_id = (me() or {}).get("id")
         self.atalhos = self._carregar_atalhos()
@@ -309,6 +325,7 @@ class PDV(QWidget):
         # em vez de travar a troca de aba esperando a resposta.
         QTimer.singleShot(0, self.atualizar_indicador_caixa)
         QTimer.singleShot(0, self.atualizar_mais_vendidos)
+        QTimer.singleShot(0, self._atualizar_contagem_suspensas)
 
     def _carregar_atalhos(self):
         salvo = preferencias_service.carregar(self._usuario_id, "pdv_atalhos", {})
@@ -1646,12 +1663,16 @@ class PDV(QWidget):
         self.campo_codigo.setFocus()
 
     # ==================================================
-    # VENDA SUSPENSA (pré-venda) — só em memória, some se o app
-    # for fechado; sobrevive a navegar pra outra tela porque o
-    # widget PDV nunca é recriado enquanto o app está aberto.
+    # VENDA SUSPENSA (pré-venda) — persistida no backend como
+    # Venda.status=ABERTA (ver VendaService.suspender/listar_suspensas/
+    # excluir_suspensa): sobrevive a fechar o app e aparece pra
+    # qualquer terminal logado na mesma loja, não só neste PDV.
     # ==================================================
 
     def suspender_venda(self):
+
+        if self._suspendendo_venda:
+            return
 
         if not self.itens:
             QMessageBox.warning(
@@ -1659,41 +1680,92 @@ class PDV(QWidget):
             )
             return
 
-        rotulo = f"Venda {len(self.vendas_suspensas) + 1}"
+        self._suspendendo_venda = True
+        self.bt_suspender.setEnabled(False)
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
-        if self.cliente_nome:
-            rotulo += f" — {self.cliente_nome}"
+        desconto_liquido = self.desconto_valor - self.acrescimo_valor
 
-        self.vendas_suspensas.append({
-            "rotulo": rotulo,
-            "itens": [dict(item) for item in self.itens],
-            "cliente_id": self.cliente_id,
-            "cliente_nome": self.cliente_nome,
-            "desconto_texto": self.campo_desconto.text(),
-            "acrescimo_texto": self.campo_acrescimo.text(),
-            "hora": datetime.now(),
-        })
+        rodar_em_thread(
+            self,
+            enviar_suspensao,
+            self.itens,
+            cliente_id=self.cliente_id,
+            desconto=desconto_liquido,
+            ao_sucesso=self._ao_suspender_sucesso,
+            ao_erro=self._ao_suspender_erro,
+            ao_finalizar=self._ao_suspender_finalizada,
+        )
+
+    def _ao_suspender_sucesso(self, response):
+
+        if response.status_code != 201:
+
+            try:
+                erro = response.json()
+                erro = erro.get("detail", str(erro)) if isinstance(erro, dict) else erro
+            except Exception:
+                erro = response.text
+
+            QMessageBox.critical(
+                self, "Erro", f"Não foi possível suspender a venda.\n\n{erro}"
+            )
+            return
 
         self.limpar_venda()
-        self._atualizar_botao_retomar()
+        self._atualizar_contagem_suspensas()
 
         QMessageBox.information(
             self,
             "Venda suspensa",
-            f'"{rotulo}" foi suspensa. Use "Vendas Suspensas" pra '
-            "retomar de onde parou.",
+            'Use "Vendas Suspensas" pra retomar de onde parou.',
         )
+
+    def _ao_suspender_erro(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
+
+    def _ao_suspender_finalizada(self):
+        self._suspendendo_venda = False
+        self.bt_suspender.setEnabled(True)
+        QApplication.restoreOverrideCursor()
 
     def abrir_vendas_suspensas(self):
 
-        dialogo = VendasSuspensasDialog(self.vendas_suspensas, parent=self)
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        rodar_em_thread(
+            self,
+            listar_vendas_suspensas,
+            ao_sucesso=self._ao_listar_suspensas_sucesso,
+            ao_erro=self._ao_listar_suspensas_erro,
+            ao_finalizar=self._ao_listar_suspensas_finalizada,
+        )
+
+    def _ao_listar_suspensas_finalizada(self):
+        QApplication.restoreOverrideCursor()
+
+    def _ao_listar_suspensas_erro(self, erro):
+        QMessageBox.critical(
+            self, "Erro", f"Não foi possível carregar as vendas suspensas.\n{erro}"
+        )
+
+    def _ao_listar_suspensas_sucesso(self, vendas_suspensas):
+
+        dialogo = VendasSuspensasDialog(vendas_suspensas, parent=self)
 
         if dialogo.exec() != QDialog.Accepted or dialogo.indice_selecionado is None:
             return
 
+        venda = vendas_suspensas[dialogo.indice_selecionado]
+
         if dialogo.acao == "excluir":
-            del self.vendas_suspensas[dialogo.indice_selecionado]
-            self._atualizar_botao_retomar()
+            rodar_em_thread(
+                self,
+                excluir_venda_suspensa,
+                venda["id"],
+                ao_sucesso=self._ao_excluir_suspensa_manual_sucesso,
+                ao_erro=self._ao_listar_suspensas_erro,
+            )
             return
 
         if self.itens:
@@ -1705,9 +1777,21 @@ class PDV(QWidget):
             )
             return
 
-        venda = self.vendas_suspensas.pop(dialogo.indice_selecionado)
-
-        self.itens = venda["itens"]
+        # "codigo"/"estoque" vem None quando o produto foi excluido
+        # depois da venda ter sido suspensa -- QTableWidgetItem(None)
+        # quebra, e o proprio criar_widget_produto/checagem de estoque
+        # esperam string/int normais
+        self.itens = [
+            {
+                "id": item["produto_id"],
+                "codigo": item["codigo"] or "",
+                "nome": item["nome"],
+                "preco": float(item["valor_unitario"]),
+                "quantidade": item["quantidade"],
+                "estoque": item["estoque"] or 0,
+            }
+            for item in venda["itens"]
+        ]
         self.atualizar_tabela()
 
         if venda["cliente_id"]:
@@ -1718,17 +1802,64 @@ class PDV(QWidget):
         else:
             self.limpar_cliente()
 
-        self.campo_desconto.setText(venda["desconto_texto"])
-        self.campo_acrescimo.setText(venda["acrescimo_texto"])
-        self.bloco_ajuste.setVisible(
-            bool(venda["desconto_texto"] or venda["acrescimo_texto"])
+        desconto_liquido = float(venda["desconto"])
+        self.campo_desconto.setText(
+            f"{desconto_liquido:.2f}" if desconto_liquido >= 0 else ""
+        )
+        self.campo_acrescimo.setText(
+            f"{-desconto_liquido:.2f}" if desconto_liquido < 0 else ""
+        )
+        self.bloco_ajuste.setVisible(desconto_liquido != 0)
+
+        # a venda ja foi retomada pro carrinho local -- apaga o
+        # rascunho no servidor pra nao ficar duplicada na lista (falha
+        # aqui nao desfaz a retomada, so' deixa o rascunho orfao pra
+        # ser limpo manualmente depois, daí o erro silencioso)
+        rodar_em_thread(
+            self,
+            excluir_venda_suspensa,
+            venda["id"],
+            ao_sucesso=self._ao_excluir_suspensa_sucesso,
+            ao_erro=self._ignorar_erro,
         )
 
-        self._atualizar_botao_retomar()
+    def _ao_excluir_suspensa_manual_sucesso(self, response):
 
-    def _atualizar_botao_retomar(self):
+        if response.status_code != 200:
+            try:
+                erro = response.json()
+                erro = erro.get("detail", str(erro)) if isinstance(erro, dict) else erro
+            except Exception:
+                erro = response.text
 
-        total = len(self.vendas_suspensas)
+            QMessageBox.critical(
+                self, "Erro", f"Não foi possível excluir a venda suspensa.\n\n{erro}"
+            )
+            return
+
+        self._atualizar_contagem_suspensas()
+
+    def _ao_excluir_suspensa_sucesso(self, response):
+        # cleanup silencioso do rascunho apos retomar (ver
+        # _ao_listar_suspensas_sucesso) -- diferente do handler acima,
+        # nao mostra erro pro usuario mesmo se o delete falhar
+        self._atualizar_contagem_suspensas()
+
+    def _ignorar_erro(self, erro):
+        pass
+
+    def _atualizar_contagem_suspensas(self):
+
+        rodar_em_thread(
+            self,
+            listar_vendas_suspensas,
+            ao_sucesso=self._ao_atualizar_contagem_suspensas_sucesso,
+            ao_erro=self._ignorar_erro,
+        )
+
+    def _ao_atualizar_contagem_suspensas_sucesso(self, vendas_suspensas):
+
+        total = len(vendas_suspensas)
 
         self.bt_retomar.setText(
             f"Vendas Suspensas ({total})" if total else "Vendas Suspensas"

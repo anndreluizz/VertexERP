@@ -53,6 +53,24 @@ def curva_abc(data_inicio, data_fim, loja_id=None, skip=0, limit=100):
     return response.json()
 
 
+def comparativo_lojas(data_inicio, data_fim):
+
+    params = {"data_fim": data_fim}
+
+    if data_inicio is not None:
+        params["data_inicio"] = data_inicio
+
+    response = get(f"/relatorios/comparativo-lojas?{urlencode(params)}")
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Falha ao carregar o comparativo entre lojas "
+            f"(HTTP {response.status_code}): {response.text}"
+        )
+
+    return response.json()
+
+
 def comparativo_estoque():
 
     response = get("/relatorios/comparativo-estoque")

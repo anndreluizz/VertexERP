@@ -20,6 +20,7 @@ from services.api import configuracoes
 from services.relatorio_service import (
     relatorio_vendas,
     curva_abc,
+    comparativo_lojas,
     comparativo_estoque,
     sugestao_reposicao,
 )
@@ -45,6 +46,7 @@ def _buscar_dados_relatorio_geral(loja_id_caixa):
     return em_paralelo((listar_produtos,), (historico_caixa, loja_id_caixa))
 
 from design import tokens
+from design.charts import GraficoArea
 from design.icons import icone
 from design.widgets import BotaoSecundario, CardKPI, SecaoCard
 from utils.formatacao import formatar_moeda
@@ -472,6 +474,11 @@ class Relatorios(QWidget):
 
         layout.addLayout(cards_layout)
 
+        painel_tendencia = PainelSecao("📈", "Faturamento no Período")
+        self.grafico_tendencia = GraficoArea()
+        painel_tendencia.corpo.addWidget(self.grafico_tendencia)
+        layout.addWidget(painel_tendencia)
+
         grid_layout = QHBoxLayout()
         grid_layout.setSpacing(16)
 
@@ -482,6 +489,19 @@ class Relatorios(QWidget):
         grid_layout.addWidget(self.painel_mix, stretch=1)
 
         layout.addLayout(grid_layout)
+
+        self.painel_comparativo_lojas = PainelSecao("🏬", "Comparativo entre Lojas")
+
+        self.tabela_comparativo_lojas = QTableWidget()
+        self.tabela_comparativo_lojas.setColumnCount(5)
+        self.tabela_comparativo_lojas.setHorizontalHeaderLabels(
+            ["Loja", "Faturamento", "Lucro", "Qtd. Vendas", "Ticket Médio"]
+        )
+        self._estilizar_tabela(self.tabela_comparativo_lojas)
+        self.tabela_comparativo_lojas.setMinimumHeight(150)
+        self.painel_comparativo_lojas.corpo.addWidget(self.tabela_comparativo_lojas)
+
+        layout.addWidget(self.painel_comparativo_lojas)
         layout.addStretch()
 
         return pagina
@@ -574,6 +594,39 @@ class Relatorios(QWidget):
             ao_finalizar=self._ao_atualizar_financeiro_finalizado,
         )
 
+        # comparativo entre lojas sempre mostra todas as lojas
+        # (independe do filtro self.combo_loja) -- chamada paralela,
+        # nao depende do resultado de relatorio_vendas acima
+        rodar_em_thread(
+            self,
+            comparativo_lojas,
+            inicio.isoformat() if inicio else None,
+            fim.isoformat(),
+            ao_sucesso=self._ao_atualizar_comparativo_lojas_sucesso,
+            ao_erro=self._ao_atualizar_secao_secundaria_erro,
+        )
+
+    def _ao_atualizar_comparativo_lojas_sucesso(self, itens):
+
+        self.tabela_comparativo_lojas.setRowCount(len(itens))
+
+        for linha, item in enumerate(itens):
+            self.tabela_comparativo_lojas.setItem(
+                linha, 0, QTableWidgetItem(item["loja_nome"])
+            )
+            self.tabela_comparativo_lojas.setItem(
+                linha, 1, QTableWidgetItem(formatar_moeda(item["receita_total"]))
+            )
+            self.tabela_comparativo_lojas.setItem(
+                linha, 2, QTableWidgetItem(formatar_moeda(item["lucro"]))
+            )
+            self.tabela_comparativo_lojas.setItem(
+                linha, 3, QTableWidgetItem(str(item["quantidade_vendas"]))
+            )
+            self.tabela_comparativo_lojas.setItem(
+                linha, 4, QTableWidgetItem(formatar_moeda(item["ticket_medio"]))
+            )
+
     def _ao_atualizar_financeiro_erro(self, erro):
         Mensagem.erro(
             self,
@@ -586,6 +639,7 @@ class Relatorios(QWidget):
         self.card_ticket.definir_valor(formatar_moeda(0))
         self._atualizar_ranking_produtos([])
         self._atualizar_mix_pagamentos([])
+        self.grafico_tendencia.definir_dados([], [])
 
     def _ao_atualizar_financeiro_finalizado(self):
         self._carregando_financeiro = False
@@ -602,6 +656,25 @@ class Relatorios(QWidget):
 
         self._atualizar_ranking_produtos(relatorio["top_produtos"])
         self._atualizar_mix_pagamentos(relatorio["formas_pagamento"])
+        self._atualizar_tendencia(relatorio["vendas_por_dia"])
+
+    def _atualizar_tendencia(self, vendas_por_dia):
+
+        if not vendas_por_dia:
+            self.grafico_tendencia.definir_dados([], [])
+            return
+
+        rotulos = []
+        rotulos_completos = []
+        valores = []
+
+        for item in vendas_por_dia:
+            dia = datetime.strptime(item["data"], "%Y-%m-%d")
+            rotulos.append(dia.strftime("%d/%m"))
+            rotulos_completos.append(dia.strftime("%d/%m/%Y"))
+            valores.append(item["total"])
+
+        self.grafico_tendencia.definir_dados(rotulos, valores, rotulos_completos)
 
     def _atualizar_ranking_produtos(self, top_produtos):
 
@@ -1059,7 +1132,7 @@ class Relatorios(QWidget):
             data_fim,
             loja_id,
             ao_sucesso=self._ao_atualizar_curva_abc_sucesso,
-            ao_erro=self._ao_atualizar_secao_estoque_erro,
+            ao_erro=self._ao_atualizar_secao_secundaria_erro,
         )
 
     def _ao_atualizar_curva_abc_sucesso(self, itens):
@@ -1102,7 +1175,7 @@ class Relatorios(QWidget):
             self,
             comparativo_estoque,
             ao_sucesso=self._ao_atualizar_comparativo_estoque_sucesso,
-            ao_erro=self._ao_atualizar_secao_estoque_erro,
+            ao_erro=self._ao_atualizar_secao_secundaria_erro,
         )
 
     def _ao_atualizar_comparativo_estoque_sucesso(self, itens):
@@ -1136,7 +1209,7 @@ class Relatorios(QWidget):
             sugestao_reposicao,
             loja_id,
             ao_sucesso=self._ao_atualizar_sugestao_reposicao_sucesso,
-            ao_erro=self._ao_atualizar_secao_estoque_erro,
+            ao_erro=self._ao_atualizar_secao_secundaria_erro,
         )
 
     def _ao_atualizar_sugestao_reposicao_sucesso(self, itens):
@@ -1157,11 +1230,11 @@ class Relatorios(QWidget):
                 linha, 3, QTableWidgetItem(str(item["quantidade_sugerida"]))
             )
 
-    def _ao_atualizar_secao_estoque_erro(self, erro):
-        # secoes secundarias da aba de Estoque (curva ABC, comparativo,
-        # reposicao) -- um erro numa delas nao deveria travar a aba
-        # inteira com um QMessageBox bloqueante, so essa secao fica
-        # vazia (tabela ja comeca vazia, entao nao precisa nem limpar).
+    def _ao_atualizar_secao_secundaria_erro(self, erro):
+        # secoes secundarias (curva ABC, comparativos, reposicao) -- um
+        # erro numa delas nao deveria travar a aba inteira com um
+        # QMessageBox bloqueante, so essa secao fica vazia (tabela ja
+        # comeca vazia, entao nao precisa nem limpar).
         pass
 
     # ==========================================

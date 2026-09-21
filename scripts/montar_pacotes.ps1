@@ -61,6 +61,7 @@ foreach ($pasta in @($PastaServidor, $PastaTerminal)) {
 # --- Servidor: launcher + backend + frontend + postgres-portable ---
 Copy-Item "$Raiz\dist\VertexERP.exe" $PastaServidor
 Copy-Item "$Raiz\icone.ico" $PastaServidor
+Copy-Item "$Raiz\scripts\excluir_do_defender.ps1" $PastaServidor
 Copy-Item "$Raiz\backend\dist\VertexERP-Backend" (Join-Path $PastaServidor "VertexERP-Backend") -Recurse
 Copy-Item "$Raiz\frontend\dist\VertexERP-Frontend" (Join-Path $PastaServidor "VertexERP-Frontend") -Recurse
 
@@ -72,6 +73,7 @@ if (Test-Path "$Raiz\postgres-portable") {
 
 # --- Terminal: so o frontend, nada de banco/backend ---
 Copy-Item "$Raiz\icone.ico" $PastaTerminal
+Copy-Item "$Raiz\scripts\excluir_do_defender.ps1" $PastaTerminal
 Copy-Item "$Raiz\frontend\dist\VertexERP-Frontend" (Join-Path $PastaTerminal "VertexERP-Frontend") -Recurse
 
 Write-Host "`nPronto!" -ForegroundColor Green

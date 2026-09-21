@@ -75,6 +75,19 @@ a se cadastrar vira automaticamente a administradora do sistema.
 Da segunda vez em diante, abre bem mais rápido e já mostra a tela de login
 normal, com os dados que ficaram salvos.
 
+### Abriu bem mais devagar que isso (ou parece travado)?
+
+Isso costuma ser o Windows Defender escaneando pela nuvem os `.exe` recém
+copiados pra esse PC, que ainda não têm nenhuma reputação conhecida — sem
+erro nenhum aparecer, só demora mesmo (às vezes minutos, em vez de segundos).
+Da próxima abertura em diante costuma normalizar sozinho, mas dá pra evitar
+isso desde a primeira vez: antes de abrir o `VertexERP.exe`, clique com o
+botão direito em `excluir_do_defender.ps1` (está do lado dele, dentro dessa
+mesma pasta) → **Executar com o PowerShell** → aceite a tela do Windows
+pedindo permissão de Administrador. Isso diz pro Defender não escanear essa
+pasta a cada abertura. Rode de novo só se reinstalar/mover a pasta do Vertex
+ERP pra outro lugar depois.
+
 ## A.3. Se respondeu "Sim" (vai ter Terminais): fixar o endereço deste PC
 
 Os Terminais vão se conectar a este PC por um endereço de rede (algo como
@@ -144,6 +157,10 @@ clientes, produtos e vendas).
 Da segunda vez em diante, o endereço já fica salvo e não precisa configurar
 de novo — só se o PC-Servidor mudar de endereço, aí é só abrir de novo a
 tela de "Configurar servidor" (link discreto embaixo da tela de login).
+
+Se a primeira abertura demorar bem mais que o normal, veja a dica de
+`excluir_do_defender.ps1` na seção A.2 acima — vale pro Terminal também
+(a cópia dele já vem junto na pasta `Terminal/`).
 
 ---
 

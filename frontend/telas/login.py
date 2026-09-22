@@ -70,6 +70,15 @@ class _PainelAnimado(QFrame):
         self._anim.stop()
 
     def _ao_animar(self, valor):
+        # mesmo caso de widgets/nav_card.py::_ao_animar_sombra e
+        # design/widgets.py::_BotaoAnimado._ao_animar: stop() chamado
+        # antes da animacao ter rodado alguma vez (ou no meio do loop
+        # infinito, ao trocar de tela apos o login) pode emitir
+        # valueChanged(None) -- sem essa guarda, float(None) estoura
+        # TypeError e derruba o processo bem na transicao pro sistema.
+        if valor is None:
+            return
+
         self._fase = float(valor)
         self.update()
 

@@ -143,6 +143,14 @@ class NavCard(QFrame):
             layout.addWidget(self.bt_acao, alignment=Qt.AlignLeft)
 
     def _ao_animar_sombra(self, valor):
+        # QVariantAnimation.stop() pode emitir valueChanged(None) quando
+        # chamado antes da animacao ter rodado alguma vez (currentValue()
+        # ainda invalido) -- acontece sempre no primeiro hover de cada
+        # card, ja que _animar_sombra_para() chama stop() antes de tudo.
+        # Sem essa guarda, setBlurRadius(None) derruba o processo inteiro.
+        if valor is None:
+            return
+
         self._sombra.setBlurRadius(valor)
         self._sombra.setOffset(0, valor / 3)
 

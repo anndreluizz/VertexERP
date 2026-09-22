@@ -103,6 +103,23 @@ def processo_existe(pid):
     return str(pid) in resultado.stdout
 
 
+def processo_com_imagem_rodando(caminho_exe):
+    """Confere se algum processo com esse nome de imagem está rodando
+    (ex.: VertexERP-Frontend.exe) -- usado pra saber se o usuario fechou
+    so a janela do frontend (backend/launcher continuam de pe em modo
+    Servidor) sem precisar rastrear PID nenhum."""
+
+    nome_imagem = os.path.basename(caminho_exe)
+
+    resultado = subprocess.run(
+        ["tasklist", "/FI", f"IMAGENAME eq {nome_imagem}"],
+        capture_output=True,
+        text=True,
+    )
+
+    return nome_imagem.lower() in resultado.stdout.lower()
+
+
 def _criar_trava():
     """Cria o arquivo de trava de forma atômica (O_CREAT|O_EXCL): se dois
     processos tentarem ao mesmo tempo, só um consegue — evita a corrida
@@ -639,6 +656,21 @@ def _mostrar_erro(titulo, mensagem):
 
 def main():
     if not obter_trava():
+        # Ja tem uma instancia rodando (backend/launcher de pe) -- so'
+        # significa que o usuario fechou a JANELA do sistema sem
+        # encerrar o Vertex inteiro (comum no modo Servidor, onde
+        # fechar o frontend nao derruba o backend -- ver finally() mais
+        # abaixo). Sem isso, clicar de novo no atalho nao fazia nada:
+        # o clique era silenciosamente descartado pela trava de
+        # instancia unica, e o unico jeito de reabrir a janela era
+        # saber que precisava abrir o VertexERP-Frontend.exe direto, de
+        # dentro da pasta.
+        if not processo_com_imagem_rodando(FRONTEND_EXE):
+            subprocess.Popen(
+                [FRONTEND_EXE],
+                cwd=BASE_DIR,
+                env=ambiente_para_subprocessos(),
+            )
         return
 
     # Se esse PC foi configurado como "Servidor" (ver garantir_env()),

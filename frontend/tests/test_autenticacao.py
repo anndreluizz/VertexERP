@@ -348,6 +348,7 @@ def test_alternar_2fa_liga_pra_usuario_desativado(esperar_threads):
     tela.tabela.setCurrentCell(0, 0)
     tela.bt_ativar_desativar = QPushButton()
     tela.bt_admin = QPushButton()
+    tela.bt_perfil = QPushButton()
     tela.bt_redefinir_senha = QPushButton()
     tela.bt_2fa = QPushButton()
 

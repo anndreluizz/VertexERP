@@ -18,6 +18,14 @@ from services.caixa_service import caixa_aberto
 from services.relatorio_service import relatorio_vendas
 from services.api import configuracoes, me
 from services import preferencias_service, comprovante_service
+from utils.documento_html import (
+    ESTILO_BODY,
+    bloco_total,
+    cabecalho_html,
+    cabecalho_tabela,
+    linha_zebra,
+    rodape_nao_fiscal,
+)
 
 ATALHOS_PADRAO = {"busca": "F1", "cadastro_rapido": "F4", "cancelar": "Esc"}
 
@@ -1922,50 +1930,50 @@ class PDV(QWidget):
     def _montar_documento_orcamento(self):
 
         config = configuracoes()
-        nome_loja = config.get("nome_loja") or "Loja"
+        logo_bytes = comprovante_service.obter_logo_loja()
 
         subtotal = sum(item["preco"] * item["quantidade"] for item in self.itens)
         total = max(0.0, subtotal - self.desconto_valor + self.acrescimo_valor)
 
         linhas_itens = "".join(
-            "<tr>"
-            f"<td style='padding:4px 8px;'>{item['nome']}</td>"
-            f"<td style='padding:4px 8px; text-align:center;'>{item['quantidade']}</td>"
-            f"<td style='padding:4px 8px; text-align:right;'>{formatar_moeda(item['preco'])}</td>"
-            f"<td style='padding:4px 8px; text-align:right;'>"
-            f"{formatar_moeda(item['preco'] * item['quantidade'])}</td>"
-            "</tr>"
-            for item in self.itens
+            linha_zebra(
+                [
+                    item["nome"],
+                    item["quantidade"],
+                    formatar_moeda(item["preco"]),
+                    formatar_moeda(item["preco"] * item["quantidade"]),
+                ],
+                indice,
+                alinhamentos=["left", "center", "right", "right"],
+            )
+            for indice, item in enumerate(self.itens)
         )
 
         cliente_linha = (
-            f"<p>Cliente: {self.cliente_nome}</p>" if self.cliente_nome else ""
+            f"<p style='margin:4px 0;'>Cliente: {self.cliente_nome}</p>"
+            if self.cliente_nome else ""
         )
 
         html = f"""
         <html>
-        <body style="font-family: Arial; font-size: 13px; color:#1E293B;">
-            <h2 style="margin-bottom:0;">{nome_loja}</h2>
-            <p style="color:#64748B; margin-top:2px;">
-                Orçamento — {datetime.now().strftime('%d/%m/%Y %H:%M')}
+        <body style="{ESTILO_BODY}">
+            {cabecalho_html("ORÇAMENTO", config, logo_bytes)}
+            <p style="margin:4px 0;">
+                Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}
             </p>
             {cliente_linha}
-            <table style="width:100%; border-collapse:collapse; margin-top:12px;">
-                <tr style="background:#F1F5F9;">
-                    <th style="padding:4px 8px; text-align:left;">Produto</th>
-                    <th style="padding:4px 8px;">Qtd</th>
-                    <th style="padding:4px 8px; text-align:right;">Unitário</th>
-                    <th style="padding:4px 8px; text-align:right;">Subtotal</th>
-                </tr>
+            <table style="width:100%; border-collapse:collapse; border:1px solid #E5E7EB; margin-top:12px;">
+                {cabecalho_tabela(
+                    ["Produto", "Qtd", "Unitário", "Subtotal"],
+                    ["left", "center", "right", "right"],
+                )}
                 {linhas_itens}
             </table>
-            <h3 style="text-align:right; margin-top:16px;">
-                Total: {formatar_moeda(total)}
-            </h3>
-            <p style="color:#94A3B8; font-size:11px; margin-top:24px;">
-                Este orçamento não tem valor fiscal e não gera nenhuma venda.
-                Os valores podem mudar até a confirmação da compra.
-            </p>
+            {bloco_total("TOTAL", formatar_moeda(total))}
+            {rodape_nao_fiscal(
+                "Este orçamento não tem valor fiscal e não gera nenhuma "
+                "venda. Os valores podem mudar até a confirmação da compra."
+            )}
         </body>
         </html>
         """

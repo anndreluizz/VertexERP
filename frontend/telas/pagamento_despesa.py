@@ -3,8 +3,6 @@ import mimetypes
 from datetime import datetime
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QPageSize, QTextDocument
-from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -18,9 +16,18 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
+from services import comprovante_service
 from services.api import configuracoes
 from services.conta_pagar_service import atualizar_conta_pagar, pagar_conta_pagar
 from services.worker import rodar_em_thread
+from utils.documento_html import (
+    ESTILO_BODY,
+    bloco_total,
+    cabecalho_html,
+    cabecalho_tabela,
+    linha_zebra,
+    rodape_nao_fiscal,
+)
 
 
 def _confirmar_pagamento(conta_id, observacao_final, forma_pagamento, comprovante_base64, comprovante_nome, comprovante_tipo):
@@ -404,6 +411,7 @@ class PagamentoDespesaDialog(QDialog):
         )
         self.cabecalho.definir_icone("check", tokens.SUCESSO)
 
+        self._config = config
         self._atualizar_comprovante(self._observacao_final_pendente, config)
 
         self.paginas.setCurrentWidget(self.pagina_comprovante)
@@ -497,50 +505,46 @@ class PagamentoDespesaDialog(QDialog):
             f"{observacao_final.replace(chr(10), '<br>')}"
         )
 
-        self._texto_comprovante = texto
         self.lbl_comprovante.setText(texto)
 
-    def _montar_documento_comprovante(self):
+    def _montar_html_impressao(self):
+        """HTML premium (cabeçalho/tabela/total padronizados, ver
+        utils/documento_html.py) pro PDF/impressão de verdade -- só
+        pra isso, não pro resumo em tela (self.lbl_comprovante), que
+        continua um texto simples dentro do próprio tema do app."""
 
-        documento = QTextDocument()
-        documento.setDefaultFont(QFont(tokens.FONTE_FAMILIA_PADRAO, 10))
-        documento.setHtml(self._texto_comprovante)
+        agora = datetime.now().strftime("%d/%m/%Y %H:%M")
 
-        return documento
-
-    def imprimir_comprovante(self):
-
-        printer = QPrinter(QPrinter.HighResolution)
-
-        dialogo = QPrintDialog(printer, self)
-
-        if dialogo.exec() != QPrintDialog.Accepted:
-            return
-
-        self._montar_documento_comprovante().print_(printer)
-
-    def salvar_pdf_comprovante(self):
-
-        caminho, _ = QFileDialog.getSaveFileName(
-            self,
-            "Salvar Comprovante",
-            "comprovante_pagamento.pdf",
-            "Arquivo PDF (*.pdf)",
+        linhas = "".join(
+            linha_zebra([rotulo, valor], indice, alinhamentos=["left", "right"])
+            for indice, (rotulo, valor) in enumerate([
+                ("Descrição", self.conta.get("descricao") or "Despesa"),
+                ("Categoria", self.conta.get("categoria") or "—"),
+                ("Forma de pagamento", NOMES_FORMA[self.forma_pagamento]),
+                ("Data", agora),
+            ])
         )
 
-        if not caminho:
-            return
+        return f"""
+        <html>
+        <body style="{ESTILO_BODY}">
+            {cabecalho_html("COMPROVANTE DE PAGAMENTO", self._config)}
+            <table style="width:100%; border-collapse:collapse; border:1px solid #E5E7EB;">
+                {cabecalho_tabela(["Dado", "Valor"], ["left", "right"])}
+                {linhas}
+            </table>
+            {bloco_total("VALOR PAGO", formatar_moeda(self.conta.get("valor", 0)))}
+            {rodape_nao_fiscal("Este comprovante não possui valor fiscal.")}
+        </body>
+        </html>
+        """
 
-        if not caminho.lower().endswith(".pdf"):
-            caminho += ".pdf"
+    def imprimir_comprovante(self):
+        comprovante_service.imprimir(self._montar_html_impressao(), self)
 
-        printer = QPrinter(QPrinter.HighResolution)
-        printer.setOutputFormat(QPrinter.PdfFormat)
-        printer.setOutputFileName(caminho)
-        printer.setPageSize(QPageSize(QPageSize.A5))
-
-        self._montar_documento_comprovante().print_(printer)
-
-        QMessageBox.information(
-            self, "Sucesso", "Comprovante salvo em PDF com sucesso."
+    def salvar_pdf_comprovante(self):
+        comprovante_service.salvar_pdf(
+            self._montar_html_impressao(),
+            self,
+            nome_sugerido="comprovante_pagamento.pdf",
         )

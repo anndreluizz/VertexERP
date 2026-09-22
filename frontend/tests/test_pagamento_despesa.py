@@ -48,3 +48,32 @@ def test_icone_do_cabecalho_muda_para_check_ao_confirmar_pagamento(esperar_threa
     assert dialogo.paginas.currentWidget() is dialogo.pagina_comprovante
     assert not dialogo.cabecalho.icone.pixmap().isNull()
     assert dialogo.cabecalho.titulo.text() == "Pagamento Confirmado"
+
+
+def test_montar_html_impressao_usa_template_premium_compartilhado(esperar_threads):
+    """Ver Fase 6 Onda 5 -- o comprovante impresso/PDF passou a usar o
+    mesmo cabecalho/tabela/total de utils/documento_html.py, em vez do
+    texto solto que so' existia pro resumo em tela."""
+
+    with mock.patch(
+        "telas.pagamento_despesa.configuracoes",
+        return_value={"nome_loja": "Loja Teste"},
+    ):
+        dialogo = PagamentoDespesaDialog(dict(CONTA))
+
+        with mock.patch(
+            "telas.pagamento_despesa.atualizar_conta_pagar",
+            return_value=_RespostaOk(),
+        ), mock.patch(
+            "telas.pagamento_despesa.pagar_conta_pagar",
+            return_value=_RespostaOk(),
+        ):
+            dialogo.confirmar()
+            esperar_threads(dialogo)
+
+    html = dialogo._montar_html_impressao()
+
+    assert "COMPROVANTE DE PAGAMENTO" in html
+    assert "Aluguel do ponto" in html
+    assert "R$ 1.800,00" in html
+    assert "px;'" not in html and 'px"' not in html

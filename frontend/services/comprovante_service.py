@@ -6,12 +6,20 @@ from io import BytesIO
 from urllib.parse import quote
 
 import qrcode
-from PySide6.QtGui import QTextDocument, QPageSize, QImage
+from PySide6.QtGui import QTextDocument, QPageSize
 from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from services.api import get, post, configuracoes
 from utils.formatacao import formatar_moeda
+from utils.documento_html import (
+    ESTILO_BODY,
+    bloco_total,
+    cabecalho_html,
+    cabecalho_tabela,
+    linha_zebra,
+    rodape_nao_fiscal,
+)
 
 
 # ==================================================
@@ -202,49 +210,19 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
     abaixo)."""
 
     nome_loja = config.get("nome_loja") or "Vertex ERP"
-    endereco_loja = config.get("endereco") or ""
     telefone_loja = config.get("telefone") or ""
-    cnpj_loja = config.get("cnpj_cpf") or ""
 
-    logo_html = ""
-    if logo_bytes:
-
-        # QTextDocument ignora max-height/max-width em CSS -- so
-        # respeita width/height como atributo HTML de verdade, entao
-        # precisa calcular o tamanho final (mantendo proporcao) aqui
-        # em vez de deixar por conta do CSS.
-        imagem_logo = QImage.fromData(logo_bytes)
-        largura_original = imagem_logo.width() or 1
-        altura_original = imagem_logo.height() or 1
-
-        altura_alvo = 70
-        largura_alvo = round(largura_original * (altura_alvo / altura_original))
-
-        if largura_alvo > 200:
-            largura_alvo = 200
-            altura_alvo = round(altura_original * (largura_alvo / largura_original))
-
-        logo_b64 = base64.b64encode(logo_bytes).decode("ascii")
-        logo_html = (
-            f'<img src="data:image/png;base64,{logo_b64}" '
-            f'width="{largura_alvo}" height="{altura_alvo}" '
-            f'style="margin-bottom:6px;" />'
-        )
-
-    # zebra striping feito aqui em Python (linha par/ímpar) porque o
-    # QTextDocument não entende seletor :nth-child em CSS -- precisa
-    # decidir a cor de cada <tr> na hora de montar o HTML.
     linhas_itens = "".join(
-        f"<tr style='background:{'#FFFFFF' if indice % 2 == 0 else '#F8FAFC'};'>"
-        f"<td style='padding:7px 8px; border-bottom:1px solid #E5E7EB;'>"
-        f"{item['nome']}</td>"
-        f"<td style='padding:7px 8px; border-bottom:1px solid #E5E7EB; "
-        f"text-align:center;'>{item['quantidade']}</td>"
-        f"<td style='padding:7px 8px; border-bottom:1px solid #E5E7EB; "
-        f"text-align:right;'>{_formatar_moeda(item['valor_unitario'])}</td>"
-        f"<td style='padding:7px 8px; border-bottom:1px solid #E5E7EB; "
-        f"text-align:right;'>{_formatar_moeda(item['subtotal'])}</td>"
-        "</tr>"
+        linha_zebra(
+            [
+                item["nome"],
+                item["quantidade"],
+                _formatar_moeda(item["valor_unitario"]),
+                _formatar_moeda(item["subtotal"]),
+            ],
+            indice,
+            alinhamentos=["left", "center", "right", "right"],
+        )
         for indice, item in enumerate(dados["itens"])
     )
 
@@ -328,49 +306,22 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
 
     return f"""
     <html>
-    <body style="font-family: Arial; font-size: 10pt; color:#1E293B;">
-        <table width="100%" style="margin-bottom:14px;">
-            <tr><td style="background:#2563EB; height:4px; font-size:1px;">&nbsp;</td></tr>
-        </table>
-        <div style="text-align:center;">
-            {logo_html}
-            <h2 style="margin:2px 0;">{nome_loja}</h2>
-            {f"<p style='margin:0; color:#64748B;'>{endereco_loja}</p>" if endereco_loja else ""}
-            {f"<p style='margin:0; color:#64748B;'>WhatsApp: {telefone_loja}</p>" if telefone_loja else ""}
-            {f"<p style='margin:0; color:#64748B;'>CNPJ: {cnpj_loja}</p>" if cnpj_loja else ""}
-        </div>
-        <table width="100%" style="margin:14px 0;">
-            <tr><td style="background:#2563EB; padding:8px; text-align:center;">
-                <span style="color:#FFFFFF; font-size:12pt; font-weight:bold;">
-                    COMPROVANTE DE VENDA
-                </span>
-            </td></tr>
-        </table>
+    <body style="{ESTILO_BODY}">
+        {cabecalho_html("COMPROVANTE DE VENDA", config, logo_bytes)}
         <p style="margin:4px 0;"><b>Pedido nº: {dados['venda_id']}</b></p>
         <p style="margin:4px 0;">Data: {data_com_hora}</p>
         {vendedor_linha}
         {cliente_linhas}
         <h4 style="margin:16px 0 6px; color:#1E293B;">ITENS</h4>
         <table style="width:100%; border-collapse:collapse; border:1px solid #E5E7EB;">
-            <tr style="background:#EFF6FF;">
-                <th style="padding:7px 8px; text-align:left; color:#1E3A8A;">Produto</th>
-                <th style="padding:7px 8px; color:#1E3A8A;">Qtd</th>
-                <th style="padding:7px 8px; text-align:right; color:#1E3A8A;">Unitário</th>
-                <th style="padding:7px 8px; text-align:right; color:#1E3A8A;">Subtotal</th>
-            </tr>
+            {cabecalho_tabela(
+                ["Produto", "Qtd", "Unitário", "Subtotal"],
+                ["left", "center", "right", "right"],
+            )}
             {linhas_itens}
         </table>
         {linha_ajuste}
-        <table width="100%" style="margin-top:14px;">
-            <tr><td style="background:#EFF6FF; padding:10px 14px; text-align:right;">
-                <span style="font-size:8pt; color:#2563EB; font-weight:bold;">
-                    TOTAL DA COMPRA
-                </span><br>
-                <span style="font-size:15pt; color:#1E293B; font-weight:bold;">
-                    {_formatar_moeda(dados['valor_total'])}
-                </span>
-            </td></tr>
-        </table>
+        {bloco_total("TOTAL DA COMPRA", _formatar_moeda(dados['valor_total']))}
         {linha_pagamento}
         <p style="margin:4px 0;">
             Situação:
@@ -384,10 +335,7 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
             Obrigado pela preferência!
         </p>
         {qr_html}
-        <hr style="border:none; border-top:1px solid #E5E7EB; margin:14px 0 8px;">
-        <p style="color:#94A3B8; font-size:8pt; text-align:center;">
-            Este comprovante não possui valor fiscal.
-        </p>
+        {rodape_nao_fiscal("Este comprovante não possui valor fiscal.")}
     </body>
     </html>
     """

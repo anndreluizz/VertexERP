@@ -83,6 +83,13 @@ from design import tokens
 from design.icons import icone, icone_pixmap
 from design.responsive import tamanho_fixo_seguro
 from utils.formatacao import formatar_moeda
+from utils.documento_html import (
+    ESTILO_BODY,
+    bloco_total,
+    cabecalho_html,
+    cabecalho_tabela,
+    linha_zebra,
+)
 from design.widgets import (
     Avatar,
     Badge,
@@ -3389,8 +3396,6 @@ class FichaClienteDialog(QDialog):
     def _montar_html_extrato(self):
 
         config = api.configuracoes()
-        nome_loja = config.get("nome_loja") or "Vertex ERP"
-        telefone_loja = config.get("telefone") or ""
 
         usuario = api.me()
         responsavel = usuario.get("nome") or "—"
@@ -3419,18 +3424,12 @@ class FichaClienteDialog(QDialog):
                 if tipo == "PAGAMENTO" else ""
             )
 
-            # zebra striping feito aqui (não em CSS :nth-child, que o
-            # QTextDocument do Qt não entende)
-            cor_fundo = "#FFFFFF" if len(linhas_tabela) % 2 == 0 else "#F8FAFC"
-
             linhas_tabela.append(
-                f"<tr style='background:{cor_fundo};'>"
-                f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB;'>{data}</td>"
-                f"<td style='padding:6px 8px; border-bottom:1px solid #E5E7EB;'>{descricao}</td>"
-                f"<td align='right' style='padding:6px 8px; border-bottom:1px solid #E5E7EB;'>{debito}</td>"
-                f"<td align='right' style='padding:6px 8px; border-bottom:1px solid #E5E7EB;'>{credito}</td>"
-                f"<td align='right' style='padding:6px 8px; border-bottom:1px solid #E5E7EB;'>{formatar_moeda(saldo_apos)}</td>"
-                f"</tr>"
+                linha_zebra(
+                    [data, descricao, debito, credito, formatar_moeda(saldo_apos)],
+                    len(linhas_tabela),
+                    alinhamentos=["left", "left", "right", "right", "right"],
+                )
             )
 
         linhas_html = "".join(linhas_tabela) or (
@@ -3454,21 +3453,8 @@ class FichaClienteDialog(QDialog):
         )
 
         return f"""
-        <body style="font-family: Arial; font-size: 10pt; color:#1E293B;">
-        <table width="100%" style="margin-bottom:14px;">
-            <tr><td style="background:#2563EB; height:4px; font-size:1px;">&nbsp;</td></tr>
-        </table>
-        <div style="text-align:center;">
-            <h2 style="margin:2px 0;">{nome_loja}</h2>
-            {f"<p style='margin:0; color:#64748B;'>WhatsApp: {telefone_loja}</p>" if telefone_loja else ""}
-        </div>
-        <table width="100%" style="margin:14px 0;">
-            <tr><td style="background:#2563EB; padding:8px; text-align:center;">
-                <span style="color:#FFFFFF; font-size:12pt; font-weight:bold;">
-                    EXTRATO FINANCEIRO
-                </span>
-            </td></tr>
-        </table>
+        <body style="{ESTILO_BODY}">
+        {cabecalho_html("EXTRATO FINANCEIRO", config)}
         <table width="100%" cellspacing="4">
             <tr><td style="color:#64748B;"><b>Cliente:</b></td><td>{self.cliente.get('nome', '')}</td></tr>
             <tr><td style="color:#64748B;"><b>CPF/CNPJ:</b></td><td>{self.cliente.get('cpf_cnpj') or '—'}</td></tr>
@@ -3477,26 +3463,14 @@ class FichaClienteDialog(QDialog):
         </table>
         <h4 style="margin:16px 0 6px; color:#1E293B;">MOVIMENTAÇÕES</h4>
         <table style="width:100%; border-collapse:collapse; border:1px solid #E5E7EB;">
-            <tr style="background:#EFF6FF;">
-                <th style="padding:7px 8px; text-align:left; color:#1E3A8A;">Data</th>
-                <th style="padding:7px 8px; text-align:left; color:#1E3A8A;">Descrição</th>
-                <th style="padding:7px 8px; text-align:right; color:#1E3A8A;">Débito</th>
-                <th style="padding:7px 8px; text-align:right; color:#1E3A8A;">Crédito</th>
-                <th style="padding:7px 8px; text-align:right; color:#1E3A8A;">Saldo</th>
-            </tr>
+            {cabecalho_tabela(
+                ["Data", "Descrição", "Débito", "Crédito", "Saldo"],
+                ["left", "left", "right", "right", "right"],
+            )}
             {linhas_html}
         </table>
         {bloco_observacoes}
-        <table width="100%" style="margin-top:14px;">
-            <tr><td style="background:#EFF6FF; padding:10px 14px; text-align:right;">
-                <span style="font-size:8pt; color:#2563EB; font-weight:bold;">
-                    TOTAL DEVEDOR
-                </span><br>
-                <span style="font-size:15pt; color:#1E293B; font-weight:bold;">
-                    {formatar_moeda(saldo)}
-                </span>
-            </td></tr>
-        </table>
+        {bloco_total("TOTAL DEVEDOR", formatar_moeda(saldo))}
         <p style="margin:8px 0 0; color:#64748B; font-size:9pt;">
             Responsável pela emissão: {responsavel}
         </p>

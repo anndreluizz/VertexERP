@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QFrame,
 )
 
+from services import comprovante_service
 from services.api import configuracoes
 from services.relatorio_service import (
     relatorio_vendas,
@@ -51,6 +52,14 @@ from design.charts import GraficoArea, GraficoPizza
 from design.icons import icone
 from design.widgets import BotaoSecundario, CardKPI, SecaoCard
 from utils.formatacao import formatar_moeda
+from utils.documento_html import (
+    ESTILO_BODY,
+    bloco_total,
+    cabecalho_html,
+    cabecalho_tabela,
+    linha_zebra,
+    rodape_nao_fiscal,
+)
 from widgets.dialogs.message_dialog import Mensagem
 
 
@@ -232,6 +241,8 @@ class Relatorios(QWidget):
         self._carregando = False
         self._carregando_financeiro = False
         self._carregando_caixa = False
+        self._aba_atual = 0
+        self._ultimo_relatorio_financeiro = None
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
@@ -285,6 +296,7 @@ class Relatorios(QWidget):
         cabecalho.addStretch()
 
         self.bt_imprimir = BotaoSecundario("Imprimir Relatório", icone_nome="printer")
+        self.bt_imprimir.clicked.connect(self.imprimir_relatorio_financeiro)
         cabecalho.addWidget(self.bt_imprimir)
 
         layout.addLayout(cabecalho)
@@ -403,6 +415,16 @@ class Relatorios(QWidget):
 
         for i, pagina in enumerate(paginas):
             pagina.setVisible(i == indice)
+
+        self._aba_atual = indice
+        # por ora so' a aba Centro Financeiro tem um relatorio pra
+        # imprimir de verdade (ver imprimir_relatorio_financeiro) --
+        # Caixa/Estoque ficam pra uma proxima onda
+        self.bt_imprimir.setEnabled(indice == 0)
+        self.bt_imprimir.setToolTip(
+            "" if indice == 0
+            else "Impressão disponível só para o Centro Financeiro, por enquanto."
+        )
 
     # ==========================================
     # PÁGINA: CENTRO FINANCEIRO
@@ -711,7 +733,85 @@ class Relatorios(QWidget):
     def _ao_atualizar_financeiro_finalizado(self):
         self._carregando_financeiro = False
 
+    def imprimir_relatorio_financeiro(self):
+
+        if self._aba_atual != 0:
+            return
+
+        if not self._ultimo_relatorio_financeiro:
+            Mensagem.erro(
+                self, "Aguarde o relatório financeiro carregar antes de imprimir."
+            )
+            return
+
+        relatorio = self._ultimo_relatorio_financeiro
+
+        linhas_produtos = "".join(
+            linha_zebra(
+                [item["produto"], item["quantidade"], formatar_moeda(item["total"])],
+                indice,
+                alinhamentos=["left", "center", "right"],
+            )
+            for indice, item in enumerate(relatorio["top_produtos"])
+        ) or linha_zebra(["Nenhuma venda no período.", "", ""], 0)
+
+        linhas_pagamento = "".join(
+            linha_zebra(
+                [
+                    NOMES_FORMA_PAGAMENTO.get(item["forma_pagamento"], item["forma_pagamento"]),
+                    item["quantidade"],
+                    formatar_moeda(item["total"]),
+                ],
+                indice,
+                alinhamentos=["left", "center", "right"],
+            )
+            for indice, item in enumerate(relatorio["formas_pagamento"])
+        ) or linha_zebra(["Nenhuma venda no período.", "", ""], 0)
+
+        periodo_texto = self.combo_periodo.currentText()
+        loja_texto = self.combo_loja.currentText()
+
+        html = f"""
+        <html>
+        <body style="{ESTILO_BODY}">
+            {cabecalho_html(
+                "RELATÓRIO FINANCEIRO",
+                configuracoes(),
+                comprovante_service.obter_logo_loja(),
+            )}
+            <p style="margin:4px 0;">Período: {periodo_texto}</p>
+            <p style="margin:4px 0;">Loja: {loja_texto}</p>
+            <p style="margin:4px 0;">
+                Emitido em: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+            </p>
+            <h4 style="margin:16px 0 6px; color:#1E293B;">RANKING DE PRODUTOS</h4>
+            <table style="width:100%; border-collapse:collapse; border:1px solid #E5E7EB;">
+                {cabecalho_tabela(
+                    ["Produto", "Qtd", "Total"], ["left", "center", "right"]
+                )}
+                {linhas_produtos}
+            </table>
+            <h4 style="margin:16px 0 6px; color:#1E293B;">MIX DE PAGAMENTOS</h4>
+            <table style="width:100%; border-collapse:collapse; border:1px solid #E5E7EB;">
+                {cabecalho_tabela(
+                    ["Forma", "Qtd", "Total"], ["left", "center", "right"]
+                )}
+                {linhas_pagamento}
+            </table>
+            {bloco_total(
+                "FATURAMENTO BRUTO",
+                formatar_moeda(float(relatorio["receita_total"]["atual"])),
+            )}
+            {rodape_nao_fiscal("Relatório interno -- não possui valor fiscal.")}
+        </body>
+        </html>
+        """
+
+        comprovante_service.imprimir(html, self)
+
     def _ao_atualizar_financeiro_sucesso(self, relatorio):
+
+        self._ultimo_relatorio_financeiro = relatorio
 
         faturamento = float(relatorio["receita_total"]["atual"])
         volume = int(relatorio["quantidade_vendas"]["atual"])

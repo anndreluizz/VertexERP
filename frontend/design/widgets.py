@@ -316,6 +316,13 @@ class _BotaoAnimado(QPushButton):
         self._anim.start()
 
     def _ao_animar(self, valor):
+        # mesmo caso de widgets/nav_card.py::_ao_animar_sombra: stop()
+        # chamado antes da animacao ter rodado alguma vez pode emitir
+        # valueChanged(None) -- sem essa guarda, self._cor_atual vira
+        # None e o paintEvent quebra ao tentar pintar com isso.
+        if valor is None:
+            return
+
         self._cor_atual = valor
         self.update()
 

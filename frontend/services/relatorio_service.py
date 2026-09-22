@@ -32,6 +32,66 @@ def relatorio_vendas(data_inicio, data_fim, skip=0, limit=100, **filtros):
     return response.json()
 
 
+def margem_categoria(data_inicio, data_fim, loja_id=None):
+
+    params = {"data_fim": data_fim}
+
+    if data_inicio is not None:
+        params["data_inicio"] = data_inicio
+
+    if loja_id is not None:
+        params["loja_id"] = loja_id
+
+    response = get(f"/relatorios/margem-categoria?{urlencode(params)}")
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Falha ao carregar a margem por categoria "
+            f"(HTTP {response.status_code}): {response.text}"
+        )
+
+    return response.json()
+
+
+def estoque_categoria(loja_id=None):
+
+    params = {}
+
+    if loja_id is not None:
+        params["loja_id"] = loja_id
+
+    response = get(f"/relatorios/estoque-categoria?{urlencode(params)}")
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Falha ao carregar o estoque por categoria "
+            f"(HTTP {response.status_code}): {response.text}"
+        )
+
+    return response.json()
+
+
+def vendas_dia_semana(data_inicio, data_fim, loja_id=None):
+
+    params = {"data_fim": data_fim}
+
+    if data_inicio is not None:
+        params["data_inicio"] = data_inicio
+
+    if loja_id is not None:
+        params["loja_id"] = loja_id
+
+    response = get(f"/relatorios/vendas-dia-semana?{urlencode(params)}")
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Falha ao carregar vendas por dia da semana "
+            f"(HTTP {response.status_code}): {response.text}"
+        )
+
+    return response.json()
+
+
 def curva_abc(data_inicio, data_fim, loja_id=None, skip=0, limit=100):
 
     params = {"data_fim": data_fim, "skip": skip, "limit": limit}

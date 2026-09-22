@@ -223,6 +223,148 @@ class RelatorioService:
         }
 
     # ==================================================
+    # MARGEM POR CATEGORIA
+    # ==================================================
+
+    @staticmethod
+    def margem_por_categoria(
+        db: Session,
+        data_inicio: date | None,
+        data_fim: date,
+        loja_id: int | None = None,
+    ):
+        inicio = (
+            datetime.combine(data_inicio, time.min)
+            if data_inicio is not None else None
+        )
+        fim = datetime.combine(data_fim, time.min) + timedelta(days=1)
+
+        ids = RelatorioService._ids_vendas(db, inicio, fim, loja_id=loja_id)
+
+        if not ids:
+            return []
+
+        itens = (
+            db.query(ItemVenda, Produto.categoria, Produto.preco_custo)
+            .join(Produto, ItemVenda.produto_id == Produto.id)
+            .filter(ItemVenda.venda_id.in_(ids))
+            .all()
+        )
+
+        agregados: dict[str, dict] = {}
+
+        for item, categoria, preco_custo in itens:
+            chave = categoria or "Sem categoria"
+            bucket = agregados.setdefault(
+                chave, {"receita": Decimal("0"), "lucro": Decimal("0"), "quantidade": 0}
+            )
+            bucket["receita"] += item.subtotal
+            bucket["lucro"] += (
+                item.valor_unitario - (preco_custo or 0)
+            ) * item.quantidade
+            bucket["quantidade"] += item.quantidade
+
+        resultado = [
+            {
+                "categoria": categoria,
+                "receita": dados["receita"],
+                "lucro": dados["lucro"],
+                "margem_pct": (
+                    round(dados["lucro"] / dados["receita"] * 100, 2)
+                    if dados["receita"] else Decimal("0")
+                ),
+                "quantidade": dados["quantidade"],
+            }
+            for categoria, dados in agregados.items()
+        ]
+
+        return sorted(resultado, key=lambda r: r["receita"], reverse=True)
+
+    # ==================================================
+    # ESTOQUE POR CATEGORIA (valor parado em estoque, pelo custo)
+    # ==================================================
+
+    @staticmethod
+    def estoque_por_categoria(db: Session, loja_id: int | None = None):
+        # sem loja_id = soma todas as lojas juntas (visao "quanto a
+        # empresa toda tem parado", nao uma linha por loja -- pra
+        # comparar loja a loja ja existe comparativo_estoque_lojas)
+        query = (
+            db.query(EstoqueLoja, Produto.categoria, Produto.preco_custo)
+            .join(Produto, EstoqueLoja.produto_id == Produto.id)
+        )
+
+        if loja_id is not None:
+            query = query.filter(EstoqueLoja.loja_id == loja_id)
+
+        agregados: dict[str, dict] = {}
+
+        for estoque, categoria, preco_custo in query.all():
+            chave = categoria or "Sem categoria"
+            bucket = agregados.setdefault(
+                chave, {"quantidade": 0, "valor": Decimal("0")}
+            )
+            bucket["quantidade"] += estoque.quantidade
+            bucket["valor"] += Decimal(estoque.quantidade) * (preco_custo or 0)
+
+        resultado = [
+            {
+                "categoria": categoria,
+                "quantidade": dados["quantidade"],
+                "valor": dados["valor"],
+            }
+            for categoria, dados in agregados.items()
+        ]
+
+        return sorted(resultado, key=lambda r: r["valor"], reverse=True)
+
+    # ==================================================
+    # VENDAS POR DIA DA SEMANA
+    # ==================================================
+
+    _DIAS_SEMANA = [
+        "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo",
+    ]
+
+    @staticmethod
+    def vendas_por_dia_semana(
+        db: Session,
+        data_inicio: date | None,
+        data_fim: date,
+        loja_id: int | None = None,
+    ):
+        inicio = (
+            datetime.combine(data_inicio, time.min)
+            if data_inicio is not None else None
+        )
+        fim = datetime.combine(data_fim, time.min) + timedelta(days=1)
+
+        ids = RelatorioService._ids_vendas(db, inicio, fim, loja_id=loja_id)
+
+        agregados = [
+            {"quantidade": 0, "total": Decimal("0")} for _ in range(7)
+        ]
+
+        if ids:
+            for data, valor_total in (
+                db.query(Venda.data, Venda.valor_total)
+                .filter(Venda.id.in_(ids))
+                .all()
+            ):
+                indice = data.weekday()
+                agregados[indice]["quantidade"] += 1
+                agregados[indice]["total"] += valor_total
+
+        return [
+            {
+                "dia_semana": RelatorioService._DIAS_SEMANA[i],
+                "quantidade": agregados[i]["quantidade"],
+                "total": agregados[i]["total"],
+            }
+            for i in range(7)
+        ]
+
+    # ==================================================
     # CURVA ABC (classificacao de produto por receita)
     # ==================================================
 

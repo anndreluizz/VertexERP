@@ -199,3 +199,85 @@ def test_sugestao_reposicao_sem_loja_usa_produto_global(client, auth_headers, db
     assert response.status_code == 200
     nomes = [i["produto"] for i in response.json()]
     assert "Produto Global Baixo" in nomes
+
+
+def test_estoque_por_categoria_agrupa_e_soma_valor_pelo_custo(client, auth_headers, db):
+    loja = Loja(nome="Loja Estoque Categoria")
+    db.add(loja)
+    db.commit()
+
+    roupa = Produto(
+        codigo="CAT-ROUPA", nome="Camiseta", categoria="Roupa", unidade="UN",
+        preco_custo=10.0, preco_venda=20.0, estoque=0, estoque_minimo=5, ativo=True,
+    )
+    calcado = Produto(
+        codigo="CAT-CALCADO", nome="Tênis", categoria="Calçado", unidade="UN",
+        preco_custo=50.0, preco_venda=90.0, estoque=0, estoque_minimo=2, ativo=True,
+    )
+    db.add_all([roupa, calcado])
+    db.commit()
+    db.refresh(roupa)
+    db.refresh(calcado)
+
+    db.add_all([
+        EstoqueLoja(produto_id=roupa.id, loja_id=loja.id, quantidade=10, estoque_minimo=5),
+        EstoqueLoja(produto_id=calcado.id, loja_id=loja.id, quantidade=4, estoque_minimo=2),
+    ])
+    db.commit()
+
+    response = client.get("/relatorios/estoque-categoria", headers=auth_headers)
+
+    assert response.status_code == 200
+    por_categoria = {item["categoria"]: item for item in response.json()}
+
+    assert por_categoria["Roupa"]["quantidade"] == 10
+    assert float(por_categoria["Roupa"]["valor"]) == 100.0  # 10 * 10.0
+
+    assert por_categoria["Calçado"]["quantidade"] == 4
+    assert float(por_categoria["Calçado"]["valor"]) == 200.0  # 4 * 50.0
+
+
+def test_margem_por_categoria_calcula_lucro_e_percentual(client, auth_headers, db):
+    roupa = _criar_produto(db, "MRG-ROUPA", "Camiseta Margem")
+    roupa.categoria = "Roupa"
+    roupa.preco_custo = 10.0
+    db.commit()
+
+    # vendida por 20 (custo 10) -- lucro 10, margem 50%
+    _criar_venda_item(db, roupa, valor_unitario=20, quantidade=1)
+
+    response = client.get(
+        "/relatorios/margem-categoria", params=_periodo_hoje(), headers=auth_headers
+    )
+
+    assert response.status_code == 200
+    itens = response.json()
+    assert len(itens) == 1
+    assert itens[0]["categoria"] == "Roupa"
+    assert float(itens[0]["receita"]) == 20.0
+    assert float(itens[0]["lucro"]) == 10.0
+    assert float(itens[0]["margem_pct"]) == 50.0
+
+
+def test_vendas_por_dia_semana_soma_no_dia_certo(client, auth_headers, db):
+    produto = _criar_produto(db, "DIA-001", "Produto Dia")
+
+    hoje = datetime.utcnow()
+    venda = _criar_venda_item(db, produto, valor_unitario=30, quantidade=1)
+    venda.data = hoje
+    db.commit()
+
+    response = client.get(
+        "/relatorios/vendas-dia-semana", params=_periodo_hoje(), headers=auth_headers
+    )
+
+    assert response.status_code == 200
+    itens = response.json()
+    assert len(itens) == 7
+
+    dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+    dia_esperado = dias_semana[hoje.weekday()]
+
+    por_dia = {item["dia_semana"]: item for item in itens}
+    assert por_dia[dia_esperado]["quantidade"] == 1
+    assert float(por_dia[dia_esperado]["total"]) == 30.0

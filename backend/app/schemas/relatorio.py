@@ -53,6 +53,26 @@ class FunilVendasResponse(BaseModel):
     taxa_cancelamento: Decimal
 
 
+class MargemCategoriaItem(BaseModel):
+    categoria: str
+    receita: Decimal
+    lucro: Decimal
+    margem_pct: Decimal
+    quantidade: int
+
+
+class EstoqueCategoriaItem(BaseModel):
+    categoria: str
+    quantidade: int
+    valor: Decimal
+
+
+class VendaDiaSemanaItem(BaseModel):
+    dia_semana: str
+    quantidade: int
+    total: Decimal
+
+
 class CurvaAbcItem(BaseModel):
     produto_id: int
     produto: str

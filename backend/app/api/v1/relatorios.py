@@ -9,9 +9,12 @@ from app.schemas.relatorio import (
     ComparativoEstoqueLojaItem,
     ComparativoLojaItem,
     CurvaAbcItem,
+    EstoqueCategoriaItem,
     FunilVendasResponse,
+    MargemCategoriaItem,
     RelatorioVendasResponse,
     SugestaoReposicaoItem,
+    VendaDiaSemanaItem,
 )
 from app.services.relatorio_service import RelatorioService
 
@@ -82,6 +85,37 @@ def funil_vendas(
     usuario=Depends(get_current_user),
 ):
     return RelatorioService.funil_vendas(db, data_inicio, data_fim, loja_id)
+
+
+@router.get("/margem-categoria", response_model=list[MargemCategoriaItem])
+def margem_categoria(
+    data_inicio: date | None = None,
+    data_fim: date = Query(...),
+    loja_id: int | None = None,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return RelatorioService.margem_por_categoria(db, data_inicio, data_fim, loja_id)
+
+
+@router.get("/estoque-categoria", response_model=list[EstoqueCategoriaItem])
+def estoque_categoria(
+    loja_id: int | None = None,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return RelatorioService.estoque_por_categoria(db, loja_id)
+
+
+@router.get("/vendas-dia-semana", response_model=list[VendaDiaSemanaItem])
+def vendas_dia_semana(
+    data_inicio: date | None = None,
+    data_fim: date = Query(...),
+    loja_id: int | None = None,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return RelatorioService.vendas_por_dia_semana(db, data_inicio, data_fim, loja_id)
 
 
 @router.get("/curva-abc", response_model=list[CurvaAbcItem])

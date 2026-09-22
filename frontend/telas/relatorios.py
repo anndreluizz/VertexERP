@@ -22,6 +22,9 @@ from services.relatorio_service import (
     relatorio_vendas,
     curva_abc,
     funil_vendas,
+    margem_categoria,
+    estoque_categoria,
+    vendas_dia_semana,
     comparativo_lojas,
     comparativo_estoque,
     sugestao_reposicao,
@@ -29,6 +32,9 @@ from services.relatorio_service import (
 from services.produto_service import listar_produtos
 from services.caixa_service import historico_caixa
 from services.loja_service import listar_lojas
+from services.cliente_service import listar_clientes
+from services.movimento_fiado_service import listar_movimentos
+from services import cliente_analise
 from services.worker import rodar_em_thread, em_paralelo
 
 
@@ -46,6 +52,63 @@ def _buscar_dados_relatorio_geral(loja_id_caixa):
     independente/refeita sozinha quando o filtro financeiro muda).
     As 2 sao independentes, entao disparam em paralelo."""
     return em_paralelo((listar_produtos,), (historico_caixa, loja_id_caixa))
+
+
+def _buscar_dados_indicadores(data_inicio, data_fim, loja_id):
+    """Roda na worker thread -- 5 chamadas independentes em paralelo,
+    mais a agregacao de aging/limite de credito (que reaproveita
+    cliente_analise, a mesma logica ja usada em telas/clientes.py,
+    pra "inadimplente" nunca divergir entre as duas telas)."""
+
+    margens, estoques, dias_semana, clientes, movimentos = em_paralelo(
+        (margem_categoria, data_inicio, data_fim, loja_id),
+        (estoque_categoria, loja_id),
+        (vendas_dia_semana, data_inicio, data_fim, loja_id),
+        (listar_clientes, loja_id),
+        (listar_movimentos,),
+    )
+
+    movimentos_por_cliente = {}
+    for mov in movimentos:
+        cid = mov.get("cliente_id")
+        if cid is not None:
+            movimentos_por_cliente.setdefault(cid, []).append(mov)
+
+    agregados = [
+        cliente_analise.calcular_agregados(
+            cliente, movimentos_por_cliente.get(cliente["id"], [])
+        )
+        for cliente in clientes
+    ]
+
+    inadimplentes = [
+        agr for agr in agregados if cliente_analise.eh_inadimplente(agr)
+    ]
+
+    aging = {"91-120": 0, "121-180": 0, "180+": 0}
+    for agr in inadimplentes:
+        dias = agr["dias_sem_movimentacao"]
+        if dias <= 120:
+            aging["91-120"] += 1
+        elif dias <= 180:
+            aging["121-180"] += 1
+        else:
+            aging["180+"] += 1
+
+    clientes_com_limite = sum(
+        1 for c in clientes if float(c.get("limite_credito") or 0) > 0
+    )
+
+    return {
+        "margem_categoria": margens,
+        "estoque_categoria": estoques,
+        "vendas_dia_semana": dias_semana,
+        "aging_inadimplencia": aging,
+        "total_inadimplentes": len(inadimplentes),
+        "clientes_com_limite": clientes_com_limite,
+        "clientes_sem_limite": len(clientes) - clientes_com_limite,
+    }
+
 
 from design import tokens
 from design.charts import GraficoArea, GraficoPizza
@@ -243,6 +306,8 @@ class Relatorios(QWidget):
         self._carregando_caixa = False
         self._aba_atual = 0
         self._ultimo_relatorio_financeiro = None
+        self._indicadores_carregados = False
+        self._carregando_indicadores = False
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
@@ -311,6 +376,7 @@ class Relatorios(QWidget):
         self.bt_aba_financeiro = self._botao_aba("Centro Financeiro")
         self.bt_aba_caixa = self._botao_aba("Relatório de Caixa")
         self.bt_aba_estoque = self._botao_aba("Relatório de Estoque")
+        self.bt_aba_indicadores = self._botao_aba("Indicadores")
 
         self.bt_aba_financeiro.clicked.connect(
             lambda: self._selecionar_aba(0)
@@ -321,10 +387,14 @@ class Relatorios(QWidget):
         self.bt_aba_estoque.clicked.connect(
             lambda: self._selecionar_aba(2)
         )
+        self.bt_aba_indicadores.clicked.connect(
+            lambda: self._selecionar_aba(3)
+        )
 
         abas_layout.addWidget(self.bt_aba_financeiro)
         abas_layout.addWidget(self.bt_aba_caixa)
         abas_layout.addWidget(self.bt_aba_estoque)
+        abas_layout.addWidget(self.bt_aba_indicadores)
         abas_layout.addStretch()
 
         layout.addLayout(abas_layout)
@@ -338,6 +408,7 @@ class Relatorios(QWidget):
             self.bt_aba_financeiro,
             self.bt_aba_caixa,
             self.bt_aba_estoque,
+            self.bt_aba_indicadores,
         ]
 
         # ======================
@@ -347,10 +418,12 @@ class Relatorios(QWidget):
         self.pagina_financeiro = self._criar_pagina_financeiro()
         self.pagina_caixa = self._criar_pagina_caixa()
         self.pagina_estoque = self._criar_pagina_estoque()
+        self.pagina_indicadores = self._criar_pagina_indicadores()
 
         layout.addWidget(self.pagina_financeiro)
         layout.addWidget(self.pagina_caixa)
         layout.addWidget(self.pagina_estoque)
+        layout.addWidget(self.pagina_indicadores)
 
         self._selecionar_aba(0)
 
@@ -408,6 +481,7 @@ class Relatorios(QWidget):
             self.pagina_financeiro,
             self.pagina_caixa,
             self.pagina_estoque,
+            self.pagina_indicadores,
         ]
 
         for i, botao in enumerate(self.botoes_aba):
@@ -417,9 +491,13 @@ class Relatorios(QWidget):
             pagina.setVisible(i == indice)
 
         self._aba_atual = indice
+
+        if indice == 3 and not self._indicadores_carregados:
+            self._atualizar_indicadores()
+
         # por ora so' a aba Centro Financeiro tem um relatorio pra
         # imprimir de verdade (ver imprimir_relatorio_financeiro) --
-        # Caixa/Estoque ficam pra uma proxima onda
+        # Caixa/Estoque/Indicadores ficam pra uma proxima onda
         self.bt_imprimir.setEnabled(indice == 0)
         self.bt_imprimir.setToolTip(
             "" if indice == 0
@@ -1180,6 +1258,242 @@ class Relatorios(QWidget):
         layout.addStretch()
 
         return pagina
+
+    # ==========================================
+    # PÁGINA: INDICADORES
+    # ==========================================
+
+    def _criar_pagina_indicadores(self):
+
+        pagina, layout = self._pagina_rolavel(espacamento=12)
+
+        filtro_layout = QHBoxLayout()
+        filtro_layout.setSpacing(8)
+
+        self.combo_periodo_indicadores = QComboBox()
+        self.combo_periodo_indicadores.addItems(self.PERIODOS)
+        self.combo_periodo_indicadores.setCurrentText("Este mês")
+        self.combo_periodo_indicadores.setMinimumHeight(36)
+        self.combo_periodo_indicadores.setCursor(Qt.PointingHandCursor)
+        self.combo_periodo_indicadores.setStyleSheet(f"""
+            QComboBox {{
+                border:1px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
+                padding:4px 12px; background:{tokens.CARD}; color:{tokens.TEXTO};
+            }}
+        """)
+
+        self.combo_loja_indicadores = QComboBox()
+        self.combo_loja_indicadores.setMinimumHeight(36)
+        self.combo_loja_indicadores.setCursor(Qt.PointingHandCursor)
+        self.combo_loja_indicadores.setStyleSheet(
+            self.combo_periodo_indicadores.styleSheet()
+        )
+        self._carregar_combo_lojas(self.combo_loja_indicadores)
+
+        self._timer_atualizar_indicadores = QTimer(self)
+        self._timer_atualizar_indicadores.setSingleShot(True)
+        self._timer_atualizar_indicadores.timeout.connect(
+            self._atualizar_indicadores
+        )
+        self.combo_periodo_indicadores.currentTextChanged.connect(
+            lambda: self._timer_atualizar_indicadores.start(300)
+        )
+        self.combo_loja_indicadores.currentIndexChanged.connect(
+            lambda: self._timer_atualizar_indicadores.start(300)
+        )
+
+        filtro_layout.addWidget(self.combo_periodo_indicadores)
+        filtro_layout.addWidget(self.combo_loja_indicadores)
+        filtro_layout.addStretch()
+
+        layout.addLayout(filtro_layout)
+
+        # margem por categoria
+        painel_margem = PainelSecao("💰", "Margem por Categoria")
+        self.tabela_margem_categoria = QTableWidget()
+        self.tabela_margem_categoria.setColumnCount(4)
+        self.tabela_margem_categoria.setHorizontalHeaderLabels(
+            ["Categoria", "Receita", "Lucro", "Margem %"]
+        )
+        self._estilizar_tabela(self.tabela_margem_categoria)
+        self.tabela_margem_categoria.setMinimumHeight(160)
+        painel_margem.corpo.addWidget(self.tabela_margem_categoria)
+        layout.addWidget(painel_margem)
+
+        # estoque por categoria (nao depende de periodo, so' de loja)
+        painel_estoque_cat = PainelSecao("📦", "Estoque por Categoria")
+        self.tabela_estoque_categoria = QTableWidget()
+        self.tabela_estoque_categoria.setColumnCount(3)
+        self.tabela_estoque_categoria.setHorizontalHeaderLabels(
+            ["Categoria", "Quantidade", "Valor em Estoque"]
+        )
+        self._estilizar_tabela(self.tabela_estoque_categoria)
+        self.tabela_estoque_categoria.setMinimumHeight(150)
+        painel_estoque_cat.corpo.addWidget(self.tabela_estoque_categoria)
+        layout.addWidget(painel_estoque_cat)
+
+        # vendas por dia da semana
+        self.painel_dia_semana = PainelSecao("📅", "Vendas por Dia da Semana")
+        layout.addWidget(self.painel_dia_semana)
+
+        # aging de inadimplencia
+        self.painel_aging = PainelSecao(
+            "🔴", "Inadimplência por Tempo de Atraso"
+        )
+        subtitulo_aging = QLabel(
+            "Mesmo critério da tela de Clientes: saldo devedor e mais "
+            "de 90 dias sem nenhuma movimentação (compra ou pagamento)."
+        )
+        subtitulo_aging.setWordWrap(True)
+        subtitulo_aging.setStyleSheet(
+            f"background:transparent; color:{tokens.TEXTO_TERCIARIO}; "
+            f"font-size:{tokens.TAMANHO_XS}px; border:none;"
+        )
+        self.painel_aging.layout_externo.insertWidget(1, subtitulo_aging)
+        layout.addWidget(self.painel_aging)
+
+        # limite de credito definido
+        self.painel_limite_credito = PainelSecao(
+            "🎯", "Limite de Crédito Definido"
+        )
+        layout.addWidget(self.painel_limite_credito)
+
+        layout.addStretch()
+
+        return pagina
+
+    def _atualizar_indicadores(self):
+
+        if self._carregando_indicadores:
+            return
+        self._carregando_indicadores = True
+
+        data_inicio, data_fim = self._calcular_periodo(
+            self.combo_periodo_indicadores
+        )
+        loja_id = self.combo_loja_indicadores.currentData()
+
+        rodar_em_thread(
+            self,
+            _buscar_dados_indicadores,
+            data_inicio.isoformat() if data_inicio else None,
+            data_fim.isoformat(),
+            loja_id,
+            ao_sucesso=self._ao_atualizar_indicadores_sucesso,
+            ao_erro=self._ao_atualizar_indicadores_erro,
+            ao_finalizar=self._ao_atualizar_indicadores_finalizado,
+        )
+
+    def _ao_atualizar_indicadores_erro(self, erro):
+        Mensagem.erro(
+            self, f"Não foi possível carregar os indicadores.\n{erro}"
+        )
+
+    def _ao_atualizar_indicadores_finalizado(self):
+        self._carregando_indicadores = False
+
+    def _ao_atualizar_indicadores_sucesso(self, dados):
+
+        self._indicadores_carregados = True
+
+        # margem por categoria
+        margens = dados["margem_categoria"]
+        self.tabela_margem_categoria.setRowCount(len(margens))
+        for linha, item in enumerate(margens):
+            self.tabela_margem_categoria.setItem(
+                linha, 0, QTableWidgetItem(item["categoria"])
+            )
+            self.tabela_margem_categoria.setItem(
+                linha, 1, QTableWidgetItem(formatar_moeda(item["receita"]))
+            )
+            self.tabela_margem_categoria.setItem(
+                linha, 2, QTableWidgetItem(formatar_moeda(item["lucro"]))
+            )
+            self.tabela_margem_categoria.setItem(
+                linha, 3, QTableWidgetItem(f"{float(item['margem_pct']):.1f}%")
+            )
+
+        # estoque por categoria
+        estoques = dados["estoque_categoria"]
+        self.tabela_estoque_categoria.setRowCount(len(estoques))
+        for linha, item in enumerate(estoques):
+            self.tabela_estoque_categoria.setItem(
+                linha, 0, QTableWidgetItem(item["categoria"])
+            )
+            self.tabela_estoque_categoria.setItem(
+                linha, 1, QTableWidgetItem(str(item["quantidade"]))
+            )
+            self.tabela_estoque_categoria.setItem(
+                linha, 2, QTableWidgetItem(formatar_moeda(item["valor"]))
+            )
+
+        # vendas por dia da semana
+        self.painel_dia_semana.limpar_corpo()
+        dias_semana = dados["vendas_dia_semana"]
+        maior_dia = max(
+            (float(item["total"]) for item in dias_semana), default=0
+        ) or 1
+
+        for item in dias_semana:
+            total = float(item["total"])
+            self.painel_dia_semana.corpo.addWidget(LinhaBarra(
+                item["dia_semana"],
+                f"{item['quantidade']} venda(s)",
+                formatar_moeda(total),
+                total / maior_dia * 100,
+                tokens.PRIMARIA,
+            ))
+
+        # aging de inadimplencia
+        self.painel_aging.limpar_corpo()
+        aging = dados["aging_inadimplencia"]
+        total_inadimplentes = dados["total_inadimplentes"]
+
+        if not total_inadimplentes:
+            self.painel_aging.adicionar_vazio(
+                "Nenhum cliente inadimplente no momento."
+            )
+        else:
+            rotulos_aging = {
+                "91-120": "91 a 120 dias",
+                "121-180": "121 a 180 dias",
+                "180+": "Mais de 180 dias",
+            }
+            for chave, rotulo in rotulos_aging.items():
+                quantidade = aging[chave]
+                self.painel_aging.corpo.addWidget(LinhaBarra(
+                    rotulo,
+                    None,
+                    f"{quantidade} cliente(s)",
+                    quantidade / total_inadimplentes * 100,
+                    tokens.ERRO,
+                ))
+
+        # limite de credito
+        self.painel_limite_credito.limpar_corpo()
+        com_limite = dados["clientes_com_limite"]
+        sem_limite = dados["clientes_sem_limite"]
+        total_clientes = com_limite + sem_limite
+
+        if not total_clientes:
+            self.painel_limite_credito.adicionar_vazio(
+                "Nenhum cliente cadastrado."
+            )
+        else:
+            self.painel_limite_credito.corpo.addWidget(LinhaBarra(
+                "Com limite definido",
+                None,
+                str(com_limite),
+                com_limite / total_clientes * 100,
+                tokens.SECUNDARIA_HOVER,
+            ))
+            self.painel_limite_credito.corpo.addWidget(LinhaBarra(
+                "Sem limite definido (\"no olho\")",
+                None,
+                str(sem_limite),
+                sem_limite / total_clientes * 100,
+                tokens.ALERTA_TEXTO,
+            ))
 
     def _botao_filtro_estoque(self, texto):
 

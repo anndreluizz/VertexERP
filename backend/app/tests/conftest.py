@@ -77,6 +77,7 @@ from app.api.v1 import (
     extrato_bancario as extrato_bancario_router,
     perfis as perfis_router,
     auditoria as auditoria_router,
+    notificacoes as notificacoes_router,
 )
 from app.auth import dependencies as auth_dependencies
 
@@ -109,6 +110,7 @@ MODULOS_COM_GET_DB = [
     extrato_bancario_router,
     perfis_router,
     auditoria_router,
+    notificacoes_router,
     auth_dependencies,
 ]
 

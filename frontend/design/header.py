@@ -16,11 +16,15 @@ from design import tokens
 from design.icons import icone
 from design.widgets import Avatar, BotaoPerigo, BotaoSucesso
 from services.aprovacao_service import aprovar, listar_pendentes, rejeitar
+from services import notificacao_service
 
-# intervalo do polling silencioso do sininho (so pra admin) -- nao
-# precisa ser em tempo real, e so um numero no canto do icone ate o
-# admin abrir o popover e ver a lista de verdade
+# intervalo do polling silencioso do sininho -- nao precisa ser em
+# tempo real, e so um numero no canto do icone ate o usuario abrir o
+# popover e ver a lista de verdade. Aprovacoes so' existe pra admin
+# (API bloqueia com 403 pra qualquer outro), notificacoes sao pra
+# todo mundo.
 _INTERVALO_POLL_APROVACOES_MS = 60_000
+_INTERVALO_POLL_NOTIFICACOES_MS = 60_000
 
 
 def _formatar_data_hora(texto_iso):
@@ -205,6 +209,80 @@ class _CartaoAprovacao(QFrame):
         self._on_resolvido(self)
 
 
+class _CartaoNotificacao(_BlocoClicavel):
+    """Uma notificação dentro do popover do sino -- clicar nela marca
+    como lida na hora (mesmo espírito de "abrir = ler" de qualquer
+    caixa de notificação). Lida vs não lida só muda a cor de fundo/
+    peso da fonte, nada mais chamativo que isso."""
+
+    def __init__(self, notificacao, on_lida, parent=None):
+
+        super().__init__(parent)
+
+        self._notificacao_id = notificacao["id"]
+        self._lida = notificacao["lida"]
+        self._on_lida = on_lida
+
+        self._aplicar_estilo()
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(2)
+
+        peso = "normal" if self._lida else "700"
+
+        lbl_titulo = QLabel(notificacao["titulo"])
+        lbl_titulo.setWordWrap(True)
+        lbl_titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:{peso};
+        """)
+        layout.addWidget(lbl_titulo)
+
+        lbl_corpo = QLabel(notificacao["corpo"])
+        lbl_corpo.setWordWrap(True)
+        lbl_corpo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_XS}px;
+        """)
+        layout.addWidget(lbl_corpo)
+
+        lbl_data = QLabel(_formatar_data_hora(notificacao.get("criado_em", "")))
+        lbl_data.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px;
+        """)
+        layout.addWidget(lbl_data)
+
+        self.clicked.connect(self._marcar_lida)
+
+    def _aplicar_estilo(self):
+        fundo = tokens.FUNDO if not self._lida else "transparent"
+        self.setStyleSheet(f"""
+            _CartaoNotificacao {{
+                background: {fundo};
+                border-radius: {tokens.RADIUS_SM}px;
+            }}
+            _CartaoNotificacao:hover {{
+                background: {tokens.FUNDO};
+            }}
+        """)
+
+    def _marcar_lida(self):
+
+        if self._lida:
+            return
+
+        try:
+            notificacao_service.marcar_lida(self._notificacao_id)
+        except Exception:
+            return
+
+        self._lida = True
+        self._aplicar_estilo()
+        self._on_lida()
+
+
 class Header(QFrame):
 
     busca_alterada = Signal(str)
@@ -342,9 +420,10 @@ class Header(QFrame):
         self.bt_notificacoes.clicked.connect(self._abrir_notificacoes)
         layout.addWidget(self.bt_notificacoes)
 
-        # bolinha vermelha com a contagem, sobreposta no canto do sino
-        # -- filha do proprio botao pra nao precisar de layout proprio,
-        # so uma geometria fixa (o botao tem tamanho fixo 38x38)
+        # bolinha vermelha com a contagem total (aprovacoes pendentes +
+        # notificacoes nao lidas), sobreposta no canto do sino -- filha
+        # do proprio botao pra nao precisar de layout proprio, so uma
+        # geometria fixa (o botao tem tamanho fixo 38x38)
         self._badge_aprovacoes = QLabel(self.bt_notificacoes)
         self._badge_aprovacoes.setGeometry(22, 1, 17, 17)
         self._badge_aprovacoes.setAlignment(Qt.AlignCenter)
@@ -357,6 +436,9 @@ class Header(QFrame):
         """)
         self._badge_aprovacoes.hide()
 
+        self._total_aprovacoes = 0
+        self._total_nao_lidas = 0
+
         self._timer_aprovacoes = None
 
         if self._admin:
@@ -367,6 +449,14 @@ class Header(QFrame):
                 self._atualizar_contagem_aprovacoes
             )
             self._timer_aprovacoes.start(_INTERVALO_POLL_APROVACOES_MS)
+
+        self._atualizar_contagem_notificacoes()
+
+        self._timer_notificacoes = QTimer(self)
+        self._timer_notificacoes.timeout.connect(
+            self._atualizar_contagem_notificacoes
+        )
+        self._timer_notificacoes.start(_INTERVALO_POLL_NOTIFICACOES_MS)
 
         divisor = QFrame()
         divisor.setFixedSize(1, 32)
@@ -479,7 +569,23 @@ class Header(QFrame):
             # vale a pena incomodar o usuario por causa do polling
             return
 
-        total = len(pendentes)
+        self._total_aprovacoes = len(pendentes)
+        self._atualizar_badge()
+
+    def _atualizar_contagem_notificacoes(self):
+
+        try:
+            self._total_nao_lidas = notificacao_service.contagem_nao_lidas()
+        except Exception:
+            # mesmo espirito de _atualizar_contagem_aprovacoes -- sem
+            # servidor/rede, so deixa o badge como estava
+            return
+
+        self._atualizar_badge()
+
+    def _atualizar_badge(self):
+
+        total = self._total_aprovacoes + self._total_nao_lidas
 
         if total:
             self._badge_aprovacoes.setText(str(total) if total <= 9 else "9+")
@@ -491,18 +597,49 @@ class Header(QFrame):
 
         popover = _Popover(largura=320)
 
+        cabecalho = QHBoxLayout()
+
         titulo = QLabel("Notificações")
         titulo.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO};
             font-size:{tokens.TAMANHO_MD}px; font-weight:700;
-            padding: 8px 10px 4px 10px;
         """)
-        popover.layout_corpo.addWidget(titulo)
+        cabecalho.addWidget(titulo)
+        cabecalho.addStretch()
+
+        if self._total_nao_lidas:
+            bt_marcar_todas = QPushButton("Marcar todas como lidas")
+            bt_marcar_todas.setCursor(Qt.PointingHandCursor)
+            bt_marcar_todas.setStyleSheet(f"""
+                QPushButton {{
+                    background:transparent; border:none;
+                    color:{tokens.PRIMARIA}; font-size:{tokens.TAMANHO_XS}px;
+                }}
+            """)
+            bt_marcar_todas.clicked.connect(self._marcar_todas_notificacoes_lidas)
+            cabecalho.addWidget(bt_marcar_todas)
+
+        cabecalho_widget = QWidget()
+        cabecalho_widget.setLayout(cabecalho)
+        cabecalho_widget.setStyleSheet("background:transparent;")
+        popover.layout_corpo.addWidget(cabecalho_widget)
 
         self._popover_notificacoes = popover
 
-        if not self._admin:
+        try:
+            notificacoes = notificacao_service.listar(limit=10)
+        except Exception:
+            notificacoes = None
 
+        if notificacoes is None:
+            erro = QLabel("Não foi possível carregar as notificações.")
+            erro.setWordWrap(True)
+            erro.setStyleSheet(f"""
+                background:transparent; color:{tokens.ERRO};
+                font-size:{tokens.TAMANHO_SM}px; padding: 4px 10px 12px 10px;
+            """)
+            popover.layout_corpo.addWidget(erro)
+        elif not notificacoes:
             vazio = QLabel("Nenhuma notificação por enquanto.")
             vazio.setWordWrap(True)
             vazio.setStyleSheet(f"""
@@ -510,7 +647,15 @@ class Header(QFrame):
                 font-size:{tokens.TAMANHO_SM}px; padding: 4px 10px 12px 10px;
             """)
             popover.layout_corpo.addWidget(vazio)
+        else:
+            for notificacao in notificacoes:
+                popover.layout_corpo.addWidget(
+                    _CartaoNotificacao(
+                        notificacao, on_lida=self._atualizar_contagem_notificacoes
+                    )
+                )
 
+        if not self._admin:
             popover.abrir_sob(self.bt_notificacoes)
             return
 
@@ -550,6 +695,18 @@ class Header(QFrame):
                 )
 
         popover.abrir_sob(self.bt_notificacoes)
+
+    def _marcar_todas_notificacoes_lidas(self):
+
+        try:
+            notificacao_service.marcar_todas_lidas()
+        except Exception:
+            return
+
+        self._atualizar_contagem_notificacoes()
+
+        if self._popover_notificacoes is not None:
+            self._popover_notificacoes.close()
 
     def _ao_resolver_aprovacao(self, cartao):
         """Chamado por um _CartaoAprovacao depois de aprovar/rejeitar

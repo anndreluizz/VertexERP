@@ -4,7 +4,9 @@ import threading
 from sqlalchemy.orm import Session
 
 from app.models.user import User
+from app.models.notificacao import Notificacao
 from app.repositories.device_token_repository import DeviceTokenRepository
+from app.repositories.notificacao_repository import NotificacaoRepository
 
 _lock = threading.Lock()
 _inicializado = False
@@ -88,6 +90,8 @@ class NotificacaoService:
         corpo: str,
         dados: dict | None = None,
     ):
+        NotificacaoService._persistir(db, [usuario_id], titulo, corpo)
+
         tokens = DeviceTokenRepository.tokens_de_usuarios(
             db, [usuario_id]
         )
@@ -111,5 +115,21 @@ class NotificacaoService:
 
         admin_ids = [linha[0] for linha in query.all()]
 
+        NotificacaoService._persistir(db, admin_ids, titulo, corpo)
+
         tokens = DeviceTokenRepository.tokens_de_usuarios(db, admin_ids)
         NotificacaoService.enviar(tokens, titulo, corpo, dados)
+
+    @staticmethod
+    def _persistir(db: Session, usuario_ids: list[int], titulo: str, corpo: str):
+        """Central de notificacoes do desktop (sem device token/push
+        nenhum, so' o mobile tem) -- salva uma linha por destinatario,
+        independente do Firebase estar configurado ou nao."""
+
+        if not usuario_ids:
+            return
+
+        NotificacaoRepository.criar_lote(db, [
+            Notificacao(usuario_id=usuario_id, titulo=titulo, corpo=corpo)
+            for usuario_id in usuario_ids
+        ])

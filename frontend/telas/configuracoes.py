@@ -1,7 +1,7 @@
 import base64
 
-from PySide6.QtCore import Qt, QSize, Signal, QBuffer, QIODevice
-from PySide6.QtGui import QKeySequence, QPixmap
+from PySide6.QtCore import Qt, QSize, Signal, QBuffer, QIODevice, QUrl
+from PySide6.QtGui import QKeySequence, QPixmap, QDesktopServices
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -20,12 +20,16 @@ from PySide6.QtWidgets import (
     QComboBox,
     QRadioButton,
     QButtonGroup,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
 )
 
-from services.api import configuracoes, atualizar_configuracoes, me
+from services.api import configuracoes, atualizar_configuracoes, me, usuario_e_admin
 from services import preferencias_service
 from services import impressora_termica_service
 from services import loja_service
+from services import backup_service
 from services.comprovante_service import obter_logo_loja
 from services.worker import rodar_em_thread
 from telas.gerenciar_usuarios import GerenciarUsuariosDialog
@@ -37,6 +41,23 @@ from utils.validacao import email_valido
 from widgets.fields.cpf_field import CpfCnpjField
 from widgets.fields.phone_field import PhoneField
 from widgets.fields.email_field import EmailField
+
+
+def _formatar_data_backup(texto_iso):
+    from datetime import datetime
+    try:
+        return datetime.fromisoformat(texto_iso).strftime("%d/%m/%Y %H:%M")
+    except (ValueError, TypeError):
+        return texto_iso or "—"
+
+
+def _formatar_tamanho(bytes_):
+    valor = float(bytes_ or 0)
+    for unidade in ("B", "KB", "MB", "GB"):
+        if valor < 1024:
+            return f"{valor:.0f} {unidade}" if unidade == "B" else f"{valor:.1f} {unidade}"
+        valor /= 1024
+    return f"{valor:.1f} TB"
 
 
 class ItemMenuConfig(QPushButton):
@@ -86,6 +107,10 @@ class Configuracoes(QWidget):
 
     def __init__(self):
         super().__init__()
+
+        self._backups_carregados = False
+        self._carregando_backups = False
+        self._pasta_backups_atual = None
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
@@ -160,6 +185,8 @@ class Configuracoes(QWidget):
         self.bt_impressora = ItemMenuConfig("printer", "Impressora / Cupom")
         self.bt_hardware = ItemMenuConfig("settings", "Hardware / Scanner")
         self.bt_lojas = ItemMenuConfig("truck", "Lojas e Filiais")
+        self.bt_backup = ItemMenuConfig("download", "Backup")
+        self.bt_backup.setVisible(usuario_e_admin())
 
         itens_futuros = [
             ItemMenuConfig("gift", "Fidelidade e Marketing", habilitado=False),
@@ -175,6 +202,7 @@ class Configuracoes(QWidget):
         submenu_layout.addWidget(self.bt_impressora)
         submenu_layout.addWidget(self.bt_hardware)
         submenu_layout.addWidget(self.bt_lojas)
+        submenu_layout.addWidget(self.bt_backup)
 
         for item in itens_futuros:
             submenu_layout.addWidget(item)
@@ -191,6 +219,7 @@ class Configuracoes(QWidget):
         self.bt_impressora.clicked.connect(lambda: self._selecionar_aba(5))
         self.bt_hardware.clicked.connect(lambda: self._selecionar_aba(6))
         self.bt_lojas.clicked.connect(lambda: self._selecionar_aba(7))
+        self.bt_backup.clicked.connect(lambda: self._selecionar_aba(8))
 
         corpo.addWidget(submenu_frame)
 
@@ -206,6 +235,7 @@ class Configuracoes(QWidget):
         self.paginas.addWidget(self._criar_pagina_impressora())
         self.paginas.addWidget(self._criar_pagina_hardware())
         self.paginas.addWidget(self._criar_pagina_lojas())
+        self.paginas.addWidget(self._criar_pagina_backup())
 
         corpo.addWidget(self.paginas, stretch=1)
 
@@ -242,8 +272,12 @@ class Configuracoes(QWidget):
         self.bt_impressora.setChecked(indice == 5)
         self.bt_hardware.setChecked(indice == 6)
         self.bt_lojas.setChecked(indice == 7)
+        self.bt_backup.setChecked(indice == 8)
 
         self.paginas.setCurrentIndex(indice)
+
+        if indice == 8 and not self._backups_carregados:
+            self._atualizar_backups()
 
     def _criar_pagina_gerais(self):
 
@@ -914,6 +948,185 @@ class Configuracoes(QWidget):
         self._carregar_lojas()
 
         return self._envolver_com_rolagem(pagina)
+
+    def _criar_pagina_backup(self):
+
+        pagina = QWidget()
+        layout = QVBoxLayout(pagina)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(14)
+
+        lbl_secao = QLabel("BACKUP DO BANCO DE DADOS")
+        lbl_secao.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.PRIMARIA};
+        """)
+        layout.addWidget(lbl_secao)
+
+        dica = QLabel(
+            "Um backup completo é gerado automaticamente todo dia, "
+            "enquanto o Vertex ERP estiver aberto no PC-Servidor, e "
+            "guardado em Documentos\\VertexERP\\Backups (backups com "
+            "mais de 30 dias são apagados sozinhos). Use \"Fazer "
+            "Backup Agora\" pra gerar uma cópia extra na hora, sem "
+            "esperar o próximo automático."
+        )
+        dica.setWordWrap(True)
+        dica.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_SECUNDARIO}; line-height:1.5;
+        """)
+        layout.addWidget(dica)
+
+        botoes = QHBoxLayout()
+        botoes.setSpacing(10)
+
+        self.bt_backup_manual = BotaoPrimario("Fazer Backup Agora")
+        self.bt_backup_manual.setMinimumHeight(44)
+        self.bt_backup_manual.clicked.connect(self._fazer_backup_manual)
+        botoes.addWidget(self.bt_backup_manual)
+
+        bt_abrir_pasta = BotaoSecundario("Abrir Pasta de Backups")
+        bt_abrir_pasta.setMinimumHeight(44)
+        bt_abrir_pasta.clicked.connect(self._abrir_pasta_backups)
+        botoes.addWidget(bt_abrir_pasta)
+
+        botoes.addStretch()
+        layout.addLayout(botoes)
+
+        linha_divisoria = QFrame()
+        linha_divisoria.setFixedHeight(1)
+        linha_divisoria.setStyleSheet(f"background:{tokens.BORDA};")
+        layout.addWidget(linha_divisoria)
+
+        lbl_historico = QLabel("Histórico")
+        lbl_historico.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:700; color:{tokens.PRIMARIA};
+        """)
+        layout.addWidget(lbl_historico)
+
+        self.tabela_backups = QTableWidget()
+        self.tabela_backups.setColumnCount(3)
+        self.tabela_backups.setHorizontalHeaderLabels(
+            ["Arquivo", "Data", "Tamanho"]
+        )
+        self.tabela_backups.verticalHeader().setVisible(False)
+        self.tabela_backups.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tabela_backups.setSelectionMode(QTableWidget.NoSelection)
+        self.tabela_backups.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Stretch
+        )
+        self.tabela_backups.setMinimumHeight(260)
+        self.tabela_backups.setStyleSheet(f"""
+            QTableWidget {{
+                border: 1px solid {tokens.BORDA};
+                border-radius: {tokens.RADIUS_MD}px;
+                color: {tokens.TEXTO};
+                background: {tokens.CARD};
+                font-size: {tokens.TAMANHO_SM}px;
+            }}
+            QHeaderView::section {{
+                background: {tokens.FUNDO};
+                color: {tokens.TEXTO_SECUNDARIO};
+                font-weight: 700;
+                padding: 8px;
+                border: none;
+                border-bottom: 1px solid {tokens.BORDA};
+            }}
+        """)
+        layout.addWidget(self.tabela_backups, stretch=1)
+
+        return self._envolver_com_rolagem(pagina)
+
+    def _atualizar_backups(self):
+
+        if self._carregando_backups:
+            return
+        self._carregando_backups = True
+
+        rodar_em_thread(
+            self,
+            backup_service.listar_backups,
+            ao_sucesso=self._ao_atualizar_backups_sucesso,
+            ao_erro=self._ao_atualizar_backups_erro,
+            ao_finalizar=self._ao_atualizar_backups_finalizado,
+        )
+
+    def _ao_atualizar_backups_finalizado(self):
+        self._carregando_backups = False
+
+    def _ao_atualizar_backups_erro(self, erro):
+        QMessageBox.critical(
+            self, "Erro", f"Não foi possível carregar o histórico de backups.\n{erro}"
+        )
+
+    def _ao_atualizar_backups_sucesso(self, dados):
+
+        self._backups_carregados = True
+        self._pasta_backups_atual = dados["pasta"]
+
+        itens = dados["itens"]
+        self.tabela_backups.setRowCount(len(itens))
+
+        for linha, item in enumerate(itens):
+            self.tabela_backups.setItem(
+                linha, 0, QTableWidgetItem(item["nome"])
+            )
+            self.tabela_backups.setItem(
+                linha, 1,
+                QTableWidgetItem(_formatar_data_backup(item["criado_em"])),
+            )
+            self.tabela_backups.setItem(
+                linha, 2, QTableWidgetItem(_formatar_tamanho(item["tamanho_bytes"]))
+            )
+
+    def _fazer_backup_manual(self):
+
+        self.bt_backup_manual.setEnabled(False)
+
+        rodar_em_thread(
+            self,
+            backup_service.criar_backup_manual,
+            ao_sucesso=self._ao_backup_manual_sucesso,
+            ao_erro=self._ao_backup_manual_erro,
+            ao_finalizar=self._ao_backup_manual_finalizado,
+        )
+
+    def _ao_backup_manual_finalizado(self):
+        self.bt_backup_manual.setEnabled(True)
+
+    def _ao_backup_manual_erro(self, erro):
+        QMessageBox.critical(self, "Erro", f"Não foi possível gerar o backup.\n{erro}")
+
+    def _ao_backup_manual_sucesso(self, response):
+
+        if response.status_code != 200:
+            try:
+                erro = response.json().get("detail", response.text)
+            except Exception:
+                erro = response.text
+            QMessageBox.critical(self, "Erro", f"Não foi possível gerar o backup.\n{erro}")
+            return
+
+        QMessageBox.information(self, "Sucesso", "Backup gerado com sucesso.")
+        self._atualizar_backups()
+
+    def _abrir_pasta_backups(self):
+
+        # so' sabemos o caminho de verdade depois do backend responder
+        # (ver _ao_atualizar_backups_sucesso) -- o backend resolve via
+        # SHGetFolderPath (a pasta Documentos pode estar redirecionada
+        # pro OneDrive), um "~/Documents" chutado aqui podia abrir uma
+        # pasta errada/vazia
+        if not self._pasta_backups_atual:
+            QMessageBox.information(
+                self, "Aguarde",
+                "Aguarde o histórico de backups carregar antes de abrir a pasta.",
+            )
+            return
+
+        QDesktopServices.openUrl(QUrl.fromLocalFile(self._pasta_backups_atual))
 
     def _carregar_lojas(self):
 

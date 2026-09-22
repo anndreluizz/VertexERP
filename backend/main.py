@@ -45,6 +45,7 @@ from app.api.v1.financeiro_fluxo_caixa import (
 from app.api.v1.relatorios import router as relatorios_router
 from app.api.v1.configuracoes import router as configuracoes_router
 from app.api.v1.notificacoes import router as notificacoes_router
+from app.api.v1.backup import router as backup_router
 from app.api.v1.aprovacoes import router as aprovacoes_router
 from app.api.v1.lojas import router as lojas_router
 from app.api.v1.fornecedores import router as fornecedores_router
@@ -102,6 +103,7 @@ app.include_router(financeiro_fluxo_caixa_router)
 app.include_router(relatorios_router)
 app.include_router(configuracoes_router)
 app.include_router(notificacoes_router)
+app.include_router(backup_router)
 app.include_router(aprovacoes_router)
 app.include_router(lojas_router)
 app.include_router(fornecedores_router)

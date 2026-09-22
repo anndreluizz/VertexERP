@@ -73,6 +73,31 @@ class VendaDiaSemanaItem(BaseModel):
     total: Decimal
 
 
+class GastoCompraMensalItem(BaseModel):
+    mes: str
+    total: Decimal
+
+
+class RankingFornecedorItem(BaseModel):
+    fornecedor_id: int
+    nome: str
+    quantidade_compras: int
+    total: Decimal
+
+
+class PrazoFornecedorItem(BaseModel):
+    fornecedor_id: int
+    nome: str
+    prazo_medio_dias: float
+    quantidade_parcelas: int
+
+
+class CategoriaSemVendaItem(BaseModel):
+    categoria: str
+    ultima_venda: datetime | None
+    dias_sem_venda: int | None
+
+
 class CurvaAbcItem(BaseModel):
     produto_id: int
     produto: str

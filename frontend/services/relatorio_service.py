@@ -92,6 +92,68 @@ def vendas_dia_semana(data_inicio, data_fim, loja_id=None):
     return response.json()
 
 
+def gasto_compras_mensal(data_inicio, data_fim):
+
+    params = {"data_fim": data_fim}
+
+    if data_inicio is not None:
+        params["data_inicio"] = data_inicio
+
+    response = get(f"/relatorios/gasto-compras-mensal?{urlencode(params)}")
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Falha ao carregar o gasto mensal de compras "
+            f"(HTTP {response.status_code}): {response.text}"
+        )
+
+    return response.json()
+
+
+def ranking_fornecedores(data_inicio, data_fim, limite=10):
+
+    params = {"data_fim": data_fim, "limite": limite}
+
+    if data_inicio is not None:
+        params["data_inicio"] = data_inicio
+
+    response = get(f"/relatorios/ranking-fornecedores?{urlencode(params)}")
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Falha ao carregar o ranking de fornecedores "
+            f"(HTTP {response.status_code}): {response.text}"
+        )
+
+    return response.json()
+
+
+def prazo_fornecedores():
+
+    response = get("/relatorios/prazo-fornecedores")
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Falha ao carregar o prazo médio de fornecedores "
+            f"(HTTP {response.status_code}): {response.text}"
+        )
+
+    return response.json()
+
+
+def categorias_sem_venda(dias=90):
+
+    response = get(f"/relatorios/categorias-sem-venda?dias={dias}")
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Falha ao carregar categorias sem venda "
+            f"(HTTP {response.status_code}): {response.text}"
+        )
+
+    return response.json()
+
+
 def curva_abc(data_inicio, data_fim, loja_id=None, skip=0, limit=100):
 
     params = {"data_fim": data_fim, "skip": skip, "limit": limit}

@@ -11,6 +11,9 @@ from app.models.produto import Produto
 from app.models.cliente import Cliente
 from app.models.loja import Loja
 from app.models.estoque_loja import EstoqueLoja
+from app.models.compra import Compra
+from app.models.fornecedor import Fornecedor
+from app.models.conta_pagar import ContaPagar
 from app.services.venda_service import _parcelas_pagamento
 
 
@@ -363,6 +366,186 @@ class RelatorioService:
             }
             for i in range(7)
         ]
+
+    # ==================================================
+    # COMPRAS / FORNECEDORES
+    # ==================================================
+
+    @staticmethod
+    def gasto_compras_mensal(
+        db: Session,
+        data_inicio: date | None,
+        data_fim: date,
+    ):
+        inicio = (
+            datetime.combine(data_inicio, time.min)
+            if data_inicio is not None else None
+        )
+        fim = datetime.combine(data_fim, time.min) + timedelta(days=1)
+
+        query = db.query(Compra.data, Compra.valor_total).filter(
+            Compra.status == "FINALIZADA",
+            Compra.data < fim,
+        )
+
+        if inicio is not None:
+            query = query.filter(Compra.data >= inicio)
+
+        agregados: dict[str, Decimal] = {}
+
+        for data, valor_total in query.all():
+            chave = data.strftime("%Y-%m")
+            agregados[chave] = agregados.get(chave, Decimal("0")) + valor_total
+
+        return [
+            {"mes": mes, "total": total}
+            for mes, total in sorted(agregados.items())
+        ]
+
+    @staticmethod
+    def ranking_fornecedores(
+        db: Session,
+        data_inicio: date | None,
+        data_fim: date,
+        limite: int = 10,
+    ):
+        inicio = (
+            datetime.combine(data_inicio, time.min)
+            if data_inicio is not None else None
+        )
+        fim = datetime.combine(data_fim, time.min) + timedelta(days=1)
+
+        query = (
+            db.query(
+                Fornecedor.id,
+                Fornecedor.razao_social,
+                Fornecedor.nome_fantasia,
+                func.count(Compra.id),
+                func.coalesce(func.sum(Compra.valor_total), 0),
+            )
+            .join(Compra, Compra.fornecedor_id == Fornecedor.id)
+            .filter(Compra.status == "FINALIZADA", Compra.data < fim)
+        )
+
+        if inicio is not None:
+            query = query.filter(Compra.data >= inicio)
+
+        resultados = (
+            query.group_by(
+                Fornecedor.id, Fornecedor.razao_social, Fornecedor.nome_fantasia
+            )
+            .order_by(func.coalesce(func.sum(Compra.valor_total), 0).desc())
+            .limit(limite)
+            .all()
+        )
+
+        return [
+            {
+                "fornecedor_id": fid,
+                "nome": nome_fantasia or razao_social,
+                "quantidade_compras": quantidade,
+                "total": total,
+            }
+            for fid, razao_social, nome_fantasia, quantidade, total in resultados
+        ]
+
+    @staticmethod
+    def prazo_medio_pagamento_fornecedores(db: Session):
+        """Media de dias entre a data da compra e o vencimento de cada
+        parcela gerada (so' compras a prazo, que geram ContaPagar com
+        compra_id preenchido -- ver ContaPagarService.criar_compra_prazo),
+        por fornecedor."""
+
+        resultados = (
+            db.query(
+                Fornecedor.id,
+                Fornecedor.razao_social,
+                Fornecedor.nome_fantasia,
+                ContaPagar.data_vencimento,
+                Compra.data,
+            )
+            .join(Compra, ContaPagar.compra_id == Compra.id)
+            .join(Fornecedor, Compra.fornecedor_id == Fornecedor.id)
+            .filter(ContaPagar.compra_id.isnot(None))
+            .all()
+        )
+
+        dias_por_fornecedor: dict[int, list[int]] = {}
+        nomes: dict[int, str] = {}
+
+        for fid, razao_social, nome_fantasia, vencimento, data_compra in resultados:
+            dias_por_fornecedor.setdefault(fid, []).append(
+                (vencimento - data_compra).days
+            )
+            nomes[fid] = nome_fantasia or razao_social
+
+        resultado = [
+            {
+                "fornecedor_id": fid,
+                "nome": nomes[fid],
+                "prazo_medio_dias": round(sum(dias) / len(dias), 1),
+                "quantidade_parcelas": len(dias),
+            }
+            for fid, dias in dias_por_fornecedor.items()
+        ]
+
+        return sorted(resultado, key=lambda r: r["prazo_medio_dias"], reverse=True)
+
+    # ==================================================
+    # CATEGORIAS SEM VENDA HA MUITO TEMPO
+    # ==================================================
+
+    @staticmethod
+    def categorias_sem_venda(db: Session, dias: int = 90):
+
+        limite = datetime.utcnow() - timedelta(days=dias)
+
+        todas_categorias = {
+            categoria for (categoria,) in
+            db.query(Produto.categoria)
+            .filter(Produto.ativo.is_(True), Produto.categoria.isnot(None))
+            .distinct()
+            .all()
+        }
+
+        ultima_por_categoria = dict(
+            db.query(Produto.categoria, func.max(Venda.data))
+            .join(ItemVenda, ItemVenda.produto_id == Produto.id)
+            .join(Venda, ItemVenda.venda_id == Venda.id)
+            .filter(
+                Venda.status == StatusVenda.FINALIZADA.value,
+                Produto.categoria.isnot(None),
+            )
+            .group_by(Produto.categoria)
+            .all()
+        )
+
+        resultado = []
+
+        for categoria in todas_categorias:
+
+            ultima_venda = ultima_por_categoria.get(categoria)
+
+            if ultima_venda is not None and ultima_venda >= limite:
+                continue
+
+            resultado.append({
+                "categoria": categoria,
+                "ultima_venda": ultima_venda,
+                "dias_sem_venda": (
+                    (datetime.utcnow() - ultima_venda).days
+                    if ultima_venda is not None else None
+                ),
+            })
+
+        return sorted(
+            resultado,
+            key=lambda r: (
+                r["dias_sem_venda"] if r["dias_sem_venda"] is not None
+                else float("inf")
+            ),
+            reverse=True,
+        )
 
     # ==================================================
     # CURVA ABC (classificacao de produto por receita)

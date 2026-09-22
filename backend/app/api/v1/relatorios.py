@@ -6,12 +6,16 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import get_current_user
 from app.database.session import SessionLocal
 from app.schemas.relatorio import (
+    CategoriaSemVendaItem,
     ComparativoEstoqueLojaItem,
     ComparativoLojaItem,
     CurvaAbcItem,
     EstoqueCategoriaItem,
     FunilVendasResponse,
+    GastoCompraMensalItem,
     MargemCategoriaItem,
+    PrazoFornecedorItem,
+    RankingFornecedorItem,
     RelatorioVendasResponse,
     SugestaoReposicaoItem,
     VendaDiaSemanaItem,
@@ -116,6 +120,44 @@ def vendas_dia_semana(
     usuario=Depends(get_current_user),
 ):
     return RelatorioService.vendas_por_dia_semana(db, data_inicio, data_fim, loja_id)
+
+
+@router.get("/gasto-compras-mensal", response_model=list[GastoCompraMensalItem])
+def gasto_compras_mensal(
+    data_inicio: date | None = None,
+    data_fim: date = Query(...),
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return RelatorioService.gasto_compras_mensal(db, data_inicio, data_fim)
+
+
+@router.get("/ranking-fornecedores", response_model=list[RankingFornecedorItem])
+def ranking_fornecedores(
+    data_inicio: date | None = None,
+    data_fim: date = Query(...),
+    limite: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return RelatorioService.ranking_fornecedores(db, data_inicio, data_fim, limite)
+
+
+@router.get("/prazo-fornecedores", response_model=list[PrazoFornecedorItem])
+def prazo_fornecedores(
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return RelatorioService.prazo_medio_pagamento_fornecedores(db)
+
+
+@router.get("/categorias-sem-venda", response_model=list[CategoriaSemVendaItem])
+def categorias_sem_venda(
+    dias: int = Query(90, ge=1),
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return RelatorioService.categorias_sem_venda(db, dias)
 
 
 @router.get("/curva-abc", response_model=list[CurvaAbcItem])

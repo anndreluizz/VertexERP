@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from telas.cadastro_produto import CadastroProdutoWindow
 from telas.produto_criado import ProdutoCriadoDialog
+from telas.importar_produtos_csv import ImportarProdutosCsvDialog
 
 from services.categoria_service import listar_categorias
 from services.produto_service import (
@@ -195,7 +196,7 @@ class Produtos(QWidget):
         col_titulo.addWidget(subtitulo)
 
         self.bt_importar = BotaoSecundario("Importar", icone_nome="arrow-down")
-        self.bt_importar.clicked.connect(self.importar_nao_disponivel)
+        self.bt_importar.clicked.connect(self.importar_csv)
 
         self.bt_exportar = BotaoSecundario("Exportar", icone_nome="arrow-up")
         self.bt_exportar.clicked.connect(self.exportar_csv)
@@ -1440,15 +1441,11 @@ class Produtos(QWidget):
     # IMPORTAR / EXPORTAR
     # ==========================================
 
-    def importar_nao_disponivel(self):
+    def importar_csv(self):
 
-        QMessageBox.information(
-            self,
-            "Importar Produtos",
-            "A importação em massa por CSV ainda não foi implementada "
-            "-- por enquanto, cadastre os produtos um a um em "
-            "\"Novo Produto\".",
-        )
+        dialogo = ImportarProdutosCsvDialog(self)
+        dialogo.importado.connect(self.carregar)
+        dialogo.exec()
 
     def exportar_csv(self):
 

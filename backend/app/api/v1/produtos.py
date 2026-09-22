@@ -12,9 +12,16 @@ from app.schemas.produto import (
 )
 from app.schemas.historico_preco import HistoricoPrecoResponse
 from app.schemas.kit_item import KitItemCreate, KitItemResponse
+from app.schemas.produto_importacao import (
+    ConfirmarImportacaoRequest,
+    ConfirmarImportacaoResponse,
+    ImportarCsvRequest,
+    PreviewImportacaoResponse,
+)
 from app.services.produto_service import ProdutoService
 from app.services.produto_foto_service import ProdutoFotoService
 from app.services.kit_item_service import KitItemService
+from app.services.importacao_produtos_service import ImportacaoProdutosService
 
 router = APIRouter(
     prefix="/produtos",
@@ -28,6 +35,46 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+@router.post("/importar-csv/preview", response_model=PreviewImportacaoResponse)
+def importar_csv_preview(
+    dados: ImportarCsvRequest,
+    loja_id: int | None = None,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    loja_efetiva = resolver_loja_id(db, usuario, loja_id)
+
+    itens, novos, atualizados, com_erro = ImportacaoProdutosService.pre_visualizar(
+        db, dados.csv_conteudo, loja_efetiva
+    )
+
+    return PreviewImportacaoResponse(
+        itens=itens,
+        total_novos=novos,
+        total_atualizados=atualizados,
+        total_com_erro=com_erro,
+    )
+
+
+@router.post("/importar-csv/confirmar", response_model=ConfirmarImportacaoResponse)
+def importar_csv_confirmar(
+    dados: ConfirmarImportacaoRequest,
+    loja_id: int | None = None,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    loja_efetiva = resolver_loja_id(db, usuario, loja_id)
+
+    try:
+        criados, atualizados = ImportacaoProdutosService.confirmar(
+            db, dados.itens, loja_efetiva
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return ConfirmarImportacaoResponse(criados=criados, atualizados=atualizados)
 
 
 @router.get("/", response_model=list[ProdutoResponse])

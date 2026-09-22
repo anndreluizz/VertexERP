@@ -165,3 +165,38 @@ def listar_variacoes(produto_id):
         return []
 
     return response.json()
+
+
+# ==========================================
+# IMPORTACAO EM MASSA (CSV)
+# ==========================================
+
+def importar_csv_preview(csv_conteudo):
+
+    response = post(
+        endpoint_com_loja("/produtos/importar-csv/preview"),
+        {"csv_conteudo": csv_conteudo},
+    )
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Falha ao ler o CSV (HTTP {response.status_code}): {response.text}"
+        )
+
+    return response.json()
+
+
+def importar_csv_confirmar(itens):
+
+    response = post(
+        endpoint_com_loja("/produtos/importar-csv/confirmar"),
+        {"itens": itens},
+    )
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Falha ao importar os produtos "
+            f"(HTTP {response.status_code}): {response.text}"
+        )
+
+    return response.json()

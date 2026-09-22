@@ -61,6 +61,23 @@ class ProdutoRepository:
         return query.first()
 
     @staticmethod
+    def buscar_por_codigo_barras(
+        db: Session, codigo_barras: str, loja_id: int | None = None
+    ):
+        query = db.query(Produto).filter(
+            Produto.codigo_barras == codigo_barras
+        )
+
+        if loja_id is not None:
+            query = query.filter(
+                or_(Produto.loja_id.is_(None), Produto.loja_id == loja_id)
+            )
+        else:
+            query = query.filter(Produto.loja_id.is_(None))
+
+        return query.first()
+
+    @staticmethod
     def criar(db: Session, produto: Produto):
         db.add(produto)
         db.commit()

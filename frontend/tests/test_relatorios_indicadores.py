@@ -27,6 +27,7 @@ def _rodar(clientes=None, movimentos=None, usuarios=None, lojas=None, **extras):
         "margem_categoria": [],
         "estoque_categoria": [],
         "vendas_dia_semana": [],
+        "vendas_dia_semana_hora": [],
         "gasto_compras_mensal": [],
         "ranking_fornecedores": [],
         "prazo_fornecedores": [],
@@ -106,11 +107,13 @@ def test_repassa_os_relatorios_agregados_sem_alterar():
     fornecedores = [{"fornecedor_id": 1, "nome": "Fornecedor X", "quantidade_compras": 2, "total": 300}]
     prazos = [{"fornecedor_id": 1, "nome": "Fornecedor X", "prazo_medio_dias": 30.0, "quantidade_parcelas": 2}]
     categorias_paradas = [{"categoria": "Bolsa", "ultima_venda": None, "dias_sem_venda": None}]
+    heatmap = [{"dia_semana": "Segunda", "hora": 14, "quantidade": 1, "total": 30}]
 
     resultado = _rodar(
         margem_categoria=margens,
         estoque_categoria=estoques,
         vendas_dia_semana=dias,
+        vendas_dia_semana_hora=heatmap,
         gasto_compras_mensal=gasto_compras,
         ranking_fornecedores=fornecedores,
         prazo_fornecedores=prazos,
@@ -120,6 +123,7 @@ def test_repassa_os_relatorios_agregados_sem_alterar():
     assert resultado["margem_categoria"] == margens
     assert resultado["estoque_categoria"] == estoques
     assert resultado["vendas_dia_semana"] == dias
+    assert resultado["heatmap_dia_hora"] == heatmap
     assert resultado["gasto_compras_mensal"] == gasto_compras
     assert resultado["ranking_fornecedores"] == fornecedores
     assert resultado["prazo_fornecedores"] == prazos

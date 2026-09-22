@@ -25,6 +25,7 @@ from services.relatorio_service import (
     margem_categoria,
     estoque_categoria,
     vendas_dia_semana,
+    vendas_dia_semana_hora,
     gasto_compras_mensal,
     ranking_fornecedores,
     prazo_fornecedores,
@@ -70,12 +71,14 @@ def _buscar_dados_indicadores(data_inicio, data_fim, loja_id):
     entre as duas telas)."""
 
     (
-        margens, estoques, dias_semana, gasto_compras, fornecedores,
-        prazos, categorias_paradas, clientes, movimentos, usuarios, lojas,
+        margens, estoques, dias_semana, heatmap_dia_hora, gasto_compras,
+        fornecedores, prazos, categorias_paradas, clientes, movimentos,
+        usuarios, lojas,
     ) = em_paralelo(
         (margem_categoria, data_inicio, data_fim, loja_id),
         (estoque_categoria, loja_id),
         (vendas_dia_semana, data_inicio, data_fim, loja_id),
+        (vendas_dia_semana_hora, data_inicio, data_fim, loja_id),
         (gasto_compras_mensal, data_inicio, data_fim),
         (ranking_fornecedores, data_inicio, data_fim),
         (prazo_fornecedores,),
@@ -132,6 +135,7 @@ def _buscar_dados_indicadores(data_inicio, data_fim, loja_id):
         "margem_categoria": margens,
         "estoque_categoria": estoques,
         "vendas_dia_semana": dias_semana,
+        "heatmap_dia_hora": heatmap_dia_hora,
         "gasto_compras_mensal": gasto_compras,
         "ranking_fornecedores": fornecedores,
         "prazo_fornecedores": prazos,
@@ -147,7 +151,7 @@ def _buscar_dados_indicadores(data_inicio, data_fim, loja_id):
 
 
 from design import tokens
-from design.charts import GraficoArea, GraficoPizza
+from design.charts import GraficoArea, GraficoPizza, GraficoHeatmap
 from design.icons import icone
 from design.widgets import BotaoSecundario, CardKPI, SecaoCard
 from utils.formatacao import formatar_moeda
@@ -1372,6 +1376,12 @@ class Relatorios(QWidget):
         self.painel_dia_semana = PainelSecao("📅", "Vendas por Dia da Semana")
         layout.addWidget(self.painel_dia_semana)
 
+        # mapa de calor dia da semana x hora
+        painel_heatmap = PainelSecao("🔥", "Quando a Loja Mais Vende")
+        self.grafico_heatmap = GraficoHeatmap()
+        painel_heatmap.corpo.addWidget(self.grafico_heatmap)
+        layout.addWidget(painel_heatmap)
+
         # gasto mensal com compras
         self.painel_gasto_compras = PainelSecao("🛒", "Gasto Mensal com Compras")
         layout.addWidget(self.painel_gasto_compras)
@@ -1546,6 +1556,9 @@ class Relatorios(QWidget):
                 total / maior_dia * 100,
                 tokens.PRIMARIA,
             ))
+
+        # mapa de calor dia da semana x hora
+        self.grafico_heatmap.definir_dados(dados["heatmap_dia_hora"])
 
         # gasto mensal com compras
         self.painel_gasto_compras.limpar_corpo()

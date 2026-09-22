@@ -73,6 +73,13 @@ class VendaDiaSemanaItem(BaseModel):
     total: Decimal
 
 
+class VendaDiaSemanaHoraItem(BaseModel):
+    dia_semana: str
+    hora: int
+    quantidade: int
+    total: Decimal
+
+
 class GastoCompraMensalItem(BaseModel):
     mes: str
     total: Decimal

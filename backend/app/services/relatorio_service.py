@@ -368,6 +368,52 @@ class RelatorioService:
         ]
 
     # ==================================================
+    # VENDAS POR DIA DA SEMANA X HORA (heatmap)
+    # ==================================================
+
+    @staticmethod
+    def vendas_dia_semana_hora(
+        db: Session,
+        data_inicio: date | None,
+        data_fim: date,
+        loja_id: int | None = None,
+    ):
+        inicio = (
+            datetime.combine(data_inicio, time.min)
+            if data_inicio is not None else None
+        )
+        fim = datetime.combine(data_fim, time.min) + timedelta(days=1)
+
+        ids = RelatorioService._ids_vendas(db, inicio, fim, loja_id=loja_id)
+
+        # matriz 7 (dia da semana) x 24 (hora) -- agregados[dia][hora]
+        agregados = [
+            [{"quantidade": 0, "total": Decimal("0")} for _ in range(24)]
+            for _ in range(7)
+        ]
+
+        if ids:
+            for data, valor_total in (
+                db.query(Venda.data, Venda.valor_total)
+                .filter(Venda.id.in_(ids))
+                .all()
+            ):
+                celula = agregados[data.weekday()][data.hour]
+                celula["quantidade"] += 1
+                celula["total"] += valor_total
+
+        return [
+            {
+                "dia_semana": RelatorioService._DIAS_SEMANA[dia],
+                "hora": hora,
+                "quantidade": agregados[dia][hora]["quantidade"],
+                "total": agregados[dia][hora]["total"],
+            }
+            for dia in range(7)
+            for hora in range(24)
+        ]
+
+    # ==================================================
     # COMPRAS / FORNECEDORES
     # ==================================================
 

@@ -19,6 +19,7 @@ from app.schemas.relatorio import (
     RelatorioVendasResponse,
     SugestaoReposicaoItem,
     VendaDiaSemanaItem,
+    VendaDiaSemanaHoraItem,
 )
 from app.services.relatorio_service import RelatorioService
 
@@ -120,6 +121,17 @@ def vendas_dia_semana(
     usuario=Depends(get_current_user),
 ):
     return RelatorioService.vendas_por_dia_semana(db, data_inicio, data_fim, loja_id)
+
+
+@router.get("/vendas-dia-semana-hora", response_model=list[VendaDiaSemanaHoraItem])
+def vendas_dia_semana_hora(
+    data_inicio: date | None = None,
+    data_fim: date = Query(...),
+    loja_id: int | None = None,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return RelatorioService.vendas_dia_semana_hora(db, data_inicio, data_fim, loja_id)
 
 
 @router.get("/gasto-compras-mensal", response_model=list[GastoCompraMensalItem])

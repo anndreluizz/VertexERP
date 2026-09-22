@@ -281,3 +281,47 @@ def test_vendas_por_dia_semana_soma_no_dia_certo(client, auth_headers, db):
     por_dia = {item["dia_semana"]: item for item in itens}
     assert por_dia[dia_esperado]["quantidade"] == 1
     assert float(por_dia[dia_esperado]["total"]) == 30.0
+
+
+def test_vendas_dia_semana_hora_marca_a_celula_certa(client, auth_headers, db):
+    produto = _criar_produto(db, "HORA-001", "Produto Hora")
+
+    hoje = datetime.utcnow().replace(hour=14, minute=30, second=0, microsecond=0)
+    venda = _criar_venda_item(db, produto, valor_unitario=50, quantidade=1)
+    venda.data = hoje
+    db.commit()
+
+    response = client.get(
+        "/relatorios/vendas-dia-semana-hora", params=_periodo_hoje(), headers=auth_headers
+    )
+
+    assert response.status_code == 200
+    itens = response.json()
+    assert len(itens) == 7 * 24  # matriz completa, mesmo as celulas vazias
+
+    dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+    dia_esperado = dias_semana[hoje.weekday()]
+
+    celula = next(
+        i for i in itens if i["dia_semana"] == dia_esperado and i["hora"] == 14
+    )
+    assert celula["quantidade"] == 1
+    assert float(celula["total"]) == 50.0
+
+    # uma celula qualquer sem venda continua com zero, nao ausente
+    outra_celula = next(
+        i for i in itens if i["dia_semana"] == dia_esperado and i["hora"] == 3
+    )
+    assert outra_celula["quantidade"] == 0
+    assert float(outra_celula["total"]) == 0.0
+
+
+def test_vendas_dia_semana_hora_sem_vendas_retorna_matriz_zerada(client, auth_headers):
+    response = client.get(
+        "/relatorios/vendas-dia-semana-hora", params=_periodo_hoje(), headers=auth_headers
+    )
+
+    assert response.status_code == 200
+    itens = response.json()
+    assert len(itens) == 7 * 24
+    assert all(i["quantidade"] == 0 for i in itens)

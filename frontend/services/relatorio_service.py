@@ -92,6 +92,27 @@ def vendas_dia_semana(data_inicio, data_fim, loja_id=None):
     return response.json()
 
 
+def vendas_dia_semana_hora(data_inicio, data_fim, loja_id=None):
+
+    params = {"data_fim": data_fim}
+
+    if data_inicio is not None:
+        params["data_inicio"] = data_inicio
+
+    if loja_id is not None:
+        params["loja_id"] = loja_id
+
+    response = get(f"/relatorios/vendas-dia-semana-hora?{urlencode(params)}")
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Falha ao carregar o mapa de calor de vendas "
+            f"(HTTP {response.status_code}): {response.text}"
+        )
+
+    return response.json()
+
+
 def gasto_compras_mensal(data_inicio, data_fim):
 
     params = {"data_fim": data_fim}

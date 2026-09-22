@@ -300,6 +300,205 @@ class GraficoPizza(QWidget):
         painter.end()
 
 
+class GraficoHeatmap(QWidget):
+    """Mapa de calor dia da semana x hora, desenhado com QPainter
+    (mesmo motivo de GraficoArea/GraficoPizza -- sem depender de
+    QtCharts). Intensidade da cor = valor da célula relativo ao maior
+    valor do conjunto (0 = tokens.BORDA, máximo = tokens.PRIMARIA)."""
+
+    def __init__(self, parent=None):
+
+        super().__init__(parent)
+
+        self.setMinimumHeight(240)
+        self.setMouseTracking(True)
+
+        # matriz[dia][hora] = {"quantidade": int, "total": float}
+        self._matriz = [
+            [{"quantidade": 0, "total": 0.0} for _ in range(24)]
+            for _ in range(7)
+        ]
+        self._dias = []
+        self._maior_total = 0.0
+
+        self._celula_hover = None
+
+        self.setStyleSheet(f"""
+            QToolTip {{
+                background: {tokens.TEXTO};
+                color: {tokens.TEXTO_CLARO};
+                border: none;
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-size: {tokens.TAMANHO_XS}px;
+            }}
+        """)
+
+    def definir_dados(self, celulas):
+        """celulas: lista de dicts com dia_semana/hora/quantidade/total
+        (mesmo formato de GET /relatorios/vendas-dia-semana-hora) --
+        ordem de dia_semana tirada da própria primeira ocorrência de
+        cada um, pra não depender de acento/grafia exata bater com
+        uma lista fixa aqui."""
+
+        dias_em_ordem = []
+        matriz_por_dia = {}
+
+        for celula in celulas:
+            dia = celula["dia_semana"]
+            if dia not in matriz_por_dia:
+                dias_em_ordem.append(dia)
+                matriz_por_dia[dia] = [
+                    {"quantidade": 0, "total": 0.0} for _ in range(24)
+                ]
+            matriz_por_dia[dia][celula["hora"]] = {
+                "quantidade": celula["quantidade"],
+                "total": float(celula["total"]),
+            }
+
+        self._dias = dias_em_ordem
+        self._matriz = [matriz_por_dia[dia] for dia in dias_em_ordem]
+        self._maior_total = max(
+            (c["total"] for linha in self._matriz for c in linha),
+            default=0.0,
+        )
+        self._celula_hover = None
+
+        self.update()
+
+    def _cor_intensidade(self, total):
+
+        if self._maior_total <= 0:
+            return QColor(tokens.BORDA)
+
+        fracao = max(0.0, min(1.0, total / self._maior_total))
+
+        vazio = QColor(tokens.BORDA)
+        cheio = QColor(tokens.PRIMARIA)
+
+        return QColor(
+            round(vazio.red() + (cheio.red() - vazio.red()) * fracao),
+            round(vazio.green() + (cheio.green() - vazio.green()) * fracao),
+            round(vazio.blue() + (cheio.blue() - vazio.blue()) * fracao),
+        )
+
+    def _geometria(self):
+
+        margem_esq = 48
+        margem_baixo = 20
+        margem_topo = 4
+        margem_dir = 4
+
+        area_largura = self.width() - margem_esq - margem_dir
+        area_altura = self.height() - margem_topo - margem_baixo
+
+        n_linhas = len(self._matriz) or 1
+        largura_celula = area_largura / 24
+        altura_celula = area_altura / n_linhas
+
+        return margem_esq, margem_topo, largura_celula, altura_celula
+
+    def mouseMoveEvent(self, event):
+
+        if not self._matriz:
+            return super().mouseMoveEvent(event)
+
+        margem_esq, margem_topo, largura_celula, altura_celula = self._geometria()
+
+        pos = event.position()
+        coluna = int((pos.x() - margem_esq) / largura_celula) if largura_celula else -1
+        linha = int((pos.y() - margem_topo) / altura_celula) if altura_celula else -1
+
+        if not (0 <= coluna < 24 and 0 <= linha < len(self._matriz)):
+            if self._celula_hover is not None:
+                self._celula_hover = None
+                self.update()
+            QToolTip.hideText()
+            return super().mouseMoveEvent(event)
+
+        if (linha, coluna) != self._celula_hover:
+            self._celula_hover = (linha, coluna)
+            self.update()
+
+        celula = self._matriz[linha][coluna]
+        QToolTip.showText(
+            event.globalPosition().toPoint(),
+            f"{self._dias[linha]}, {coluna}h\n"
+            f"{celula['quantidade']} venda(s) · {formatar_moeda(celula['total'])}",
+            self,
+        )
+
+        return super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event):
+
+        if self._celula_hover is not None:
+            self._celula_hover = None
+            self.update()
+
+        super().leaveEvent(event)
+
+    def paintEvent(self, event):
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        if not self._matriz:
+            painter.end()
+            return
+
+        margem_esq, margem_topo, largura_celula, altura_celula = self._geometria()
+
+        fonte = self.font()
+        fonte.setPixelSize(tokens.TAMANHO_XS)
+        painter.setFont(fonte)
+
+        for linha, dia in enumerate(self._dias):
+
+            y = margem_topo + linha * altura_celula
+
+            painter.setPen(QColor(tokens.TEXTO_TERCIARIO))
+            painter.drawText(
+                0, int(y), margem_esq - 8, int(altura_celula),
+                Qt.AlignRight | Qt.AlignVCenter,
+                dia[:3],
+            )
+
+            for hora in range(24):
+
+                x = margem_esq + hora * largura_celula
+                celula = self._matriz[linha][hora]
+
+                retangulo = QRectF(
+                    x + 1, y + 1, largura_celula - 2, altura_celula - 2,
+                )
+
+                cor = self._cor_intensidade(celula["total"])
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(cor)
+                painter.drawRoundedRect(retangulo, 2, 2)
+
+                if self._celula_hover == (linha, hora):
+                    pen_destaque = QPen(QColor(tokens.TEXTO), 1.5)
+                    painter.setPen(pen_destaque)
+                    painter.setBrush(Qt.NoBrush)
+                    painter.drawRoundedRect(retangulo, 2, 2)
+
+        area_altura_total = len(self._dias) * altura_celula
+        painter.setPen(QColor(tokens.TEXTO_TERCIARIO))
+
+        for hora in range(0, 24, 3):
+            x = margem_esq + hora * largura_celula
+            painter.drawText(
+                int(x), int(margem_topo + area_altura_total + 2),
+                int(largura_celula * 3), 16,
+                Qt.AlignLeft | Qt.AlignTop,
+                f"{hora}h",
+            )
+
+        painter.end()
+
+
 class LinhaProgresso(QFrame):
     """Linha 'título / valor' com barra de progresso — usada em rankings
     (top produtos, mix de formas de pagamento etc.)."""

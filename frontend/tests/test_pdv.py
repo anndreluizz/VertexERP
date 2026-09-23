@@ -78,3 +78,20 @@ def test_montar_documento_orcamento_usa_template_premium_compartilhado():
     assert "ORÇAMENTO" in html
     assert "Camiseta" in html
     assert "R$ 100,00" in html  # total = 50 * 2
+
+
+def test_separar_multiplicador_quantidade_antes_do_asterisco():
+    from telas.pdv import _separar_multiplicador
+
+    assert _separar_multiplicador("3*7891234580450") == (3, "7891234580450")
+    assert _separar_multiplicador("12 * 98") == (12, "98")
+    assert _separar_multiplicador("3*") == (3, "")
+
+
+def test_separar_multiplicador_sem_asterisco_ou_invalido_e_codigo_normal():
+    from telas.pdv import _separar_multiplicador
+
+    assert _separar_multiplicador("7891234580450") == (1, "7891234580450")
+    # nao-numero ou zero antes do "*" -> faz parte do codigo/nome
+    assert _separar_multiplicador("BOLSA*G") == (1, "BOLSA*G")
+    assert _separar_multiplicador("0*98") == (1, "0*98")

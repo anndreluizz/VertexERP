@@ -12,7 +12,11 @@ from services.venda_service import (
     excluir_venda_suspensa,
 )
 from services.worker import rodar_em_thread
-from services.produto_service import listar_produtos, cadastrar_produto
+from services.produto_service import (
+    listar_produtos,
+    cadastrar_produto,
+    obter_foto_produto,
+)
 from services.pdv_service import buscar_produto
 from services.caixa_service import caixa_aberto
 from services.relatorio_service import relatorio_vendas
@@ -29,7 +33,7 @@ from utils.documento_html import (
 
 ATALHOS_PADRAO = {"busca": "F1", "cadastro_rapido": "F4", "cancelar": "Esc"}
 
-from PySide6.QtCore import Qt, QTimer, Signal, QSize
+from PySide6.QtCore import Qt, QTimer, Signal, QSize, QEvent
 from PySide6.QtGui import (
     QShortcut,
     QKeySequence,
@@ -84,6 +88,25 @@ def _parse_data(texto):
         return datetime.fromisoformat(texto)
     except (ValueError, TypeError):
         return None
+
+
+def _separar_multiplicador(texto):
+    """"3*789..." -> (3, "789..."); sem "*" -> (1, texto). So' aceita
+    inteiro de 1 a 9999 antes do "*" -- qualquer outra coisa e' tratada
+    como parte do codigo/nome."""
+
+    antes, separador, depois = texto.partition("*")
+
+    if separador and antes.strip().isdigit() and 0 < int(antes) < 10000:
+        return int(antes), depois.strip()
+
+    return 1, texto
+
+
+def _baixar_foto_com_id(produto_id):
+    """Roda na worker thread -- o id viaja junto com os bytes (nao da'
+    pra usar closure como callback, ver services/worker.py)."""
+    return produto_id, obter_foto_produto(produto_id)
 
 
 def _parse_valor(texto):
@@ -219,6 +242,10 @@ class PDV(QWidget):
         self.acrescimo_valor = 0.0
         self._finalizando_venda = False
         self._suspendendo_venda = False
+        # destaque "ultimo item lido" -- id do produto, nao indice da
+        # linha, pra continuar certo quando outra linha e' removida
+        self._id_ultimo_item = None
+        self._fotos_cache = {}
 
         self._usuario_id = (me() or {}).get("id")
         self.atalhos = self._carregar_atalhos()
@@ -256,10 +283,12 @@ class PDV(QWidget):
         layout_esquerda.setContentsMargins(0, 0, 4, 0)
         layout_esquerda.setSpacing(12)
 
+        # layout de caixa de loja: ultimo item em destaque, campo de
+        # codigo, e a lista em formato de cupom; cliente/totais ficam
+        # no painel da direita, com o TOTAL grande
+        layout_esquerda.addWidget(self._construir_ultimo_item())
         layout_esquerda.addWidget(self._construir_campo_codigo())
         layout_esquerda.addWidget(self.lbl_status_busca)
-        layout_esquerda.addLayout(self._construir_acoes_rapidas())
-        layout_esquerda.addWidget(self._construir_linha_cliente())
         layout_esquerda.addWidget(self._construir_mais_vendidos())
         layout_esquerda.addWidget(self._construir_cartao_tabela(), stretch=1)
 
@@ -321,6 +350,11 @@ class PDV(QWidget):
         self.atalho_f7 = QShortcut(QKeySequence("F7"), self)
         self.atalho_f7.setContext(contexto)
         self.atalho_f7.activated.connect(self._abrir_ajuste_acrescimo)
+
+        # Del / + / - / setas agem no item selecionado do cupom, tanto
+        # com o foco no campo de codigo (vazio) quanto na propria lista
+        self.campo_codigo.installEventFilter(self)
+        self.tabela.installEventFilter(self)
 
         fade_in(self, duracao=200)
 
@@ -523,10 +557,14 @@ class PDV(QWidget):
         _, item_finalizar = self._item_atalho("F3", "Finalizar venda")
         _, item_desconto = self._item_atalho("F6", "Desconto")
         _, item_acrescimo = self._item_atalho("F7", "Acréscimo")
+        _, item_quantidade = self._item_atalho("+ / −", "Quantidade")
+        _, item_remover = self._item_atalho("Del", "Remover item")
+        _, item_multiplicar = self._item_atalho("3*", "Várias unidades")
 
         for item in (
             item_busca, item_cliente, item_finalizar,
             item_produto, item_desconto, item_acrescimo,
+            item_quantidade, item_remover, item_multiplicar,
         ):
             layout.addLayout(item)
 
@@ -592,7 +630,7 @@ class PDV(QWidget):
 
         self.campo_codigo = QLineEdit()
         self.campo_codigo.setPlaceholderText(
-            "Digite código, código de barras ou nome do produto..."
+            "Código de barras, código ou nome  ·  3* antes = 3 unidades"
         )
         self.campo_codigo.setFont(QFont(tokens.FONTE_FAMILIA_PADRAO, 18))
         self.campo_codigo.setStyleSheet(f"""
@@ -610,18 +648,52 @@ class PDV(QWidget):
             QLineEdit.LeadingPosition,
         )
         self.campo_codigo.returnPressed.connect(self.processar_codigo)
+        self.campo_codigo.textChanged.connect(self._atualizar_multiplicador)
         layout.addWidget(self.campo_codigo, stretch=1)
 
-        # "pílula" cinza discreta -- sem borda nenhuma, só pra não
-        # sobrar o contorno de foco do Qt (outline) perto do texto
-        # quando o campo de busca está com foco.
-        dica = QLabel(f"{self.atalhos['busca']} busca por nome")
-        dica.setStyleSheet(f"""
-            background:{tokens.FUNDO}; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_SM}px; border:none; outline:none;
+        # "3*" digitado antes do codigo -- mostra que a proxima leitura
+        # vai entrar com essa quantidade (ver processar_codigo)
+        self.lbl_multiplicador = QLabel()
+        self.lbl_multiplicador.setStyleSheet(f"""
+            background:{tokens.PRIMARIA_CLARA}; color:{tokens.PRIMARIA};
+            font-size:{tokens.TAMANHO_MD}px; font-weight:800; border:none;
             border-radius:{tokens.RADIUS_PILL}px; padding: 4px 12px;
         """)
-        layout.addWidget(dica)
+        self.lbl_multiplicador.setVisible(False)
+        layout.addWidget(self.lbl_multiplicador)
+
+        # Buscar / Novo produto -- formas alternativas de adicionar
+        # item, coladas no campo; discretas porque o caminho principal
+        # e' o leitor/teclado (F1/F4)
+        estilo_bt_campo = f"""
+            QPushButton {{
+                background:{tokens.FUNDO}; color:{tokens.TEXTO_SECUNDARIO};
+                border:none; border-radius:{tokens.RADIUS_SM}px;
+                font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+                padding: 0 12px;
+            }}
+            QPushButton:hover {{ background:{tokens.BORDA}; color:{tokens.TEXTO}; }}
+        """
+
+        self.bt_buscar = QPushButton(f"Buscar ({self.atalhos['busca']})")
+        self.bt_buscar.setIcon(icone("search", cor=tokens.TEXTO_SECUNDARIO, tamanho=14))
+        self.bt_buscar.setCursor(Qt.PointingHandCursor)
+        self.bt_buscar.setFixedHeight(36)
+        self.bt_buscar.setFocusPolicy(Qt.NoFocus)
+        self.bt_buscar.setStyleSheet(estilo_bt_campo)
+        self.bt_buscar.clicked.connect(self.abrir_busca)
+        layout.addWidget(self.bt_buscar)
+
+        self.bt_adicionar = QPushButton(
+            f"Novo Produto ({self.atalhos['cadastro_rapido']})"
+        )
+        self.bt_adicionar.setIcon(icone("plus", cor=tokens.TEXTO_SECUNDARIO, tamanho=14))
+        self.bt_adicionar.setCursor(Qt.PointingHandCursor)
+        self.bt_adicionar.setFixedHeight(36)
+        self.bt_adicionar.setFocusPolicy(Qt.NoFocus)
+        self.bt_adicionar.setStyleSheet(estilo_bt_campo)
+        self.bt_adicionar.clicked.connect(self.abrir_novo_produto)
+        layout.addWidget(self.bt_adicionar)
 
         self.lbl_status_busca = QLabel("")
         self.lbl_status_busca.setStyleSheet(f"""
@@ -631,29 +703,73 @@ class PDV(QWidget):
 
         return container
 
-    def _construir_acoes_rapidas(self):
-        """[Buscar] e [Novo Produto] — formas alternativas de adicionar
-        item ao carrinho, por isso ficam coladas no campo de código em
-        vez de lá embaixo, longe de onde o operador está olhando."""
+    def _construir_ultimo_item(self):
+        """Faixa de destaque do ultimo produto lido (foto ou inicial,
+        nome grande, "qtd x unitario" e o total da linha) -- o que o
+        operador e o cliente olham pra confirmar que a leitura entrou
+        certa, igual aos PDVs de supermercado."""
 
-        linha = QHBoxLayout()
-        linha.setSpacing(10)
+        self.cartao_ultimo = QFrame()
+        self.cartao_ultimo.setObjectName("cartaoUltimoItem")
+        self.cartao_ultimo.setFixedHeight(112)
+        self.cartao_ultimo.setStyleSheet(f"""
+            QFrame#cartaoUltimoItem {{
+                background: {tokens.CARD};
+                border: 1px solid {tokens.BORDA};
+                border-radius: {tokens.RADIUS_MD}px;
+            }}
+        """)
 
-        self.bt_buscar = BotaoPrimario(
-            f"Buscar ({self.atalhos['busca']})", icone_nome="search"
-        )
-        self.bt_buscar.clicked.connect(self.abrir_busca)
+        layout = QHBoxLayout(self.cartao_ultimo)
+        layout.setContentsMargins(14, 12, 22, 12)
+        layout.setSpacing(16)
 
-        self.bt_adicionar = BotaoSecundario(
-            f"Novo Produto ({self.atalhos['cadastro_rapido']})", icone_nome="plus"
-        )
-        self.bt_adicionar.clicked.connect(self.abrir_novo_produto)
+        self.lbl_ultimo_foto = QLabel()
+        self.lbl_ultimo_foto.setFixedSize(86, 86)
+        self.lbl_ultimo_foto.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.lbl_ultimo_foto)
 
-        linha.addWidget(self.bt_buscar)
-        linha.addWidget(self.bt_adicionar)
-        linha.addStretch()
+        col_texto = QVBoxLayout()
+        col_texto.setSpacing(2)
 
-        return linha
+        self.lbl_ultimo_rotulo = QLabel()
+        self.lbl_ultimo_rotulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:800; letter-spacing:0.5px;
+        """)
+
+        self.lbl_ultimo_nome = QLabel()
+        self.lbl_ultimo_nome.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:24px; font-weight:800;
+        """)
+
+        self.lbl_ultimo_conta = QLabel()
+        self.lbl_ultimo_conta.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_MD}px; font-weight:600;
+        """)
+
+        col_texto.addStretch()
+        col_texto.addWidget(self.lbl_ultimo_rotulo)
+        col_texto.addWidget(self.lbl_ultimo_nome)
+        col_texto.addWidget(self.lbl_ultimo_conta)
+        col_texto.addStretch()
+
+        layout.addLayout(col_texto, 1)
+
+        self.lbl_ultimo_total = QLabel()
+        self.lbl_ultimo_total.setMinimumWidth(240)
+        self.lbl_ultimo_total.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.lbl_ultimo_total.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:30px; font-weight:800;
+        """)
+        layout.addWidget(self.lbl_ultimo_total)
+
+        self._atualizar_ultimo_item()
+
+        return self.cartao_ultimo
 
     def _construir_linha_cliente(self):
 
@@ -667,8 +783,8 @@ class PDV(QWidget):
         """)
 
         layout = QHBoxLayout(linha)
-        layout.setContentsMargins(14, 10, 14, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 8, 8, 8)
+        layout.setSpacing(8)
 
         lbl_icone = QLabel()
         lbl_icone.setStyleSheet("background:transparent;")
@@ -708,10 +824,19 @@ class PDV(QWidget):
         self.bt_limpar_cliente.setVisible(False)
         layout.addWidget(self.bt_limpar_cliente)
 
-        self.bt_selecionar_cliente = BotaoSecundario(
-            f"Selecionar (F2)", icone_nome="users"
-        )
-        self.bt_selecionar_cliente.setMinimumHeight(32)
+        self.bt_selecionar_cliente = QPushButton("F2")
+        self.bt_selecionar_cliente.setToolTip("Selecionar cliente (F2)")
+        self.bt_selecionar_cliente.setCursor(Qt.PointingHandCursor)
+        self.bt_selecionar_cliente.setFocusPolicy(Qt.NoFocus)
+        self.bt_selecionar_cliente.setFixedHeight(30)
+        self.bt_selecionar_cliente.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD}; color:{tokens.PRIMARIA};
+                border:1px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
+                font-size:{tokens.TAMANHO_SM}px; font-weight:800; padding: 0 12px;
+            }}
+            QPushButton:hover {{ background:{tokens.PRIMARIA_CLARA}; }}
+        """)
         self.bt_selecionar_cliente.clicked.connect(self.abrir_selecionar_cliente)
         layout.addWidget(self.bt_selecionar_cliente)
 
@@ -811,8 +936,9 @@ class PDV(QWidget):
         pra não deixar um vão em branco atrás da tabela zerada."""
 
         cartao = QFrame()
+        cartao.setObjectName("cartaoCupom")
         cartao.setStyleSheet(f"""
-            QFrame {{
+            QFrame#cartaoCupom {{
                 background: {tokens.CARD};
                 border: 1px solid {tokens.BORDA};
                 border-radius: {tokens.RADIUS_MD}px;
@@ -826,7 +952,7 @@ class PDV(QWidget):
         cabecalho_tabela = QHBoxLayout()
         cabecalho_tabela.setContentsMargins(16, 14, 16, 10)
 
-        lbl_titulo_tabela = QLabel("PRODUTOS DA VENDA")
+        lbl_titulo_tabela = QLabel("CUPOM")
         lbl_titulo_tabela.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO};
             font-size:{tokens.TAMANHO_SM}px; font-weight:800; letter-spacing: 0.5px;
@@ -867,36 +993,44 @@ class PDV(QWidget):
 
         self.tabela = QTableWidget()
 
+        # formato de cupom: linhas simples, sem botao por linha --
+        # quantidade e remocao sao pelo teclado (+ / - / Del) no item
+        # selecionado (ver eventFilter), como nos PDVs de loja
         self.tabela.setColumnCount(6)
 
         self.tabela.setHorizontalHeaderLabels([
+            "Nº",
             "Código",
             "Produto",
-            "Qtde",
+            "Qtd",
             "Unitário",
             "Total",
-            "",
         ])
 
         self.tabela.verticalHeader().setVisible(False)
-        self.tabela.setSelectionMode(QTableWidget.NoSelection)
+        self.tabela.setSelectionMode(QTableWidget.SingleSelection)
+        self.tabela.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabela.setEditTriggers(QTableWidget.NoEditTriggers)
         self.tabela.setShowGrid(False)
-        self.tabela.verticalHeader().setDefaultSectionSize(58)
+        self.tabela.verticalHeader().setDefaultSectionSize(40)
 
-        self.tabela.horizontalHeader().setStretchLastSection(False)
-        self.tabela.setColumnWidth(2, 120)
-        self.tabela.setColumnWidth(5, 48)
-        self.tabela.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.Stretch
-        )
+        cabecalho_horizontal = self.tabela.horizontalHeader()
+        cabecalho_horizontal.setStretchLastSection(False)
+        cabecalho_horizontal.setSectionResizeMode(2, QHeaderView.Stretch)
+        self.tabela.setColumnWidth(0, 56)
+        self.tabela.setColumnWidth(1, 140)
+        self.tabela.setColumnWidth(3, 70)
+        self.tabela.setColumnWidth(4, 110)
+        self.tabela.setColumnWidth(5, 120)
         self.tabela.setStyleSheet(f"""
             QTableWidget {{
                 border: none;
                 color: {tokens.TEXTO};
                 background: {tokens.CARD};
-                font-size: {tokens.TAMANHO_BASE}px;
+                font-size: {tokens.TAMANHO_MD}px;
                 alternate-background-color: {tokens.FUNDO};
+                selection-background-color: {tokens.PRIMARIA_CLARA};
+                selection-color: {tokens.TEXTO};
             }}
             QHeaderView::section {{
                 background: {tokens.CARD};
@@ -930,25 +1064,17 @@ class PDV(QWidget):
         layout.setAlignment(Qt.AlignCenter)
         layout.setSpacing(6)
 
-        lbl_icone = QLabel()
-        lbl_icone.setAlignment(Qt.AlignCenter)
-        lbl_icone.setStyleSheet("background:transparent;")
-        lbl_icone.setPixmap(
-            icone_pixmap("shopping-cart", cor=tokens.TEXTO_TERCIARIO, tamanho=40)
-        )
-        layout.addWidget(lbl_icone)
-
-        lbl_titulo = QLabel("Nenhum produto na venda")
+        lbl_titulo = QLabel("CAIXA LIVRE")
         lbl_titulo.setAlignment(Qt.AlignCenter)
         lbl_titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
-            font-size:{tokens.TAMANHO_MD}px; font-weight:700; margin-top: 6px;
+            background:transparent; color:{tokens.SECUNDARIA};
+            font-size:56px; font-weight:900; letter-spacing: 4px;
         """)
         layout.addWidget(lbl_titulo)
 
         lbl_dica = QLabel(
-            "Digite um código, leia um código de barras ou pressione "
-            f"{self.atalhos['busca']} para buscar."
+            "Passe o código de barras ou pressione "
+            f"{self.atalhos['busca']} para buscar pelo nome."
         )
         lbl_dica.setAlignment(Qt.AlignCenter)
         lbl_dica.setWordWrap(True)
@@ -956,7 +1082,7 @@ class PDV(QWidget):
             background:transparent; color:{tokens.TEXTO_TERCIARIO};
             font-size:{tokens.TAMANHO_SM}px;
         """)
-        lbl_dica.setMaximumWidth(340)
+        lbl_dica.setMaximumWidth(420)
         layout.addWidget(lbl_dica, alignment=Qt.AlignCenter)
 
         return estado
@@ -1002,6 +1128,8 @@ class PDV(QWidget):
         layout = QVBoxLayout(cartao)
         layout.setContentsMargins(20, 18, 20, 20)
         layout.setSpacing(12)
+
+        layout.addWidget(self._construir_linha_cliente())
 
         titulo = QLabel("RESUMO DA VENDA")
         titulo.setStyleSheet(f"""
@@ -1093,7 +1221,9 @@ class PDV(QWidget):
         linha_acrescimo, self.lbl_acrescimo_valor = self._linha_resumo("Acréscimo")
         layout.addLayout(linha_acrescimo)
 
-        layout.addSpacing(6)
+        # total ancorado embaixo, colado no botao Finalizar -- o espaco
+        # que sobra fica entre o detalhamento e o total
+        layout.addStretch()
 
         caixa_total = QFrame()
         caixa_total.setStyleSheet(f"""
@@ -1104,7 +1234,7 @@ class PDV(QWidget):
         """)
 
         layout_caixa_total = QVBoxLayout(caixa_total)
-        layout_caixa_total.setContentsMargins(14, 12, 14, 12)
+        layout_caixa_total.setContentsMargins(16, 14, 16, 16)
         layout_caixa_total.setSpacing(2)
 
         lbl_total_rotulo = QLabel("TOTAL")
@@ -1115,19 +1245,14 @@ class PDV(QWidget):
         layout_caixa_total.addWidget(lbl_total_rotulo)
 
         self.total = QLabel("R$ 0,00")
-        self.total.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.total.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.total.setStyleSheet(f"""
-            background:transparent; font-size: 34px; font-weight: 800;
+            background:transparent; font-size: 50px; font-weight: 900;
             color: {tokens.SECUNDARIA};
         """)
         layout_caixa_total.addWidget(self.total)
 
         layout.addWidget(caixa_total)
-
-        # o card acompanha a altura do carrinho ao lado (ver stretch=1
-        # em __init__) — o conteúdo fica ancorado no topo, o resto do
-        # espaço é preenchido aqui dentro, sem sobrar vão cinza embaixo.
-        layout.addStretch()
 
         return cartao
 
@@ -1178,6 +1303,11 @@ class PDV(QWidget):
         if not codigo:
             return
 
+        quantidade, codigo = _separar_multiplicador(codigo)
+
+        if not codigo:
+            return  # so' "3*" -- espera o codigo
+
         produto = buscar_produto(codigo)
 
         if produto is None:
@@ -1185,9 +1315,19 @@ class PDV(QWidget):
             self.campo_codigo.selectAll()
             return
 
-        self.adicionar_produto_ao_carrinho(produto, 1)
+        if not self.adicionar_produto_ao_carrinho(produto, quantidade):
+            self.campo_codigo.selectAll()
+            return
+
         self.campo_codigo.clear()
-        self._mostrar_status_busca(f"Adicionado: {produto['nome']}", erro=False)
+
+    def _atualizar_multiplicador(self, texto):
+
+        quantidade, _ = _separar_multiplicador(texto.strip())
+        tem_multiplicador = "*" in texto and quantidade > 1
+
+        self.lbl_multiplicador.setText(f"× {quantidade}")
+        self.lbl_multiplicador.setVisible(tem_multiplicador)
 
     def _mostrar_status_busca(self, texto, erro):
 
@@ -1246,7 +1386,7 @@ class PDV(QWidget):
                 )
 
             self._mostrar_status_busca(mensagem, erro=True)
-            return
+            return False
 
         if item_existente:
             item_existente["quantidade"] += quantidade
@@ -1259,10 +1399,13 @@ class PDV(QWidget):
                     "preco": float(produto["preco"]),
                     "quantidade": quantidade,
                     "estoque": estoque,
+                    "tem_foto": produto.get("tem_foto", False),
                 }
             )
 
+        self._id_ultimo_item = produto["id"]
         self.atualizar_tabela()
+        return True
 
     # ==================================================
     # NOVO PRODUTO (F4) - cadastro completo sem sair do PDV
@@ -1365,38 +1508,205 @@ class PDV(QWidget):
 
         self.tabela.setRowCount(len(self.itens))
 
+        alinhado_direita = Qt.AlignRight | Qt.AlignVCenter
+        linha_ultimo = None
+
         for linha, item in enumerate(self.itens):
             subtotal = item["preco"] * item["quantidade"]
 
-            self.tabela.setItem(
-                linha, 0, QTableWidgetItem(item["codigo"])
-            )
+            celulas = [
+                (f"{linha + 1:03d}", Qt.AlignCenter),
+                (item["codigo"], Qt.AlignLeft | Qt.AlignVCenter),
+                (item["nome"], Qt.AlignLeft | Qt.AlignVCenter),
+                (str(item["quantidade"]), Qt.AlignCenter),
+                (formatar_moeda(item["preco"]), alinhado_direita),
+                (formatar_moeda(subtotal), alinhado_direita),
+            ]
 
-            self.tabela.setCellWidget(linha, 1, self.criar_widget_produto(item))
+            for coluna, (texto, alinhamento) in enumerate(celulas):
+                celula = QTableWidgetItem(texto)
+                celula.setTextAlignment(alinhamento)
+                if coluna in (2, 5):
+                    fonte = celula.font()
+                    fonte.setBold(True)
+                    celula.setFont(fonte)
+                self.tabela.setItem(linha, coluna, celula)
 
-            self.tabela.setCellWidget(
-                linha, 2, self.criar_widget_qtde(linha, item["quantidade"])
-            )
+            if item["id"] == self._id_ultimo_item:
+                linha_ultimo = linha
 
-            self.tabela.setItem(
-                linha, 3, QTableWidgetItem(formatar_moeda(item["preco"]))
-            )
-
-            self.tabela.setItem(
-                linha, 4, QTableWidgetItem(formatar_moeda(subtotal))
-            )
-
-            self.tabela.setCellWidget(
-                linha, 5, self.criar_widget_excluir(linha)
-            )
+        if self.itens:
+            if linha_ultimo is None:
+                linha_ultimo = len(self.itens) - 1
+                self._id_ultimo_item = self.itens[-1]["id"]
+            self.tabela.selectRow(linha_ultimo)
+            self.tabela.scrollToItem(self.tabela.item(linha_ultimo, 0))
+        else:
+            self._id_ultimo_item = None
 
         self.pilha_carrinho.setCurrentWidget(
             self.tabela if self.itens else self.pilha_carrinho.widget(0)
         )
         self.bt_limpar_carrinho.setVisible(bool(self.itens))
 
+        self._atualizar_ultimo_item()
         self._recalcular_totais()
         self.campo_codigo.setFocus()
+
+    # ==================================================
+    # DESTAQUE DO ÚLTIMO ITEM
+    # ==================================================
+
+    def _atualizar_ultimo_item(self):
+
+        item = next(
+            (i for i in self.itens if i["id"] == self._id_ultimo_item), None
+        )
+
+        if item is None:
+            self.lbl_ultimo_rotulo.setText("")
+            self.lbl_ultimo_nome.setText("Aguardando produto...")
+            self.lbl_ultimo_nome.setStyleSheet(f"""
+                background:transparent; color:{tokens.TEXTO_TERCIARIO};
+                font-size:24px; font-weight:800;
+            """)
+            self.lbl_ultimo_conta.setText("")
+            self.lbl_ultimo_total.setText("")
+            self._exibir_monograma_ultimo(None)
+            return
+
+        self.lbl_ultimo_rotulo.setText("ÚLTIMO ITEM")
+        self.lbl_ultimo_nome.setText(item["nome"])
+        self.lbl_ultimo_nome.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:24px; font-weight:800;
+        """)
+        self.lbl_ultimo_conta.setText(
+            f"{item['quantidade']} × {formatar_moeda(item['preco'])}"
+        )
+        self.lbl_ultimo_total.setText(
+            formatar_moeda(item["preco"] * item["quantidade"])
+        )
+
+        foto = self._fotos_cache.get(item["id"])
+
+        if foto:
+            self._exibir_foto_ultimo(foto)
+            return
+
+        self._exibir_monograma_ultimo(item["nome"])
+
+        if item.get("tem_foto") and item["id"] not in self._fotos_cache:
+            # marca como "buscando" pra nao disparar de novo a cada
+            # atualizacao enquanto a foto baixa
+            self._fotos_cache[item["id"]] = None
+            rodar_em_thread(
+                self,
+                _baixar_foto_com_id,
+                item["id"],
+                ao_sucesso=self._ao_baixar_foto_ultimo,
+                ao_erro=self._ignorar_erro,
+            )
+
+    def _ao_baixar_foto_ultimo(self, resultado):
+
+        produto_id, foto = resultado
+
+        if not foto:
+            return
+
+        self._fotos_cache[produto_id] = foto
+
+        if produto_id == self._id_ultimo_item:
+            self._exibir_foto_ultimo(foto)
+
+    def _exibir_foto_ultimo(self, foto):
+
+        pixmap = QPixmap()
+
+        if not pixmap.loadFromData(foto):
+            return
+
+        self.lbl_ultimo_foto.setStyleSheet(f"""
+            background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px;
+        """)
+        self.lbl_ultimo_foto.setPixmap(
+            pixmap.scaled(86, 86, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        )
+
+    def _exibir_monograma_ultimo(self, nome):
+        """Inicial colorida quando o produto nao tem foto (mesmo
+        principio dos avatares de Clientes Recentes do Dashboard)."""
+
+        self.lbl_ultimo_foto.clear()
+
+        if not nome:
+            self.lbl_ultimo_foto.setText("")
+            self.lbl_ultimo_foto.setStyleSheet(f"""
+                background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px;
+            """)
+            self.lbl_ultimo_foto.setPixmap(
+                icone_pixmap("shopping-cart", cor=tokens.TEXTO_TERCIARIO, tamanho=32)
+            )
+            return
+
+        cor = _CORES_MONOGRAMA[sum(ord(c) for c in nome) % len(_CORES_MONOGRAMA)]
+
+        self.lbl_ultimo_foto.setText((nome[:1] or "?").upper())
+        self.lbl_ultimo_foto.setStyleSheet(f"""
+            background:{cor}; color:white; border-radius:{tokens.RADIUS_SM}px;
+            font-size:36px; font-weight:900;
+        """)
+
+    # ==================================================
+    # TECLADO NO CUPOM (Del / + / - / setas)
+    # ==================================================
+
+    def eventFilter(self, origem, evento):
+
+        if evento.type() != QEvent.KeyPress or not self.itens:
+            return super().eventFilter(origem, evento)
+
+        tecla = evento.key()
+        no_campo = origem is self.campo_codigo
+        campo_vazio = not self.campo_codigo.text().strip()
+
+        if tecla in (Qt.Key_Up, Qt.Key_Down):
+            linha = self._linha_selecionada()
+            passo = -1 if tecla == Qt.Key_Up else 1
+            nova = max(0, min(len(self.itens) - 1, linha + passo))
+            self.tabela.selectRow(nova)
+            self._id_ultimo_item = self.itens[nova]["id"]
+            self._atualizar_ultimo_item()
+            return True
+
+        # no campo de codigo, Del/+/- so' valem com o campo vazio --
+        # com texto, sao edicao normal do que esta' sendo digitado
+        if no_campo and not campo_vazio:
+            return super().eventFilter(origem, evento)
+
+        if tecla == Qt.Key_Delete:
+            self.remover_item(self._linha_selecionada())
+            return True
+
+        if tecla == Qt.Key_Plus:
+            self.alterar_quantidade(self._linha_selecionada(), 1)
+            return True
+
+        if tecla == Qt.Key_Minus:
+            self.alterar_quantidade(self._linha_selecionada(), -1)
+            return True
+
+        return super().eventFilter(origem, evento)
+
+    def _linha_selecionada(self):
+
+        linhas = self.tabela.selectionModel().selectedRows()
+
+        if linhas:
+            return linhas[0].row()
+
+        return len(self.itens) - 1
 
     def _recalcular_totais(self):
 
@@ -1445,142 +1755,8 @@ class PDV(QWidget):
         return total
 
     # ==================================================
-    # WIDGETS DE QUANTIDADE / EXCLUIR (por linha)
+    # QUANTIDADE / REMOVER (item selecionado do cupom)
     # ==================================================
-
-    def criar_widget_produto(self, item):
-        """Selo colorido com a inicial do produto + nome + estoque
-        disponível, no lugar de só o nome puro -- não temos foto de
-        produto cadastrada no sistema, então um monograma colorido (o
-        mesmo princípio já usado nos avatares de Clientes Recentes do
-        Dashboard) é o que dá pra fazer sem inventar uma imagem que
-        não existe."""
-
-        widget = QWidget()
-        widget.setStyleSheet("background:transparent;")
-
-        layout = QHBoxLayout(widget)
-        layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(10)
-
-        inicial = (item["nome"][:1] or "?").upper()
-        cor_indice = sum(ord(c) for c in item["nome"]) % len(_CORES_MONOGRAMA)
-        cor = _CORES_MONOGRAMA[cor_indice]
-
-        selo = QLabel(inicial)
-        selo.setFixedSize(34, 34)
-        selo.setAlignment(Qt.AlignCenter)
-        selo.setStyleSheet(f"""
-            background: {cor}; color: white; border-radius: 9px;
-            font-size: 14px; font-weight: 800;
-        """)
-
-        col_texto = QVBoxLayout()
-        col_texto.setSpacing(1)
-
-        lbl_nome = QLabel(item["nome"])
-        lbl_nome.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO};
-            font-size:{tokens.TAMANHO_MD}px; font-weight:700;
-        """)
-
-        estoque = item.get("estoque")
-        texto_estoque = f"Estoque: {estoque} un" if estoque is not None else "Estoque: —"
-
-        lbl_estoque = QLabel(texto_estoque)
-        lbl_estoque.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px;
-        """)
-
-        col_texto.addWidget(lbl_nome)
-        col_texto.addWidget(lbl_estoque)
-
-        layout.addWidget(selo)
-        layout.addLayout(col_texto, 1)
-
-        return widget
-
-    def criar_widget_qtde(self, linha, quantidade):
-
-        widget = QWidget()
-
-        caixa = QHBoxLayout(widget)
-        caixa.setContentsMargins(4, 2, 4, 2)
-        caixa.setSpacing(4)
-
-        estilo_botao = f"""
-            QPushButton {{
-                background:{tokens.FUNDO};
-                border-radius:4px;
-                font-weight:bold;
-                color:{tokens.TEXTO};
-            }}
-            QPushButton:hover {{
-                background:{tokens.BORDA};
-            }}
-        """
-
-        bt_menos = QPushButton("-")
-        bt_menos.setFixedSize(24, 24)
-        bt_menos.setCursor(Qt.PointingHandCursor)
-        bt_menos.setStyleSheet(estilo_botao)
-        bt_menos.clicked.connect(
-            lambda: self.alterar_quantidade(linha, -1)
-        )
-
-        lbl_qtde = QLabel(str(quantidade))
-        lbl_qtde.setAlignment(Qt.AlignCenter)
-        lbl_qtde.setFixedWidth(24)
-        lbl_qtde.setStyleSheet(
-            f"background:transparent; color:{tokens.TEXTO}; font-weight:bold;"
-        )
-
-        bt_mais = QPushButton("+")
-        bt_mais.setFixedSize(24, 24)
-        bt_mais.setCursor(Qt.PointingHandCursor)
-        bt_mais.setStyleSheet(estilo_botao)
-        bt_mais.clicked.connect(
-            lambda: self.alterar_quantidade(linha, 1)
-        )
-
-        caixa.addWidget(bt_menos)
-        caixa.addWidget(lbl_qtde)
-        caixa.addWidget(bt_mais)
-        caixa.addStretch()
-
-        return widget
-
-    def criar_widget_excluir(self, linha):
-
-        widget = QWidget()
-
-        caixa = QHBoxLayout(widget)
-        caixa.setContentsMargins(0, 0, 0, 0)
-
-        bt_excluir = QPushButton()
-        bt_excluir.setFixedSize(28, 28)
-        bt_excluir.setCursor(Qt.PointingHandCursor)
-        bt_excluir.setIcon(icone("trash-2", cor=tokens.TEXTO_TERCIARIO, tamanho=15))
-        bt_excluir.setToolTip("Remover item")
-        bt_excluir.setAccessibleName("Remover item")
-        bt_excluir.setStyleSheet(f"""
-            QPushButton {{
-                background:transparent;
-                border:none;
-                border-radius:6px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.ERRO_CLARO};
-            }}
-        """)
-        bt_excluir.clicked.connect(
-            lambda: self.remover_item(linha)
-        )
-
-        caixa.addWidget(bt_excluir)
-
-        return widget
 
     def alterar_quantidade(self, linha, delta):
 
@@ -1605,15 +1781,21 @@ class PDV(QWidget):
             return
 
         item["quantidade"] = nova_quantidade
+        self._id_ultimo_item = item["id"]
 
         self.atualizar_tabela()
 
     def remover_item(self, linha):
 
-        if linha >= len(self.itens):
+        if linha < 0 or linha >= len(self.itens):
             return
 
         del self.itens[linha]
+
+        # selecao/destaque vao pro item que ficou no lugar (ou o de
+        # cima, se era o ultimo) -- Del seguido de Del vai limpando
+        if self.itens:
+            self._id_ultimo_item = self.itens[min(linha, len(self.itens) - 1)]["id"]
 
         self.atualizar_tabela()
 
@@ -1642,6 +1824,8 @@ class PDV(QWidget):
     def limpar_venda(self):
 
         self.itens.clear()
+        self._id_ultimo_item = None
+        self._atualizar_ultimo_item()
 
         self.tabela.setRowCount(0)
         self.pilha_carrinho.setCurrentWidget(self.pilha_carrinho.widget(0))
@@ -1787,7 +1971,7 @@ class PDV(QWidget):
 
         # "codigo"/"estoque" vem None quando o produto foi excluido
         # depois da venda ter sido suspensa -- QTableWidgetItem(None)
-        # quebra, e o proprio criar_widget_produto/checagem de estoque
+        # quebra, e o proprio atualizar_tabela/checagem de estoque
         # esperam string/int normais
         self.itens = [
             {

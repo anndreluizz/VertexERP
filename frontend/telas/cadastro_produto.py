@@ -62,13 +62,6 @@ from design.widgets import Card
 
 _TAMANHO_PREVIA = 110
 
-_UNIDADES = [
-    ("Unidade (UN)", "UN"),
-    ("Quilograma (KG)", "KG"),
-    ("Litro (L)", "L"),
-]
-
-
 def _criar_categoria_com_nome(nome):
     """Roda na worker thread -- o nome viaja junto com a resposta (nao
     da pra usar lambda/closure como callback, ver services/worker.py)."""
@@ -110,7 +103,6 @@ class CadastroProdutoWindow(QDialog):
         self.imagem_bytes = None
         self.modo_venda = "UN"
 
-        tamanho_fixo_seguro(self, 1120, 860)
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         layout = QVBoxLayout(self)
@@ -153,7 +145,7 @@ class CadastroProdutoWindow(QDialog):
         subtitulo_texto = (
             "Atualize os dados do produto no sistema."
             if produto else
-            "Preencha os dados básicos para cadastrar um novo produto no sistema."
+            "Preencha o essencial -- o resto fica em Mais opções."
         )
 
         subtitulo = QLabel(subtitulo_texto)
@@ -200,12 +192,15 @@ class CadastroProdutoWindow(QDialog):
         layout.addWidget(linha_separadora)
 
         # ======================
-        # CORPO (2 colunas)
+        # CORPO
         # ======================
 
-        # corpo rola -- 2 colunas com ate' 4 cartoes empilhados na
-        # direita nao cabem em telas de 900px de altura (ver
-        # design/responsive.py); cabecalho e rodape ficam fixos
+        # cadastro rapido: so' o essencial (codigo, nome, precos,
+        # estoque, categoria, unidade) fica sempre visivel; o resto
+        # (marca, cor, foto, promocao, kit, variacoes...) mora em
+        # "Mais opcoes", recolhido por padrao em produto novo. Com
+        # tudo aberto nao cabe em telas de 900px -> corpo rola, e
+        # cabecalho/rodape ficam fixos
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
@@ -213,19 +208,42 @@ class CadastroProdutoWindow(QDialog):
         corpo_widget = QWidget()
         corpo_widget.setStyleSheet("background:transparent;")
 
-        corpo = QHBoxLayout(corpo_widget)
+        corpo = QVBoxLayout(corpo_widget)
         corpo.setContentsMargins(30, 20, 30, 16)
-        corpo.setSpacing(20)
+        corpo.setSpacing(16)
 
-        # ---- coluna esquerda: informações básicas ----
+        # ---- essencial ----
 
-        cartao_info, corpo_info = self._construir_cartao_secao(
-            "Informações Básicas",
-            "Cadastre as informações principais do produto.",
+        cartao_rapido, corpo_rapido = self._construir_cartao_secao(
+            "Dados do produto",
+            "Bipe o código de barras ou digite o nome. Enter passa pro "
+            "próximo campo.",
             "edit-2", tokens.PRIMARIA,
         )
 
-        corpo_info.addWidget(self._rotulo_campo("Código de barras (opcional)"))
+        # preenchidas mais abaixo, conforme os campos sao criados --
+        # ja entram no cartao aqui pra ficar na ordem certa
+        linha_valores_rapido = QHBoxLayout()
+        linha_valores_rapido.setSpacing(12)
+
+        self.lbl_margem = QLabel()
+        self.lbl_margem.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px;
+        """)
+
+        linha_categoria_modo = QHBoxLayout()
+        linha_categoria_modo.setSpacing(12)
+
+        # ---- mais opções ----
+
+        cartao_detalhes, corpo_detalhes = self._construir_cartao_secao(
+            "Detalhes",
+            "Marca, coleção, cor, tamanho e descrição.",
+            "edit-2", tokens.PRIMARIA,
+        )
+
+        corpo_rapido.addWidget(self._rotulo_campo("Código de barras (opcional)"))
 
         linha_codigo = QHBoxLayout()
         linha_codigo.setSpacing(8)
@@ -234,7 +252,13 @@ class CadastroProdutoWindow(QDialog):
         self.codigo_barras.setPlaceholderText("Bipar ou digitar o código de barras...")
         self.codigo_barras.setMinimumHeight(42)
         self.codigo_barras.setStyleSheet(self._estilo_input())
-        self.codigo_barras.returnPressed.connect(self.buscar_automatico)
+        # Enter (o leitor de codigo manda um no fim) busca em silencio
+        # -- bolsa/roupa quase nunca esta' na base publica e um aviso
+        # "nao encontrado" a cada bipada travaria o cadastro rapido.
+        # O botao de lupa continua avisando.
+        self.codigo_barras.returnPressed.connect(
+            lambda: self.buscar_automatico(silencioso=True)
+        )
         self.codigo_barras.textChanged.connect(
             self.agendar_busca_automatica
         )
@@ -267,18 +291,24 @@ class CadastroProdutoWindow(QDialog):
         linha_codigo.addWidget(self.codigo_barras)
         linha_codigo.addWidget(self.bt_buscar)
 
-        corpo_info.addLayout(linha_codigo)
+        corpo_rapido.addLayout(linha_codigo)
 
-        corpo_info.addWidget(self._rotulo_campo("Nome do produto", obrigatorio=True))
+        corpo_rapido.addWidget(self._rotulo_campo("Nome do produto", obrigatorio=True))
 
         self.nome = QLineEdit()
-        self.nome.setPlaceholderText("Ex.: Coca-Cola Lata 350ml")
+        self.nome.setPlaceholderText("Ex.: Mochila Preta Escolar")
         self.nome.setMinimumHeight(42)
         self.nome.setStyleSheet(self._estilo_input())
 
-        corpo_info.addWidget(self.nome)
+        corpo_rapido.addWidget(self.nome)
 
-        corpo_info.addWidget(self._rotulo_campo("Categoria do produto"))
+        corpo_rapido.addLayout(linha_valores_rapido)
+        corpo_rapido.addWidget(self.lbl_margem)
+        corpo_rapido.addLayout(linha_categoria_modo)
+
+        col_categoria = QVBoxLayout()
+        col_categoria.setSpacing(6)
+        col_categoria.addWidget(self._rotulo_campo("Categoria"))
 
         linha_categoria = QHBoxLayout()
         linha_categoria.setSpacing(8)
@@ -337,9 +367,10 @@ class CadastroProdutoWindow(QDialog):
         linha_categoria.addWidget(self.bt_nova_categoria)
         linha_categoria.addWidget(self.bt_gerenciar_categorias)
 
-        corpo_info.addLayout(linha_categoria)
+        col_categoria.addLayout(linha_categoria)
+        linha_categoria_modo.addLayout(col_categoria, 3)
 
-        corpo_info.addWidget(self._rotulo_campo("Marca (opcional)"))
+        corpo_detalhes.addWidget(self._rotulo_campo("Marca (opcional)"))
 
         linha_marca = QHBoxLayout()
         linha_marca.setSpacing(8)
@@ -392,16 +423,16 @@ class CadastroProdutoWindow(QDialog):
         linha_marca.addWidget(self.bt_nova_marca)
         linha_marca.addWidget(self.bt_gerenciar_marcas)
 
-        corpo_info.addLayout(linha_marca)
+        corpo_detalhes.addLayout(linha_marca)
 
-        corpo_info.addWidget(self._rotulo_campo("Coleção (opcional)"))
+        corpo_detalhes.addWidget(self._rotulo_campo("Coleção (opcional)"))
 
         self.colecao = QLineEdit()
         self.colecao.setPlaceholderText("Ex.: Verão 2026, Linha Premium...")
         self.colecao.setMinimumHeight(42)
         self.colecao.setStyleSheet(self._estilo_input())
 
-        corpo_info.addWidget(self.colecao)
+        corpo_detalhes.addWidget(self.colecao)
 
         linha_variacao = QHBoxLayout()
         linha_variacao.setSpacing(12)
@@ -427,9 +458,9 @@ class CadastroProdutoWindow(QDialog):
         linha_variacao.addLayout(col_cor)
         linha_variacao.addLayout(col_tamanho)
 
-        corpo_info.addLayout(linha_variacao)
+        corpo_detalhes.addLayout(linha_variacao)
 
-        corpo_info.addWidget(self._rotulo_campo("Descrição (opcional)"))
+        corpo_detalhes.addWidget(self._rotulo_campo("Descrição (opcional)"))
 
         self.descricao = QPlainTextEdit()
         self.descricao.setPlaceholderText(
@@ -446,7 +477,7 @@ class CadastroProdutoWindow(QDialog):
         """)
         self.descricao.textChanged.connect(self._limitar_descricao)
 
-        corpo_info.addWidget(self.descricao)
+        corpo_detalhes.addWidget(self.descricao)
 
         self.lbl_contador_descricao = QLabel("0/300")
         self.lbl_contador_descricao.setAlignment(Qt.AlignRight)
@@ -454,23 +485,11 @@ class CadastroProdutoWindow(QDialog):
             background:transparent; color:{tokens.TEXTO_TERCIARIO};
             font-size:{tokens.TAMANHO_XS}px;
         """)
-        corpo_info.addWidget(self.lbl_contador_descricao)
+        corpo_detalhes.addWidget(self.lbl_contador_descricao)
 
-        corpo_info.addStretch()
+        corpo_detalhes.addStretch()
 
-        # ---- coluna direita: valores + foto ----
-
-        direita = QVBoxLayout()
-        direita.setSpacing(20)
-
-        cartao_valores, corpo_valores = self._construir_cartao_secao(
-            "Valores e Disponibilidade",
-            "Defina o preço, custos e controle de estoque.",
-            "dollar-sign", tokens.SECUNDARIA,
-        )
-
-        linha_preco_modo = QHBoxLayout()
-        linha_preco_modo.setSpacing(16)
+        # ---- precos / estoque / unidade (vao pro cartao essencial) ----
 
         col_preco = QVBoxLayout()
         col_preco.setSpacing(6)
@@ -482,38 +501,6 @@ class CadastroProdutoWindow(QDialog):
         self.preco_venda.setMinimumHeight(42)
         self.preco_venda.setStyleSheet(self._estilo_input("QDoubleSpinBox"))
         col_preco.addWidget(self.preco_venda)
-
-        col_modo = QVBoxLayout()
-        col_modo.setSpacing(6)
-        col_modo.addWidget(self._rotulo_campo("Modo de venda"))
-
-        linha_modo = QHBoxLayout()
-        linha_modo.setSpacing(4)
-
-        self.botoes_modo = {}
-
-        for rotulo, valor in [
-            ("UNID", "UN"), ("PESO", "KG"), ("LITRO", "L"),
-        ]:
-            bt = QPushButton(rotulo)
-            bt.setCursor(Qt.PointingHandCursor)
-            bt.setCheckable(True)
-            bt.setMinimumHeight(42)
-            bt.clicked.connect(
-                lambda checked, v=valor: self.selecionar_modo(v)
-            )
-            self.botoes_modo[valor] = bt
-            linha_modo.addWidget(bt)
-
-        col_modo.addLayout(linha_modo)
-
-        linha_preco_modo.addLayout(col_preco)
-        linha_preco_modo.addLayout(col_modo)
-
-        corpo_valores.addLayout(linha_preco_modo)
-
-        linha_custo_estoque = QHBoxLayout()
-        linha_custo_estoque.setSpacing(16)
 
         col_custo = QVBoxLayout()
         col_custo.setSpacing(6)
@@ -528,58 +515,71 @@ class CadastroProdutoWindow(QDialog):
 
         col_estoque = QVBoxLayout()
         col_estoque.setSpacing(6)
-        col_estoque.addWidget(self._rotulo_campo("Estoque inicial"))
+        col_estoque.addWidget(self._rotulo_campo(
+            "Estoque" if produto else "Estoque inicial"
+        ))
         self.estoque = QSpinBox()
         self.estoque.setMaximum(999999)
         self.estoque.setMinimumHeight(42)
         self.estoque.setStyleSheet(self._estilo_input("QSpinBox"))
         col_estoque.addWidget(self.estoque)
 
-        linha_custo_estoque.addLayout(col_custo)
-        linha_custo_estoque.addLayout(col_estoque)
+        linha_valores_rapido.addLayout(col_preco)
+        linha_valores_rapido.addLayout(col_custo)
+        linha_valores_rapido.addLayout(col_estoque)
 
-        corpo_valores.addLayout(linha_custo_estoque)
+        self.preco_venda.valueChanged.connect(self._atualizar_margem)
+        self.preco_custo.valueChanged.connect(self._atualizar_margem)
+        self._atualizar_margem()
 
-        linha_minimo_unidade = QHBoxLayout()
-        linha_minimo_unidade.setSpacing(16)
+        # UN/KG/L -- define a unidade do produto (antes tinha tambem um
+        # combo "Unidade de medida" desabilitado que so' repetia isto)
+        col_modo = QVBoxLayout()
+        col_modo.setSpacing(6)
+        col_modo.addWidget(self._rotulo_campo("Vendido por"))
 
-        col_estoque_minimo = QVBoxLayout()
-        col_estoque_minimo.setSpacing(6)
-        col_estoque_minimo.addWidget(self._rotulo_campo("Estoque mínimo (alerta)"))
+        linha_modo = QHBoxLayout()
+        linha_modo.setSpacing(4)
+
+        self.botoes_modo = {}
+
+        for rotulo, valor in [
+            ("UNID", "UN"), ("KG", "KG"), ("LITRO", "L"),
+        ]:
+            bt = QPushButton(rotulo)
+            bt.setCursor(Qt.PointingHandCursor)
+            bt.setCheckable(True)
+            bt.setMinimumHeight(42)
+            bt.clicked.connect(
+                lambda checked, v=valor: self.selecionar_modo(v)
+            )
+            self.botoes_modo[valor] = bt
+            linha_modo.addWidget(bt)
+
+        col_modo.addLayout(linha_modo)
+        linha_categoria_modo.addLayout(col_modo, 2)
+
+        # ---- mais opções: estoque mínimo + promoção ----
+
+        direita = QVBoxLayout()
+        direita.setSpacing(16)
+
+        cartao_valores, corpo_valores = self._construir_cartao_secao(
+            "Estoque mínimo e promoção",
+            "Alerta de reposição e preço promocional por período.",
+            "dollar-sign", tokens.SECUNDARIA,
+        )
+
+        corpo_valores.addWidget(self._rotulo_campo("Estoque mínimo (alerta)"))
         self.estoque_minimo = QSpinBox()
         self.estoque_minimo.setMaximum(999999)
         self.estoque_minimo.setMinimumHeight(42)
-        self.estoque_minimo.setStyleSheet(self._estilo_input("QSpinBox"))
-        col_estoque_minimo.addWidget(self.estoque_minimo)
-
-        col_unidade = QVBoxLayout()
-        col_unidade.setSpacing(6)
-        col_unidade.addWidget(self._rotulo_campo("Unidade de medida"))
-        self.unidade_medida = QComboBox()
-        for rotulo, valor in _UNIDADES:
-            self.unidade_medida.addItem(rotulo, valor)
-        self.unidade_medida.setEnabled(False)
-        self.unidade_medida.setToolTip("Acompanha o Modo de Venda selecionado acima")
-        self.unidade_medida.setMinimumHeight(42)
-        self.unidade_medida.setStyleSheet(self._estilo_input("QComboBox"))
-        col_unidade.addWidget(self.unidade_medida)
-
-        linha_minimo_unidade.addLayout(col_estoque_minimo)
-        linha_minimo_unidade.addLayout(col_unidade)
-
-        corpo_valores.addLayout(linha_minimo_unidade)
-
-        banner_info = QLabel(
-            "Quando o estoque atingir o mínimo, o produto será exibido "
-            "no alerta de estoque."
+        self.estoque_minimo.setToolTip(
+            "Quando o estoque atingir o mínimo, o produto aparece no "
+            "alerta de estoque."
         )
-        banner_info.setWordWrap(True)
-        banner_info.setStyleSheet(f"""
-            background:{tokens.PRIMARIA_CLARA}; color:{tokens.PRIMARIA_HOVER};
-            font-size:{tokens.TAMANHO_SM}px; border-radius:{tokens.RADIUS_SM}px;
-            padding:10px 14px;
-        """)
-        corpo_valores.addWidget(banner_info)
+        self.estoque_minimo.setStyleSheet(self._estilo_input("QSpinBox"))
+        corpo_valores.addWidget(self.estoque_minimo)
 
         linha_promocao_titulo = QHBoxLayout()
         linha_promocao_titulo.setSpacing(8)
@@ -883,14 +883,53 @@ class CadastroProdutoWindow(QDialog):
             else:
                 self._carregar_variacoes()
 
-            direita.addWidget(cartao_variacoes)
+            # variacao e kit so' funcionam depois de salvar (precisam
+            # do id do produto) -- em produto novo nem aparecem; a
+            # referencia segura o cartao vivo, os metodos ainda leem
+            # eh_kit_check/painel_kit
+            self._cartao_variacoes = cartao_variacoes
+            if self.produto:
+                direita.addWidget(cartao_variacoes)
+
+        self._cartao_kit = cartao_kit
 
         direita.addWidget(cartao_valores)
-        direita.addWidget(cartao_kit)
-        direita.addWidget(cartao_foto)
+        if self.produto:
+            direita.addWidget(cartao_kit)
+        direita.addStretch()
 
-        corpo.addWidget(cartao_info, 1)
-        corpo.addLayout(direita, 1)
+        esquerda = QVBoxLayout()
+        esquerda.setSpacing(16)
+        esquerda.addWidget(cartao_detalhes)
+        esquerda.addWidget(cartao_foto)
+        esquerda.addStretch()
+
+        self.painel_mais = QWidget()
+        self.painel_mais.setStyleSheet("background:transparent;")
+        layout_mais = QHBoxLayout(self.painel_mais)
+        layout_mais.setContentsMargins(0, 0, 0, 0)
+        layout_mais.setSpacing(16)
+        layout_mais.addLayout(esquerda, 1)
+        layout_mais.addLayout(direita, 1)
+
+        self.bt_mais_opcoes = QPushButton()
+        self.bt_mais_opcoes.setCursor(Qt.PointingHandCursor)
+        self.bt_mais_opcoes.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; color:{tokens.SECUNDARIA};
+                font-weight:700; font-size:{tokens.TAMANHO_SM}px;
+                border:none; padding:4px 0; text-align:left;
+            }}
+            QPushButton:hover {{ color:{tokens.SECUNDARIA_HOVER}; }}
+        """)
+        self.bt_mais_opcoes.clicked.connect(
+            lambda: self._alternar_mais_opcoes(not self.painel_mais.isVisible())
+        )
+
+        corpo.addWidget(cartao_rapido)
+        corpo.addWidget(self.bt_mais_opcoes)
+        corpo.addWidget(self.painel_mais)
+        corpo.addStretch()
 
         scroll.setWidget(corpo_widget)
         layout.addWidget(scroll, 1)
@@ -947,6 +986,16 @@ class CadastroProdutoWindow(QDialog):
         self._atualizar_estilo_favorito(False)
         self.selecionar_modo("UN")
 
+        # Enter e' tratado em keyPressEvent (proximo campo / cadastrar)
+        # -- sem isso o QDialog "clica" o botao autoDefault da vez
+        for botao in self.findChildren(QPushButton):
+            botao.setAutoDefault(False)
+            botao.setDefault(False)
+
+        # editando (ou criando variacao, que comeca pela cor/tamanho)
+        # abre tudo; produto novo abre so' o essencial
+        self._alternar_mais_opcoes(bool(self.produto or self.produto_pai))
+
         if self.produto:
             self.preencher_campos()
             self.codigo_barras.setFocus()
@@ -955,6 +1004,87 @@ class CadastroProdutoWindow(QDialog):
             self.cor.setFocus()
         else:
             self.codigo_barras.setFocus()
+
+    # ==========================================
+    # CADASTRO RÁPIDO
+    # ==========================================
+
+    def _alternar_mais_opcoes(self, aberto):
+
+        self.painel_mais.setVisible(aberto)
+
+        if aberto:
+            self.bt_mais_opcoes.setText("▾  Menos opções")
+            tamanho_fixo_seguro(self, 1120, 860)
+        else:
+            self.bt_mais_opcoes.setText(
+                "▸  Mais opções  (marca, cor, tamanho, foto, promoção, "
+                "estoque mínimo, descrição...)"
+            )
+            tamanho_fixo_seguro(self, 760, 700)
+
+    def _atualizar_margem(self, *_):
+
+        venda = self.preco_venda.value()
+        custo = self.preco_custo.value()
+
+        if venda <= 0 or custo <= 0:
+            self.lbl_margem.setText(
+                "Informe o custo pra ver a margem de lucro."
+            )
+            return
+
+        lucro = venda - custo
+        margem = lucro / venda * 100
+        texto_lucro = f"{lucro:.2f}".replace(".", ",")
+
+        self.lbl_margem.setText(
+            f"Lucro por unidade: R$ {texto_lucro}  ·  margem {margem:.0f}%"
+        )
+
+    def keyPressEvent(self, event):
+        """Enter anda pelos campos essenciais na ordem em que se
+        preenche um cadastro e, no ultimo (categoria), cadastra --
+        da' pra fazer tudo sem tirar a mao do teclado."""
+
+        if event.key() not in (Qt.Key_Return, Qt.Key_Enter):
+            super().keyPressEvent(event)
+            return
+
+        ordem = [
+            self.codigo_barras, self.nome, self.preco_venda,
+            self.preco_custo, self.estoque, self.categoria,
+        ]
+
+        foco = QApplication.focusWidget()
+
+        if isinstance(foco, QPushButton):
+            foco.click()
+            return
+
+        # o foco pode estar num filho interno (line edit do spinbox /
+        # combo editavel) -- sobe ate' achar o campo da lista
+        atual = foco
+        while atual is not None and atual not in ordem:
+            atual = atual.parentWidget()
+
+        if atual is None:
+            self.focusNextChild()
+            return
+
+        indice = ordem.index(atual)
+
+        if indice == len(ordem) - 1:
+            self.salvar()
+            return
+
+        proximo = ordem[indice + 1]
+        proximo.setFocus()
+
+        if hasattr(proximo, "selectAll"):
+            proximo.selectAll()
+        elif hasattr(proximo, "lineEdit") and proximo.lineEdit():
+            proximo.lineEdit().selectAll()
 
     # ==========================================
     # HELPERS DE ESTILO
@@ -1467,10 +1597,6 @@ class CadastroProdutoWindow(QDialog):
                     background: {tokens.SIDEBAR_HOVER if selecionado else tokens.BORDA};
                 }}
             """)
-
-        indice_unidade = self.unidade_medida.findData(valor)
-        if indice_unidade >= 0:
-            self.unidade_medida.setCurrentIndex(indice_unidade)
 
     # ==========================================
     # BUSCA AUTOMÁTICA PELO CÓDIGO DE BARRAS

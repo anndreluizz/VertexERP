@@ -454,7 +454,10 @@ class Produtos(QWidget):
             "Excluir Selecionados", icone_nome="trash-2"
         )
         self.bt_excluir_selecionados.clicked.connect(self.excluir_selecionados)
-        self.bt_excluir_selecionados.setVisible(self._pode_excluir_produto)
+        # hide() e nao setVisible(True): widget ainda sem pai que recebe
+        # show vira janela solta por um instante (flash de janelinhas)
+        if not self._pode_excluir_produto:
+            self.bt_excluir_selecionados.hide()
 
         self.lbl_resumo_rodape = QLabel("")
         self.lbl_resumo_rodape.setStyleSheet(f"""
@@ -1053,7 +1056,8 @@ class Produtos(QWidget):
             QPushButton:hover {{ background:{tokens.ERRO_CLARO}; }}
         """)
         bt_excluir.clicked.connect(lambda checked=False, p=produto: self._excluir_um(p))
-        bt_excluir.setVisible(self._pode_excluir_produto)
+        if not self._pode_excluir_produto:
+            bt_excluir.hide()
 
         layout.addWidget(bt_editar)
         layout.addWidget(bt_excluir)

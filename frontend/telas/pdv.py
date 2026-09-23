@@ -535,36 +535,32 @@ class PDV(QWidget):
                 border: none;
             }}
         """)
+        # a barra nunca pode ditar a largura minima do PDV -- como todas
+        # as telas dividem a mesma janela (QStackedWidget), uma barra
+        # comprida aqui alargava o app inteiro alem da tela (1600px)
+        barra.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
 
         layout = QHBoxLayout(barra)
         layout.setContentsMargins(24, 0, 24, 0)
-        layout.setSpacing(22)
-
-        lbl_titulo = QLabel("ATALHOS DO TECLADO")
-        lbl_titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px; font-weight:800; letter-spacing: 0.5px;
-        """)
-        layout.addWidget(lbl_titulo)
+        layout.setSpacing(16)
 
         self.lbl_atalho_busca_tecla, item_busca = self._item_atalho(
-            self.atalhos["busca"], "Buscar produto"
+            self.atalhos["busca"], "Buscar"
         )
         self.lbl_atalho_produto_tecla, item_produto = self._item_atalho(
             self.atalhos["cadastro_rapido"], "Novo produto"
         )
-        _, item_cliente = self._item_atalho("F2", "Selecionar cliente")
-        _, item_finalizar = self._item_atalho("F3", "Finalizar venda")
+        _, item_cliente = self._item_atalho("F2", "Cliente")
+        _, item_finalizar = self._item_atalho("F3", "Finalizar")
         _, item_desconto = self._item_atalho("F6", "Desconto")
         _, item_acrescimo = self._item_atalho("F7", "Acréscimo")
-        _, item_quantidade = self._item_atalho("+ / −", "Quantidade")
-        _, item_remover = self._item_atalho("Del", "Remover item")
-        _, item_multiplicar = self._item_atalho("3*", "Várias unidades")
+        _, item_quantidade = self._item_atalho("+ −", "Quantidade")
+        _, item_remover = self._item_atalho("Del", "Remover")
 
         for item in (
             item_busca, item_cliente, item_finalizar,
             item_produto, item_desconto, item_acrescimo,
-            item_quantidade, item_remover, item_multiplicar,
+            item_quantidade, item_remover,
         ):
             layout.addLayout(item)
 

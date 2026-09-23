@@ -1,3 +1,4 @@
+from utils.maiusculas import forcar_maiusculas
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -90,6 +91,9 @@ class CadastroFornecedorDialog(QDialog):
         )
         self.cidade = self._campo(corpo, "CIDADE", "Cidade")
         self.estado = self._campo(corpo, "ESTADO (UF)", "Ex.: SP")
+
+        # cadastro em MAIUSCULAS -- e-mail/CPF/telefone ficam de fora
+        forcar_maiusculas(self.razao_social, self.nome_fantasia, self.cidade, self.estado)
 
         lbl_margem = QLabel("MARGEM PADRÃO DE VENDA (%)")
         lbl_margem.setStyleSheet(f"""

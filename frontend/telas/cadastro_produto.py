@@ -59,6 +59,7 @@ from design import tokens
 from design.icons import icone, icone_pixmap
 from design.responsive import tamanho_fixo_seguro
 from design.widgets import Card
+from utils.maiusculas import forcar_maiusculas
 
 _TAMANHO_PREVIA = 110
 
@@ -986,6 +987,12 @@ class CadastroProdutoWindow(QDialog):
         self._atualizar_estilo_favorito(False)
         self.selecionar_modo("UN")
 
+        # cadastro em MAIUSCULAS (padrao de ERP de loja) -- so' campos
+        # de nome; codigo de barras fica como vem do leitor
+        forcar_maiusculas(
+            self.nome, self.categoria, self.colecao, self.cor, self.tamanho,
+        )
+
         # Enter e' tratado em keyPressEvent (proximo campo / cadastrar)
         # -- sem isso o QDialog "clica" o botao autoDefault da vez
         for botao in self.findChildren(QPushButton):
@@ -1248,7 +1255,7 @@ class CadastroProdutoWindow(QDialog):
         if not ok or not nome.strip():
             return
 
-        nome = nome.strip()
+        nome = nome.strip().upper()
 
         rodar_em_thread(
             self,
@@ -1328,7 +1335,7 @@ class CadastroProdutoWindow(QDialog):
         if not ok or not nome.strip():
             return
 
-        nome = nome.strip()
+        nome = nome.strip().upper()
 
         rodar_em_thread(
             self,

@@ -1,3 +1,4 @@
+from utils.maiusculas import forcar_maiusculas
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
@@ -59,6 +60,7 @@ class GerenciarMarcasDialog(QDialog):
         nova_layout = QHBoxLayout()
 
         self.novo_nome = QLineEdit()
+        forcar_maiusculas(self.novo_nome)
         self.novo_nome.setPlaceholderText("Nova marca...")
         self.novo_nome.setMinimumHeight(40)
         self.novo_nome.setStyleSheet(f"""
@@ -303,7 +305,7 @@ class GerenciarMarcasDialog(QDialog):
         if not ok:
             return
 
-        novo_nome = novo_nome.strip()
+        novo_nome = novo_nome.strip().upper()
 
         if not novo_nome:
             return

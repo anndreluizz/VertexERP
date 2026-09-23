@@ -1,5 +1,6 @@
 import base64
 
+from utils.maiusculas import forcar_maiusculas
 from PySide6.QtCore import Qt, QDate, QBuffer, QIODevice
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
@@ -143,6 +144,9 @@ class CadastroClienteDialog(QDialog):
         self.endereco = self._campo(corpo, "ENDEREÇO", "Rua, número, bairro")
         self.cidade = self._campo(corpo, "CIDADE", "Cidade")
         self.estado = self._campo(corpo, "ESTADO (UF)", "Ex.: SP")
+
+        # cadastro em MAIUSCULAS -- e-mail/CPF/telefone ficam de fora
+        forcar_maiusculas(self.nome, self.endereco, self.cidade, self.estado)
 
         # ---- data de nascimento (opcional) ----
 

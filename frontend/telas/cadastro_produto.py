@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QFileDialog,
     QTableWidgetItem,
+    QScrollArea,
 )
 
 import base64
@@ -202,7 +203,17 @@ class CadastroProdutoWindow(QDialog):
         # CORPO (2 colunas)
         # ======================
 
-        corpo = QHBoxLayout()
+        # corpo rola -- 2 colunas com ate' 4 cartoes empilhados na
+        # direita nao cabem em telas de 900px de altura (ver
+        # design/responsive.py); cabecalho e rodape ficam fixos
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
+
+        corpo_widget = QWidget()
+        corpo_widget.setStyleSheet("background:transparent;")
+
+        corpo = QHBoxLayout(corpo_widget)
         corpo.setContentsMargins(30, 20, 30, 16)
         corpo.setSpacing(20)
 
@@ -881,7 +892,8 @@ class CadastroProdutoWindow(QDialog):
         corpo.addWidget(cartao_info, 1)
         corpo.addLayout(direita, 1)
 
-        layout.addLayout(corpo)
+        scroll.setWidget(corpo_widget)
+        layout.addWidget(scroll, 1)
 
         # ======================
         # RODAPÉ

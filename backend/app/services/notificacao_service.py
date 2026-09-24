@@ -9,6 +9,13 @@ from app.repositories.device_token_repository import DeviceTokenRepository
 from app.repositories.notificacao_repository import NotificacaoRepository
 
 _lock = threading.Lock()
+
+
+def moeda(valor) -> str:
+    """R$ 1.234,56 -- formato brasileiro pro texto das notificacoes."""
+    return f"R$ {float(valor):,.2f}".replace(",", "_").replace(
+        ".", ","
+    ).replace("_", ".")
 _inicializado = False
 _disponivel = False
 

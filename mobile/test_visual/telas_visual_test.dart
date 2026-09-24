@@ -16,6 +16,7 @@ import 'package:mobile/features/dashboard/dashboard_provider.dart';
 import 'package:mobile/features/aprovacoes/aprovacoes_screen.dart';
 import 'package:mobile/features/auth/lock_screen.dart';
 import 'package:mobile/features/financeiro/comprovante_screen.dart';
+import 'package:mobile/features/notificacoes/notificacoes_provider.dart';
 import 'package:mobile/features/notificacoes/notificacoes_screen.dart';
 import 'package:mobile/features/server/server_setup_screen.dart';
 import 'package:mobile/features/caixas/caixas_screen.dart';
@@ -171,6 +172,58 @@ final _rotas = <String, Object>{
     },
   ],
   '/configuracoes': {},
+  '/notificacoes/nao-lidas': {'nao_lidas': 3},
+  '/notificacoes/': [
+    for (final (i, t, c, h, lida) in [
+      (
+        6,
+        'Venda no fiado',
+        'Venda #1481 — R\$ 245,00 (Maria Aparecida Souza)',
+        0,
+        false,
+      ),
+      (
+        5,
+        'Recebimento de fiado',
+        'João Batista Lima pagou R\$ 150,00. Saldo devedor: R\$ 95,50.',
+        1,
+        false,
+      ),
+      (4, 'Nova venda', 'Venda #1480 — R\$ 89,90', 2, false),
+      (
+        3,
+        'Conta recebida',
+        'Ana Paula Ferreira — R\$ 180,00 (conta Nº 12).',
+        5,
+        true,
+      ),
+      (
+        2,
+        'Cliente inadimplente',
+        'Carlos Eduardo Rocha passou do limite de crédito (R\$ 612,00 de R\$ 500,00).',
+        26,
+        true,
+      ),
+      (
+        1,
+        'Haver lançado',
+        'Luciana Mendes recebeu um haver de R\$ 20,00. Saldo devedor: R\$ 0,00.',
+        28,
+        true,
+      ),
+    ])
+      {
+        'id': i,
+        'titulo': t,
+        'corpo': c,
+        'lida': lida,
+        'criado_em': DateTime.now()
+            .toUtc()
+            .subtract(Duration(hours: h))
+            .toIso8601String()
+            .replaceAll('Z', ''),
+      },
+  ],
   '/produtos/': [
     for (var i = 0; i < 10; i++)
       {
@@ -366,6 +419,7 @@ Future<void> _render(
     overrides: [
       apiClientProvider.overrideWithValue(_apiFalsa()),
       abaSelecionadaProvider.overrideWith((ref) => aba),
+      vigiaNotificacoesProvider.overrideWith(_VigiaSemPlugin.new),
       dashboardProvider.overrideWith(
         (ref) async => DashboardCarregado(
           resumo: _resumo,
@@ -486,4 +540,13 @@ void main() {
       );
     }
   }
+}
+
+/// Plugin de notificacao do Android nao existe no teste -- so consulta
+/// o servidor (atualiza o contador), sem mostrar na barra.
+class _VigiaSemPlugin extends VigiaNotificacoes {
+  _VigiaSemPlugin(super.ref);
+
+  @override
+  Future<void> iniciar() => verificar();
 }

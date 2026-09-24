@@ -22,7 +22,7 @@ class MaisScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sessao = ref.watch(sessaoControllerProvider);
-    final qtdNotificacoes = ref.watch(notificacoesProvider).length;
+    final qtdNotificacoes = ref.watch(naoLidasProvider);
     final ehAdmin = sessao.usuario?.admin ?? false;
 
     // Endpoint de aprovacoes e restrito a admin -- pedir a lista pra
@@ -85,8 +85,8 @@ class MaisScreen extends ConsumerWidget {
                 icone: Icons.notifications_outlined,
                 titulo: 'Notificações',
                 subtitulo: qtdNotificacoes == 0
-                    ? 'Nenhuma por enquanto'
-                    : '$qtdNotificacoes recebida(s) nesta sessão',
+                    ? 'Vendas, fiado e pagamentos'
+                    : '$qtdNotificacoes não lida${qtdNotificacoes == 1 ? '' : 's'}',
                 contador: qtdNotificacoes,
                 aoTocar: () => _abrir(context, const NotificacoesScreen()),
               ),

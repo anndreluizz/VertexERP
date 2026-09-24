@@ -17,6 +17,7 @@ from app.schemas.conta_receber import (
 )
 
 from app.services.caixa_operacao_service import CaixaOperacaoService
+from app.services.notificacao_service import NotificacaoService, moeda
 
 
 class ContaReceberService:
@@ -135,6 +136,15 @@ class ContaReceberService:
             tipo="RECEBIMENTO",
             descricao=f"Recebimento da Conta Nº {conta.id}",
             valor=conta.valor,
+        )
+
+        cliente = ClienteRepository.buscar_por_id(db, conta.cliente_id)
+
+        NotificacaoService.enviar_para_admins(
+            db,
+            "Conta recebida",
+            f"{cliente.nome if cliente else 'Cliente'} — "
+            f"{moeda(conta.valor)} (conta Nº {conta.id}).",
         )
 
         return conta

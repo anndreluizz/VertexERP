@@ -359,7 +359,6 @@ class ContaPagarService:
             db,
             "Pagamento realizado",
             f"{conta.descricao or 'Despesa'} — {_moeda(conta.valor)}",
-            excluir_usuario_id=usuario_id,
         )
 
         if comprovante_base64:

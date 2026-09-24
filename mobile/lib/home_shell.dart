@@ -45,18 +45,32 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       notificacoes.ouvirMensagensEmPrimeiroPlano((titulo, corpo) {
         if (!mounted) return;
 
-        ref.read(notificacoesProvider.notifier).adicionar(titulo, corpo);
+        ref.invalidate(notificacoesProvider);
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$titulo — $corpo')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$titulo — $corpo')));
       });
+
+      final vigia = ref.read(vigiaNotificacoesProvider);
+      _vigia = vigia;
+      vigia.iniciar();
     });
+  }
+
+  VigiaNotificacoes? _vigia;
+
+  @override
+  void dispose() {
+    // saiu da conta: para de consultar (evitaria 401 em loop)
+    _vigia?.parar();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final indice = ref.watch(abaSelecionadaProvider);
+    final naoLidas = ref.watch(naoLidasProvider);
 
     return Scaffold(
       body: IndexedStack(index: indice, children: _paginas),
@@ -64,30 +78,33 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         selectedIndex: indice,
         onDestinationSelected: (novoIndice) =>
             ref.read(abaSelecionadaProvider.notifier).state = novoIndice,
-        destinations: const [
-          NavigationDestination(
+        destinations: [
+          const NavigationDestination(
             icon: Icon(Icons.home_outlined),
             selectedIcon: Icon(Icons.home),
             label: 'Início',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.receipt_long_outlined),
             selectedIcon: Icon(Icons.receipt_long),
             label: 'Vendas',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.people_outline),
             selectedIcon: Icon(Icons.people),
             label: 'Clientes',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.account_balance_wallet_outlined),
             selectedIcon: Icon(Icons.account_balance_wallet),
             label: 'Financeiro',
           ),
           NavigationDestination(
-            icon: Icon(Icons.more_horiz),
-            selectedIcon: Icon(Icons.more_horiz),
+            icon: Badge(
+              isLabelVisible: naoLidas > 0,
+              label: Text(naoLidas > 99 ? '99+' : '$naoLidas'),
+              child: const Icon(Icons.more_horiz),
+            ),
             label: 'Mais',
           ),
         ],

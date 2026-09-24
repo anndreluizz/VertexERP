@@ -499,12 +499,15 @@ class VendaService:
                 )
                 nome_cliente = cliente_venda.nome if cliente_venda else None
 
+            no_fiado = "PRAZO" in (
+                venda.forma_pagamento, venda.forma_pagamento_2
+            )
+
             NotificacaoService.enviar_para_admins(
                 db,
-                "Nova venda",
+                "Venda no fiado" if no_fiado else "Nova venda",
                 f"Venda #{venda.id} — {_moeda(venda.valor_total)}"
                 + (f" ({nome_cliente})" if nome_cliente else ""),
-                excluir_usuario_id=usuario_id,
             )
 
             return venda

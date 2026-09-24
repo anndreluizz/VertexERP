@@ -220,3 +220,110 @@ def test_marcar_todas_lidas(client, auth_headers, usuario, db):
 
     contagem = client.get("/notificacoes/nao-lidas", headers=auth_headers)
     assert contagem.json()["nao_lidas"] == 0
+
+
+# ---- avisos de movimento de cliente/venda: vao pra todos os admins,
+# inclusive quem fez a acao (dono vende no PDV e quer o registro no
+# celular -- antes quem fazia era excluido do aviso)
+
+
+def _titulos_do(db, usuario_id):
+    from app.models.notificacao import Notificacao
+
+    return [
+        n.titulo
+        for n in db.query(Notificacao)
+        .filter(Notificacao.usuario_id == usuario_id)
+        .all()
+    ]
+
+
+def _corpo(db, usuario_id, titulo):
+    from app.models.notificacao import Notificacao
+
+    return (
+        db.query(Notificacao)
+        .filter(
+            Notificacao.usuario_id == usuario_id,
+            Notificacao.titulo == titulo,
+        )
+        .first()
+        .corpo
+    )
+
+
+def _venda_no_fiado(client, auth_headers, produto, cliente, quantidade=5):
+    return client.post(
+        "/vendas/",
+        json={
+            "cliente_id": cliente.id,
+            "forma_pagamento": "PRAZO",
+            "data_vencimento": "2026-12-31T00:00:00",
+            "itens": [
+                {
+                    "produto_id": produto.id,
+                    "quantidade": quantidade,
+                    "valor_unitario": "20.00",
+                }
+            ],
+        },
+        headers=auth_headers,
+    )
+
+
+def test_venda_no_fiado_avisa_inclusive_quem_vendeu(
+    client, auth_headers, db, usuario, produto, cliente, caixa_aberto
+):
+    assert _venda_no_fiado(client, auth_headers, produto, cliente).status_code == 201
+
+    assert "Venda no fiado" in _titulos_do(db, usuario.id)
+    assert cliente.nome in _corpo(db, usuario.id, "Venda no fiado")
+
+
+def test_pagamento_de_fiado_avisa_com_saldo_restante(
+    client, auth_headers, db, usuario, produto, cliente, caixa_aberto
+):
+    _venda_no_fiado(client, auth_headers, produto, cliente)  # deve R$ 100
+
+    client.post(
+        "/fiado/pagamento",
+        json={"cliente_id": cliente.id, "valor": 40.0},
+        headers=auth_headers,
+    )
+
+    corpo = _corpo(db, usuario.id, "Recebimento de fiado")
+    assert "R$ 40,00" in corpo
+    assert "Saldo devedor: R$ 60,00" in corpo
+
+
+def test_haver_avisa(client, auth_headers, db, usuario, produto, cliente, caixa_aberto):
+    _venda_no_fiado(client, auth_headers, produto, cliente)
+
+    response = client.post(
+        "/fiado/movimentos",
+        json={"cliente_id": cliente.id, "tipo": "HAVER", "valor": 10.0},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+
+    assert "Haver lançado" in _titulos_do(db, usuario.id)
+
+
+def test_conta_a_receber_recebida_avisa(
+    client, auth_headers, db, usuario, cliente, caixa_aberto
+):
+    conta = client.post(
+        "/contas-receber/",
+        json={
+            "cliente_id": cliente.id,
+            "data_vencimento": "2026-12-31T00:00:00",
+            "valor": 200.0,
+        },
+        headers=auth_headers,
+    ).json()
+
+    client.post(f"/contas-receber/{conta['id']}/receber", headers=auth_headers)
+
+    corpo = _corpo(db, usuario.id, "Conta recebida")
+    assert cliente.nome in corpo
+    assert "R$ 200,00" in corpo

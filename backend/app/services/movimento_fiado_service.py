@@ -14,7 +14,7 @@ from app.schemas.movimento_fiado import (
     MovimentoFiadoCreate,
     MovimentoFiadoUpdate,
 )
-from app.services.notificacao_service import NotificacaoService
+from app.services.notificacao_service import NotificacaoService, moeda
 
 
 def _ajustar_caixa_por_correcao(
@@ -178,13 +178,20 @@ class MovimentoFiadoService:
         if tipo == "COMPRA":
             _verificar_limite_credito(db, dados.cliente_id)
 
-        if tipo == "PAGAMENTO":
-            NotificacaoService.enviar_para_admins(
-                db,
-                "Recebimento de fiado",
-                f"{cliente.nome} pagou R$ {dados.valor:.2f}.",
-                excluir_usuario_id=usuario_id,
-            )
+        titulo, verbo = {
+            "COMPRA": ("Compra no fiado", "comprou"),
+            "PAGAMENTO": ("Recebimento de fiado", "pagou"),
+            "HAVER": ("Haver lançado", "recebeu um haver de"),
+        }[tipo]
+        saldo = MovimentoFiadoRepository.saldo_por_cliente(
+            db, dados.cliente_id
+        )
+        NotificacaoService.enviar_para_admins(
+            db,
+            titulo,
+            f"{cliente.nome} {verbo} {moeda(dados.valor)}. "
+            f"Saldo devedor: {moeda(saldo)}.",
+        )
 
         return movimento
 

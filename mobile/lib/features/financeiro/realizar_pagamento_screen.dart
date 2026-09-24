@@ -93,7 +93,7 @@ class _RealizarPagamentoScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Realizar Pagamento')),
+      appBar: AppBar(title: const Text('Realizar pagamento')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
@@ -114,9 +114,7 @@ class _RealizarPagamentoScreenState
                   const SizedBox(height: 4),
                   Text(
                     formatarMoeda(widget.conta.valor),
-                    style: Theme.of(
-                      context,
-                    ).textTheme.headlineSmall?.copyWith(
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       color: VertexColors.primaria,
                       fontWeight: FontWeight.w700,
                     ),
@@ -208,8 +206,7 @@ class _RealizarPagamentoScreenState
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        _anexo?.nome ??
-                            'Fotografar ou escolher o comprovante',
+                        _anexo?.nome ?? 'Fotografar ou escolher o comprovante',
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 13,

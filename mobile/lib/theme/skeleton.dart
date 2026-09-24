@@ -43,9 +43,9 @@ class _SkeletonBoxState extends State<SkeletonBox>
   @override
   Widget build(BuildContext context) {
     final escuro = Theme.of(context).brightness == Brightness.dark;
-    final base = escuro ? VertexColors.bordaEscura : VertexColors.borda;
+    final base = VertexColors.borda;
     final brilho = escuro
-        ? VertexColors.textoSecundarioEscuro.withValues(alpha: 0.18)
+        ? VertexColors.textoSecundario.withValues(alpha: 0.18)
         : Colors.white.withValues(alpha: 0.85);
 
     return AnimatedBuilder(
@@ -69,49 +69,40 @@ class _SkeletonBoxState extends State<SkeletonBox>
   }
 }
 
-/// Skeleton no formato de um KpiCard -- mesmo tamanho/proporcao do
-/// card de verdade, pra nao "pular" o layout quando o dado chega.
-class SkeletonKpiCard extends StatelessWidget {
-  const SkeletonKpiCard({super.key});
+/// Skeleton no formato do topo do Inicio (painel de vendas + quadro
+/// financeiro), pra nao "pular" o layout quando o dado chega.
+class SkeletonResumoHoje extends StatelessWidget {
+  const SkeletonResumoHoje({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SkeletonBox(width: 34, height: 34, borderRadius: 10),
-            const SizedBox(height: 12),
-            const SkeletonBox(width: 70, height: 11),
-            const SizedBox(height: 8),
-            SkeletonBox(width: MediaQuery.of(context).size.width * 0.2),
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SkeletonBox(height: 176, borderRadius: 16),
+        const SizedBox(height: 28),
+        const SkeletonBox(width: 90, height: 15),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                for (var i = 0; i < 6; i++) ...[
+                  if (i > 0) const SizedBox(height: 22),
+                  const Row(
+                    children: [
+                      SkeletonBox(width: 110),
+                      Spacer(),
+                      SkeletonBox(width: 80),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
-      ),
-    );
-  }
-}
-
-/// Grade de skeletons no lugar dos KPIs do Dashboard enquanto carrega.
-class SkeletonKpiGrid extends StatelessWidget {
-  const SkeletonKpiGrid({super.key, this.itens = 10});
-
-  final int itens;
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 2,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.15,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      children: List.generate(itens, (_) => const SkeletonKpiCard()),
+      ],
     );
   }
 }

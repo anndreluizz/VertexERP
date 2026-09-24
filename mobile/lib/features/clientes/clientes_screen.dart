@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/cliente.dart';
+import '../../theme/lista_agrupada.dart';
+import '../../theme/skeleton.dart';
 import '../../theme/vertex_colors.dart';
 import 'cliente_detalhe_screen.dart';
 import 'clientes_provider.dart';
@@ -22,7 +24,7 @@ class ClientesScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: TextField(
               decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search, size: 20),
+                prefixIcon: Icon(Icons.search_rounded, size: 20),
                 hintText: 'Buscar por nome ou telefone...',
               ),
               onChanged: (valor) =>
@@ -33,8 +35,7 @@ class ClientesScreen extends ConsumerWidget {
             child: RefreshIndicator(
               onRefresh: () => ref.refresh(clientesProvider.future),
               child: clientesAsync.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
+                loading: () => const SkeletonList(),
                 error: (erro, _) => ListView(
                   children: const [
                     SizedBox(height: 80),
@@ -62,14 +63,29 @@ class ClientesScreen extends ConsumerWidget {
                     );
                   }
 
-                  return ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filtrados.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, indice) {
-                      final cliente = filtrados[indice];
-                      return _CartaoCliente(cliente: cliente);
-                    },
+                  // agrupado pela inicial, feito agenda do celular
+                  final grupos = <String, List<Cliente>>{};
+                  for (final cliente in filtrados) {
+                    grupos
+                        .putIfAbsent(_letra(cliente.nome), () => [])
+                        .add(cliente);
+                  }
+                  final letras = grupos.keys.toList()..sort();
+
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    children: [
+                      for (final letra in letras) ...[
+                        CabecalhoGrupo(letra),
+                        ListaAgrupada(
+                          recuo: 68,
+                          linhas: [
+                            for (final cliente in grupos[letra]!)
+                              _LinhaCliente(cliente: cliente),
+                          ],
+                        ),
+                      ],
+                    ],
                   );
                 },
               ),
@@ -81,67 +97,97 @@ class ClientesScreen extends ConsumerWidget {
   }
 }
 
-class _CartaoCliente extends StatelessWidget {
-  const _CartaoCliente({required this.cliente});
+String _semAcento(String letra) => switch (letra) {
+  'Á' || 'À' || 'Â' || 'Ã' => 'A',
+  'É' || 'Ê' => 'E',
+  'Í' => 'I',
+  'Ó' || 'Ô' || 'Õ' => 'O',
+  'Ú' => 'U',
+  'Ç' => 'C',
+  _ => letra,
+};
+
+String _letra(String nome) {
+  final limpo = nome.trim();
+  if (limpo.isEmpty) return '#';
+  final letra = _semAcento(limpo[0].toUpperCase());
+  return RegExp('[A-Z]').hasMatch(letra) ? letra : '#';
+}
+
+String _iniciais(String nome) {
+  final partes = nome.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
+  if (partes.isEmpty) return '?';
+  final primeira = partes.first[0];
+  final ultima = partes.length > 1 ? partes.last[0] : '';
+  return (primeira + ultima).toUpperCase();
+}
+
+class _LinhaCliente extends StatelessWidget {
+  const _LinhaCliente({required this.cliente});
 
   final Cliente cliente;
 
   @override
   Widget build(BuildContext context) {
-    final iniciais = cliente.nome.trim().isEmpty
-        ? '?'
-        : cliente.nome.trim()[0].toUpperCase();
+    final tema = Theme.of(context).textTheme;
+    final detalhe = [
+      cliente.telefone ?? '',
+      cliente.cidade ?? '',
+    ].where((p) => p.isNotEmpty).join(' · ');
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => ClienteDetalheScreen(clienteId: cliente.id),
-          ),
+    return InkWell(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => ClienteDetalheScreen(clienteId: cliente.id),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: VertexColors.primariaClara,
-                child: Text(
-                  iniciais,
-                  style: const TextStyle(
-                    color: VertexColors.primaria,
-                    fontWeight: FontWeight.w700,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: VertexColors.primariaClara,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                _iniciais(cliente.nome),
+                style: tema.labelMedium?.copyWith(
+                  color: VertexColors.escuro
+                      ? VertexColors.texto
+                      : VertexColors.primaria,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    cliente.nome,
+                    style: tema.titleSmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      cliente.nome,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    if (cliente.telefone != null)
-                      Text(
-                        cliente.telefone!,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: VertexColors.textoSecundario,
-                        ),
-                      ),
+                  if (detalhe.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(detalhe, style: tema.bodySmall, maxLines: 1),
                   ],
-                ),
+                ],
               ),
-              const Icon(
-                Icons.chevron_right,
-                color: VertexColors.textoTerciario,
-              ),
-            ],
-          ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: VertexColors.textoTerciario,
+            ),
+          ],
         ),
       ),
     );

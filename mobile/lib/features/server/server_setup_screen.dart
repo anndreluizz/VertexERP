@@ -109,9 +109,9 @@ class _ServerSetupScreenState extends ConsumerState<ServerSetupScreen> {
     }
 
     setState(() => _salvando = true);
-    await ref.read(sessaoControllerProvider.notifier).configurarServidor(
-      endereco,
-    );
+    await ref
+        .read(sessaoControllerProvider.notifier)
+        .configurarServidor(endereco);
     if (!mounted) return;
     setState(() => _salvando = false);
   }
@@ -134,18 +134,25 @@ class _ServerSetupScreenState extends ConsumerState<ServerSetupScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: VertexColors.primariaClara,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(
-                    Icons.storefront_outlined,
-                    color: VertexColors.primaria,
-                    size: 30,
+                // marca do Vertex (mesma do login/Desktop); Center porque
+                // a coluna estica os filhos pra largura toda
+                Center(
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: VertexColors.primaria,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: const Text(
+                      'V',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 23,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),

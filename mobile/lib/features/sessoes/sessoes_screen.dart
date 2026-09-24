@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatadores.dart';
 import '../../models/sessao.dart';
+import '../../theme/lista_agrupada.dart';
 import '../../theme/vertex_colors.dart';
 import 'sessoes_provider.dart';
 
@@ -27,22 +28,25 @@ class SessoesScreen extends ConsumerWidget {
           ),
           data: (sessoes) {
             return ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
               children: [
                 Text(
                   'Aparelhos com sessão aberta na sua conta. Encerre '
                   'qualquer uma remotamente se não reconhecer ou não '
                   'usar mais um deles.',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: VertexColors.textoSecundario,
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
-                const SizedBox(height: 16),
-                for (final sessao in sessoes) ...[
-                  _CartaoSessao(sessao: sessao),
-                  const SizedBox(height: 10),
-                ],
+                const SizedBox(height: 4),
+                CabecalhoGrupo(
+                  '${sessoes.length} aparelho'
+                  '${sessoes.length == 1 ? '' : 's'}',
+                ),
+                ListaAgrupada(
+                  recuo: 54,
+                  linhas: [
+                    for (final sessao in sessoes) _CartaoSessao(sessao: sessao),
+                  ],
+                ),
               ],
             );
           },
@@ -105,40 +109,53 @@ class _CartaoSessaoState extends ConsumerState<_CartaoSessao> {
   @override
   Widget build(BuildContext context) {
     final sessao = widget.sessao;
+    final tema = Theme.of(context).textTheme;
+    final nome = sessao.dispositivo ?? 'Aparelho desconhecido';
+    final computador = RegExp(
+      r'windows|desktop|mac|linux|pc\b',
+      caseSensitive: false,
+    ).hasMatch(nome);
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: ListTile(
-        leading: Container(
-          width: 38,
-          height: 38,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: VertexColors.primariaClara,
-            borderRadius: BorderRadius.circular(11),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+      child: Row(
+        children: [
+          Icon(
+            computador ? Icons.computer_outlined : Icons.smartphone_outlined,
+            size: 22,
+            color: VertexColors.textoSecundario,
           ),
-          child: const Icon(
-            Icons.smartphone,
-            size: 18,
-            color: VertexColors.primaria,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(nome, style: tema.titleSmall),
+                const SizedBox(height: 2),
+                Text(
+                  'Último acesso ${rotuloDia(sessao.ultimoUsoEm).toLowerCase()}'
+                  ' às ${formatarDataHora(sessao.ultimoUsoEm).substring(11)}',
+                  style: tema.bodySmall,
+                ),
+              ],
+            ),
           ),
-        ),
-        title: Text(sessao.dispositivo ?? 'Aparelho desconhecido'),
-        subtitle: Text(
-          'Último acesso: ${formatarDataHora(sessao.ultimoUsoEm)}',
-          style: const TextStyle(fontSize: 12),
-        ),
-        trailing: _encerrando
-            ? const SizedBox(
+          if (_encerrando)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : IconButton(
-                icon: const Icon(Icons.logout, color: VertexColors.erro),
-                tooltip: 'Encerrar sessão',
-                onPressed: _encerrar,
               ),
+            )
+          else
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: VertexColors.erro),
+              onPressed: _encerrar,
+              child: const Text('Encerrar'),
+            ),
+        ],
       ),
     );
   }

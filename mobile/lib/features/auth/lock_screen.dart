@@ -40,7 +40,8 @@ class _LockScreenState extends ConsumerState<LockScreen> {
         // Aparelho sem nenhuma trava configurada (raro) — nao faz
         // sentido bloquear o acesso por uma seguranca que nem existe
         // no proprio aparelho.
-        await ref.read(sessaoControllerProvider.notifier)
+        await ref
+            .read(sessaoControllerProvider.notifier)
             .desbloquearComBiometria();
         return;
       }
@@ -54,7 +55,8 @@ class _LockScreenState extends ConsumerState<LockScreen> {
       if (!mounted) return;
 
       if (autenticado) {
-        await ref.read(sessaoControllerProvider.notifier)
+        await ref
+            .read(sessaoControllerProvider.notifier)
             .desbloquearComBiometria();
       } else {
         // usuario recusou/cancelou o prompt de proposito -- continua
@@ -82,13 +84,12 @@ class _LockScreenState extends ConsumerState<LockScreen> {
 
       if (codigosSemTravaNoAparelho.contains(e.code)) {
         if (mounted) {
-          await ref.read(sessaoControllerProvider.notifier)
+          await ref
+              .read(sessaoControllerProvider.notifier)
               .desbloquearComBiometria();
         }
       } else if (mounted) {
-        setState(
-          () => _aviso = 'Não foi possível confirmar sua identidade.',
-        );
+        setState(() => _aviso = 'Não foi possível confirmar sua identidade.');
       }
     } catch (_) {
       // Erro que nem veio do plugin de biometria (ex.: falha no
@@ -125,7 +126,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
                     color: VertexColors.primariaClara,
                     borderRadius: BorderRadius.circular(24),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.fingerprint,
                     color: VertexColors.primaria,
                     size: 36,
@@ -147,7 +148,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
                   Text(
                     _aviso!,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: VertexColors.alerta,
                       fontSize: 13.5,
                     ),
@@ -161,9 +162,9 @@ class _LockScreenState extends ConsumerState<LockScreen> {
                 ),
                 const SizedBox(height: 8),
                 TextButton(
-                  onPressed: () =>
-                      ref.read(sessaoControllerProvider.notifier)
-                          .recusarBiometria(),
+                  onPressed: () => ref
+                      .read(sessaoControllerProvider.notifier)
+                      .recusarBiometria(),
                   child: const Text('Entrar com e-mail e senha'),
                 ),
               ],

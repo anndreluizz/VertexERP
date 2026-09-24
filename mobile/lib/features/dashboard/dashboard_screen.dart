@@ -12,7 +12,7 @@ import 'dashboard_provider.dart';
 import 'widgets/aviso_vencimento_banner.dart';
 import 'widgets/grafico_pago_pendente.dart';
 import 'widgets/grafico_serie_mensal.dart';
-import 'widgets/kpi_card.dart';
+import 'widgets/resumo_hoje.dart';
 
 class _AvisoOffline extends StatelessWidget {
   const _AvisoOffline({required this.atualizadoEm});
@@ -30,17 +30,13 @@ class _AvisoOffline extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.cloud_off_outlined,
-            size: 16,
-            color: VertexColors.alerta,
-          ),
+          Icon(Icons.cloud_off_outlined, size: 16, color: VertexColors.alerta),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               'Sem conexão — mostrando dados de '
               '${formatarDataHora(atualizadoEm)}',
-              style: const TextStyle(fontSize: 12, color: VertexColors.alerta),
+              style: TextStyle(fontSize: 12, color: VertexColors.alerta),
             ),
           ),
         ],
@@ -154,7 +150,7 @@ class _ItemOperacional extends StatelessWidget {
         if (selo != null)
           Text(
             selo!,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 9.5,
               fontWeight: FontWeight.w700,
               color: VertexColors.erro,
@@ -252,30 +248,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: VertexColors.secundaria,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  sessao.nomeLoja ?? 'Vertex ERP',
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleMedium,
-                                ),
-                              ],
+                            Text(
+                              (sessao.nomeLoja ?? 'Vertex ERP').toUpperCase(),
+                              style: Theme.of(context).textTheme.labelSmall,
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '${_saudacao()}, $primeiroNome',
-                              style: Theme.of(context).textTheme.headlineMedium
-                                  ?.copyWith(fontSize: 22),
+                              primeiroNome.isEmpty
+                                  ? _saudacao()
+                                  : '${_saudacao()}, $primeiroNome',
+                              style: Theme.of(context).textTheme.headlineSmall,
                             ),
                           ],
                         ),
@@ -283,7 +265,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       IconButton(
                         tooltip: 'Sair',
                         onPressed: () => _confirmarLogout(context),
-                        icon: const Icon(Icons.logout),
+                        icon: Icon(
+                          Icons.logout_rounded,
+                          color: VertexColors.textoSecundario,
+                        ),
                       ),
                     ],
                   ),
@@ -298,7 +283,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               resumoAsync.when(
                 loading: () => const SliverPadding(
                   padding: EdgeInsets.all(20),
-                  sliver: SliverToBoxAdapter(child: SkeletonKpiGrid()),
+                  sliver: SliverToBoxAdapter(child: SkeletonResumoHoje()),
                 ),
                 error: (erro, _) => SliverFillRemaining(
                   child: Center(
@@ -307,7 +292,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.cloud_off_outlined,
                             size: 36,
                             color: VertexColors.textoTerciario,
@@ -334,105 +319,75 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
-                        if (resumo.totalAvisoVencimento > 0)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: AvisoVencimentoBanner(
-                              vencidasQtd: resumo.contasVencidasQtd,
-                              vencidasValor: resumo.contasVencidasValor,
-                              vencendoHojeQtd: resumo.contasVencendoHojeQtd,
-                              vencendoHojeValor: resumo.contasVencendoHojeValor,
-                              aoTocar: () => ref
-                                  .read(abaSelecionadaProvider.notifier)
-                                  .state = 3,
-                            ),
+                        ...entradaEscalonada([
+                          PainelVendasHoje(
+                            vendasHoje: resumo.vendasHoje,
+                            qtdVendas: resumo.vendasHojeQtd,
+                            ticketMedio: resumo.ticketMedio,
+                            vendasMes: resumo.vendasMes,
+                            saldoCaixa: resumo.saldoCaixa,
                           ),
-                        GridView.count(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: 1.15,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          children: entradaEscalonada([
-                            KpiCard(
-                              rotulo: 'Vendas hoje',
-                              valor: formatarMoeda(resumo.vendasHoje),
-                              icone: Icons.point_of_sale_outlined,
-                              cor: VertexColors.primaria,
-                              selo: resumo.vendasHojeQtd > 0
-                                  ? '${resumo.vendasHojeQtd} pedidos'
-                                  : null,
-                            ),
-                            KpiCard(
-                              rotulo: 'Ticket médio',
-                              valor: formatarMoeda(resumo.ticketMedio),
-                              icone: Icons.trending_up,
-                              cor: VertexColors.primaria,
-                            ),
-                            KpiCard(
-                              rotulo: 'Vendas do mês',
-                              valor: formatarMoeda(resumo.vendasMes),
-                              icone: Icons.calendar_month_outlined,
-                              cor: VertexColors.primaria,
-                            ),
-                            KpiCard(
-                              rotulo: 'Saldo em caixa',
-                              valor: formatarMoeda(resumo.saldoCaixa),
-                              icone: Icons.account_balance_wallet_outlined,
-                              cor: VertexColors.primaria,
-                            ),
-                            KpiCard(
-                              rotulo: 'Contas a receber',
-                              valor: formatarMoeda(resumo.contasReceber),
-                              icone: Icons.call_received,
-                              cor: VertexColors.secundaria,
-                            ),
-                            KpiCard(
-                              rotulo: 'Contas a pagar',
-                              valor: formatarMoeda(resumo.contasPagar),
-                              icone: Icons.call_made,
-                              cor: VertexColors.textoSecundario,
-                            ),
-                            KpiCard(
-                              rotulo: 'Contas vencidas',
-                              valor: formatarMoeda(resumo.contasVencidasValor),
-                              icone: Icons.error_outline,
-                              cor: VertexColors.erro,
-                              selo: resumo.contasVencidasQtd > 0
-                                  ? '${resumo.contasVencidasQtd}'
-                                  : null,
-                            ),
-                            KpiCard(
-                              rotulo: 'Vencendo hoje',
-                              valor: formatarMoeda(
-                                resumo.contasVencendoHojeValor,
+                          if (resumo.totalAvisoVencimento > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: AvisoVencimentoBanner(
+                                vencidasQtd: resumo.contasVencidasQtd,
+                                vencidasValor: resumo.contasVencidasValor,
+                                vencendoHojeQtd: resumo.contasVencendoHojeQtd,
+                                vencendoHojeValor:
+                                    resumo.contasVencendoHojeValor,
+                                aoTocar: () =>
+                                    ref
+                                            .read(
+                                              abaSelecionadaProvider.notifier,
+                                            )
+                                            .state =
+                                        3,
                               ),
-                              icone: Icons.today_outlined,
-                              cor: VertexColors.alerta,
-                              selo: resumo.contasVencendoHojeQtd > 0
-                                  ? '${resumo.contasVencendoHojeQtd}'
-                                  : null,
                             ),
-                            KpiCard(
-                              rotulo: 'Pago hoje',
-                              valor: formatarMoeda(
-                                resumo.contasPagasHojeValor,
+                          const SizedBox(height: 24),
+                          const _TituloSecao('Financeiro'),
+                          QuadroFinanceiro(
+                            aoTocar: () =>
+                                ref
+                                        .read(abaSelecionadaProvider.notifier)
+                                        .state =
+                                    3,
+                            linhas: [
+                              LinhaFinanceira(
+                                rotulo: 'A receber',
+                                valor: resumo.contasReceber,
+                                cor: VertexColors.secundaria,
                               ),
-                              icone: Icons.check_circle_outline,
-                              cor: VertexColors.secundaria,
-                              selo: resumo.contasPagasHojeQtd > 0
-                                  ? '${resumo.contasPagasHojeQtd}'
-                                  : null,
-                            ),
-                            KpiCard(
-                              rotulo: 'Recebido hoje',
-                              valor: formatarMoeda(resumo.fiadoRecebidoHoje),
-                              icone: Icons.savings_outlined,
-                              cor: VertexColors.secundaria,
-                            ),
-                          ]),
-                        ),
+                              LinhaFinanceira(
+                                rotulo: 'A pagar',
+                                valor: resumo.contasPagar,
+                                cor: VertexColors.bordaForte,
+                              ),
+                              LinhaFinanceira(
+                                rotulo: 'Vencidas',
+                                valor: resumo.contasVencidasValor,
+                                qtd: resumo.contasVencidasQtd,
+                                cor: VertexColors.erro,
+                              ),
+                              LinhaFinanceira(
+                                rotulo: 'Vencendo hoje',
+                                valor: resumo.contasVencendoHojeValor,
+                                qtd: resumo.contasVencendoHojeQtd,
+                                cor: VertexColors.alerta,
+                              ),
+                              LinhaFinanceira(
+                                rotulo: 'Pago hoje',
+                                valor: resumo.contasPagasHojeValor,
+                                qtd: resumo.contasPagasHojeQtd,
+                              ),
+                              LinhaFinanceira(
+                                rotulo: 'Recebido hoje',
+                                valor: resumo.fiadoRecebidoHoje,
+                              ),
+                            ],
+                          ),
+                        ]),
                         const SizedBox(height: 14),
                         _FaixaOperacional(
                           produtos: resumo.produtos,

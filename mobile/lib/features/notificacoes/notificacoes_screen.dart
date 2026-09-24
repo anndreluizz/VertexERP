@@ -21,7 +21,7 @@ class NotificacoesScreen extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.notifications_none,
                       size: 40,
                       color: VertexColors.textoTerciario,
@@ -56,7 +56,7 @@ class NotificacoesScreen extends ConsumerWidget {
                 return Card(
                   margin: EdgeInsets.zero,
                   child: ListTile(
-                    leading: const Icon(
+                    leading: Icon(
                       Icons.notifications_outlined,
                       color: VertexColors.primaria,
                     ),

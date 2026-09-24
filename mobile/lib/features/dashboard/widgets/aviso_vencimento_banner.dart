@@ -53,7 +53,6 @@ class AvisoVencimentoBanner extends StatelessWidget {
         onTap: aoTocar,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          margin: const EdgeInsets.fromLTRB(20, 0, 20, 4),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: corFundo,

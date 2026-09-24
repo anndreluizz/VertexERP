@@ -85,7 +85,7 @@ class _ComprovanteScreenState extends ConsumerState<ComprovanteScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.check_circle,
                         color: VertexColors.secundaria,
                         size: 22,
@@ -93,7 +93,7 @@ class _ComprovanteScreenState extends ConsumerState<ComprovanteScreen> {
                       const SizedBox(width: 8),
                       Text(
                         'Pago em ${conta.dataPagamento != null ? formatarData(conta.dataPagamento!) : '—'}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w700,
                           color: VertexColors.secundaria,
                         ),
@@ -178,7 +178,7 @@ class _LinhaInfo extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 140,
+            width: 172,
             child: Text(
               rotulo,
               style: TextStyle(
@@ -190,7 +190,10 @@ class _LinhaInfo extends StatelessWidget {
           Expanded(
             child: Text(
               valor,
-              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

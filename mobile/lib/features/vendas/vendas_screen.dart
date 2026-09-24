@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/formatadores.dart';
 import '../../models/movimento_fiado.dart';
 import '../../models/venda.dart';
+import '../../theme/lista_agrupada.dart';
+import '../../theme/skeleton.dart';
 import '../../theme/vertex_colors.dart';
 import '../clientes/cliente_detalhe_screen.dart';
 import 'venda_detalhe_screen.dart';
@@ -46,14 +48,11 @@ class VendasScreen extends ConsumerWidget {
             child: RefreshIndicator(
               onRefresh: () => ref.refresh(atividadeVendasProvider.future),
               child: atividadeAsync.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
+                loading: () => const SkeletonList(),
                 error: (erro, _) => ListView(
                   children: const [
                     SizedBox(height: 80),
-                    Center(
-                      child: Text('Não foi possível carregar as vendas.'),
-                    ),
+                    Center(child: Text('Não foi possível carregar as vendas.')),
                   ],
                 ),
                 data: (itens) {
@@ -65,32 +64,55 @@ class VendasScreen extends ConsumerWidget {
                     return ListView(
                       children: const [
                         SizedBox(height: 80),
-                        Center(
-                          child: Text('Nenhuma venda nesse período.'),
-                        ),
+                        Center(child: Text('Nenhuma venda nesse período.')),
                       ],
                     );
                   }
 
-                  return ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filtrados.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, indice) {
-                      final item = filtrados[indice];
-                      return switch (item) {
-                        AtividadeVenda(:final venda) =>
-                          _CartaoVenda(venda: venda),
-                        AtividadeRecebimento(
-                          :final movimento,
-                          :final clienteNome,
-                        ) =>
-                          _CartaoRecebimento(
-                            movimento: movimento,
-                            clienteNome: clienteNome,
+                  // agrupa por dia (lista ja vem do mais recente pro
+                  // mais antigo), com o total do dia no cabecalho
+                  final grupos = <DateTime, List<ItemAtividadeVendas>>{};
+                  for (final item in filtrados) {
+                    final d = item.data;
+                    grupos
+                        .putIfAbsent(DateTime(d.year, d.month, d.day), () => [])
+                        .add(item);
+                  }
+
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    children: [
+                      for (final MapEntry(key: dia, value: doDia)
+                          in grupos.entries) ...[
+                        CabecalhoGrupo(
+                          rotuloDia(dia),
+                          resumo: formatarMoeda(
+                            doDia.fold<double>(
+                              0,
+                              (soma, item) => soma + _valorEfetivo(item),
+                            ),
                           ),
-                      };
-                    },
+                        ),
+                        ListaAgrupada(
+                          linhas: [
+                            for (final item in doDia)
+                              switch (item) {
+                                AtividadeVenda(:final venda) => _LinhaVenda(
+                                  venda: venda,
+                                ),
+                                AtividadeRecebimento(
+                                  :final movimento,
+                                  :final clienteNome,
+                                ) =>
+                                  _LinhaRecebimento(
+                                    movimento: movimento,
+                                    clienteNome: clienteNome,
+                                  ),
+                              },
+                          ],
+                        ),
+                      ],
+                    ],
                   );
                 },
               ),
@@ -102,145 +124,146 @@ class VendasScreen extends ConsumerWidget {
   }
 }
 
-class _CartaoVenda extends StatelessWidget {
-  const _CartaoVenda({required this.venda});
+double _valorEfetivo(ItemAtividadeVendas item) => switch (item) {
+  AtividadeVenda(:final venda) =>
+    venda.status == 'CANCELADA' ? 0 : venda.valorTotal,
+  AtividadeRecebimento(:final movimento) => movimento.valor,
+};
 
-  final Venda venda;
+String _hora(DateTime d) =>
+    '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+/// Linha base das duas: hora a esquerda (coluna fixa, alinhada), titulo
+/// e detalhe no meio, valor a direita.
+class _Linha extends StatelessWidget {
+  const _Linha({
+    required this.hora,
+    required this.titulo,
+    required this.detalhe,
+    required this.valor,
+    required this.aoTocar,
+    this.corValor,
+    this.riscado = false,
+  });
+
+  final String hora;
+  final String titulo;
+  final String detalhe;
+  final String valor;
+  final VoidCallback aoTocar;
+  final Color? corValor;
+  final bool riscado;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => VendaDetalheScreen(venda: venda),
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: VertexColors.sucessoClaro,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.receipt_long_outlined,
-                  color: VertexColors.secundaria,
-                  size: 20,
+    final tema = Theme.of(context).textTheme;
+
+    return InkWell(
+      onTap: aoTocar,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 48,
+              child: Text(
+                hora,
+                style: tema.labelMedium?.copyWith(
+                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Venda #${venda.id}',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${formatarDataHora(venda.data)} · '
-                      '${formatarFormaPagamento(venda.formaPagamento)}',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: VertexColors.textoSecundario,
-                      ),
-                    ),
-                  ],
-                ),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    titulo,
+                    style: tema.titleSmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    detalhe,
+                    style: tema.bodySmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
-              Text(
-                formatarMoeda(venda.valorTotal),
-                style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              valor,
+              style: tema.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: corValor,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                decoration: riscado ? TextDecoration.lineThrough : null,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Recebimento de fiado (pagamento de uma compra a prazo já feita) --
-/// mesmo cartão visual da venda, mas com ícone/cor diferentes (é
-/// dinheiro entrando, não uma venda nova) e toque leva pra ficha do
-/// cliente em vez do detalhe de uma venda.
-class _CartaoRecebimento extends StatelessWidget {
-  const _CartaoRecebimento({
-    required this.movimento,
-    required this.clienteNome,
-  });
+class _LinhaVenda extends StatelessWidget {
+  const _LinhaVenda({required this.venda});
+
+  final Venda venda;
+
+  @override
+  Widget build(BuildContext context) {
+    final cancelada = venda.status == 'CANCELADA';
+    final detalhe = [
+      if (cancelada) 'Cancelada',
+      formatarFormaPagamento(venda.formaPagamento),
+      venda.usuarioNome ?? '',
+    ].where((p) => p.isNotEmpty).join(' · ');
+
+    return _Linha(
+      hora: _hora(venda.data),
+      titulo: 'Venda #${venda.id}',
+      detalhe: detalhe,
+      valor: formatarMoeda(venda.valorTotal),
+      corValor: cancelada ? VertexColors.textoTerciario : null,
+      riscado: cancelada,
+      aoTocar: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => VendaDetalheScreen(venda: venda),
+        ),
+      ),
+    );
+  }
+}
+
+/// Recebimento de fiado (pagamento de uma compra a prazo ja feita) --
+/// e dinheiro entrando, nao venda nova: valor em verde com "+", e o
+/// toque leva pra ficha do cliente em vez do detalhe de uma venda.
+class _LinhaRecebimento extends StatelessWidget {
+  const _LinhaRecebimento({required this.movimento, required this.clienteNome});
 
   final MovimentoFiado movimento;
   final String clienteNome;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) =>
-                ClienteDetalheScreen(clienteId: movimento.clienteId),
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: VertexColors.primariaClara,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.call_received,
-                  color: VertexColors.primaria,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Recebimento de fiado — $clienteNome',
-                      style: Theme.of(context).textTheme.titleMedium,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      formatarDataHora(movimento.data),
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: VertexColors.textoSecundario,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                formatarMoeda(movimento.valor),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(color: VertexColors.primaria),
-              ),
-            ],
-          ),
+    return _Linha(
+      hora: _hora(movimento.data),
+      titulo: clienteNome,
+      detalhe: [
+        'Recebimento de fiado',
+        formatarFormaPagamento(movimento.formaPagamento),
+      ].where((p) => p.isNotEmpty).join(' · '),
+      valor: '+ ${formatarMoeda(movimento.valor)}',
+      corValor: VertexColors.secundaria,
+      aoTocar: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) =>
+              ClienteDetalheScreen(clienteId: movimento.clienteId),
         ),
       ),
     );

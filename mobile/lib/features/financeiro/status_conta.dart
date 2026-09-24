@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/conta_pagar.dart';
+import '../../models/conta_receber.dart';
 import '../../theme/vertex_colors.dart';
 
 /// Classificacao visual de uma conta a pagar -- cruza o status
@@ -18,6 +19,14 @@ extension StatusVisualContaInfo on StatusVisualConta {
     StatusVisualConta.cancelada => 'Cancelada',
   };
 
+  String get rotuloGrupo => switch (this) {
+    StatusVisualConta.paga => 'Pagas',
+    StatusVisualConta.vencida => 'Vencidas',
+    StatusVisualConta.venceHoje => 'Vence hoje',
+    StatusVisualConta.aVencer => 'A vencer',
+    StatusVisualConta.cancelada => 'Canceladas',
+  };
+
   Color get cor => switch (this) {
     StatusVisualConta.paga => VertexColors.secundaria,
     StatusVisualConta.vencida => VertexColors.erro,
@@ -31,16 +40,25 @@ extension StatusVisualContaInfo on StatusVisualConta {
     StatusVisualConta.vencida => VertexColors.erroClaro,
     StatusVisualConta.venceHoje => VertexColors.alertaClaro,
     StatusVisualConta.aVencer => VertexColors.primariaClara,
-    StatusVisualConta.cancelada => const Color(0xFFF1F5F9),
+    StatusVisualConta.cancelada => VertexColors.fundo,
   };
 }
 
 StatusVisualConta statusVisual(ContaPagar conta) {
   if (conta.status == 'CANCELADO') return StatusVisualConta.cancelada;
   if (conta.status == 'PAGO') return StatusVisualConta.paga;
+  return _porVencimento(conta.dataVencimento);
+}
 
+/// Mesmo criterio pra conta a receber ("paga" = RECEBIDO).
+StatusVisualConta statusVisualReceber(ContaReceber conta) {
+  if (conta.status == 'CANCELADO') return StatusVisualConta.cancelada;
+  if (conta.status == 'RECEBIDO') return StatusVisualConta.paga;
+  return _porVencimento(conta.dataVencimento);
+}
+
+StatusVisualConta _porVencimento(DateTime vencimento) {
   final hoje = DateTime.now();
-  final vencimento = conta.dataVencimento;
   final diasParaVencer = DateTime(
     vencimento.year,
     vencimento.month,

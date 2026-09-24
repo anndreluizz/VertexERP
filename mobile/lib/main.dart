@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'app_gate.dart';
+import 'theme/vertex_colors.dart';
 import 'theme/vertex_theme.dart';
 
 void main() async {
@@ -22,9 +23,7 @@ void main() async {
 }
 
 final _router = GoRouter(
-  routes: [
-    GoRoute(path: '/', builder: (context, state) => const AppGate()),
-  ],
+  routes: [GoRoute(path: '/', builder: (context, state) => const AppGate())],
 );
 
 class VertexManagerApp extends StatelessWidget {
@@ -39,6 +38,17 @@ class VertexManagerApp extends StatelessWidget {
       darkTheme: VertexTheme.escuro,
       themeMode: ThemeMode.system,
       routerConfig: _router,
+      builder: (context, child) {
+        final escuro =
+            MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+        VertexColors.aplicar(escuro: escuro);
+
+        // ponytail: as telas leem VertexColors direto (sem depender do
+        // Theme), entao ao trocar claro/escuro a arvore toda e' remontada
+        // pela key -- perde estado de rolagem/abas nessa hora, o que e'
+        // raro; migrar pra ThemeExtension se isso incomodar.
+        return KeyedSubtree(key: ValueKey(escuro), child: child!);
+      },
     );
   }
 }

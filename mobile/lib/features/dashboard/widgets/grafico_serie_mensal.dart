@@ -50,7 +50,7 @@ class GraficoSerieMensal extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             if (maior <= 0)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
                 child: Center(
                   child: Text(

@@ -6,6 +6,8 @@ import '../../core/formatadores.dart';
 import '../../core/providers.dart';
 import '../../models/cliente.dart';
 import '../../models/movimento_fiado.dart';
+import '../../theme/lista_agrupada.dart';
+import '../../theme/skeleton.dart';
 import '../../theme/vertex_colors.dart';
 import 'clientes_provider.dart';
 
@@ -39,7 +41,9 @@ class _Ficha extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final saldoAsync = ref.watch(saldoFiadoProvider(cliente.id));
     final historicoAsync = ref.watch(historicoFiadoProvider(cliente.id));
-    final estatisticasAsync = ref.watch(estatisticasClienteProvider(cliente.id));
+    final estatisticasAsync = ref.watch(
+      estatisticasClienteProvider(cliente.id),
+    );
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -50,177 +54,62 @@ class _Ficha extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 26,
-                        backgroundColor: VertexColors.primariaClara,
-                        child: Text(
-                          cliente.nome.isEmpty
-                              ? '?'
-                              : cliente.nome[0].toUpperCase(),
-                          style: const TextStyle(
-                            color: VertexColors.primaria,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 18,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              cliente.nome,
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            Text(
-                              'Cliente desde ${formatarData(cliente.criadoEm)}',
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                color: VertexColors.textoSecundario,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+          _Cabecalho(cliente: cliente),
+          const SizedBox(height: 16),
+          saldoAsync.when(
+            loading: () => const SkeletonBox(height: 118, borderRadius: 16),
+            error: (erro, _) =>
+                _PainelSaldo(saldo: null, limite: cliente.limiteCredito),
+            data: (saldo) =>
+                _PainelSaldo(saldo: saldo, limite: cliente.limiteCredito),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _AcaoRapida(
+                  icone: Icons.point_of_sale_outlined,
+                  rotulo: 'Vender',
+                  aoTocar: () {
+                    ref.read(abaSelecionadaProvider.notifier).state = 1;
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _AcaoRapida(
+                  icone: Icons.payments_outlined,
+                  rotulo: 'Receber',
+                  aoTocar: () => _abrirReceber(context, ref),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: _botaoMenuWhatsapp(context, ref)),
+            ],
+          ),
+          estatisticasAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (erro, _) => const SizedBox.shrink(),
+            data: (estatisticas) => Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: _Estatisticas(
+                itens: [
+                  (
+                    'Última compra',
+                    estatisticas.ultimaCompra != null
+                        ? formatarData(estatisticas.ultimaCompra!)
+                        : '—',
                   ),
-                  const Divider(height: 28),
-                  if (cliente.telefone != null)
-                    _linhaContato(
-                      Icons.phone_outlined,
-                      cliente.telefone!,
-                    ),
-                  if (cliente.email != null)
-                    _linhaContato(Icons.mail_outline, cliente.email!),
-                  if (cliente.enderecoCompleto.isNotEmpty)
-                    _linhaContato(
-                      Icons.location_on_outlined,
-                      cliente.enderecoCompleto,
-                    ),
+                  ('Total', formatarMoeda(estatisticas.totalComprado)),
+                  ('Compras', '${estatisticas.qtdCompras}'),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    ref.read(abaSelecionadaProvider.notifier).state = 1;
-                    Navigator.of(context).pop();
-                  },
-                  icon: const Icon(Icons.point_of_sale_outlined, size: 17),
-                  label: const Text('Nova venda'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _abrirReceber(context, ref),
-                  icon: const Icon(Icons.call_received, size: 17),
-                  label: const Text('Receber'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _botaoMenuWhatsapp(context, ref),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          estatisticasAsync.when(
-            loading: () => const SizedBox.shrink(),
-            error: (erro, _) => const SizedBox.shrink(),
-            data: (estatisticas) => Row(
-              children: [
-                Expanded(
-                  child: _CartaoValor(
-                    rotulo: 'Última compra',
-                    valor: estatisticas.ultimaCompra != null
-                        ? formatarData(estatisticas.ultimaCompra!)
-                        : '—',
-                    cor: VertexColors.texto,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _CartaoValor(
-                    rotulo: 'Total comprado',
-                    valor: formatarMoeda(estatisticas.totalComprado),
-                    cor: VertexColors.texto,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _CartaoValor(
-                    rotulo: 'Qtd. compras',
-                    valor: '${estatisticas.qtdCompras}',
-                    cor: VertexColors.texto,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _CartaoValor(
-                  rotulo: 'Limite de crédito',
-                  valor: cliente.limiteCredito != null
-                      ? formatarMoeda(cliente.limiteCredito!)
-                      : '—',
-                  cor: VertexColors.primaria,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: saldoAsync.when(
-                  loading: () => const _CartaoValor(
-                    rotulo: 'Saldo devedor',
-                    valor: '...',
-                    cor: VertexColors.alerta,
-                  ),
-                  error: (erro, _) => const _CartaoValor(
-                    rotulo: 'Saldo devedor',
-                    valor: '—',
-                    cor: VertexColors.alerta,
-                  ),
-                  data: (saldo) => _CartaoValor(
-                    rotulo: 'Saldo devedor',
-                    valor: formatarMoeda(saldo),
-                    cor: saldo > 0
-                        ? VertexColors.erro
-                        : VertexColors.secundaria,
-                    destaque:
-                        cliente.limiteCredito != null &&
-                        saldo > cliente.limiteCredito!,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Histórico financeiro',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
+          const CabecalhoGrupo('Histórico financeiro'),
           historicoAsync.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
-            ),
+            loading: () => const SkeletonListCard(),
             error: (erro, _) => const Padding(
               padding: EdgeInsets.all(16),
               child: Text('Não foi possível carregar o histórico.'),
@@ -233,13 +122,12 @@ class _Ficha extends ConsumerWidget {
                 );
               }
 
-              return Card(
-                child: Column(
-                  children: [
-                    for (final movimento in movimentos)
-                      _linhaMovimento(context, movimento),
-                  ],
-                ),
+              return ListaAgrupada(
+                recuo: 48,
+                linhas: [
+                  for (final movimento in movimentos)
+                    _linhaMovimento(context, movimento),
+                ],
               );
             },
           ),
@@ -269,20 +157,17 @@ class _Ficha extends ConsumerWidget {
           value: _AcaoWhatsapp.saldo,
           child: Text('Enviar Saldo Devedor'),
         ),
-        PopupMenuItem(
-          value: _AcaoWhatsapp.haver,
-          child: Text('Enviar Haver'),
-        ),
+        PopupMenuItem(value: _AcaoWhatsapp.haver, child: Text('Enviar Haver')),
         PopupMenuItem(
           value: _AcaoWhatsapp.cadastro,
           child: Text('Enviar Cadastro do Cliente'),
         ),
       ],
       child: IgnorePointer(
-        child: OutlinedButton.icon(
-          onPressed: cliente.telefone == null ? null : () {},
-          icon: const Icon(Icons.chat_outlined, size: 17),
-          label: const Text('WhatsApp'),
+        child: _AcaoRapida(
+          icone: Icons.chat_outlined,
+          rotulo: 'WhatsApp',
+          aoTocar: cliente.telefone == null ? null : () {},
         ),
       ),
     );
@@ -320,9 +205,7 @@ class _Ficha extends ConsumerWidget {
         texto = _textoSaldoDevedor(saldo);
         break;
       case _AcaoWhatsapp.haver:
-        final haveres = cronologico
-            .where((m) => m.tipo == 'HAVER')
-            .toList();
+        final haveres = cronologico.where((m) => m.tipo == 'HAVER').toList();
         if (haveres.isEmpty) {
           _mostrarSnack(
             context,
@@ -458,9 +341,9 @@ class _Ficha extends ConsumerWidget {
   }
 
   void _mostrarSnack(BuildContext context, String mensagem) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensagem)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensagem)));
   }
 
   Future<void> _abrirWhatsApp(
@@ -524,22 +407,7 @@ class _Ficha extends ConsumerWidget {
     if (!context.mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(erro ?? 'Recebimento registrado com sucesso.'),
-      ),
-    );
-  }
-
-  Widget _linhaContato(IconData icone, String texto) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(icone, size: 17, color: VertexColors.textoTerciario),
-          const SizedBox(width: 10),
-          Expanded(child: Text(texto)),
-        ],
-      ),
+      SnackBar(content: Text(erro ?? 'Recebimento registrado com sucesso.')),
     );
   }
 
@@ -551,48 +419,46 @@ class _Ficha extends ConsumerWidget {
     final String descricaoPadrao;
 
     if (compra) {
-      iconeMovimento = Icons.arrow_upward;
+      iconeMovimento = Icons.shopping_bag_outlined;
       cor = VertexColors.erro;
       descricaoPadrao = 'Compra a prazo';
     } else if (movimento.tipo == 'HAVER') {
-      iconeMovimento = Icons.card_giftcard;
+      iconeMovimento = Icons.savings_outlined;
       cor = VertexColors.alerta;
       descricaoPadrao = 'Crédito (Haver)';
     } else {
-      iconeMovimento = Icons.arrow_downward;
+      iconeMovimento = Icons.payments_outlined;
       cor = VertexColors.secundaria;
       descricaoPadrao = 'Pagamento';
     }
 
+    final tema = Theme.of(context).textTheme;
+
     return Padding(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          Icon(iconeMovimento, size: 17, color: cor),
-          const SizedBox(width: 10),
+          Icon(iconeMovimento, size: 18, color: cor),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   movimento.descricao ?? descricaoPadrao,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  style: tema.titleSmall,
                 ),
-                Text(
-                  formatarData(movimento.data),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: VertexColors.textoSecundario,
-                  ),
-                ),
+                const SizedBox(height: 2),
+                Text(formatarData(movimento.data), style: tema.bodySmall),
               ],
             ),
           ),
           Text(
             '${compra ? '+' : '-'} ${formatarMoeda(movimento.valor)}',
-            style: TextStyle(
+            style: tema.titleSmall?.copyWith(
               fontWeight: FontWeight.w700,
               color: cor,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
         ],
@@ -603,54 +469,248 @@ class _Ficha extends ConsumerWidget {
 
 enum _AcaoWhatsapp { extrato, cobranca, saldo, haver, cadastro }
 
-class _CartaoValor extends StatelessWidget {
-  const _CartaoValor({
-    required this.rotulo,
-    required this.valor,
-    required this.cor,
-    this.destaque = false,
-  });
+class _Cabecalho extends StatelessWidget {
+  const _Cabecalho({required this.cliente});
 
-  final String rotulo;
-  final String valor;
-  final Color cor;
-  final bool destaque;
+  final Cliente cliente;
 
   @override
   Widget build(BuildContext context) {
+    final tema = Theme.of(context).textTheme;
+    final partes = cliente.nome
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty);
+    final iniciais = partes.isEmpty
+        ? '?'
+        : (partes.first[0] + (partes.length > 1 ? partes.last[0] : ''))
+              .toUpperCase();
+    final contatos = <(IconData, String)>[
+      if (cliente.telefone != null) (Icons.phone_outlined, cliente.telefone!),
+      if (cliente.email != null) (Icons.mail_outline, cliente.email!),
+      if (cliente.enderecoCompleto.isNotEmpty)
+        (Icons.location_on_outlined, cliente.enderecoCompleto),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: VertexColors.escuro
+                  ? VertexColors.primariaClara
+                  : VertexColors.sidebar,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              iniciais,
+              style: tema.titleMedium?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(cliente.nome, style: tema.headlineSmall),
+                const SizedBox(height: 2),
+                Text(
+                  'Cliente desde ${formatarData(cliente.criadoEm)}',
+                  style: tema.bodySmall,
+                ),
+                for (final (icone, texto) in contatos) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(icone, size: 15, color: VertexColors.textoTerciario),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          texto,
+                          style: tema.bodyMedium?.copyWith(
+                            color: VertexColors.textoSecundario,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Saldo devedor + quanto do limite de credito ja foi usado -- a
+/// pergunta que o dono faz ao abrir a ficha ("quanto ele me deve, e
+/// ainda pode comprar fiado?").
+class _PainelSaldo extends StatelessWidget {
+  const _PainelSaldo({required this.saldo, required this.limite});
+
+  final double? saldo;
+  final double? limite;
+
+  @override
+  Widget build(BuildContext context) {
+    final tema = Theme.of(context).textTheme;
+    final valor = saldo;
+    final devendo = (valor ?? 0) > 0;
+    final temLimite = limite != null && limite! > 0;
+    final uso = temLimite && valor != null
+        ? (valor / limite!).clamp(0.0, 1.0)
+        : 0.0;
+    final estourou = temLimite && valor != null && valor > limite!;
+
     return Card(
-      margin: EdgeInsets.zero,
-      color: destaque ? VertexColors.erroClaro : null,
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text('SALDO DEVEDOR', style: tema.labelSmall),
+            const SizedBox(height: 6),
             Text(
-              rotulo,
-              style: TextStyle(
-                fontSize: 11.5,
-                color: VertexColors.textoSecundario,
-                fontWeight: FontWeight.w600,
+              valor == null ? '—' : formatarMoeda(valor),
+              style: tema.headlineMedium?.copyWith(
+                color: devendo ? VertexColors.erro : VertexColors.secundaria,
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              valor,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                color: cor,
+            if (temLimite) ...[
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(99),
+                child: LinearProgressIndicator(
+                  value: uso,
+                  minHeight: 6,
+                  backgroundColor: VertexColors.fundo,
+                  color: estourou
+                      ? VertexColors.erro
+                      : uso > 0.8
+                      ? VertexColors.alerta
+                      : VertexColors.primaria,
+                ),
               ),
-            ),
-            if (destaque) ...[
-              const SizedBox(height: 2),
-              const Text(
-                'Acima do limite',
-                style: TextStyle(fontSize: 10.5, color: VertexColors.erro),
+              const SizedBox(height: 8),
+              Text(
+                estourou
+                    ? 'Acima do limite de ${formatarMoeda(limite!)}'
+                    : 'Limite ${formatarMoeda(limite!)} · disponível '
+                          '${formatarMoeda(limite! - (valor ?? 0))}',
+                style: tema.bodySmall?.copyWith(
+                  color: estourou ? VertexColors.erro : null,
+                  fontWeight: estourou ? FontWeight.w600 : null,
+                ),
               ),
+            ] else ...[
+              const SizedBox(height: 4),
+              Text('Sem limite de crédito definido', style: tema.bodySmall),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AcaoRapida extends StatelessWidget {
+  const _AcaoRapida({
+    required this.icone,
+    required this.rotulo,
+    required this.aoTocar,
+  });
+
+  final IconData icone;
+  final String rotulo;
+  final VoidCallback? aoTocar;
+
+  @override
+  Widget build(BuildContext context) {
+    final ativo = aoTocar != null;
+    final cor = ativo ? VertexColors.primaria : VertexColors.textoTerciario;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: aoTocar,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Column(
+            children: [
+              Icon(icone, size: 22, color: cor),
+              const SizedBox(height: 6),
+              Text(
+                rotulo,
+                maxLines: 1,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: ativo
+                      ? VertexColors.texto
+                      : VertexColors.textoTerciario,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Estatisticas extends StatelessWidget {
+  const _Estatisticas({required this.itens});
+
+  final List<(String, String)> itens;
+
+  @override
+  Widget build(BuildContext context) {
+    final tema = Theme.of(context).textTheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              for (var i = 0; i < itens.length; i++) ...[
+                if (i > 0) const VerticalDivider(width: 1),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(itens[i].$1, style: tema.labelMedium, maxLines: 1),
+                        const SizedBox(height: 4),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            itens[i].$2,
+                            style: tema.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

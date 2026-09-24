@@ -22,15 +22,13 @@ class AprovacoesScreen extends ConsumerWidget {
           error: (erro, _) => ListView(
             children: const [
               SizedBox(height: 80),
-              Center(
-                child: Text('Não foi possível carregar as aprovações.'),
-              ),
+              Center(child: Text('Não foi possível carregar as aprovações.')),
             ],
           ),
           data: (pendentes) {
             if (pendentes.isEmpty) {
               return ListView(
-                children: const [
+                children: [
                   SizedBox(height: 80),
                   Center(
                     child: Icon(
@@ -85,9 +83,7 @@ class _CartaoAprovacaoState extends ConsumerState<_CartaoAprovacao> {
     setState(() => _processando = false);
 
     if (erro != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(erro)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(erro)));
     }
   }
 
@@ -110,7 +106,7 @@ class _CartaoAprovacaoState extends ConsumerState<_CartaoAprovacao> {
                     color: VertexColors.alertaClaro,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.help_outline,
                     size: 18,
                     color: VertexColors.alerta,
@@ -150,7 +146,7 @@ class _CartaoAprovacaoState extends ConsumerState<_CartaoAprovacao> {
                       onPressed: () => _responder(false),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: VertexColors.erro,
-                        side: const BorderSide(color: VertexColors.erro),
+                        side: BorderSide(color: VertexColors.erro),
                       ),
                       child: const Text('Rejeitar'),
                     ),

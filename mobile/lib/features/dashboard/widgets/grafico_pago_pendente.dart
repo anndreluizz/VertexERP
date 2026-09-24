@@ -42,7 +42,7 @@ class GraficoPagoPendente extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             if (total <= 0)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
                 child: Center(
                   child: Text(
@@ -110,7 +110,11 @@ class GraficoPagoPendente extends StatelessWidget {
 }
 
 class _Legenda extends StatelessWidget {
-  const _Legenda({required this.cor, required this.rotulo, required this.valor});
+  const _Legenda({
+    required this.cor,
+    required this.rotulo,
+    required this.valor,
+  });
 
   final Color cor;
   final String rotulo;

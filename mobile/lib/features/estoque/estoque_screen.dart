@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatadores.dart';
 import '../../models/produto.dart';
+import '../../theme/lista_agrupada.dart';
+import '../../theme/skeleton.dart';
 import '../../theme/vertex_colors.dart';
 import 'estoque_provider.dart';
 
@@ -58,8 +60,7 @@ class EstoqueScreen extends ConsumerWidget {
             child: RefreshIndicator(
               onRefresh: () => ref.refresh(produtosProvider.future),
               child: produtosAsync.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
+                loading: () => const SkeletonList(),
                 error: (erro, _) => ListView(
                   children: const [
                     SizedBox(height: 80),
@@ -71,31 +72,37 @@ class EstoqueScreen extends ConsumerWidget {
                 data: (produtos) {
                   final filtrados = switch (filtro) {
                     FiltroEstoque.todos => produtos,
-                    FiltroEstoque.criticos => produtos
-                        .where((p) => p.semEstoque || p.estoqueBaixo)
-                        .toList(),
-                    FiltroEstoque.semEstoque => produtos
-                        .where((p) => p.semEstoque)
-                        .toList(),
+                    FiltroEstoque.criticos =>
+                      produtos
+                          .where((p) => p.semEstoque || p.estoqueBaixo)
+                          .toList(),
+                    FiltroEstoque.semEstoque =>
+                      produtos.where((p) => p.semEstoque).toList(),
                   };
 
                   if (filtrados.isEmpty) {
                     return ListView(
                       children: const [
                         SizedBox(height: 80),
-                        Center(
-                          child: Text('Nenhum produto nessa condição.'),
-                        ),
+                        Center(child: Text('Nenhum produto nessa condição.')),
                       ],
                     );
                   }
 
-                  return ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filtrados.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, indice) =>
-                        _CartaoProduto(produto: filtrados[indice]),
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    children: [
+                      CabecalhoGrupo(
+                        '${filtrados.length} produto'
+                        '${filtrados.length == 1 ? '' : 's'}',
+                      ),
+                      ListaAgrupada(
+                        linhas: [
+                          for (final produto in filtrados)
+                            _LinhaProduto(produto: produto),
+                        ],
+                      ),
+                    ],
                   );
                 },
               ),
@@ -107,76 +114,67 @@ class EstoqueScreen extends ConsumerWidget {
   }
 }
 
-class _CartaoProduto extends StatelessWidget {
-  const _CartaoProduto({required this.produto});
+class _LinhaProduto extends StatelessWidget {
+  const _LinhaProduto({required this.produto});
 
   final Produto produto;
 
   @override
   Widget build(BuildContext context) {
-    final (String selo, Color cor, Color fundo)? estado = produto.semEstoque
-        ? ('Sem estoque', VertexColors.erro, VertexColors.erroClaro)
+    final tema = Theme.of(context).textTheme;
+    final (String, Color)? estado = produto.semEstoque
+        ? ('Sem estoque', VertexColors.erro)
         : produto.estoqueBaixo
-        ? ('Estoque baixo', VertexColors.alerta, VertexColors.alertaClaro)
+        ? ('Abaixo do mínimo (${produto.estoqueMinimo})', VertexColors.alerta)
         : null;
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    produto.nome,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${produto.codigo} · ${formatarMoeda(produto.precoVenda)}',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: VertexColors.textoSecundario,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${produto.estoque} un.',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  produto.nome,
+                  style: tema.titleSmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                if (estado != null) ...[
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: estado.$3,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      estado.$1,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: estado.$2,
-                      ),
-                    ),
-                  ),
-                ],
+                const SizedBox(height: 2),
+                Text(
+                  '${produto.codigo} · ${formatarMoeda(produto.precoVenda)}',
+                  style: tema.bodySmall,
+                ),
               ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${produto.estoque} un.',
+                style: tema.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: estado?.$2,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              if (estado != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  estado.$1,
+                  style: tema.labelSmall?.copyWith(
+                    color: estado.$2,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }

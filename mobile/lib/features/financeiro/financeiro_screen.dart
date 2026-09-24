@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/formatadores.dart';
 import '../../models/conta_pagar.dart';
 import '../../models/conta_receber.dart';
+import '../../theme/lista_agrupada.dart';
 import '../../theme/skeleton.dart';
 import '../../theme/vertex_colors.dart';
 import 'comprovante_screen.dart';
@@ -67,13 +68,6 @@ class _FinanceiroScreenState extends ConsumerState<FinanceiroScreen> {
 
 /// Vencido ou vencendo em ate 1 dia esquenta a cor — mesmo criterio
 /// usado na tela de Contas a Pagar do Desktop.
-Color _corVencimento(DateTime vencimento, bool resolvida) {
-  if (resolvida) return VertexColors.textoSecundario;
-
-  final dias = vencimento.difference(DateTime.now()).inDays;
-  return dias <= 1 ? VertexColors.erro : VertexColors.texto;
-}
-
 /// Filtros rapidos da aba "A Pagar" -- cada um e um recorte simples
 /// por cima da mesma lista ja carregada, sem ida nova ao servidor.
 enum FiltroRapidoContaPagar {
@@ -161,8 +155,7 @@ class _AbaContasPagarState extends ConsumerState<_AbaContasPagar> {
             onChanged: (valor) => setState(() => _busca = valor),
             decoration: InputDecoration(
               hintText: 'Buscar por descrição, categoria, boleto...',
-              prefixIcon: const Icon(Icons.search, size: 20),
-              isDense: true,
+              prefixIcon: const Icon(Icons.search_rounded, size: 20),
               suffixIcon: _busca.isEmpty
                   ? null
                   : IconButton(
@@ -172,15 +165,11 @@ class _AbaContasPagarState extends ConsumerState<_AbaContasPagar> {
                         _busca = '';
                       }),
                     ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
             ),
           ),
         ),
         SizedBox(
-          height: 36,
+          height: 40,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -193,21 +182,6 @@ class _AbaContasPagarState extends ConsumerState<_AbaContasPagar> {
               return ChoiceChip(
                 label: Text(opcao.rotulo),
                 selected: selecionado,
-                labelStyle: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: selecionado ? Colors.white : VertexColors.texto,
-                ),
-                selectedColor: VertexColors.primaria,
-                backgroundColor: VertexColors.card,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                  side: BorderSide(
-                    color: selecionado
-                        ? VertexColors.primaria
-                        : VertexColors.borda,
-                  ),
-                ),
                 onSelected: (_) => setState(() => _filtro = opcao),
               );
             },
@@ -246,12 +220,28 @@ class _AbaContasPagarState extends ConsumerState<_AbaContasPagar> {
                   );
                 }
 
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                  itemCount: contas.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (context, indice) =>
-                      _CartaoContaPagar(conta: contas[indice]),
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  children: [
+                    for (final (status, doGrupo) in _agruparPorStatus(
+                      contas,
+                      statusVisual,
+                    )) ...[
+                      CabecalhoGrupo(
+                        status.rotuloGrupo,
+                        resumo: formatarMoeda(
+                          doGrupo.fold<double>(0, (t, c) => t + c.valor),
+                        ),
+                      ),
+                      ListaAgrupada(
+                        recuo: 72,
+                        linhas: [
+                          for (final conta in doGrupo)
+                            _LinhaContaPagar(conta: conta),
+                        ],
+                      ),
+                    ],
+                  ],
                 );
               },
             ),
@@ -262,151 +252,217 @@ class _AbaContasPagarState extends ConsumerState<_AbaContasPagar> {
   }
 }
 
-class _CartaoContaPagar extends ConsumerWidget {
-  const _CartaoContaPagar({required this.conta});
+/// Agrupa mantendo a ordem de urgencia (vencidas primeiro).
+List<(StatusVisualConta, List<T>)> _agruparPorStatus<T>(
+  List<T> contas,
+  StatusVisualConta Function(T) status,
+) {
+  return [
+    for (final s in const [
+      StatusVisualConta.vencida,
+      StatusVisualConta.venceHoje,
+      StatusVisualConta.aVencer,
+      StatusVisualConta.paga,
+      StatusVisualConta.cancelada,
+    ])
+      if (contas.where((c) => status(c) == s).toList() case final grupo
+          when grupo.isNotEmpty)
+        (s, grupo),
+  ];
+}
 
-  final ContaPagar conta;
+const _mesesCurtos = [
+  'JAN',
+  'FEV',
+  'MAR',
+  'ABR',
+  'MAI',
+  'JUN',
+  'JUL',
+  'AGO',
+  'SET',
+  'OUT',
+  'NOV',
+  'DEZ',
+];
+
+/// "Venceu ha 3 dias", "Vence amanha"... -- mais facil de ler de relance
+/// que a data crua.
+String _prazo(
+  StatusVisualConta status,
+  DateTime vencimento,
+  DateTime? resolvidaEm,
+) {
+  final hoje = DateTime.now();
+  final dias = DateTime(
+    vencimento.year,
+    vencimento.month,
+    vencimento.day,
+  ).difference(DateTime(hoje.year, hoje.month, hoje.day)).inDays;
+
+  return switch (status) {
+    StatusVisualConta.vencida =>
+      dias == -1 ? 'Venceu ontem' : 'Venceu há ${-dias} dias',
+    StatusVisualConta.venceHoje => 'Vence hoje',
+    StatusVisualConta.aVencer =>
+      dias == 1 ? 'Vence amanhã' : 'Vence em $dias dias',
+    StatusVisualConta.paga =>
+      resolvidaEm == null
+          ? 'Quitada'
+          : 'Quitada em ${formatarData(resolvidaEm).substring(0, 5)}',
+    StatusVisualConta.cancelada => 'Cancelada',
+  };
+}
+
+/// Bloco de data a esquerda da linha (dia grande + mes), na cor da
+/// situacao -- o vencimento e a informacao que o dono procura primeiro.
+class _BlocoData extends StatelessWidget {
+  const _BlocoData({required this.data, required this.status});
+
+  final DateTime data;
+  final StatusVisualConta status;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final status = statusVisual(conta);
-    final paga = status == StatusVisualConta.paga;
+  Widget build(BuildContext context) {
+    final tema = Theme.of(context).textTheme;
+    final urgente =
+        status == StatusVisualConta.vencida ||
+        status == StatusVisualConta.venceHoje;
+    final cor = urgente ? status.cor : VertexColors.texto;
+    final apagada =
+        status == StatusVisualConta.paga ||
+        status == StatusVisualConta.cancelada;
 
-    return Card(
-      margin: EdgeInsets.zero,
-      color: paga ? VertexColors.sucessoClaro : null,
-      shape: paga
-          ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(
-                color: VertexColors.secundaria,
-                width: 1.5,
-              ),
-            )
-          : null,
+    return Container(
+      width: 44,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: urgente ? status.corFundo : VertexColors.fundo,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Text(
+            '${data.day}',
+            style: tema.titleMedium?.copyWith(
+              height: 1.1,
+              fontWeight: FontWeight.w700,
+              color: apagada ? VertexColors.textoTerciario : cor,
+            ),
+          ),
+          Text(
+            _mesesCurtos[data.month - 1],
+            style: tema.labelSmall?.copyWith(
+              fontSize: 9.5,
+              color: apagada ? VertexColors.textoTerciario : cor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LinhaConta extends StatelessWidget {
+  const _LinhaConta({
+    required this.status,
+    required this.vencimento,
+    required this.titulo,
+    required this.detalhe,
+    required this.valor,
+    required this.aoTocar,
+  });
+
+  final StatusVisualConta status;
+  final DateTime vencimento;
+  final String titulo;
+  final String detalhe;
+  final double valor;
+  final VoidCallback aoTocar;
+
+  @override
+  Widget build(BuildContext context) {
+    final tema = Theme.of(context).textTheme;
+    final apagada =
+        status == StatusVisualConta.paga ||
+        status == StatusVisualConta.cancelada;
+    final urgente =
+        status == StatusVisualConta.vencida ||
+        status == StatusVisualConta.venceHoje;
+
+    return InkWell(
+      onTap: aoTocar,
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    conta.descricao ?? 'Despesa',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                Text(
-                  formatarMoeda(conta.valor),
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: 32,
-                  ),
-                  icon: const Icon(Icons.more_vert, size: 19),
-                  onPressed: () => _abrirMaisOpcoes(context, ref),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                StatusContaPill(status: status),
-                if ((conta.categoria ?? '').isNotEmpty) ...[
-                  const SizedBox(width: 6),
-                  Text(
-                    conta.categoria!,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: VertexColors.textoSecundario,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Vencimento: ${formatarData(conta.dataVencimento)}',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 12.5,
-                color: _corVencimento(conta.dataVencimento, paga),
-              ),
-            ),
-            if (conta.temDocumento || conta.temComprovantePagamento || !paga) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 4,
+            _BlocoData(data: vencimento, status: status),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (conta.temDocumento)
-                    TextButton.icon(
-                      onPressed: () async {
-                        final erro = await ref
-                            .read(financeiroActionsProvider)
-                            .abrirDocumento(conta);
-
-                        if (erro != null && context.mounted) {
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(SnackBar(content: Text(erro)));
-                        }
-                      },
-                      icon: const Icon(Icons.description_outlined, size: 16),
-                      label: const Text('Ver boleto'),
+                  Text(
+                    titulo,
+                    style: tema.titleSmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    detalhe,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tema.bodySmall?.copyWith(
+                      color: urgente ? status.cor : null,
+                      fontWeight: urgente ? FontWeight.w600 : null,
                     ),
-                  if (conta.temComprovantePagamento)
-                    TextButton.icon(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ComprovanteScreen(conta: conta),
-                        ),
-                      ),
-                      icon: const Icon(Icons.check_circle_outline, size: 16),
-                      label: const Text('Ver comprovante'),
-                    ),
-                  if (!paga)
-                    FilledButton(
-                      onPressed: () async {
-                        final pago = await Navigator.of(context).push<bool>(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                RealizarPagamentoScreen(conta: conta),
-                          ),
-                        );
-
-                        if (pago == true && context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Pagamento confirmado.'),
-                            ),
-                          );
-                        }
-                      },
-                      child: const Text('Realizar pagamento'),
-                    ),
+                  ),
                 ],
               ),
-            ],
+            ),
+            const SizedBox(width: 12),
+            Text(
+              formatarMoeda(valor),
+              style: tema.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                color: apagada ? VertexColors.textoTerciario : null,
+                decoration: status == StatusVisualConta.cancelada
+                    ? TextDecoration.lineThrough
+                    : null,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
+}
 
-  void _abrirMaisOpcoes(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+class _LinhaContaPagar extends StatelessWidget {
+  const _LinhaContaPagar({required this.conta});
+
+  final ContaPagar conta;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = statusVisual(conta);
+
+    return _LinhaConta(
+      status: status,
+      vencimento: conta.dataVencimento,
+      titulo: conta.descricao ?? 'Despesa',
+      detalhe: [
+        _prazo(status, conta.dataVencimento, conta.dataPagamento),
+        conta.categoria ?? '',
+      ].where((p) => p.isNotEmpty).join(' · '),
+      valor: conta.valor,
+      aoTocar: () => showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => _DetalhesContaPagarSheet(conta: conta),
       ),
-      builder: (context) => _DetalhesContaPagarSheet(conta: conta),
     );
   }
 }
@@ -419,25 +475,16 @@ class _DetalhesContaPagarSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = statusVisual(conta);
+    final paga = status == StatusVisualConta.paga;
+    final cancelada = status == StatusVisualConta.cancelada;
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: VertexColors.borda,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
             Row(
               children: [
                 Expanded(
@@ -450,7 +497,12 @@ class _DetalhesContaPagarSheet extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 16),
-            _LinhaDetalhe('Valor', formatarMoeda(conta.valor)),
+            const SizedBox(height: 4),
+            Text(
+              formatarMoeda(conta.valor),
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 12),
             _LinhaDetalhe('Categoria', conta.categoria ?? '—'),
             _LinhaDetalhe('Emissão', formatarData(conta.dataEmissao)),
             _LinhaDetalhe('Vencimento', formatarData(conta.dataVencimento)),
@@ -459,8 +511,67 @@ class _DetalhesContaPagarSheet extends ConsumerWidget {
             _LinhaDetalhe('Nº do boleto', conta.numeroBoleto ?? '—'),
             if ((conta.observacao ?? '').isNotEmpty)
               _LinhaDetalhe('Observação', conta.observacao!),
+            const SizedBox(height: 16),
+            if (!paga && !cancelada)
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () async {
+                    final navegador = Navigator.of(context);
+                    final mensageiro = ScaffoldMessenger.of(context);
+                    navegador.pop();
+                    final pago = await navegador.push<bool>(
+                      MaterialPageRoute(
+                        builder: (_) => RealizarPagamentoScreen(conta: conta),
+                      ),
+                    );
+                    if (pago == true) {
+                      mensageiro.showSnackBar(
+                        const SnackBar(content: Text('Pagamento confirmado.')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.payments_outlined, size: 18),
+                  label: const Text('Realizar pagamento'),
+                ),
+              ),
+            if (conta.temComprovantePagamento)
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.tonalIcon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ComprovanteScreen(conta: conta),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.check_circle_outline, size: 18),
+                  label: const Text('Ver comprovante'),
+                ),
+              ),
             if (conta.temDocumento) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final erro = await ref
+                        .read(financeiroActionsProvider)
+                        .abrirDocumento(conta);
+
+                    if (erro != null && context.mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(erro)));
+                    }
+                  },
+                  icon: const Icon(Icons.description_outlined, size: 18),
+                  label: const Text('Ver boleto'),
+                ),
+              ),
+              const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -497,16 +608,20 @@ class _DetalhesContaPagarSheet extends ConsumerWidget {
                 label: const Text('Ver histórico'),
               ),
             ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton.icon(
-                onPressed: () => _confirmarCancelamento(context, ref),
-                style: TextButton.styleFrom(foregroundColor: VertexColors.erro),
-                icon: const Icon(Icons.cancel_outlined, size: 18),
-                label: const Text('Cancelar despesa'),
+            if (!cancelada) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
+                  onPressed: () => _confirmarCancelamento(context, ref),
+                  style: TextButton.styleFrom(
+                    foregroundColor: VertexColors.erro,
+                  ),
+                  icon: const Icon(Icons.cancel_outlined, size: 18),
+                  label: const Text('Cancelar despesa'),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -534,9 +649,7 @@ class _DetalhesContaPagarSheet extends ConsumerWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: VertexColors.erro,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: VertexColors.erro),
             child: const Text('Cancelar despesa'),
           ),
         ],
@@ -634,12 +747,30 @@ class _AbaContasReceber extends ConsumerWidget {
             );
           }
 
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: contas.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (context, indice) =>
-                _CartaoContaReceber(conta: contas[indice]),
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+            children: [
+              for (final (status, doGrupo) in _agruparPorStatus(
+                contas,
+                statusVisualReceber,
+              )) ...[
+                CabecalhoGrupo(
+                  status == StatusVisualConta.paga
+                      ? 'Recebidas'
+                      : status.rotuloGrupo,
+                  resumo: formatarMoeda(
+                    doGrupo.fold<double>(0, (t, c) => t + c.valor),
+                  ),
+                ),
+                ListaAgrupada(
+                  recuo: 72,
+                  linhas: [
+                    for (final conta in doGrupo)
+                      _LinhaContaReceber(conta: conta),
+                  ],
+                ),
+              ],
+            ],
           );
         },
       ),
@@ -647,58 +778,26 @@ class _AbaContasReceber extends ConsumerWidget {
   }
 }
 
-class _CartaoContaReceber extends ConsumerWidget {
-  const _CartaoContaReceber({required this.conta});
+class _LinhaContaReceber extends ConsumerWidget {
+  const _LinhaContaReceber({required this.conta});
 
   final ContaReceber conta;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final recebida = conta.status == 'RECEBIDO';
+    final status = statusVisualReceber(conta);
+    final recebida = status == StatusVisualConta.paga;
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Cliente #${conta.clienteId}',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                Text(
-                  formatarMoeda(conta.valor),
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ],
-            ),
-            const SizedBox(height: 3),
-            Text(
-              'Vencimento: ${formatarData(conta.dataVencimento)}',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 12.5,
-                color: _corVencimento(conta.dataVencimento, recebida),
-              ),
-            ),
-            if (!recebida) ...[
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton(
-                  onPressed: () => _confirmarRecebimento(context, ref),
-                  child: const Text('Marcar como recebida'),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+    return _LinhaConta(
+      status: status,
+      vencimento: conta.dataVencimento,
+      titulo: 'Cliente #${conta.clienteId}',
+      detalhe: [
+        _prazo(status, conta.dataVencimento, conta.dataRecebimento),
+        if (conta.vendaId != null) 'Venda #${conta.vendaId}',
+      ].join(' · '),
+      valor: conta.valor,
+      aoTocar: recebida ? () {} : () => _confirmarRecebimento(context, ref),
     );
   }
 
@@ -730,12 +829,12 @@ class _CartaoContaReceber extends ConsumerWidget {
 
     if (confirmar != true || !context.mounted) return;
 
-    final erro = await ref.read(financeiroActionsProvider).receberConta(conta.id);
+    final erro = await ref
+        .read(financeiroActionsProvider)
+        .receberConta(conta.id);
 
     if (erro != null && context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(erro)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(erro)));
     }
   }
 }

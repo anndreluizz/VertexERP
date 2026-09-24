@@ -83,26 +83,29 @@ class _RelatoriosScreenState extends ConsumerState<RelatoriosScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _cartao(
-                            context,
-                            'Vendas',
-                            '${dados.totalVendas}',
-                            formatarMoeda(dados.valorVendas),
+                    IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: _cartao(
+                              context,
+                              'Vendas',
+                              '${dados.totalVendas}',
+                              formatarMoeda(dados.valorVendas),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _cartao(
-                            context,
-                            'Ticket médio',
-                            formatarMoeda(dados.ticketMedio),
-                            null,
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _cartao(
+                              context,
+                              'Ticket médio',
+                              formatarMoeda(dados.ticketMedio),
+                              null,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 18),
                     Text(
@@ -133,9 +136,7 @@ class _RelatoriosScreenState extends ConsumerState<RelatoriosScreen> {
                                           MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
-                                          formatarFormaPagamento(
-                                            entrada.key,
-                                          ),
+                                          formatarFormaPagamento(entrada.key),
                                         ),
                                         Text(
                                           formatarMoeda(entrada.value),
@@ -187,9 +188,7 @@ class _RelatoriosScreenState extends ConsumerState<RelatoriosScreen> {
                     ),
                     const SizedBox(height: 20),
                     ElevatedButton.icon(
-                      onPressed: _exportando
-                          ? null
-                          : () => _exportarPdf(dados),
+                      onPressed: _exportando ? null : () => _exportarPdf(dados),
                       icon: _exportando
                           ? const SizedBox(
                               width: 16,

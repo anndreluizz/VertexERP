@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatadores.dart';
 import '../../models/caixa.dart';
+import '../../theme/lista_agrupada.dart';
 import '../../theme/vertex_colors.dart';
 import 'caixas_provider.dart';
 
@@ -50,32 +51,43 @@ class CaixasScreen extends ConsumerWidget {
             }
 
             return ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
               children: [
-                Text(
-                  abertos.isEmpty
-                      ? 'Nenhum caixa aberto agora'
-                      : '${abertos.length} caixa(s) aberto(s) agora',
-                  style: Theme.of(context).textTheme.titleMedium,
+                CabecalhoGrupo(
+                  'Abertos agora',
+                  resumo: abertos.isEmpty ? null : '${abertos.length}',
                 ),
-                const SizedBox(height: 10),
-                for (final caixa in abertos)
-                  _CartaoCaixa(
-                    caixa: caixa,
-                    nomeOperador: operadores[caixa.usuarioId],
+                if (abertos.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
+                    child: Text(
+                      'Nenhum caixa aberto no momento.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  )
+                else
+                  ListaAgrupada(
+                    recuo: 38,
+                    linhas: [
+                      for (final caixa in abertos)
+                        _LinhaCaixa(
+                          caixa: caixa,
+                          nomeOperador: operadores[caixa.usuarioId],
+                        ),
+                    ],
                   ),
                 if (fechados.isNotEmpty) ...[
-                  const SizedBox(height: 22),
-                  Text(
-                    'Histórico recente',
-                    style: Theme.of(context).textTheme.titleMedium,
+                  const CabecalhoGrupo('Fechados recentemente'),
+                  ListaAgrupada(
+                    recuo: 38,
+                    linhas: [
+                      for (final caixa in fechados)
+                        _LinhaCaixa(
+                          caixa: caixa,
+                          nomeOperador: operadores[caixa.usuarioId],
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: 10),
-                  for (final caixa in fechados)
-                    _CartaoCaixa(
-                      caixa: caixa,
-                      nomeOperador: operadores[caixa.usuarioId],
-                    ),
                 ],
               ],
             );
@@ -86,67 +98,70 @@ class CaixasScreen extends ConsumerWidget {
   }
 }
 
-class _CartaoCaixa extends StatelessWidget {
-  const _CartaoCaixa({required this.caixa, this.nomeOperador});
+class _LinhaCaixa extends StatelessWidget {
+  const _LinhaCaixa({required this.caixa, this.nomeOperador});
 
   final Caixa caixa;
   final String? nomeOperador;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: caixa.aberto
-                    ? VertexColors.sucessoClaro
-                    : VertexColors.primariaClara,
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: Icon(
-                caixa.aberto
-                    ? Icons.point_of_sale
-                    : Icons.lock_outline,
-                size: 18,
-                color: caixa.aberto
-                    ? VertexColors.secundaria
-                    : VertexColors.primaria,
-              ),
+    final tema = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          // ponto verde = aberto agora (mesmo sinal do Desktop)
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: caixa.aberto
+                  ? VertexColors.sucesso
+                  : VertexColors.bordaForte,
+              shape: BoxShape.circle,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    nomeOperador ?? 'Operador #${caixa.usuarioId ?? '-'}',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  Text(
-                    caixa.aberto
-                        ? 'Aberto há ${_formatarDuracao(caixa.tempoAberto)}'
-                        : 'Fechado em ${formatarDataHora(caixa.dataFechamento!)}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: VertexColors.textoSecundario,
-                    ),
-                  ),
-                ],
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  nomeOperador ?? 'Operador #${caixa.usuarioId ?? '-'}',
+                  style: tema.titleSmall,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  caixa.aberto
+                      ? 'Aberto há ${_formatarDuracao(caixa.tempoAberto)}'
+                      : 'Fechado ${rotuloDia(caixa.dataFechamento!).toLowerCase()}'
+                            ' às ${formatarDataHora(caixa.dataFechamento!).substring(11)}',
+                  style: tema.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                formatarMoeda(caixa.saldoFinal),
+                style: tema.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
-            ),
-            Text(
-              formatarMoeda(caixa.saldoFinal),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ],
-        ),
+              const SizedBox(height: 2),
+              Text(
+                caixa.aberto ? 'em caixa' : 'no fechamento',
+                style: tema.bodySmall,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

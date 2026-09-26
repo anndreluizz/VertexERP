@@ -82,11 +82,11 @@ class MovimentoFiadoRepository:
             else_=-MovimentoFiado.valor,
         )
 
-        # comparado em Python (naive UTC), mesmo padrao de
-        # datetime.utcnow() usado no resto do projeto -- evita
+        # comparado em Python (naive, hora local), mesmo padrao de
+        # datetime.now() usado no resto do projeto -- evita
         # depender de conversao implicita de timezone do Postgres
         # entre timestamp naive e now() (timestamptz).
-        limite = datetime.utcnow() - timedelta(days=dias_limite)
+        limite = datetime.now() - timedelta(days=dias_limite)
 
         return (
             db.query(

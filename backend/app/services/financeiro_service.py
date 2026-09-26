@@ -31,7 +31,7 @@ class FinanceiroService:
 
         saldo_atual = query_saldo_atual.scalar() or Decimal("0")
 
-        limite = datetime.utcnow() + timedelta(days=dias)
+        limite = datetime.now() + timedelta(days=dias)
 
         receber = [
             conta

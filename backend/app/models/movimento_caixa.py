@@ -35,7 +35,7 @@ class MovimentoCaixa(Base):
 
     data: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow
+        default=datetime.now
     )
 
     tipo: Mapped[str] = mapped_column(

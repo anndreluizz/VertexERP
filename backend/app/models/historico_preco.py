@@ -29,7 +29,7 @@ class HistoricoPreco(Base):
     preco_venda_anterior: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     preco_venda_novo: Mapped[Decimal] = mapped_column(Numeric(12, 2))
 
-    data: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    data: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     usuario = relationship("User")
 

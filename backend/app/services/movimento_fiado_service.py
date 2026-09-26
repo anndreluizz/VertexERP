@@ -170,7 +170,7 @@ class MovimentoFiadoService:
             valor=dados.valor,
             descricao=dados.descricao,
             forma_pagamento=forma_pagamento,
-            data=dados.data or datetime.utcnow(),
+            data=dados.data or datetime.now(),
         )
 
         movimento = MovimentoFiadoRepository.criar(db, movimento)

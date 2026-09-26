@@ -30,13 +30,13 @@ class RefreshToken(Base):
     )
 
     criado_em: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, default=datetime.now
     )
 
     expira_em: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     ultimo_uso_em: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, default=datetime.now
     )
 
     revogado: Mapped[bool] = mapped_column(Boolean, default=False)

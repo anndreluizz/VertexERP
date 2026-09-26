@@ -37,7 +37,7 @@ class LogAuditoria(Base):
 
     ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
 
-    data: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    data: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     usuario = relationship("User")
 

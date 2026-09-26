@@ -46,7 +46,7 @@ class ContaPagarEvento(Base):
 
     data: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=datetime.now,
     )
 
     usuario = relationship("User")

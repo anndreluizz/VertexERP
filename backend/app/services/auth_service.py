@@ -46,7 +46,7 @@ class AuthService:
         if sessao.expira_em < datetime.utcnow():
             return None
 
-        sessao.ultimo_uso_em = datetime.utcnow()
+        sessao.ultimo_uso_em = datetime.now()
         RefreshTokenRepository.atualizar(db, sessao)
 
         return sessao

@@ -767,7 +767,7 @@ class VendaService:
         # preservando historico do cliente e rastreabilidade dos
         # lancamentos de fiado/caixa que ja referenciam essa venda.
         venda.status = StatusVenda.CANCELADA.value
-        venda.cancelado_em = datetime.utcnow()
+        venda.cancelado_em = datetime.now()
         venda.cancelado_por_id = usuario_id
         venda.motivo_cancelamento = motivo
 

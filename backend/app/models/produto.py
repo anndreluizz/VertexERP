@@ -170,7 +170,7 @@ class Produto(Base):
 
     criado_em: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow
+        default=datetime.now
     )
 
     foto: Mapped[bytes | None] = mapped_column(

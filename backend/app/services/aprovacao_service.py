@@ -96,7 +96,7 @@ class AprovacaoService:
 
         solicitacao.status = "APROVADA"
         solicitacao.aprovador_id = aprovador_id
-        solicitacao.resolvido_em = datetime.utcnow()
+        solicitacao.resolvido_em = datetime.now()
 
         solicitacao = SolicitacaoAprovacaoRepository.atualizar(
             db, solicitacao
@@ -125,7 +125,7 @@ class AprovacaoService:
 
         solicitacao.status = "REJEITADA"
         solicitacao.aprovador_id = aprovador_id
-        solicitacao.resolvido_em = datetime.utcnow()
+        solicitacao.resolvido_em = datetime.now()
 
         solicitacao = SolicitacaoAprovacaoRepository.atualizar(
             db, solicitacao

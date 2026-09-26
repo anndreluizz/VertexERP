@@ -55,7 +55,7 @@ class MovimentoFiado(Base):
 
     data: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow
+        default=datetime.now
     )
 
     cliente = relationship(

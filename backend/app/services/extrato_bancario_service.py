@@ -240,7 +240,7 @@ class ExtratoBancarioService:
         transacao.conta_pagar_id = conta_pagar_id
         transacao.conta_receber_id = conta_receber_id
         transacao.status = "CONCILIADA"
-        transacao.conciliado_em = datetime.utcnow()
+        transacao.conciliado_em = datetime.now()
         transacao.conciliado_por_id = usuario_id
 
         return TransacaoBancariaRepository.atualizar(db, transacao)

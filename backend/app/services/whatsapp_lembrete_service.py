@@ -39,7 +39,7 @@ def verificar_fiados_parados_e_notificar(db) -> None:
 
     parados = MovimentoFiadoRepository.listar_parados(db, dias_limite)
 
-    agora = datetime.utcnow()
+    agora = datetime.now()
 
     for cliente_id, saldo, _ultima_movimentacao in parados:
 

@@ -19,5 +19,5 @@ class CategoriaDespesa(Base):
 
     criado_em: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=datetime.now,
     )

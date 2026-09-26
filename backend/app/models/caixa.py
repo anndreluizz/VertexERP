@@ -18,7 +18,7 @@ class Caixa(Base):
 
     data_abertura: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow
+        default=datetime.now
     )
 
     data_fechamento: Mapped[datetime | None] = mapped_column(

@@ -165,7 +165,7 @@ class CompraService:
             )
 
         compra.status = "CANCELADA"
-        compra.cancelado_em = datetime.utcnow()
+        compra.cancelado_em = datetime.now()
 
         CompraRepository.salvar(db)
 

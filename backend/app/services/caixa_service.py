@@ -59,7 +59,7 @@ class CaixaService:
             raise Exception("Nenhum caixa aberto.")
 
         caixa.status = "FECHADO"
-        caixa.data_fechamento = datetime.utcnow()
+        caixa.data_fechamento = datetime.now()
         caixa.valor_contado = valor_contado
         caixa.observacoes = observacoes
 

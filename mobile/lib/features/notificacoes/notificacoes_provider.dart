@@ -5,14 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 
-/// Backend grava com datetime.utcnow (sem fuso no JSON) -- sem o 'Z',
-/// o Dart leria como hora local e mostraria 3h adiantado.
-DateTime _utcParaLocal(String texto) {
-  final temFuso =
-      texto.endsWith('Z') || RegExp(r'[+-]\d\d:?\d\d$').hasMatch(texto);
-  return DateTime.parse(temFuso ? texto : '${texto}Z').toLocal();
-}
-
 /// Espelha backend/app/schemas/notificacao.py::NotificacaoResponse.
 class Notificacao {
   const Notificacao({
@@ -29,7 +21,8 @@ class Notificacao {
       titulo: json['titulo'] as String? ?? '',
       corpo: json['corpo'] as String? ?? '',
       lida: json['lida'] as bool? ?? false,
-      criadoEm: _utcParaLocal(json['criado_em'] as String),
+      // backend grava em hora local (datetime.now), sem fuso no JSON
+      criadoEm: DateTime.parse(json['criado_em'] as String),
     );
   }
 

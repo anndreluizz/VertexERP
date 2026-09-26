@@ -130,7 +130,7 @@ class ContagemEstoqueService:
             )
 
         contagem.status = "FINALIZADA"
-        contagem.finalizado_em = datetime.utcnow()
+        contagem.finalizado_em = datetime.now()
 
         return ContagemEstoqueRepository.atualizar(db, contagem)
 

@@ -29,7 +29,7 @@ class ContagemEstoque(Base):
     observacao: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     criado_em: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, default=datetime.now
     )
 
     finalizado_em: Mapped[datetime | None] = mapped_column(

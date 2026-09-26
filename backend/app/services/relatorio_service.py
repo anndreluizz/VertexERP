@@ -544,7 +544,7 @@ class RelatorioService:
     @staticmethod
     def categorias_sem_venda(db: Session, dias: int = 90):
 
-        limite = datetime.utcnow() - timedelta(days=dias)
+        limite = datetime.now() - timedelta(days=dias)
 
         todas_categorias = {
             categoria for (categoria,) in
@@ -579,7 +579,7 @@ class RelatorioService:
                 "categoria": categoria,
                 "ultima_venda": ultima_venda,
                 "dias_sem_venda": (
-                    (datetime.utcnow() - ultima_venda).days
+                    (datetime.now() - ultima_venda).days
                     if ultima_venda is not None else None
                 ),
             })

@@ -64,7 +64,7 @@ class Cliente(Base):
 
     criado_em: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow
+        default=datetime.now
     )
 
     data_nascimento: Mapped[date | None] = mapped_column(

@@ -40,7 +40,7 @@ class ContaReceberService:
         conta = ContaReceber(
             cliente_id=dados.cliente_id,
             venda_id=dados.venda_id,
-            data_emissao=datetime.utcnow(),
+            data_emissao=datetime.now(),
             data_vencimento=dados.data_vencimento,
             data_recebimento=None,
             valor=dados.valor,
@@ -122,7 +122,7 @@ class ContaReceberService:
             raise Exception("Nenhum caixa aberto.")
 
         conta.status = StatusContaReceber.RECEBIDO.value
-        conta.data_recebimento = datetime.utcnow()
+        conta.data_recebimento = datetime.now()
 
         conta = ContaReceberRepository.atualizar(
             db,
@@ -221,7 +221,7 @@ class ContaReceberService:
         conta = ContaReceber(
             cliente_id=venda.cliente_id,
             venda_id=venda.id,
-            data_emissao=datetime.utcnow(),
+            data_emissao=datetime.now(),
             data_vencimento=venda.data_vencimento,
             data_recebimento=None,
             valor=venda.valor_total,

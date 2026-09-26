@@ -77,11 +77,10 @@ class DashboardService:
     @staticmethod
     def resumo(db: Session, loja_id: int | None = None):
 
-        # UTC, nao date.today() (hora local) -- Venda/ContaPagar gravam
-        # a data com datetime.utcnow(), entao "hoje" precisa estar no
-        # mesmo fuso ou as vendas somem do painel entre 21h e meia-noite
-        # (horario de Brasilia, quando UTC ja virou o dia seguinte).
-        hoje = datetime.utcnow().date()
+        # hora local do servidor -- mesmo fuso em que Venda/ContaPagar
+        # gravam a data (datetime.now; ate a migracao
+        # d4e7a1c9b2f0 era UTC e o "hoje" virava as 20h/21h).
+        hoje = datetime.now().date()
 
         # KPIs cruzam Venda/ContaPagar/Produto, que ganharam loja_id na
         # feature multi-loja -- sem esse filtro, cada numero do painel

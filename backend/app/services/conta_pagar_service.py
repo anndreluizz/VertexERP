@@ -49,7 +49,7 @@ class ContaPagarService:
     ):
 
         conta = ContaPagar(
-            data_emissao=datetime.utcnow(),
+            data_emissao=datetime.now(),
             data_vencimento=dados.data_vencimento,
             data_pagamento=None,
             valor=dados.valor,
@@ -145,7 +145,7 @@ class ContaPagarService:
             conta = ContaPagar(
                 fornecedor_id=compra.fornecedor_id,
                 compra_id=compra.id,
-                data_emissao=datetime.utcnow(),
+                data_emissao=datetime.now(),
                 data_vencimento=compra.data_vencimento
                 + timedelta(days=30 * indice),
                 data_pagamento=None,
@@ -318,7 +318,7 @@ class ContaPagarService:
                 raise Exception("Nenhum caixa aberto.")
 
         conta.status = StatusContaPagar.PAGO.value
-        conta.data_pagamento = datetime.utcnow()
+        conta.data_pagamento = datetime.now()
         conta.forma_pagamento = forma_pagamento
         conta.banco_pagamento = banco_pagamento
         conta.numero_transacao = numero_transacao

@@ -36,7 +36,7 @@ class ContaReceber(Base):
 
     data_emissao: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow
+        default=datetime.now
     )
 
     data_vencimento: Mapped[datetime] = mapped_column(

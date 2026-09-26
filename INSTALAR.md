@@ -177,15 +177,20 @@ escrita.
 ## Backup automático
 
 Já vem ligado por padrão no PC-Servidor, sem precisar configurar nada. Um
-backup completo do banco é salvo todo dia em
-`Documentos\VertexERP\Backups\` (dentro dos Documentos do Windows do
-usuário que abriu o sistema) enquanto o Vertex ERP estiver aberto — o
-primeiro roda logo na abertura, os seguintes a cada 24h. Backups com mais
-de 30 dias são apagados automaticamente pra não acumular espaço em disco
-sem limite.
+backup completo do banco é salvo em `Documentos\VertexERP\Backups\`
+(dentro dos Documentos do Windows do usuário que abriu o sistema)
+enquanto o Vertex ERP estiver aberto — o primeiro roda logo na abertura,
+os seguintes a cada 4 horas. Os backups dos últimos 7 dias ficam todos;
+entre 7 e 30 dias fica só o último de cada dia; com mais de 30 dias são
+apagados, pra não acumular espaço em disco sem limite.
 
 Terminais não guardam nada localmente, então esse backup só existe (e só
 faz sentido) no PC-Servidor.
+
+Se o backup falhar, parar de rodar por mais de 24h ou estiver guardado
+só no próprio PC (sem a cópia fora da loja, abaixo), quem é
+administrador vê uma **faixa amarela** no topo do sistema e o detalhe em
+**Configurações → Backup**.
 
 ### Backup fora da loja (recomendado)
 
@@ -209,8 +214,8 @@ outro arquivo).
    ```
 4. Salve e reabra o Vertex ERP.
 
-Da próxima vez que o backup diário rodar, uma cópia extra vai pra essa
-pasta também (mesma regra dos últimos 30 dias) -- o backup local continua
+Da próxima vez que o backup automático rodar, uma cópia extra vai pra essa
+pasta também (mesma regra de retenção acima) -- o backup local continua
 existindo do mesmo jeito de sempre, essa é só uma cópia a mais.
 
 ## Acesso remoto (ver a loja de fora)

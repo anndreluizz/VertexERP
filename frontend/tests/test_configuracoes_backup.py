@@ -65,3 +65,56 @@ def test_selecionar_aba_backup_carrega_historico_uma_vez(esperar_threads):
     assert tela.tabela_backups.rowCount() == 1
     assert tela.tabela_backups.item(0, 0).text() == "vertexerp_teste.sql"
     assert tela._pasta_backups_atual == resposta["pasta"]
+
+
+def _carregar_aba_backup(tela, resposta, esperar_threads):
+    with mock.patch(
+        "telas.configuracoes.backup_service.listar_backups",
+        return_value=resposta,
+    ):
+        tela._selecionar_aba(8)
+        esperar_threads(tela)
+
+
+def test_aba_backup_mostra_alerta_do_backend(esperar_threads):
+    tela = _tela_configuracoes(admin=True)
+
+    _carregar_aba_backup(tela, {
+        "itens": [],
+        "pasta": r"C:\Backups",
+        "copia_externa": None,
+        "alerta": "Os backups estão guardados só neste PC.",
+    }, esperar_threads)
+
+    assert tela.lbl_alerta_backup.isHidden() is False
+    assert "só neste PC" in tela.lbl_alerta_backup.text()
+    assert tela.lbl_copia_externa.isHidden() is True
+
+
+def test_aba_backup_sem_alerta_mostra_copia_externa(esperar_threads):
+    tela = _tela_configuracoes(admin=True)
+
+    _carregar_aba_backup(tela, {
+        "itens": [],
+        "pasta": r"C:\Backups",
+        "copia_externa": r"C:\OneDrive\VertexERP-Backups",
+        "alerta": None,
+    }, esperar_threads)
+
+    assert tela.lbl_alerta_backup.isHidden() is True
+    assert tela.lbl_copia_externa.isHidden() is False
+    assert "OneDrive" in tela.lbl_copia_externa.text()
+
+
+def test_faixa_aviso_backup_aparece_so_com_alerta():
+    from telas.principal import FaixaAvisoBackup
+
+    faixa = FaixaAvisoBackup()
+    assert faixa.isHidden() is True
+
+    faixa.definir_status({"alerta": "O último backup automático falhou: x"})
+    assert faixa.isHidden() is False
+    assert "falhou" in faixa.lbl_mensagem.text()
+
+    faixa.definir_status({"alerta": None})
+    assert faixa.isHidden() is True

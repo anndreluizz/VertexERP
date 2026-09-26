@@ -1,10 +1,19 @@
 import ctypes
 import ctypes.wintypes
+import json
 import os
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 
 CREATE_NO_WINDOW = 0x08000000
+
+# Escrito pelo launcher.py a cada tentativa de backup automatico (ver
+# launcher.py::_loop_backup_diario) -- mesmo nome dos dois lados.
+ARQUIVO_STATUS = "status_backup.json"
+
+# O launcher faz backup na abertura e a cada 4h; passar disso sem
+# nenhum arquivo novo significa que o automatico parou de rodar.
+HORAS_SEM_BACKUP_PARA_ALERTA = 24
 
 
 def _pasta_documentos():
@@ -80,10 +89,80 @@ class BackupService:
         return sorted(arquivos, key=lambda a: a["criado_em"], reverse=True)
 
     @staticmethod
+    def _ler_status():
+        """None quando o arquivo nao existe -- backend rodando sem o
+        launcher (dev), onde nao ha backup automatico nenhum."""
+
+        caminho = os.path.join(_pasta_backups(), ARQUIVO_STATUS)
+
+        try:
+            with open(caminho, encoding="utf-8") as arquivo:
+                return json.load(arquivo)
+        except (OSError, ValueError):
+            return None
+
+    @staticmethod
+    def alerta(itens, status, agora=None):
+        """Mensagem pro admin quando o backup nao esta protegendo a loja
+        direito, ou None se esta tudo certo. Ordem = gravidade: falha
+        total primeiro, depois backup parado, depois so' a copia fora
+        do PC -- que parece detalhe, mas foi a falta dela que fez a
+        loja perder tudo quando o PC-Servidor foi formatado (issue #4)."""
+
+        agora = agora or datetime.now()
+        status = status or {}
+
+        if status.get("erro"):
+            return f"O último backup automático falhou: {status['erro']}"
+
+        if not itens:
+            return "Nenhum backup do banco de dados foi encontrado."
+
+        horas = (agora - itens[0]["criado_em"]) / timedelta(hours=1)
+        if horas > HORAS_SEM_BACKUP_PARA_ALERTA:
+            dias = int(horas // 24)
+            return (
+                f"O último backup foi há {dias} dia(s). "
+                "O backup automático pode ter parado."
+            )
+
+        if not status:
+            return None
+
+        if status.get("erro_copia_externa"):
+            return (
+                "O backup foi salvo neste PC, mas a cópia para "
+                f"{status.get('copia_externa')} falhou: "
+                f"{status['erro_copia_externa']}"
+            )
+
+        if not status.get("copia_externa"):
+            return (
+                "Os backups estão guardados só neste PC. Se ele "
+                "estragar, os dados se perdem. Configure "
+                "VERTEXERP_BACKUP_EXTRA no .env do Servidor com uma "
+                "pasta do OneDrive ou Google Drive."
+            )
+
+        return None
+
+    @staticmethod
+    def resumo():
+        itens = BackupService.listar()
+        status = BackupService._ler_status()
+
+        return {
+            "itens": itens,
+            "pasta": _pasta_backups(),
+            "copia_externa": (status or {}).get("copia_externa"),
+            "alerta": BackupService.alerta(itens, status),
+        }
+
+    @staticmethod
     def criar_manual():
         """pg_dump direto (protocolo Postgres, nao passa pelo
         SQLAlchemy) -- mesmo comando que launcher.py::_fazer_backup
-        roda automaticamente todo dia, so' que disparado na hora pelo
+        roda automaticamente a cada 4h, so' que disparado na hora pelo
         usuario em vez de pelo timer."""
 
         pasta = _pasta_backups()

@@ -19,7 +19,7 @@ from telas.trocar_senha import TrocarSenhaDialog
 import os
 import sys
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QShortcut, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
@@ -30,12 +30,17 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QDialog,
     QMessageBox,
+    QFrame,
+    QLabel,
+    QPushButton,
 )
 
 from design import tokens
+from design.icons import icone
 from design.sidebar import Sidebar
 from design.header import Header
-from services import api
+from design.widgets import BotaoSecundario
+from services import api, backup_service
 from services.caixa_service import caixa_aberto, abrir_caixa
 from services.preferencias_service import salvar_tema_escuro
 from services.worker import rodar_em_thread
@@ -45,6 +50,68 @@ from services.worker import rodar_em_thread
 # um indicador; 20s equilibra perceber a queda logo sem gerar trafego
 # nenhum digno de nota.
 _INTERVALO_CONEXAO_MS = 20_000
+
+# checagem do status do backup (so' pra admin, ver FaixaAvisoBackup) --
+# a primeira espera o launcher terminar o backup que ele dispara logo
+# ao abrir, senao numa loja que ficou fechada no domingo o aviso de
+# "backup atrasado" piscaria toda segunda de manha a' toa.
+_ATRASO_PRIMEIRA_CHECAGEM_BACKUP_MS = 60_000
+_INTERVALO_BACKUP_MS = 30 * 60_000
+
+
+class FaixaAvisoBackup(QFrame):
+    """Faixa amarela abaixo do Header, so' pra admin, quando o backup
+    nao esta protegendo a loja (issue #4: o backup ficou quebrado por
+    semanas sem ninguem ver, e a loja perdeu os dados quando o
+    PC-Servidor foi formatado). A mensagem vem pronta do backend
+    (BackupService.alerta)."""
+
+    ver_backups = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setObjectName("faixaAvisoBackup")
+        self.setStyleSheet(f"""
+            QFrame#faixaAvisoBackup {{
+                background: {tokens.ALERTA_CLARO};
+                border: none;
+                border-bottom: 1px solid {tokens.ALERTA};
+            }}
+        """)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(20, 8, 12, 8)
+        layout.setSpacing(12)
+
+        self.lbl_mensagem = QLabel()
+        self.lbl_mensagem.setWordWrap(True)
+        self.lbl_mensagem.setStyleSheet(f"""
+            background: transparent; border: none;
+            color: {tokens.ALERTA_TEXTO};
+            font-size: {tokens.TAMANHO_SM}px; font-weight: 600;
+        """)
+        layout.addWidget(self.lbl_mensagem, stretch=1)
+
+        bt_ver = BotaoSecundario("Ver backups")
+        bt_ver.clicked.connect(self.ver_backups)
+        layout.addWidget(bt_ver)
+
+        bt_fechar = QPushButton()
+        bt_fechar.setIcon(icone("x", cor=tokens.ALERTA_TEXTO, tamanho=16))
+        bt_fechar.setToolTip("Esconder até a próxima checagem")
+        bt_fechar.setFixedSize(28, 28)
+        bt_fechar.setCursor(Qt.PointingHandCursor)
+        bt_fechar.setStyleSheet("background: transparent; border: none;")
+        bt_fechar.clicked.connect(self.hide)
+        layout.addWidget(bt_fechar)
+
+        self.setVisible(False)
+
+    def definir_status(self, dados):
+        alerta = dados.get("alerta") if isinstance(dados, dict) else None
+        self.lbl_mensagem.setText(f"⚠ Backup: {alerta}" if alerta else "")
+        self.setVisible(bool(alerta))
 
 
 # (chave, ícone lucide, rótulo) — única fonte de verdade pra montar tanto
@@ -133,6 +200,10 @@ class PrincipalWindow(QMainWindow):
         self.header.solicitou_trocar_senha.connect(self._abrir_trocar_senha)
         self.header.tema_alternado.connect(self._alternar_tema)
         layout_central.addWidget(self.header)
+
+        self.faixa_backup = FaixaAvisoBackup()
+        self.faixa_backup.ver_backups.connect(self._abrir_aba_backup)
+        layout_central.addWidget(self.faixa_backup)
 
         self.paginas = QStackedWidget()
         layout_central.addWidget(self.paginas, stretch=1)
@@ -248,6 +319,35 @@ class PrincipalWindow(QMainWindow):
         self._timer_conexao = QTimer(self)
         self._timer_conexao.timeout.connect(self._checar_conexao)
         self._timer_conexao.start(_INTERVALO_CONEXAO_MS)
+
+        # ======================
+        # STATUS DO BACKUP -- so' admin ve (e so' admin pode chamar
+        # GET /backup/, que e' get_current_admin)
+        # ======================
+
+        if info_usuario.get("admin"):
+            self._timer_backup = QTimer(self)
+            self._timer_backup.timeout.connect(self._checar_backup)
+            self._timer_backup.start(_INTERVALO_BACKUP_MS)
+            QTimer.singleShot(
+                _ATRASO_PRIMEIRA_CHECAGEM_BACKUP_MS, self._checar_backup
+            )
+
+    def _checar_backup(self):
+        # sem ao_erro de proposito: servidor fora do ar ja' tem o aviso
+        # proprio no Header, nao precisa de um segundo aqui
+        rodar_em_thread(
+            self,
+            backup_service.listar_backups,
+            ao_sucesso=self.faixa_backup.definir_status,
+        )
+
+    def _abrir_aba_backup(self):
+        self._exibir_pagina("config", self.config)
+        # forca recarregar -- a aba pode ter sido aberta antes do
+        # problema aparecer, com o historico antigo ainda em cache
+        self.config._backups_carregados = False
+        self.config._selecionar_aba(8)
 
     def _checar_conexao(self):
         rodar_em_thread(

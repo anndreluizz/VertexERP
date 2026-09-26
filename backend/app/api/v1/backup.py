@@ -12,10 +12,7 @@ router = APIRouter(
 
 @router.get("/", response_model=BackupListResponse)
 def listar(usuario=Depends(get_current_admin)):
-    return {
-        "itens": BackupService.listar(),
-        "pasta": BackupService.pasta_backups(),
-    }
+    return BackupService.resumo()
 
 
 @router.post("/manual", response_model=BackupItem)

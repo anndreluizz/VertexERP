@@ -1,5 +1,6 @@
 import ctypes
 import ctypes.wintypes
+import json
 import os
 import secrets
 import shutil
@@ -441,9 +442,21 @@ def encerrar_processo(caminho_exe):
 
 DIAS_PARA_MANTER_BACKUP = 30
 
-# 24h -- roda uma vez por dia (a primeira já quase na hora de abrir),
-# nao precisa de nada mais fino que isso pra um backup de loja.
-_INTERVALO_BACKUP_SEGUNDOS = 24 * 60 * 60
+# Nos ultimos DIAS_COM_TODOS_OS_BACKUPS fica tudo; dali ate
+# DIAS_PARA_MANTER_BACKUP fica so' o ultimo backup de cada dia -- sem
+# isso, rodando a cada 4h, a pasta (e a copia no OneDrive, que tem cota)
+# cresceria ~6x mais rapido do que com o backup diario de antes.
+DIAS_COM_TODOS_OS_BACKUPS = 7
+
+# 4h -- a primeira ja quase na hora de abrir. Era 24h, mas isso deixava
+# ate um dia inteiro de vendas descoberto se o PC-Servidor morresse
+# (issue #4: foi exatamente o que aconteceu com a matriz em 25/09).
+_INTERVALO_BACKUP_SEGUNDOS = 4 * 60 * 60
+
+# Lido pelo backend (app/services/backup_service.py) pra avisar o admin
+# na tela quando o backup falha -- antes a falha morria calada dentro
+# da thread daemon e ninguem ficava sabendo.
+_ARQUIVO_STATUS_BACKUP = "status_backup.json"
 
 
 def _pasta_documentos():
@@ -545,23 +558,53 @@ def _fazer_backup():
         raise RuntimeError(f"pg_dump falhou:\n{resultado.stderr}")
 
     pasta_extra = _pasta_backup_extra()
+    erro_copia_externa = None
 
     if pasta_extra:
         try:
             shutil.copy2(arquivo, os.path.join(pasta_extra, os.path.basename(arquivo)))
-        except OSError:
+        except OSError as erro:
             # a copia externa e um extra -- se a pasta sincronizada
             # estiver temporariamente inacessivel (OneDrive pausado,
             # pendrive desconectado etc.), o backup local (que ja deu
-            # certo acima) nao pode ser perdido por causa disso
-            pass
+            # certo acima) nao pode ser perdido por causa disso. Mas
+            # a falha vai pro status, pro admin ficar sabendo.
+            erro_copia_externa = str(erro)
 
-    return arquivo
+    return pasta_extra, erro_copia_externa
+
+
+def _backups_para_apagar(arquivos, agora):
+    """Recebe [(caminho, modificado_em)] e devolve os caminhos que a
+    politica de retencao manda apagar: tudo com mais de
+    DIAS_PARA_MANTER_BACKUP dias, e, entre DIAS_COM_TODOS_OS_BACKUPS e
+    esse limite, tudo menos o backup mais recente de cada dia."""
+
+    limite_total = agora - timedelta(days=DIAS_PARA_MANTER_BACKUP)
+    limite_todos = agora - timedelta(days=DIAS_COM_TODOS_OS_BACKUPS)
+
+    apagar = []
+    ultimo_do_dia = {}
+
+    for caminho, modificado in arquivos:
+        if modificado < limite_total:
+            apagar.append(caminho)
+        elif modificado < limite_todos:
+            dia = modificado.date()
+            atual = ultimo_do_dia.get(dia)
+
+            if atual is None:
+                ultimo_do_dia[dia] = (caminho, modificado)
+            elif modificado > atual[1]:
+                apagar.append(atual[0])
+                ultimo_do_dia[dia] = (caminho, modificado)
+            else:
+                apagar.append(caminho)
+
+    return apagar
 
 
 def _limpar_backups_antigos():
-    limite = datetime.now() - timedelta(days=DIAS_PARA_MANTER_BACKUP)
-
     pastas = [_pasta_backups()]
 
     pasta_extra = _pasta_backup_extra()
@@ -574,6 +617,8 @@ def _limpar_backups_antigos():
         except OSError:
             continue
 
+        arquivos = []
+
         for nome in nomes:
             if not nome.endswith(".sql"):
                 continue
@@ -581,24 +626,51 @@ def _limpar_backups_antigos():
             caminho = os.path.join(destino, nome)
 
             try:
-                modificado = datetime.fromtimestamp(os.path.getmtime(caminho))
-                if modificado < limite:
-                    os.remove(caminho)
+                arquivos.append(
+                    (caminho, datetime.fromtimestamp(os.path.getmtime(caminho)))
+                )
+            except OSError:
+                continue
+
+        for caminho in _backups_para_apagar(arquivos, datetime.now()):
+            try:
+                os.remove(caminho)
             except OSError:
                 continue
 
 
+def _gravar_status_backup(status):
+    try:
+        caminho = os.path.join(_pasta_backups(), _ARQUIVO_STATUS_BACKUP)
+        with open(caminho, "w", encoding="utf-8") as arquivo:
+            json.dump(status, arquivo, ensure_ascii=False)
+    except OSError:
+        pass
+
+
 def _loop_backup_diario():
     while True:
+        status = {
+            "tentativa_em": datetime.now().isoformat(timespec="seconds"),
+            "erro": None,
+            "copia_externa": None,
+            "erro_copia_externa": None,
+        }
+
         try:
-            _fazer_backup()
+            pasta_extra, erro_copia_externa = _fazer_backup()
+            status["copia_externa"] = pasta_extra
+            status["erro_copia_externa"] = erro_copia_externa
             _limpar_backups_antigos()
-        except Exception:
+        except Exception as erro:
             # backup automatico e complemento, nunca pode derrubar o
             # launcher nem travar a abertura do sistema -- se falhar
-            # (disco cheio, pg_dump nao encontrado etc.), so tenta de
-            # novo no proximo ciclo.
-            pass
+            # (disco cheio, pg_dump nao encontrado etc.), registra no
+            # status (o admin ve o aviso na tela) e tenta de novo no
+            # proximo ciclo.
+            status["erro"] = str(erro)[:500]
+
+        _gravar_status_backup(status)
 
         time.sleep(_INTERVALO_BACKUP_SEGUNDOS)
 
@@ -606,7 +678,7 @@ def _loop_backup_diario():
 def iniciar_backup_diario():
     """Chamado uma vez, depois que o backend confirma que subiu (ver
     main()) -- dispara o primeiro backup quase na hora, depois repete
-    a cada 24h numa thread em segundo plano (daemon: nao impede o
+    a cada 4h numa thread em segundo plano (daemon: nao impede o
     launcher de fechar normalmente quando o usuario sai do sistema)."""
 
     threading.Thread(target=_loop_backup_diario, daemon=True).start()

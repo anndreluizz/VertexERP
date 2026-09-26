@@ -964,12 +964,12 @@ class Configuracoes(QWidget):
         layout.addWidget(lbl_secao)
 
         dica = QLabel(
-            "Um backup completo é gerado automaticamente todo dia, "
-            "enquanto o Vertex ERP estiver aberto no PC-Servidor, e "
-            "guardado em Documentos\\VertexERP\\Backups (backups com "
-            "mais de 30 dias são apagados sozinhos). Use \"Fazer "
-            "Backup Agora\" pra gerar uma cópia extra na hora, sem "
-            "esperar o próximo automático."
+            "Um backup completo é gerado automaticamente ao abrir o "
+            "Vertex ERP no PC-Servidor e depois a cada 4 horas, e "
+            "guardado em Documentos\\VertexERP\\Backups. Os backups "
+            "dos últimos 7 dias ficam todos; até 30 dias fica só o "
+            "último de cada dia. Use \"Fazer Backup Agora\" pra gerar "
+            "uma cópia extra na hora, sem esperar o próximo automático."
         )
         dica.setWordWrap(True)
         dica.setStyleSheet(f"""
@@ -977,6 +977,26 @@ class Configuracoes(QWidget):
             color:{tokens.TEXTO_SECUNDARIO}; line-height:1.5;
         """)
         layout.addWidget(dica)
+
+        self.lbl_alerta_backup = QLabel()
+        self.lbl_alerta_backup.setWordWrap(True)
+        self.lbl_alerta_backup.setStyleSheet(f"""
+            background:{tokens.ALERTA_CLARO}; color:{tokens.ALERTA_TEXTO};
+            border:1px solid {tokens.ALERTA};
+            border-radius:{tokens.RADIUS_MD}px; padding:10px 12px;
+            font-size:{tokens.TAMANHO_SM}px; font-weight:600;
+        """)
+        self.lbl_alerta_backup.setVisible(False)
+        layout.addWidget(self.lbl_alerta_backup)
+
+        self.lbl_copia_externa = QLabel()
+        self.lbl_copia_externa.setWordWrap(True)
+        self.lbl_copia_externa.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.SUCESSO};
+        """)
+        self.lbl_copia_externa.setVisible(False)
+        layout.addWidget(self.lbl_copia_externa)
 
         botoes = QHBoxLayout()
         botoes.setSpacing(10)
@@ -1065,6 +1085,17 @@ class Configuracoes(QWidget):
 
         self._backups_carregados = True
         self._pasta_backups_atual = dados["pasta"]
+
+        alerta = dados.get("alerta")
+        self.lbl_alerta_backup.setText(f"⚠ {alerta}" if alerta else "")
+        self.lbl_alerta_backup.setVisible(bool(alerta))
+
+        copia_externa = dados.get("copia_externa")
+        self.lbl_copia_externa.setText(
+            f"✓ Cada backup também é copiado para {copia_externa}"
+            if copia_externa else ""
+        )
+        self.lbl_copia_externa.setVisible(bool(copia_externa))
 
         itens = dados["itens"]
         self.tabela_backups.setRowCount(len(itens))

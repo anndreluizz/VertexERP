@@ -15,6 +15,7 @@ class CaixaOperacaoService:
             db.query(Caixa)
             .filter(Caixa.status == "ABERTO")
             .filter(Caixa.usuario_id == usuario_id)
+            .with_for_update()
             .first()
         )
 

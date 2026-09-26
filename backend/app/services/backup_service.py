@@ -3,6 +3,9 @@ import ctypes.wintypes
 import json
 import os
 import subprocess
+import threading
+import time
+import traceback
 from datetime import datetime, timedelta
 
 CREATE_NO_WINDOW = 0x08000000
@@ -57,6 +60,30 @@ def _caminho_pg_dump():
             return caminho_portatil
 
     return "pg_dump"
+
+
+_RODAPE_DUMP = b"PostgreSQL database dump complete"
+
+
+def validar_dump(caminho):
+    """Mesma checagem de launcher.py::_validar_dump (duplicada pelo
+    mesmo motivo de _pasta_documentos): arquivo nao vazio e com o
+    rodape que o pg_dump so escreve quando termina de verdade."""
+
+    tamanho = os.path.getsize(caminho)
+
+    if tamanho == 0:
+        raise Exception("pg_dump gerou um arquivo vazio.")
+
+    with open(caminho, "rb") as arquivo:
+        arquivo.seek(max(0, tamanho - 4096))
+        final = arquivo.read()
+
+    if _RODAPE_DUMP not in final:
+        raise Exception(
+            "O arquivo de backup ficou incompleto (sem o rodape do "
+            "pg_dump) e foi descartado."
+        )
 
 
 class BackupService:
@@ -174,24 +201,37 @@ class BackupService:
         ambiente = os.environ.copy()
         ambiente["PGPASSWORD"] = os.getenv("DB_PASSWORD", "")
 
-        resultado = subprocess.run(
-            [
-                _caminho_pg_dump(),
-                "-h", os.getenv("DB_HOST", "127.0.0.1"),
-                "-p", os.getenv("DB_PORT", "5432"),
-                "-U", os.getenv("DB_USER", "postgres"),
-                "-F", "p",
-                "-f", caminho,
-                os.getenv("DB_NAME", "vertexerp"),
-            ],
-            capture_output=True,
-            text=True,
-            env=ambiente,
-            creationflags=CREATE_NO_WINDOW,
-        )
+        # .tmp + validacao + rename -- mesmo motivo de
+        # launcher.py::_fazer_backup: um dump cortado no meio nunca
+        # pode aparecer na pasta como se fosse um backup bom
+        temporario = caminho + ".tmp"
 
-        if resultado.returncode != 0:
-            raise Exception(f"pg_dump falhou: {resultado.stderr}")
+        try:
+            resultado = subprocess.run(
+                [
+                    _caminho_pg_dump(),
+                    "-h", os.getenv("DB_HOST", "127.0.0.1"),
+                    "-p", os.getenv("DB_PORT", "5432"),
+                    "-U", os.getenv("DB_USER", "postgres"),
+                    "-F", "p",
+                    "-f", temporario,
+                    os.getenv("DB_NAME", "vertexerp"),
+                ],
+                capture_output=True,
+                text=True,
+                env=ambiente,
+                creationflags=CREATE_NO_WINDOW,
+            )
+
+            if resultado.returncode != 0:
+                raise Exception(f"pg_dump falhou: {resultado.stderr}")
+
+            validar_dump(temporario)
+            os.replace(temporario, caminho)
+
+        finally:
+            if os.path.exists(temporario):
+                os.remove(temporario)
 
         info = os.stat(caminho)
 
@@ -200,3 +240,71 @@ class BackupService:
             "tamanho_bytes": info.st_size,
             "criado_em": datetime.fromtimestamp(info.st_mtime),
         }
+
+
+# ==========================================
+# AVISO NO CELULAR -- a faixa amarela do desktop so' aparece pra admin
+# logado no desktop; o PC-Servidor passa dias sem ninguem logado, e foi
+# assim que a loja ficou 3 semanas sem backup sem ninguem saber.
+# ==========================================
+
+_INTERVALO_CHECAGEM_SEGUNDOS = 60 * 60
+
+# mesmo alerta persistindo: repete no maximo 1x por dia (senao vira
+# ruido que o dono aprende a ignorar)
+_REPETIR_MESMO_AVISO = timedelta(hours=24)
+
+
+def deve_avisar(alerta, ultimo_alerta, ultimo_envio, agora):
+    if not alerta:
+        return False
+
+    if alerta != ultimo_alerta or ultimo_envio is None:
+        return True
+
+    return agora - ultimo_envio >= _REPETIR_MESMO_AVISO
+
+
+def _loop_aviso_backup():
+    from app.database.session import SessionLocal
+    from app.services.notificacao_service import NotificacaoService
+
+    ultimo_alerta = None
+    ultimo_envio = None
+
+    while True:
+        # primeira checagem so' depois de 1h: da tempo do backup que o
+        # launcher faz na abertura terminar e gravar o status
+        time.sleep(_INTERVALO_CHECAGEM_SEGUNDOS)
+
+        try:
+            resumo = BackupService.resumo()
+            alerta = resumo["alerta"]
+            agora = datetime.now()
+
+            if deve_avisar(alerta, ultimo_alerta, ultimo_envio, agora):
+                db = SessionLocal()
+                try:
+                    NotificacaoService.enviar_para_admins(
+                        db, "Backup com problema", alerta
+                    )
+                finally:
+                    db.close()
+
+                ultimo_envio = agora
+
+            ultimo_alerta = alerta
+
+        except Exception:
+            traceback.print_exc()
+
+
+def iniciar_aviso_backup():
+    """Chamado no startup (ver main.py). So' roda na instalacao de
+    verdade (backend subido pelo launcher, que e' quem faz o backup
+    automatico) -- em dev nao ha backup nenhum pra vigiar."""
+
+    if not os.getenv("VERTEXERP_INSTALL_DIR"):
+        return
+
+    threading.Thread(target=_loop_aviso_backup, daemon=True).start()

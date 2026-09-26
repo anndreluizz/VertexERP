@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta
 
 from telas.pagamento import PagamentoWindow
@@ -236,6 +237,8 @@ class PDV(QWidget):
         super().__init__()
 
         self.itens = []
+        # chave de idempotencia do carrinho atual (ver finalizar_venda)
+        self._chave_venda = None
         self.cliente_id = None
         self.cliente_nome = None
         self.desconto_valor = 0.0
@@ -913,7 +916,10 @@ class PDV(QWidget):
                         "id": p["id"],
                         "codigo": p["codigo"],
                         "nome": p["nome"],
-                        "preco": float(p["preco_venda"]),
+                        # preco_efetivo (nao preco_venda): respeita a
+                        # promocao vigente, igual a busca normal do PDV
+                        # -- o backend recusa preco diferente desse
+                        "preco": float(p.get("preco_efetivo", p["preco_venda"])),
                         "estoque": p["estoque"],
                     },
                     1,
@@ -1819,6 +1825,7 @@ class PDV(QWidget):
 
     def limpar_venda(self):
 
+        self._chave_venda = None
         self.itens.clear()
         self._id_ultimo_item = None
         self._atualizar_ultimo_item()
@@ -2257,9 +2264,18 @@ class PDV(QWidget):
 
         desconto_liquido = self.desconto_valor - self.acrescimo_valor
 
+        # Mesma chave em todo reenvio deste carrinho: se a resposta se
+        # perder (timeout/rede) e o caixa clicar de novo, o backend
+        # devolve a venda ja gravada em vez de vender duas vezes. So'
+        # zera quando a venda deu certo ou o servidor RECUSOU de vez
+        # (ver _ao_venda_sucesso).
+        if self._chave_venda is None:
+            self._chave_venda = uuid.uuid4().hex
+
         rodar_em_thread(
             self,
             enviar_venda,
+            chave_idempotencia=self._chave_venda,
             itens=self.itens,
             forma_pagamento=tela.forma_pagamento,
             cliente_id=tela.cliente_id,
@@ -2300,6 +2316,11 @@ class PDV(QWidget):
 
         else:
 
+            # o servidor respondeu e recusou (estoque, preco, caixa
+            # fechado...): nada foi gravado, a proxima tentativa (talvez
+            # com o carrinho corrigido) e' uma venda nova
+            self._chave_venda = None
+
             try:
                 erro = response.json()
 
@@ -2320,10 +2341,14 @@ class PDV(QWidget):
 
     def _ao_venda_erro(self, erro):
 
+        # sem resposta do servidor (timeout, rede): a venda PODE ter
+        # sido gravada. A chave continua a mesma, entao tentar de novo
+        # e' seguro -- nao vende duas vezes.
         QMessageBox.critical(
             self,
             "Erro",
-            str(erro)
+            f"{erro}\n\nSe a venda já tiver sido registrada, tentar de "
+            "novo não vai duplicar."
         )
 
     def _ao_venda_finalizada(self):

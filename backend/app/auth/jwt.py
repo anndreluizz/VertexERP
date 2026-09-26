@@ -1,13 +1,30 @@
 import os
+import secrets
+import sys
 
+from dotenv import load_dotenv
 from jose import jwt
 from datetime import datetime, timedelta
 
-# Cai no literal antigo só se a instalação não tiver gerado uma chave
-# própria (ver launcher.py::garantir_env) — sem isso, uma chave igual em
-# toda instalação permite forjar token válido pra qualquer usuário, de
-# qualquer loja, sem nunca saber a senha.
-SECRET_KEY = os.getenv("SECRET_KEY", "VERTEXERP2026SECRET")
+# Precisa carregar o .env AQUI: este modulo e' importado (via
+# auth/dependencies.py) antes de database/session.py, que era o unico
+# load_dotenv() -- sem isso SECRET_KEY nunca vinha do .env e toda
+# instalacao caia no mesmo literal publico, permitindo forjar token de
+# admin. load_dotenv nao sobrescreve variavel ja definida (testes/CI).
+load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+
+if not SECRET_KEY:
+    # Nunca um literal fixo: sem chave configurada, usa uma aleatoria
+    # so' deste processo (tokens deixam de valer ao reiniciar -- basta
+    # logar de novo). launcher.py::garantir_env grava uma chave fixa no
+    # .env de toda instalacao de verdade.
+    SECRET_KEY = secrets.token_hex(32)
+    print(
+        "AVISO: SECRET_KEY ausente no .env -- usando chave temporaria.",
+        file=sys.stderr,
+    )
 
 ALGORITHM = "HS256"
 

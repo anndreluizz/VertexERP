@@ -64,15 +64,7 @@ def test_chamada_repetida_reaproveita_o_certificado(pasta_certs):
     assert conteudo1 == conteudo2
 
 
-def test_regenera_sozinho_quando_nao_cobre_mais_o_ip_atual(pasta_certs):
-    cert, _ = garantir_certificado(pasta_certs)
-
-    with open(cert, "rb") as arquivo:
-        conteudo_original = arquivo.read()
-
-    # sobrescreve com um certificado "velho" que só cobre um IP que
-    # certamente não é desta máquina -- simula "o DHCP deu outro
-    # endereço desde a última vez"
+def _escrever_cert_fake(caminho, ip, validade_ate):
     chave_fake = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     nome_fake = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "teste")])
     agora = datetime.now(timezone.utc)
@@ -83,24 +75,52 @@ def test_regenera_sozinho_quando_nao_cobre_mais_o_ip_atual(pasta_certs):
         .issuer_name(nome_fake)
         .public_key(chave_fake.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(agora - timedelta(days=1))
-        .not_valid_after(agora + timedelta(days=3650))
+        .not_valid_before(agora - timedelta(days=400))
+        .not_valid_after(validade_ate)
         .add_extension(
             x509.SubjectAlternativeName(
-                [x509.IPAddress(ipaddress.ip_address("10.99.99.99"))]
+                [x509.IPAddress(ipaddress.ip_address(ip))]
             ),
             critical=False,
         )
         .sign(chave_fake, hashes.SHA256())
     )
 
-    with open(cert, "wb") as arquivo:
-        arquivo.write(cert_fake.public_bytes(serialization.Encoding.PEM))
+    conteudo = cert_fake.public_bytes(serialization.Encoding.PEM)
 
-    cert_novo, _ = garantir_certificado(pasta_certs)
+    with open(caminho, "wb") as arquivo:
+        arquivo.write(conteudo)
 
-    with open(cert_novo, "rb") as arquivo:
-        conteudo_novo = arquivo.read()
+    return conteudo
 
-    assert conteudo_novo != cert_fake.public_bytes(serialization.Encoding.PEM)
-    assert "127.0.0.1" in _sans_de(cert_novo)
+
+def test_nao_regenera_quando_o_ip_da_maquina_muda(pasta_certs):
+    # os clientes fixam o certificado exato e nao checam IP -- trocar a
+    # chave so' porque o DHCP/Tailscale mudou o IP derrubava todos os
+    # Terminais com "servidor mudou de identidade"
+    cert, _ = garantir_certificado(pasta_certs)
+
+    conteudo = _escrever_cert_fake(
+        cert, "10.99.99.99", datetime.now(timezone.utc) + timedelta(days=3650)
+    )
+
+    garantir_certificado(pasta_certs)
+
+    with open(cert, "rb") as arquivo:
+        assert arquivo.read() == conteudo
+
+
+def test_regenera_quando_o_certificado_venceu(pasta_certs):
+    cert, _ = garantir_certificado(pasta_certs)
+
+    vencido = _escrever_cert_fake(
+        cert, "127.0.0.1", datetime.now(timezone.utc) - timedelta(days=1)
+    )
+
+    garantir_certificado(pasta_certs)
+
+    with open(cert, "rb") as arquivo:
+        novo = arquivo.read()
+
+    assert novo != vencido
+    assert "127.0.0.1" in _sans_de(cert)

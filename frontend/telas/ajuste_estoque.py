@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 from services.produto_service import listar_produtos
 from services.estoque_service import listar_movimentos, ajustar_estoque
 from services.worker import rodar_em_thread, em_paralelo
+from services import api
 from widgets.dialogs.pesquisa_window import PesquisaWindow
 from widgets.tables.standard_table import StandardTable
 from design import tokens
@@ -50,6 +51,12 @@ def _estilo_rotulo():
         f"background:transparent; color:{tokens.TEXTO_SECUNDARIO}; "
         f"font-size:{tokens.TAMANHO_XS}px; font-weight:700;"
     )
+
+
+def _pode_ajustar():
+    # backend exige estoque.ajustar (POST /estoque/movimentos) --
+    # sem ela o botao fica desligado em vez de so' dar erro
+    return api.usuario_tem_permissao("estoque.ajustar")
 
 
 class AjusteEstoque(QWidget):
@@ -288,7 +295,7 @@ class AjusteEstoque(QWidget):
 
     def _ao_carregar_finalizado(self):
         self._carregando = False
-        self.bt_registrar.setEnabled(True)
+        self.bt_registrar.setEnabled(_pode_ajustar())
 
     def preencher_tabela(self, movimentos):
         self.tabela.setRowCount(len(movimentos))
@@ -378,7 +385,7 @@ class AjusteEstoque(QWidget):
         # se o sucesso ja disparou carregar() de novo, deixa ele mesmo
         # reabilitar (mesmo raciocinio de telas/caixa.py)
         if not self._carregando:
-            self.bt_registrar.setEnabled(True)
+            self.bt_registrar.setEnabled(_pode_ajustar())
 
     # ==========================================
     # LIMPAR FORMULÁRIO

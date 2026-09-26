@@ -56,11 +56,14 @@ def _ips_desta_maquina() -> set[str]:
     return ips
 
 
-def _certificado_cobre_ips_atuais(caminho_cert: str, ips_atuais: set[str]) -> bool:
-    """Se o IP da máquina mudou (DHCP deu outro endereço, por
-    exemplo) desde que o certificado foi gerado, ele fica sem cobrir
-    o endereço novo -- clientes conectando nesse IP veriam uma
-    identidade que não bate. Detecta isso pra regenerar sozinho."""
+def _certificado_valido(caminho_cert: str) -> bool:
+    """Legivel e dentro da validade. NAO regenera mais quando o IP da
+    maquina muda: os clientes fixam (pin) o certificado exato e nao
+    checam hostname/IP (desktop: api.py::_AdaptadorSemChecagemDeHostname;
+    mobile: badCertificateCallback compara o PEM) -- regenerar a cada
+    DHCP/Tailscale mudando so' trocava a chave, derrubava todos os
+    Terminais com "servidor mudou de identidade" e ensinava a equipe a
+    clicar "confiar de novo" sem pensar (o que anula o TOFU)."""
 
     try:
         with open(caminho_cert, "rb") as arquivo:
@@ -68,18 +71,7 @@ def _certificado_cobre_ips_atuais(caminho_cert: str, ips_atuais: set[str]) -> bo
     except (OSError, ValueError):
         return False
 
-    if cert.not_valid_after_utc < datetime.now(timezone.utc):
-        return False
-
-    try:
-        san = cert.extensions.get_extension_for_class(
-            x509.SubjectAlternativeName
-        ).value
-        ips_no_certificado = {str(ip) for ip in san.get_values_for_type(x509.IPAddress)}
-    except x509.ExtensionNotFound:
-        ips_no_certificado = set()
-
-    return ips_atuais.issubset(ips_no_certificado)
+    return cert.not_valid_after_utc >= datetime.now(timezone.utc)
 
 
 def _gerar_certificado(caminho_cert: str, caminho_chave: str) -> None:
@@ -137,18 +129,15 @@ def _gerar_certificado(caminho_cert: str, caminho_chave: str) -> None:
 
 def garantir_certificado(pasta: str) -> tuple[str, str]:
     """Devolve (caminho_cert, caminho_chave), gerando um novo par se
-    ainda não existir, se tiver vencido, ou se não cobrir mais os IPs
-    atuais desta máquina."""
+    ainda não existir ou se tiver vencido (ver _certificado_valido)."""
 
     caminho_cert = os.path.join(pasta, "servidor.crt")
     caminho_chave = os.path.join(pasta, "servidor.key")
 
-    ips_atuais = _ips_desta_maquina()
-
     precisa_gerar = (
         not os.path.exists(caminho_cert)
         or not os.path.exists(caminho_chave)
-        or not _certificado_cobre_ips_atuais(caminho_cert, ips_atuais)
+        or not _certificado_valido(caminho_cert)
     )
 
     if precisa_gerar:

@@ -51,6 +51,7 @@ from app.api.v1.lojas import router as lojas_router
 from app.api.v1.fornecedores import router as fornecedores_router
 from app.api.v1.compras import router as compras_router
 from app.services.aviso_vencimento_service import iniciar_verificacao_diaria
+from app.services.backup_service import iniciar_aviso_backup
 from app.services.whatsapp_lembrete_service import (
     iniciar_verificacao_diaria as iniciar_lembrete_whatsapp,
 )
@@ -72,6 +73,14 @@ def home():
 
 @app.exception_handler(Exception)
 def handle_generic_exception(request: Request, exc: Exception):
+    # Mantem 400 + mensagem (as telas mostram esse "detail" direto),
+    # mas agora deixa o traceback no backend_log.txt -- antes todo erro
+    # inesperado sumia sem rastro nenhum no servidor.
+    import traceback
+
+    print(f"\nERRO em {request.method} {request.url.path}:", file=sys.stderr)
+    traceback.print_exception(type(exc), exc, exc.__traceback__)
+
     return JSONResponse(
         status_code=400,
         content={"detail": str(exc)}
@@ -142,10 +151,33 @@ def preparar_banco():
     # verdade se a integracao estiver configurada e ligada.
     iniciar_lembrete_whatsapp()
 
+    # push pros admins quando o backup automatico falha/para (ver
+    # app/services/backup_service.py::iniciar_aviso_backup)
+    iniciar_aviso_backup()
+
 
 def _rodar_migracoes():
     config = Config(os.path.join(ASSETS_DIR, "alembic.ini"))
     config.set_main_option(
         "script_location", os.path.join(ASSETS_DIR, "migrations")
     )
-    command.upgrade(config, "head")
+
+    try:
+        command.upgrade(config, "head")
+    except Exception:
+        # sys.stderr e' o backend_log.txt no build empacotado (ver
+        # backend_entry.py) -- sem isso o backend saia com codigo 3
+        # sem deixar nenhuma pista do motivo
+        import traceback
+
+        print(
+            "\nERRO AO ATUALIZAR O BANCO DE DADOS (alembic upgrade head).\n"
+            "Se a mensagem abaixo diz \"Can't locate revision\", o banco "
+            "foi atualizado por uma versao MAIS NOVA do Vertex ERP do que "
+            "esta: instale a versao mais recente (ou restaure um backup "
+            "feito por esta versao).\n",
+            file=sys.stderr,
+        )
+        traceback.print_exc()
+        sys.stderr.flush()
+        raise

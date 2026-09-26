@@ -3,7 +3,13 @@ import base64
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import exigir_permissao, get_current_user, resolver_loja_id
+from app.auth.dependencies import (
+    exigir_permissao,
+    get_current_user,
+    loja_para_leitura,
+    resolver_loja_id,
+    usuario_tem_permissao,
+)
 from app.database.session import SessionLocal
 from app.models.cliente import Cliente
 from app.schemas.venda import (
@@ -43,6 +49,7 @@ def listar(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    loja_id = loja_para_leitura(usuario, loja_id)
     return VendaService.listar(db, skip, limit, loja_id)
 
 
@@ -82,7 +89,15 @@ def criar(
 ):
     try:
         loja_efetiva = resolver_loja_id(db, usuario, loja_id)
-        return VendaService.criar(db, dados, usuario.id, loja_efetiva)
+        return VendaService.criar(
+            db,
+            dados,
+            usuario.id,
+            loja_efetiva,
+            pode_alterar_preco=usuario_tem_permissao(
+                db, usuario, "vendas.alterar_preco"
+            ),
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

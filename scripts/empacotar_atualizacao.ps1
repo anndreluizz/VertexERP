@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-    Gera os pacotes de ATUALIZACAO do Vertex ERP (so backend + frontend,
-    sem banco/launcher) e ja envia pro PC-Servidor via Tailscale.
+    Gera os pacotes de ATUALIZACAO do Vertex ERP (launcher + backend +
+    frontend, sem banco) e ja envia pro PC-Servidor via Tailscale.
 
 .DESCRIPTION
     Builda VertexERP-Backend.spec e VertexERP-Frontend.spec, zipa cada um
@@ -12,7 +12,10 @@
     Nao mexe em pgdata\ nem no .env do Servidor -- esses ficam na raiz da
     pasta Servidor, ao lado do VertexERP.exe (launcher), separados das
     subpastas VertexERP-Backend\ e VertexERP-Frontend\ que este script
-    atualiza. So troque essas duas subpastas no destino, nada mais.
+    atualiza. O zip do Servidor tambem leva o VertexERP.exe (launcher:
+    backup automatico, retencao, espera do backend) e o
+    restaurar_backup.ps1 -- sem isso uma correcao no launcher nunca
+    chegava numa loja ja instalada. Nada de pgdata\ nem .env.
 
 .PARAMETER PeerTailscale
     Nome ou IP Tailscale do PC-Servidor (ver 'tailscale status'). Se omitido,
@@ -37,17 +40,22 @@ if (-not (Test-Path $Python)) {
 
 Write-Host "=== Vertex ERP - pacote de atualizacao ===" -ForegroundColor Cyan
 
-Write-Host "`n[1/3] Build do backend..." -ForegroundColor Yellow
+Write-Host "`n[1/4] Build do launcher..." -ForegroundColor Yellow
+Push-Location $Raiz
+& $Python -m PyInstaller "VertexERP.spec" --clean --noconfirm
+Pop-Location
+
+Write-Host "`n[2/4] Build do backend..." -ForegroundColor Yellow
 Push-Location "$Raiz\backend"
 & $Python -m PyInstaller "VertexERP-Backend.spec" --clean --noconfirm
 Pop-Location
 
-Write-Host "`n[2/3] Build do frontend..." -ForegroundColor Yellow
+Write-Host "`n[3/4] Build do frontend..." -ForegroundColor Yellow
 Push-Location "$Raiz\frontend"
 & $Python -m PyInstaller "VertexERP-Frontend.spec" --clean --noconfirm
 Pop-Location
 
-Write-Host "`n[3/3] Zipando pacotes de atualizacao..." -ForegroundColor Yellow
+Write-Host "`n[4/4] Zipando pacotes de atualizacao..." -ForegroundColor Yellow
 $DistFinal = Join-Path $Raiz "dist_final"
 New-Item -ItemType Directory -Path $DistFinal -Force | Out-Null
 
@@ -56,7 +64,12 @@ $ZipFrontend = Join-Path $DistFinal "atualizacao_frontend.zip"
 Remove-Item $ZipServidor -ErrorAction SilentlyContinue
 Remove-Item $ZipFrontend -ErrorAction SilentlyContinue
 
-Compress-Archive -Path "$Raiz\backend\dist\VertexERP-Backend" -DestinationPath $ZipServidor
+Compress-Archive -Path @(
+    "$Raiz\backend\dist\VertexERP-Backend",
+    "$Raiz\dist\VertexERP.exe",
+    "$Raiz\scripts\restaurar_backup.ps1",
+    "$Raiz\scripts\proteger_banco.ps1"
+) -DestinationPath $ZipServidor
 Compress-Archive -Path "$Raiz\frontend\dist\VertexERP-Frontend" -DestinationPath $ZipFrontend
 
 Write-Host "`nPronto!" -ForegroundColor Green
@@ -69,7 +82,7 @@ if ($PeerTailscale -ne "") {
     & tailscale file cp $ZipFrontend "${PeerTailscale}:"
     Write-Host "`nEnviado. No PC-Servidor (com o Vertex ERP FECHADO):" -ForegroundColor Green
     Write-Host "  1. tailscale file get .`t(baixa os 2 zips na pasta atual)"
-    Write-Host "  2. Extraia atualizacao_servidor.zip substituindo a pasta VertexERP-Backend\ dentro de Servidor\"
+    Write-Host "  2. Finalize o VertexERP.exe no Gerenciador de Tarefas (modo Servidor) e extraia atualizacao_servidor.zip DENTRO de Servidor substituindo tudo (VertexERP-Backend, VertexERP.exe, restaurar_backup.ps1)"
     Write-Host "  3. Extraia atualizacao_frontend.zip substituindo a pasta VertexERP-Frontend\ dentro de Servidor\"
     Write-Host "  4. Reabra o Vertex ERP"
 } else {

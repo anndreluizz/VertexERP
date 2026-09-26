@@ -111,9 +111,11 @@ def finalizar_venda(
     data_vencimento=None,
     forma_pagamento_2=None,
     valor_forma_2=None,
+    chave_idempotencia=None,
 ):
 
     dados = {
+        "chave_idempotencia": chave_idempotencia,
         "cliente_id": cliente_id,
         "observacao": observacao,
         "desconto": desconto,

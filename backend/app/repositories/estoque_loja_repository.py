@@ -15,12 +15,17 @@ class EstoqueLojaRepository:
         # fisicamente so existe na Matriz (que ja foi semeada por uma
         # migracao de dados especifica, ver 7596e4010a1f -> proxima
         # migration).
+        # FOR UPDATE: trava a linha ate o commit -- sem isso dois
+        # terminais vendendo o mesmo produto liam a mesma quantidade e o
+        # ultimo a gravar apagava a baixa do outro (ou os dois passavam
+        # na checagem da ultima unidade). So' e' chamado em escrita.
         registro = (
             db.query(EstoqueLoja)
             .filter(
                 EstoqueLoja.produto_id == produto_id,
                 EstoqueLoja.loja_id == loja_id,
             )
+            .with_for_update()
             .first()
         )
 

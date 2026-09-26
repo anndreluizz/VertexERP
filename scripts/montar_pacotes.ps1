@@ -62,6 +62,8 @@ foreach ($pasta in @($PastaServidor, $PastaTerminal)) {
 Copy-Item "$Raiz\dist\VertexERP.exe" $PastaServidor
 Copy-Item "$Raiz\icone.ico" $PastaServidor
 Copy-Item "$Raiz\scripts\excluir_do_defender.ps1" $PastaServidor
+Copy-Item "$Raiz\scripts\restaurar_backup.ps1" $PastaServidor
+Copy-Item "$Raiz\scripts\proteger_banco.ps1" $PastaServidor
 Copy-Item "$Raiz\backend\dist\VertexERP-Backend" (Join-Path $PastaServidor "VertexERP-Backend") -Recurse
 Copy-Item "$Raiz\frontend\dist\VertexERP-Frontend" (Join-Path $PastaServidor "VertexERP-Frontend") -Recurse
 

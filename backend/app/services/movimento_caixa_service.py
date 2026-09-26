@@ -40,7 +40,9 @@ class MovimentoCaixaService:
         if dados.valor <= 0:
             raise Exception("Informe um valor maior que zero.")
 
-        caixa = CaixaRepository.buscar_aberto(db, usuario_id, loja_id)
+        caixa = CaixaRepository.buscar_aberto(
+            db, usuario_id, loja_id, para_atualizar=True
+        )
 
         if not caixa:
             raise Exception("Não existe caixa aberto.")
@@ -58,7 +60,10 @@ class MovimentoCaixaService:
         else:
             caixa.saldo_final -= movimento.valor
 
-        CaixaRepository.atualizar(db, caixa)
+        # um commit so' pro saldo E o movimento: antes eram dois, e se
+        # o segundo falhasse o saldo do caixa mudava sem lancamento
+        # nenhum -- fechamento nao batia e ninguem sabia por que
+        db.add(caixa)
 
         return MovimentoCaixaRepository.criar(
             db,

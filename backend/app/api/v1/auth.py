@@ -88,7 +88,7 @@ def login(
         rate_limit.registrar_falha(dados.email)
         raise HTTPException(
             status_code=401,
-            detail="Usuário inválido."
+            detail="E-mail ou senha inválidos.",  # mesma msg: nao revela quais e-mails existem
         )
 
     if not verificar_hash(
@@ -98,7 +98,7 @@ def login(
         rate_limit.registrar_falha(dados.email)
         raise HTTPException(
             status_code=401,
-            detail="Senha inválida."
+            detail="E-mail ou senha inválidos.",
         )
 
     if not usuario.ativo:

@@ -1,13 +1,15 @@
 from datetime import datetime
 from decimal import Decimal
 from app.enums.forma_pagamento import FormaPagamento
-from pydantic import BaseModel
+from pydantic import BaseModel, conint, condecimal, constr
 
 
 class ItemVendaCreate(BaseModel):
     produto_id: int
-    quantidade: int
-    valor_unitario: Decimal
+    # quantidade <= 0 passava na checagem de estoque e SOMAVA estoque
+    # (devolucao disfarcada de venda, sem passar pelo cancelamento)
+    quantidade: conint(gt=0)
+    valor_unitario: condecimal(ge=0, decimal_places=2)
 
 
 class ItemVendaResponse(BaseModel):
@@ -38,6 +40,10 @@ class VendaCreate(BaseModel):
     valor_forma_2: Decimal | None = None
 
     data_vencimento: datetime | None = None
+
+    # opcional: mesmo valor em dois envios = mesma venda (ver
+    # VendaService.criar). O PDV gera uma por carrinho.
+    chave_idempotencia: constr(min_length=8, max_length=64) | None = None
 
     itens: list[ItemVendaCreate]
 

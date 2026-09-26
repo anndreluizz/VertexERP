@@ -42,10 +42,11 @@ PG_LOG = os.path.join(BASE_DIR, "pgdata_log.txt")
 # de outro projeto (vertexlanchonete-postgres) numa das máquinas de teste.
 PG_PORT = "5442"
 PG_SUPERUSER = "postgres"
+# Senha LEGADA: so' vale pra instalacoes criadas antes da senha
+# aleatoria por instalacao (ver garantir_env). A senha de verdade vem
+# sempre do .env -- ver _senha_banco().
 PG_SUPERSENHA = "Vertex2026"
 PG_BANCO = "vertexerp"
-
-LOCK_FILE = os.path.join(BASE_DIR, ".vertexerp.lock")
 
 CREATE_NO_WINDOW = 0x08000000
 
@@ -91,19 +92,6 @@ def ambiente_para_subprocessos():
     return env
 
 
-def processo_existe(pid):
-    """Confere se um PID ainda está vivo no Windows via tasklist —
-    os.kill(pid, 0) não é confiável nessa plataforma."""
-
-    resultado = subprocess.run(
-        ["tasklist", "/FI", f"PID eq {pid}"],
-        capture_output=True,
-        text=True,
-    )
-
-    return str(pid) in resultado.stdout
-
-
 def processo_com_imagem_rodando(caminho_exe):
     """Confere se algum processo com esse nome de imagem está rodando
     (ex.: VertexERP-Frontend.exe) -- usado pra saber se o usuario fechou
@@ -121,47 +109,38 @@ def processo_com_imagem_rodando(caminho_exe):
     return nome_imagem.lower() in resultado.stdout.lower()
 
 
-def _criar_trava():
-    """Cria o arquivo de trava de forma atômica (O_CREAT|O_EXCL): se dois
-    processos tentarem ao mesmo tempo, só um consegue — evita a corrida
-    de checar "existe?" e escrever em passos separados."""
+_ERROR_ALREADY_EXISTS = 183
 
-    descritor = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-    os.write(descritor, str(os.getpid()).encode())
-    os.close(descritor)
+# Guardado em variavel global de proposito: o mutex vive enquanto o
+# handle estiver aberto, e o Windows fecha sozinho quando o processo
+# morre (crash, Gerenciador de Tarefas, desligar o PC).
+_handle_mutex = None
 
 
 def obter_trava():
     """Garante que só uma instância do sistema fique aberta por vez —
     se o usuário clicar duas vezes no ícone, a segunda simplesmente não
-    abre outro backend/PDV por cima do primeiro."""
+    abre outro backend/PDV por cima do primeiro.
 
-    try:
-        _criar_trava()
-        return True
-    except FileExistsError:
-        pass
+    Mutex nomeado do Windows, nao mais arquivo com PID: no modo
+    Servidor o launcher so' termina quando o PC desliga, entao o
+    arquivo nunca era apagado -- e depois do reboot, se o PID antigo
+    tivesse sido reaproveitado por outro processo, o launcher achava
+    que ja estava rodando e nao subia banco nem backend (loja parada
+    sem mensagem nenhuma). O mutex nunca fica orfao."""
 
-    try:
-        with open(LOCK_FILE) as arquivo:
-            pid = int(arquivo.read().strip())
-    except (ValueError, OSError):
-        pid = None
+    global _handle_mutex
 
-    if pid is not None and processo_existe(pid):
-        return False
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateMutexW.restype = ctypes.wintypes.HANDLE
 
-    # Trava órfã (a instância anterior morreu sem limpar) — refaz.
-    try:
-        os.remove(LOCK_FILE)
-    except OSError:
-        pass
+    # nome inclui a pasta: duas instalacoes diferentes no mesmo PC (ex.:
+    # teste e producao) nao se bloqueiam
+    nome = "Local\\VertexERP_" + BASE_DIR.replace("\\", "_").replace(":", "")
 
-    try:
-        _criar_trava()
-        return True
-    except FileExistsError:
-        return False
+    _handle_mutex = kernel32.CreateMutexW(None, False, nome)
+
+    return ctypes.get_last_error() != _ERROR_ALREADY_EXISTS
 
 
 # ==========================================
@@ -192,21 +171,53 @@ def _nosso_postgres_ja_rodando():
     return resultado.returncode == 0
 
 
+def _senha_banco():
+    return _ler_env("DB_PASSWORD") or PG_SUPERSENHA
+
+
 def _banco_ja_inicializado():
     # initdb cria esse arquivo como marca de "cluster já criado".
     return os.path.exists(os.path.join(PG_DATA, "PG_VERSION"))
+
+
+class InicializacaoCancelada(Exception):
+    pass
+
+
+def _existem_backups():
+    try:
+        return any(n.endswith(".sql") for n in os.listdir(_pasta_backups()))
+    except OSError:
+        return False
 
 
 def inicializar_cluster_se_necessario():
     if _banco_ja_inicializado():
         return
 
+    # Sem pgdata MAS com backups neste PC: quase sempre e' pasta movida/
+    # copiada sem o pgdata, ou atualizacao extraida no lugar errado --
+    # criar um banco vazio calado fazia a loja voltar a vender num banco
+    # zerado sem ninguem perceber.
+    if _existem_backups() and not _perguntar_sim_nao(
+        "Banco de dados não encontrado",
+        "Não encontrei o banco de dados do Vertex ERP nesta pasta:\n\n"
+        f"{PG_DATA}\n\n"
+        "Mas existem backups deste sistema neste computador. Se você "
+        "moveu ou copiou a pasta do Vertex, feche e abra pela pasta "
+        "certa (a que tem o pgdata).\n\n"
+        "Criar um banco NOVO e VAZIO aqui?\n\n"
+        "(Para recuperar os dados num banco novo: escolha Sim, feche o "
+        "sistema depois que abrir e rode restaurar_backup.ps1.)",
+    ):
+        raise InicializacaoCancelada()
+
     os.makedirs(PG_DATA, exist_ok=True)
 
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".txt", delete=False
     ) as arquivo_senha:
-        arquivo_senha.write(PG_SUPERSENHA)
+        arquivo_senha.write(_senha_banco())
         caminho_senha = arquivo_senha.name
 
     try:
@@ -216,6 +227,10 @@ def inicializar_cluster_se_necessario():
                 "-D", PG_DATA,
                 "-U", PG_SUPERUSER,
                 "--pwfile", caminho_senha,
+                # sem -A o initdb usa "trust": qualquer processo deste PC
+                # entrava como superusuario SEM senha. So' vale pra
+                # cluster novo -- os que ja existem nao sao mexidos.
+                "-A", "scram-sha-256",
                 "-E", "UTF8",
                 "--locale=C",
             ],
@@ -260,7 +275,7 @@ def parar_postgres():
 
 def garantir_banco_vertexerp():
     env = os.environ.copy()
-    env["PGPASSWORD"] = PG_SUPERSENHA
+    env["PGPASSWORD"] = _senha_banco()
 
     resultado = subprocess.run(
         [
@@ -332,6 +347,14 @@ def garantir_env():
     # instalação aceitaria token assinado por qualquer outra).
     chave_secreta = secrets.token_hex(32)
 
+    # Senha do banco: aleatoria por instalacao quando o cluster ainda vai
+    # ser criado agora (instalacao nova -- initdb usa essa senha, ver
+    # inicializar_cluster_se_necessario). Cluster que ja existe (so' o
+    # .env sumiu) continua com a senha antiga, senao ninguem conecta.
+    senha_banco = (
+        PG_SUPERSENHA if _banco_ja_inicializado() else secrets.token_urlsafe(24)
+    )
+
     with open(caminho_env, "w", encoding="utf-8") as arquivo:
         arquivo.write(
             "APP_NAME=Vertex ERP\n"
@@ -340,7 +363,7 @@ def garantir_env():
             f"DB_PORT={PG_PORT}\n"
             f"DB_NAME={PG_BANCO}\n"
             f"DB_USER={PG_SUPERUSER}\n"
-            f"DB_PASSWORD={PG_SUPERSENHA}\n\n"
+            f"DB_PASSWORD={senha_banco}\n\n"
             f"VERTEXERP_HOST={host}\n\n"
             f"SECRET_KEY={chave_secreta}\n"
             "JWT_ALGORITHM=HS256\n"
@@ -402,6 +425,12 @@ def iniciar_backend():
     for _ in range(900):
         if backend_pronto():
             return processo
+
+        # processo ja morreu (ex.: exit code 3, migracao falhou) --
+        # esperar os 15 minutos inteiros so' atrasava o aviso de erro
+        if processo.poll() is not None:
+            break
+
         time.sleep(1)
 
     # Não travou, mas não subiu — não adianta abrir o frontend pra só
@@ -526,7 +555,7 @@ def _pasta_backup_extra():
 
 def _fazer_backup():
     """pg_dump do banco portatil que o proprio launcher gerencia -- os
-    caminhos e credenciais (PG_BIN/PG_PORT/PG_SUPERUSER/PG_SUPERSENHA/
+    caminhos e credenciais (PG_BIN/PG_PORT/PG_SUPERUSER/_senha_banco()/
     PG_BANCO) ja sao conhecidos com certeza aqui, sem precisar adivinhar
     onde o backend empacotado ficou nem ler nenhum .env."""
 
@@ -535,56 +564,107 @@ def _fazer_backup():
     agora = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     arquivo = os.path.join(destino, f"vertexerp_{agora}.sql")
 
+    # Grava num .tmp e so' renomeia pra .sql depois de validar: um dump
+    # que falha no meio (disco cheio, conexao caiu) deixava um .sql
+    # truncado com cara de backup bom -- e a retencao podia manter
+    # justamente ele como "o ultimo do dia" e apagar os completos.
+    temporario = arquivo + ".tmp"
+
     ambiente = os.environ.copy()
-    ambiente["PGPASSWORD"] = PG_SUPERSENHA
+    ambiente["PGPASSWORD"] = _senha_banco()
 
-    resultado = subprocess.run(
-        [
-            os.path.join(PG_BIN, "pg_dump.exe"),
-            "-h", "127.0.0.1",
-            "-p", PG_PORT,
-            "-U", PG_SUPERUSER,
-            "-F", "p",
-            "-f", arquivo,
-            PG_BANCO,
-        ],
-        capture_output=True,
-        text=True,
-        env=ambiente,
-        creationflags=CREATE_NO_WINDOW,
-    )
+    try:
+        resultado = subprocess.run(
+            [
+                os.path.join(PG_BIN, "pg_dump.exe"),
+                "-h", "127.0.0.1",
+                "-p", PG_PORT,
+                "-U", PG_SUPERUSER,
+                "-F", "p",
+                "-f", temporario,
+                PG_BANCO,
+            ],
+            capture_output=True,
+            text=True,
+            env=ambiente,
+            creationflags=CREATE_NO_WINDOW,
+        )
 
-    if resultado.returncode != 0:
-        raise RuntimeError(f"pg_dump falhou:\n{resultado.stderr}")
+        if resultado.returncode != 0:
+            raise RuntimeError(f"pg_dump falhou:\n{resultado.stderr}")
 
-    pasta_extra = _pasta_backup_extra()
+        _validar_dump(temporario)
+        os.replace(temporario, arquivo)
+
+    finally:
+        if os.path.exists(temporario):
+            os.remove(temporario)
+
     erro_copia_externa = None
+    pasta_extra = None
 
-    if pasta_extra:
-        try:
+    try:
+        # dentro do try: pasta do OneDrive inacessivel nao pode marcar
+        # como "falhou" um backup local que deu certo
+        pasta_extra = _pasta_backup_extra()
+
+        if pasta_extra:
             shutil.copy2(arquivo, os.path.join(pasta_extra, os.path.basename(arquivo)))
-        except OSError as erro:
-            # a copia externa e um extra -- se a pasta sincronizada
-            # estiver temporariamente inacessivel (OneDrive pausado,
-            # pendrive desconectado etc.), o backup local (que ja deu
-            # certo acima) nao pode ser perdido por causa disso. Mas
-            # a falha vai pro status, pro admin ficar sabendo.
-            erro_copia_externa = str(erro)
+    except OSError as erro:
+        # a copia externa e um extra -- se a pasta sincronizada
+        # estiver temporariamente inacessivel (OneDrive pausado,
+        # pendrive desconectado etc.), o backup local (que ja deu
+        # certo acima) nao pode ser perdido por causa disso. Mas
+        # a falha vai pro status, pro admin ficar sabendo.
+        erro_copia_externa = str(erro)
+        pasta_extra = pasta_extra or _ler_env("VERTEXERP_BACKUP_EXTRA")
 
     return pasta_extra, erro_copia_externa
+
+
+# Ultima linha que o pg_dump (formato plain) escreve -- se nao estiver
+# no fim do arquivo, o dump foi cortado no meio.
+_RODAPE_DUMP = b"PostgreSQL database dump complete"
+
+
+def _validar_dump(caminho):
+    tamanho = os.path.getsize(caminho)
+
+    if tamanho == 0:
+        raise RuntimeError("pg_dump gerou um arquivo vazio.")
+
+    with open(caminho, "rb") as arquivo:
+        arquivo.seek(max(0, tamanho - 4096))
+        final = arquivo.read()
+
+    if _RODAPE_DUMP not in final:
+        raise RuntimeError(
+            "O arquivo de backup ficou incompleto (sem o rodape do "
+            "pg_dump) e foi descartado."
+        )
+
+
+# Piso da retencao: os N backups mais recentes nunca sao apagados, seja
+# qual for a idade -- se o relogio do PC pular pra frente (bateria da
+# BIOS, NTP errado) a regra por idade sozinha apagaria tudo de uma vez.
+MINIMO_BACKUPS_MANTIDOS = 10
 
 
 def _backups_para_apagar(arquivos, agora):
     """Recebe [(caminho, modificado_em)] e devolve os caminhos que a
     politica de retencao manda apagar: tudo com mais de
     DIAS_PARA_MANTER_BACKUP dias, e, entre DIAS_COM_TODOS_OS_BACKUPS e
-    esse limite, tudo menos o backup mais recente de cada dia."""
+    esse limite, tudo menos o backup mais recente de cada dia. Os
+    MINIMO_BACKUPS_MANTIDOS mais recentes nunca entram na lista."""
 
     limite_total = agora - timedelta(days=DIAS_PARA_MANTER_BACKUP)
     limite_todos = agora - timedelta(days=DIAS_COM_TODOS_OS_BACKUPS)
 
     apagar = []
     ultimo_do_dia = {}
+
+    arquivos = sorted(arquivos, key=lambda item: item[1], reverse=True)
+    arquivos = arquivos[MINIMO_BACKUPS_MANTIDOS:]
 
     for caminho, modificado in arquivos:
         if modificado < limite_total:
@@ -607,7 +687,11 @@ def _backups_para_apagar(arquivos, agora):
 def _limpar_backups_antigos():
     pastas = [_pasta_backups()]
 
-    pasta_extra = _pasta_backup_extra()
+    try:
+        pasta_extra = _pasta_backup_extra()
+    except OSError:
+        pasta_extra = None
+
     if pasta_extra:
         pastas.append(pasta_extra)
 
@@ -620,10 +704,20 @@ def _limpar_backups_antigos():
         arquivos = []
 
         for nome in nomes:
-            if not nome.endswith(".sql"):
+            caminho = os.path.join(destino, nome)
+
+            # .tmp de um dump interrompido (processo morto no meio) --
+            # com mais de 1 dia com certeza nao esta mais sendo escrito
+            if nome.endswith(".sql.tmp"):
+                try:
+                    if time.time() - os.path.getmtime(caminho) > 24 * 3600:
+                        os.remove(caminho)
+                except OSError:
+                    pass
                 continue
 
-            caminho = os.path.join(destino, nome)
+            if not nome.endswith(".sql"):
+                continue
 
             try:
                 arquivos.append(
@@ -648,38 +742,43 @@ def _gravar_status_backup(status):
         pass
 
 
+def _rodar_backup_e_registrar():
+    status = {
+        "tentativa_em": datetime.now().isoformat(timespec="seconds"),
+        "erro": None,
+        "copia_externa": None,
+        "erro_copia_externa": None,
+    }
+
+    try:
+        pasta_extra, erro_copia_externa = _fazer_backup()
+        status["copia_externa"] = pasta_extra
+        status["erro_copia_externa"] = erro_copia_externa
+        _limpar_backups_antigos()
+    except Exception as erro:
+        # backup automatico e complemento, nunca pode derrubar o
+        # launcher nem travar a abertura do sistema -- se falhar
+        # (disco cheio, pg_dump nao encontrado etc.), registra no
+        # status (o admin ve o aviso na tela e recebe push) e tenta de
+        # novo no proximo ciclo.
+        status["erro"] = str(erro)[:500]
+
+    _gravar_status_backup(status)
+
+
 def _loop_backup_diario():
+    # o primeiro backup ja rodou em main(), antes do backend subir
     while True:
-        status = {
-            "tentativa_em": datetime.now().isoformat(timespec="seconds"),
-            "erro": None,
-            "copia_externa": None,
-            "erro_copia_externa": None,
-        }
-
-        try:
-            pasta_extra, erro_copia_externa = _fazer_backup()
-            status["copia_externa"] = pasta_extra
-            status["erro_copia_externa"] = erro_copia_externa
-            _limpar_backups_antigos()
-        except Exception as erro:
-            # backup automatico e complemento, nunca pode derrubar o
-            # launcher nem travar a abertura do sistema -- se falhar
-            # (disco cheio, pg_dump nao encontrado etc.), registra no
-            # status (o admin ve o aviso na tela) e tenta de novo no
-            # proximo ciclo.
-            status["erro"] = str(erro)[:500]
-
-        _gravar_status_backup(status)
-
         time.sleep(_INTERVALO_BACKUP_SEGUNDOS)
+        _rodar_backup_e_registrar()
 
 
 def iniciar_backup_diario():
     """Chamado uma vez, depois que o backend confirma que subiu (ver
-    main()) -- dispara o primeiro backup quase na hora, depois repete
-    a cada 4h numa thread em segundo plano (daemon: nao impede o
-    launcher de fechar normalmente quando o usuario sai do sistema)."""
+    main()) -- repete o backup a cada 4h numa thread em segundo plano
+    (daemon: nao impede o launcher de fechar normalmente quando o
+    usuario sai do sistema). O primeiro backup da sessao roda antes,
+    em main(), de forma sincrona."""
 
     threading.Thread(target=_loop_backup_diario, daemon=True).start()
 
@@ -770,9 +869,6 @@ def main():
             "de instalação não pode).",
         )
 
-        if os.path.exists(LOCK_FILE):
-            os.remove(LOCK_FILE)
-
         return
 
     try:
@@ -782,14 +878,24 @@ def main():
         iniciar_postgres()
         garantir_banco_vertexerp()
 
+        # Backup ANTES do backend subir: o backend roda `alembic upgrade
+        # head` no startup, e uma migracao com bug numa atualizacao
+        # nova pode estragar dados -- sem isso o backup mais recente
+        # podia ter ate 4h. Se falhar, segue abrindo (registrado no
+        # status, o admin e' avisado) -- um PC-Servidor ligando sozinho
+        # de madrugada nao pode ficar parado numa pergunta na tela.
+        _rodar_backup_e_registrar()
+
         backend = iniciar_backend()
 
         if backend is None:
             _mostrar_erro(
                 "Erro ao iniciar",
                 "Não foi possível iniciar o backend do Vertex ERP.\n\n"
-                "Tente abrir de novo. Se continuar falhando, verifique "
-                "o arquivo pgdata_log.txt na pasta do sistema.",
+                "Tente abrir de novo. Se continuar falhando, o motivo "
+                "está no fim do arquivo "
+                "VertexERP-Backend\\backend_log.txt (e, se for o banco "
+                "de dados, em pgdata_log.txt), na pasta do sistema.",
             )
             return
 
@@ -813,6 +919,10 @@ def main():
             # Tarefas) ou desligando o PC.
             while True:
                 time.sleep(3600)
+
+    except InicializacaoCancelada:
+        # usuario escolheu nao criar banco vazio -- so' sai
+        return
 
     except Exception as e:
         # Sem isso, qualquer erro aqui (initdb falhar, pg_ctl falhar,
@@ -841,9 +951,6 @@ def main():
     finally:
         if not modo_servidor:
             parar_postgres()
-
-        if os.path.exists(LOCK_FILE):
-            os.remove(LOCK_FILE)
 
 
 if __name__ == "__main__":

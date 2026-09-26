@@ -42,7 +42,9 @@ def test_criar_manual_chama_pg_dump_e_devolve_info_do_arquivo(tmp_path):
     def _pg_dump_fake(comando, **kwargs):
         caminho_saida = comando[comando.index("-f") + 1]
         with open(caminho_saida, "w", encoding="utf-8") as arquivo:
-            arquivo.write("-- dump fake")
+            arquivo.write(
+                "-- dump fake\n--\n-- PostgreSQL database dump complete\n--\n"
+            )
         return mock.Mock(returncode=0, stderr="")
 
     with mock.patch(
@@ -57,6 +59,31 @@ def test_criar_manual_chama_pg_dump_e_devolve_info_do_arquivo(tmp_path):
     assert resultado["nome"].endswith(".sql")
     assert resultado["tamanho_bytes"] > 0
     assert (tmp_path / resultado["nome"]).exists()
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_criar_manual_descarta_dump_truncado(tmp_path):
+    # pg_dump "terminou" mas o arquivo nao tem o rodape -- nao pode
+    # sobrar nenhum .sql com cara de backup bom na pasta
+
+    def _pg_dump_truncado(comando, **kwargs):
+        caminho_saida = comando[comando.index("-f") + 1]
+        with open(caminho_saida, "w", encoding="utf-8") as arquivo:
+            arquivo.write("-- dump cortado no meio\nCOPY public.vendas")
+        return mock.Mock(returncode=0, stderr="")
+
+    with mock.patch(
+        "app.services.backup_service._pasta_backups", return_value=str(tmp_path)
+    ), mock.patch(
+        "app.services.backup_service._caminho_pg_dump", return_value="pg_dump"
+    ), mock.patch("subprocess.run", side_effect=_pg_dump_truncado):
+        try:
+            BackupService.criar_manual()
+            assert False, "deveria ter levantado excecao"
+        except Exception as erro:
+            assert "incompleto" in str(erro)
+
+    assert not list(tmp_path.iterdir())
 
 
 def test_criar_manual_levanta_excecao_se_pg_dump_falhar(tmp_path):
@@ -192,3 +219,18 @@ def test_rota_backup_devolve_alerta_e_copia_externa_do_status(
     assert corpo["copia_externa"] is None
     assert "só neste PC" in corpo["alerta"]
     assert [i["nome"] for i in corpo["itens"]] == ["vertexerp_teste.sql"]
+
+
+def test_aviso_de_backup_no_celular_nao_repete_o_mesmo_alerta_toda_hora():
+    from app.services.backup_service import deve_avisar
+
+    agora = datetime(2026, 9, 26, 12, 0)
+    falhou = "O último backup automático falhou: disco cheio"
+
+    assert deve_avisar(falhou, None, None, agora)
+    assert not deve_avisar(falhou, falhou, agora - timedelta(hours=1), agora)
+    assert deve_avisar(falhou, falhou, agora - timedelta(hours=25), agora)
+    # alerta mudou: avisa na hora
+    assert deve_avisar("Nenhum backup", falhou, agora - timedelta(hours=1), agora)
+    # tudo certo: nada
+    assert not deve_avisar(None, falhou, agora, agora)

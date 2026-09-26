@@ -109,6 +109,8 @@ for forma, cliente_id, itens_idx_qtd in vendas_demo:
         VendaCreate(cliente_id=cliente_id, forma_pagamento=forma, itens=itens),
         usuario.id,
         loja_id,
+        # seed usa preco_venda direto, sem olhar promocao
+        pode_alterar_preco=True,
     )
     print(f"venda #{venda.id} - {forma.value}")
 

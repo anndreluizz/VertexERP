@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, exigir_permissao, resolver_loja_id
+from app.auth.dependencies import get_current_user, exigir_permissao, loja_para_leitura, resolver_loja_id
 from app.database.session import SessionLocal
 
 from app.schemas.conta_receber import (
@@ -57,6 +57,7 @@ def listar(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    loja_id = loja_para_leitura(usuario, loja_id)
     contas = ContaReceberService.listar(db, skip, limit, loja_id)
 
     return [
@@ -74,6 +75,7 @@ def listar_pendentes(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    loja_id = loja_para_leitura(usuario, loja_id)
     # Sem paginação de propósito: essa lista também alimenta o cálculo
     # do fluxo de caixa (financeiro_service), que precisa do total real.
     contas = ContaReceberService.listar_pendentes(db, loja_id)

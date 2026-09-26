@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, loja_para_leitura
 from app.database.session import SessionLocal
 from app.schemas.relatorio import (
     CategoriaSemVendaItem,
@@ -54,6 +54,7 @@ def relatorio_vendas(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    loja_id = loja_para_leitura(usuario, loja_id)
     return RelatorioService.vendas_geral(
         db,
         data_inicio,
@@ -89,6 +90,7 @@ def funil_vendas(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    loja_id = loja_para_leitura(usuario, loja_id)
     return RelatorioService.funil_vendas(db, data_inicio, data_fim, loja_id)
 
 
@@ -100,6 +102,7 @@ def margem_categoria(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    loja_id = loja_para_leitura(usuario, loja_id)
     return RelatorioService.margem_por_categoria(db, data_inicio, data_fim, loja_id)
 
 
@@ -109,6 +112,7 @@ def estoque_categoria(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    loja_id = loja_para_leitura(usuario, loja_id)
     return RelatorioService.estoque_por_categoria(db, loja_id)
 
 
@@ -120,6 +124,7 @@ def vendas_dia_semana(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    loja_id = loja_para_leitura(usuario, loja_id)
     return RelatorioService.vendas_por_dia_semana(db, data_inicio, data_fim, loja_id)
 
 
@@ -131,6 +136,7 @@ def vendas_dia_semana_hora(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    loja_id = loja_para_leitura(usuario, loja_id)
     return RelatorioService.vendas_dia_semana_hora(db, data_inicio, data_fim, loja_id)
 
 
@@ -182,6 +188,7 @@ def curva_abc(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    loja_id = loja_para_leitura(usuario, loja_id)
     return RelatorioService.curva_abc(
         db, data_inicio, data_fim, loja_id, skip, limit
     )
@@ -205,4 +212,5 @@ def sugestao_reposicao(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    loja_id = loja_para_leitura(usuario, loja_id)
     return RelatorioService.sugestao_reposicao(db, loja_id, skip, limit)

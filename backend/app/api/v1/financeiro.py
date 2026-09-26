@@ -1,7 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import (
+    exigir_permissao,
+    get_current_user,
+    usuario_tem_permissao,
+)
 from app.database.session import SessionLocal
 from app.schemas.movimento_fiado import (
     FichaFiadoResponse,
@@ -28,12 +32,33 @@ def get_db():
         db.close()
 
 
+def _exigir_permissao_se_abate_sem_dinheiro(db, usuario, dados):
+    """HAVER e PAGAMENTO sem forma_pagamento baixam a divida do cliente
+    sem entrar dinheiro nenhum no caixa -- na pratica e' um perdao de
+    divida, entao so' quem pode corrigir o fiado pode fazer. Pagamento
+    de verdade (com forma_pagamento) continua liberado pra qualquer
+    operador."""
+
+    tipo = (dados.tipo or "").upper()
+    sem_dinheiro = tipo == "HAVER" or (
+        tipo == "PAGAMENTO" and not dados.forma_pagamento
+    )
+
+    if sem_dinheiro and not usuario_tem_permissao(db, usuario, "fiado.corrigir"):
+        raise HTTPException(
+            status_code=403,
+            detail="Você não tem permissão para realizar essa ação.",
+        )
+
+
 @router.post("/movimentos", response_model=MovimentoFiadoResponse)
 def criar_movimento(
     dados: MovimentoFiadoCreate,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    _exigir_permissao_se_abate_sem_dinheiro(db, usuario, dados)
+
     try:
         movimento = MovimentoFiadoService.criar(
             db,
@@ -85,7 +110,7 @@ def atualizar_movimento(
     movimento_id: int,
     dados: MovimentoFiadoUpdate,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(exigir_permissao("fiado.corrigir")),
 ):
     try:
         movimento, caixa_ajustado = MovimentoFiadoService.atualizar(
@@ -104,7 +129,7 @@ def atualizar_movimento(
 def excluir_movimento(
     movimento_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(exigir_permissao("fiado.corrigir")),
 ):
     try:
         caixa_ajustado = MovimentoFiadoService.excluir(
@@ -172,17 +197,17 @@ def registrar_pagamento_avulso(
     pra recebimento com impacto no caixa físico, use o endpoint
     genérico de movimentos informando forma_pagamento)."""
 
-    movimento = MovimentoFiadoService.criar(
-        db,
-        MovimentoFiadoCreate(
-            cliente_id=dados.cliente_id,
-            tipo="PAGAMENTO",
-            valor=dados.valor,
-            descricao=dados.descricao,
-            data=dados.data,
-        ),
-        usuario.id,
+    movimento_dados = MovimentoFiadoCreate(
+        cliente_id=dados.cliente_id,
+        tipo="PAGAMENTO",
+        valor=dados.valor,
+        descricao=dados.descricao,
+        data=dados.data,
     )
+
+    _exigir_permissao_se_abate_sem_dinheiro(db, usuario, movimento_dados)
+
+    movimento = MovimentoFiadoService.criar(db, movimento_dados, usuario.id)
 
     return MovimentoFiadoResponse.from_orm(movimento)
 

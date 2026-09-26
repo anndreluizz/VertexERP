@@ -67,7 +67,22 @@ class NotificacaoService:
         corpo: str,
         dados: dict | None = None,
     ):
-        if not tokens or not _garantir_inicializado():
+        if not tokens:
+            return
+
+        # Em segundo plano: e' chamado de dentro de requisicoes criticas
+        # (ex.: finalizar venda, 2x por venda). Com a internet lenta, o
+        # Firebase segurava a resposta alem do timeout do PDV -> o caixa
+        # via "erro", reenviava, e a venda (ja gravada) saia em dobro.
+        threading.Thread(
+            target=NotificacaoService._enviar_agora,
+            args=(tokens, titulo, corpo, dados),
+            daemon=True,
+        ).start()
+
+    @staticmethod
+    def _enviar_agora(tokens, titulo, corpo, dados):
+        if not _garantir_inicializado():
             return
 
         from firebase_admin import messaging

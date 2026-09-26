@@ -29,7 +29,10 @@ config.set_main_option("sqlalchemy.url", db_url)
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: o padrao (True) desligava os
+    # loggers do uvicorn ja criados -- a falha de startup (exit code 3)
+    # e todo log do servidor dali pra frente sumiam do backend_log.txt
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # add your model's MetaData object here
 # for 'autogenerate' support

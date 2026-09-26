@@ -83,6 +83,20 @@ def resolver_loja_id(db: Session, usuario: User, loja_id_informado: int | None =
     esse dado (frontend ainda nao implementa isso)."""
 
     if loja_id_informado is not None:
+        # usuario preso a uma loja (ex.: operador da Filial) nao pode
+        # registrar venda/caixa/estoque em OUTRA loja so' mandando
+        # ?loja_id= diferente. Admin e usuario sem loja de origem
+        # continuam escolhendo livremente (terminal decide).
+        if (
+            not usuario.admin
+            and usuario.loja_id is not None
+            and loja_id_informado != usuario.loja_id
+        ):
+            raise Exception(
+                "Seu usuário pertence a outra loja. Confira a loja "
+                "configurada neste terminal."
+            )
+
         return loja_id_informado
 
     if usuario.loja_id is not None:
@@ -96,6 +110,20 @@ def resolver_loja_id(db: Session, usuario: User, loja_id_informado: int | None =
     )
 
     return loja.id if loja else None
+
+
+def loja_para_leitura(usuario: User, loja_id_informado: int | None = None):
+    """Filtro de loja pra LISTAGENS de dinheiro (vendas, caixa,
+    contas, relatorios): usuario preso a uma loja so' enxerga a dele,
+    mesmo sem mandar ?loja_id= (antes, sem o parametro, a Filial via o
+    faturamento de todas as lojas). Admin/usuario sem loja: o que pediu
+    (None = todas). Catalogo e clientes sao compartilhados de proposito
+    e nao usam isso."""
+
+    if not usuario.admin and usuario.loja_id is not None:
+        return usuario.loja_id
+
+    return loja_id_informado
 
 
 def _ip_do_pedido(request: Request | None) -> str | None:
@@ -126,6 +154,23 @@ def get_current_admin(
     return usuario
 
 
+def usuario_tem_permissao(db: Session, usuario: User, chave: str) -> bool:
+    """Admin sempre pode; usuario comum so' se o Perfil dele tiver a
+    chave. Usado por exigir_permissao e por regras dentro de uma rota
+    que nao bloqueiam a rota inteira (ex.: vender com preco diferente
+    do cadastro)."""
+
+    if usuario.admin:
+        return True
+
+    if usuario.perfil_id is None:
+        return False
+
+    perfil = db.query(Perfil).filter(Perfil.id == usuario.perfil_id).first()
+
+    return bool(perfil and chave in (perfil.permissoes or []))
+
+
 def exigir_permissao(chave: str):
     """Dependency factory -- Depends(exigir_permissao("produtos.excluir"))
     numa rota. Admin sempre passa (superusuario); usuario comum passa
@@ -138,25 +183,7 @@ def exigir_permissao(chave: str):
         usuario: User = Depends(get_current_user),
         db: Session = Depends(get_db),
     ):
-        if usuario.admin:
-            LogAuditoriaService.registrar(
-                db, usuario.id, chave, ip=_ip_do_pedido(request)
-            )
-            return usuario
-
-        tem_permissao = False
-
-        if usuario.perfil_id is not None:
-            perfil = (
-                db.query(Perfil)
-                .filter(Perfil.id == usuario.perfil_id)
-                .first()
-            )
-            tem_permissao = bool(
-                perfil and chave in (perfil.permissoes or [])
-            )
-
-        if not tem_permissao:
+        if not usuario_tem_permissao(db, usuario, chave):
             raise HTTPException(
                 status_code=403,
                 detail="Você não tem permissão para realizar essa ação.",

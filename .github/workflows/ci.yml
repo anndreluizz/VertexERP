@@ -37,6 +37,23 @@ jobs:
       - name: Instalar dependências
         run: pip install -r requirements.txt
 
+      # Os testes montam o schema com create_all, nao com as migracoes --
+      # sem este passo uma migracao quebrada (ou um 2o head, bug que ja
+      # aconteceu) so' aparecia no startup do backend na loja (exit 3).
+      - name: Migracoes (banco vazio -> head, um head so)
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_NAME: vertexerp_migracoes
+        run: |
+          python -c "import psycopg; psycopg.connect('host=localhost user=postgres password=postgres dbname=postgres', autocommit=True).execute('CREATE DATABASE vertexerp_migracoes')"
+          heads=$(alembic heads | wc -l)
+          if [ "$heads" -ne 1 ]; then echo "Esperava 1 head do alembic, achei $heads"; alembic heads; exit 1; fi
+          alembic upgrade head
+
       - name: Rodar testes
         working-directory: backend
         env:

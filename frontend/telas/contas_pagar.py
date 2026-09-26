@@ -26,6 +26,7 @@ from services.conta_pagar_service import (
     obter_documento_conta_pagar,
     obter_comprovante_pagamento_conta_pagar,
 )
+from services import api
 from services.worker import rodar_em_thread
 from telas.cadastro_despesa import CadastroDespesaDialog
 from telas.pagamento_despesa import PagamentoDespesaDialog
@@ -272,10 +273,12 @@ class DespesaCard(Card):
         menu.addAction(
             "Duplicar", lambda: self.duplicar_solicitado.emit(self.conta)
         )
-        menu.addSeparator()
-        menu.addAction(
-            "Excluir", lambda: self.excluir_solicitado.emit(self.conta)
-        )
+        # backend exige contas_pagar.excluir -- sem ela nem mostra
+        if api.usuario_tem_permissao("contas_pagar.excluir"):
+            menu.addSeparator()
+            menu.addAction(
+                "Excluir", lambda: self.excluir_solicitado.emit(self.conta)
+            )
 
         return menu
 

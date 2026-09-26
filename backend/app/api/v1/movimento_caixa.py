@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, resolver_loja_id
+from app.auth.dependencies import get_current_user, loja_para_leitura, resolver_loja_id
 from app.database.session import SessionLocal
 from app.schemas.movimento_caixa import (
     MovimentoCaixaCreate,
@@ -57,6 +57,7 @@ def listar_movimentos(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    loja_id = loja_para_leitura(usuario, loja_id)
     movimentos = MovimentoCaixaService.listar(db, skip, limit, loja_id)
 
     return [

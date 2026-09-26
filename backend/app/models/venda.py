@@ -114,6 +114,16 @@ class Venda(Base):
         nullable=True
     )
 
+    # gerada pelo PDV uma vez por carrinho: se a resposta da venda se
+    # perder (timeout, rede caiu) e o caixa reenviar, o backend devolve
+    # a venda que ja existe em vez de gravar outra (ver
+    # VendaService.criar). Unica; NULL em vendas antigas/sem chave.
+    chave_idempotencia: Mapped[str | None] = mapped_column(
+        String(64),
+        unique=True,
+        nullable=True
+    )
+
     cliente = relationship(
         "Cliente",
         back_populates="vendas"

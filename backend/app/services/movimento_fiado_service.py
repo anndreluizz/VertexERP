@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
+from app.models.cliente import Cliente
 from app.models.movimento_fiado import MovimentoFiado
 from app.models.movimento_caixa import MovimentoCaixa
 from app.repositories.cliente_repository import ClienteRepository
@@ -39,7 +40,7 @@ def _ajustar_caixa_por_correcao(
     if diferenca == 0:
         return True
 
-    caixa = CaixaRepository.buscar_aberto(db, usuario_id)
+    caixa = CaixaRepository.buscar_aberto(db, usuario_id, para_atualizar=True)
 
     if not caixa:
         return False
@@ -60,6 +61,19 @@ def _ajustar_caixa_por_correcao(
     )
 
     return True
+
+
+def _recusar_se_veio_de_venda(movimento: MovimentoFiado) -> None:
+    """A compra no fiado gerada por uma venda so' pode sumir/mudar
+    cancelando a venda (que tambem devolve estoque e estorna o caixa)
+    -- editar/apagar direto aqui deixaria venda e caderninho
+    discordando pra sempre."""
+
+    if movimento.venda_id is not None:
+        raise Exception(
+            f"Este lançamento veio da venda #{movimento.venda_id}. "
+            "Para corrigir, cancele a venda."
+        )
 
 
 def _verificar_limite_credito(db: Session, cliente_id: int):
@@ -92,7 +106,15 @@ class MovimentoFiadoService:
         usuario_id: int,
     ):
 
-        cliente = ClienteRepository.buscar_por_id(db, dados.cliente_id)
+        # FOR UPDATE no cliente: serializa lancamentos do mesmo cliente
+        # -- dois recebimentos simultaneos (dois terminais) passavam os
+        # dois pela checagem de saldo e deixavam a divida negativa
+        cliente = (
+            db.query(Cliente)
+            .filter(Cliente.id == dados.cliente_id)
+            .with_for_update()
+            .first()
+        )
 
         if not cliente:
             raise Exception("Cliente não encontrado.")
@@ -139,7 +161,7 @@ class MovimentoFiadoService:
         # estorno de venda fiado) nao informam forma_pagamento
         if tipo == "PAGAMENTO" and forma_pagamento:
 
-            caixa = CaixaRepository.buscar_aberto(db, usuario_id)
+            caixa = CaixaRepository.buscar_aberto(db, usuario_id, para_atualizar=True)
 
             if not caixa:
                 raise Exception(
@@ -234,6 +256,11 @@ class MovimentoFiadoService:
         if not movimento:
             raise Exception("Lançamento não encontrado.")
 
+        _recusar_se_veio_de_venda(movimento)
+
+        if dados.valor is not None and dados.valor <= 0:
+            raise Exception("Informe um valor maior que zero.")
+
         valor_antigo = movimento.valor
         caixa_ajustado = True
 
@@ -277,6 +304,8 @@ class MovimentoFiadoService:
 
         if not movimento:
             raise Exception("Lançamento não encontrado.")
+
+        _recusar_se_veio_de_venda(movimento)
 
         caixa_ajustado = True
 

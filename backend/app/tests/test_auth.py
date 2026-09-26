@@ -19,7 +19,7 @@ def test_login_com_senha_invalida(client, usuario):
     )
 
     assert response.status_code == 401
-    assert response.json()["detail"] == "Senha inválida."
+    assert response.json()["detail"] == "E-mail ou senha inválidos."
 
 
 def test_login_com_email_inexistente(client):
@@ -29,7 +29,7 @@ def test_login_com_email_inexistente(client):
     )
 
     assert response.status_code == 401
-    assert response.json()["detail"] == "Usuário inválido."
+    assert response.json()["detail"] == "E-mail ou senha inválidos."
 
 
 def test_rota_protegida_sem_token(client):
@@ -246,3 +246,12 @@ def test_login_com_2fa_falha_de_envio_nao_deixa_passar(client, db, usuario, monk
 
     assert resposta.status_code == 503
     assert "access_token" not in resposta.json()
+
+
+def test_secret_key_do_jwt_nunca_e_o_literal_publico():
+    # o literal antigo esta no GitHub -- se voltar a ser usado, qualquer
+    # um forja token de admin em qualquer instalacao
+    from app.auth import jwt
+
+    assert jwt.SECRET_KEY
+    assert jwt.SECRET_KEY != "VERTEXERP2026SECRET"

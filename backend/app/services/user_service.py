@@ -3,8 +3,20 @@ from sqlalchemy.orm import Session
 from app.auth.hash import gerar_hash, verificar_hash
 from app.models.user import User
 from app.models.perfil import Perfil
+from app.models.refresh_token import RefreshToken
 from app.schemas.user import UserCreate
 from app.repositories.user_repository import UserRepository
+
+
+def _revogar_sessoes(db: Session, usuario_id: int) -> None:
+    """Senha trocada = sessoes antigas (refresh token de 90 dias,
+    ex.: celular perdido/roubado) deixam de valer -- sem isso quem
+    tinha a sessao continuava entrando mesmo depois da troca."""
+
+    db.query(RefreshToken).filter(
+        RefreshToken.usuario_id == usuario_id,
+        RefreshToken.revogado.is_(False),
+    ).update({"revogado": True}, synchronize_session=False)
 
 
 class UserService:
@@ -113,6 +125,7 @@ class UserService:
             raise Exception("Informe a nova senha.")
 
         usuario.senha = gerar_hash(senha_nova)
+        _revogar_sessoes(db, usuario.id)
 
         return UserRepository.atualizar(db, usuario)
 
@@ -131,5 +144,6 @@ class UserService:
             raise Exception("Informe a nova senha.")
 
         usuario.senha = gerar_hash(senha_nova)
+        _revogar_sessoes(db, usuario.id)
 
         return UserRepository.atualizar(db, usuario)

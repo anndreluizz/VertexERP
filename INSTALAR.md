@@ -218,6 +218,47 @@ Da próxima vez que o backup automático rodar, uma cópia extra vai pra essa
 pasta também (mesma regra de retenção acima) -- o backup local continua
 existindo do mesmo jeito de sempre, essa é só uma cópia a mais.
 
+### Restaurar um backup
+
+Use quando o banco estragar, alguém apagar dados por engano, ou o
+PC-Servidor for trocado.
+
+1. **Feche o Vertex ERP** no PC-Servidor. No modo Servidor, abra o
+   Gerenciador de Tarefas e finalize também o `VertexERP.exe`.
+2. **PC novo** (o antigo quebrou): instale o Vertex ERP, abra **uma vez**,
+   feche, e copie o `.sql` mais recente da pasta da nuvem (OneDrive etc.)
+   pra `Documentos\VertexERP\Backups\` deste PC.
+3. Clique com o botão direito em `restaurar_backup.ps1` (na pasta do
+   Vertex ERP, do lado do `VertexERP.exe`) → **Executar com o PowerShell**.
+4. Escolha o backup na lista (o **1** é o mais recente) e digite `SIM`.
+5. Abra o Vertex ERP e confira as últimas vendas.
+
+O banco que estava em uso **não é apagado**: fica guardado como
+`vertexerp_antes_restauro_<data>`. Se a restauração falhar no meio, o
+script volta tudo como estava. Backup cortado no meio (incompleto) é
+recusado antes de começar.
+
+**Teste isso uma vez por mês** (num PC de teste, ou num dia de loja
+fechada): backup que nunca foi restaurado é backup que ninguém sabe se
+funciona.
+
+### Proteger o banco (instalações antigas)
+
+Instalações feitas antes desta versão usam uma senha de banco igual pra
+todas as lojas e deixam qualquer programa do PC-Servidor entrar no banco
+sem senha. Instalações novas já nascem protegidas. Pra proteger uma
+antiga, **uma vez só**:
+
+1. Feche o Vertex ERP (no modo Servidor, finalize também o
+   `VertexERP.exe` no Gerenciador de Tarefas).
+2. Clique com o botão direito em `proteger_banco.ps1` → **Executar com o
+   PowerShell** → digite `SIM`.
+
+O script guarda uma cópia do `.env` e da configuração do banco antes de
+mudar, testa a senha nova no fim e, se algo não funcionar, volta tudo
+como estava. A senha nova fica no `.env` (não precisa anotar). Rodar de
+novo num banco já protegido não faz nada.
+
 ## Acesso remoto (ver a loja de fora)
 
 Por padrão, o app (desktop ou celular) só consegue se conectar ao Servidor

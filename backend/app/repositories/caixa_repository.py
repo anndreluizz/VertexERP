@@ -13,7 +13,12 @@ class CaixaRepository:
         return caixa
 
     @staticmethod
-    def buscar_aberto(db: Session, usuario_id: int, loja_id: int | None = None):
+    def buscar_aberto(
+        db: Session,
+        usuario_id: int,
+        loja_id: int | None = None,
+        para_atualizar: bool = False,
+    ):
         # loja_id filtra o caixa aberto pela loja alem do usuario -- sem
         # isso, um admin com caixa aberto na Matriz nao conseguiria abrir
         # (nem operar) um caixa separado na Filial, porque o sistema
@@ -26,6 +31,13 @@ class CaixaRepository:
 
         if loja_id is not None:
             query = query.filter(Caixa.loja_id == loja_id)
+
+        # para_atualizar=True em quem vai mexer em saldo_final: trava a
+        # linha ate o commit, senao duas operacoes simultaneas no mesmo
+        # caixa (venda + sangria, dois terminais com o mesmo login)
+        # perdiam uma das somas
+        if para_atualizar:
+            query = query.with_for_update()
 
         return query.first()
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, resolver_loja_id
+from app.auth.dependencies import exigir_permissao, get_current_user, loja_para_leitura, resolver_loja_id
 from app.database.session import SessionLocal
 
 from app.schemas.conta_pagar import (
@@ -66,6 +66,7 @@ def listar(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    loja_id = loja_para_leitura(usuario, loja_id)
 
     contas = ContaPagarService.listar(db, loja_id=loja_id)
 
@@ -84,6 +85,7 @@ def listar_pendentes(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    loja_id = loja_para_leitura(usuario, loja_id)
 
     contas = ContaPagarService.listar_pendentes(db, loja_id)
 
@@ -144,7 +146,7 @@ def atualizar(
 def excluir(
     conta_id: int,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(exigir_permissao("contas_pagar.excluir")),
 ):
 
     try:

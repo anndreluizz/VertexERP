@@ -1831,6 +1831,9 @@ class FichaClienteDialog(QDialog):
         self.bt_haver.setMinimumHeight(46)
         self.bt_haver.setAutoDefault(False)
         self.bt_haver.clicked.connect(self.lancar_haver)
+        # haver abate divida sem entrar dinheiro -- backend exige
+        # fiado.corrigir (ver api/v1/financeiro.py)
+        self.bt_haver.setVisible(api.usuario_tem_permissao("fiado.corrigir"))
 
         self.bt_extrato = BotaoSecundario("Imprimir Extrato", icone_nome="printer")
         self.bt_extrato.setMinimumHeight(46)
@@ -2296,8 +2299,11 @@ class FichaClienteDialog(QDialog):
             lambda _, m=mov: self._excluir_movimento_fiado(m)
         )
 
-        layout.addWidget(bt_editar)
-        layout.addWidget(bt_excluir)
+        # o backend recusa (403) quem nao tem essa permissao -- nem
+        # mostra os botoes pra nao virar um clique que so' da erro
+        if api.usuario_tem_permissao("fiado.corrigir"):
+            layout.addWidget(bt_editar)
+            layout.addWidget(bt_excluir)
 
         return container
 

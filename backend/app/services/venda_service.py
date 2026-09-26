@@ -1,4 +1,5 @@
 import threading
+import traceback
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -243,6 +244,7 @@ class VendaService:
         dados,
         usuario_id: int,
         loja_id: int | None = None,
+        pode_alterar_preco: bool = False,
     ):
 
         # Toda venda (qualquer forma de pagamento) precisa de um caixa
@@ -250,7 +252,26 @@ class VendaService:
         # (pix/cartao/prazo) gera um MovimentoCaixa preso a esse caixa,
         # pra aparecer certinho no fechamento do turno (ver loop de
         # _parcelas_pagamento logo abaixo).
-        caixa = CaixaRepository.buscar_aberto(db, usuario_id, loja_id)
+        caixa = CaixaRepository.buscar_aberto(
+            db, usuario_id, loja_id, para_atualizar=True
+        )
+
+        # Reenvio da MESMA venda (resposta anterior se perdeu: timeout,
+        # rede caiu) -- devolve a que ja foi gravada em vez de vender de
+        # novo. Checado depois da trava do caixa: dois reenvios
+        # simultaneos do mesmo operador ficam em fila e o segundo ja
+        # enxerga a venda do primeiro.
+        chave = getattr(dados, "chave_idempotencia", None)
+
+        if chave:
+            ja_gravada = (
+                db.query(Venda)
+                .filter(Venda.chave_idempotencia == chave)
+                .first()
+            )
+
+            if ja_gravada:
+                return ja_gravada
 
         if not caixa:
             raise Exception(
@@ -299,6 +320,7 @@ class VendaService:
                 ),
                 data_vencimento=dados.data_vencimento,
                 status="FINALIZADA",
+                chave_idempotencia=chave,
             )
 
             VendaRepository.criar(
@@ -322,6 +344,19 @@ class VendaService:
                 if produto is None:
                     raise Exception(
                         f"Produto {item.produto_id} não encontrado."
+                    )
+
+                # o preco vem do terminal -- sem essa checagem qualquer
+                # operador (ou o app, com o token dele) vendia a qualquer
+                # preco. preco_efetivo ja considera promocao vigente.
+                if (
+                    not pode_alterar_preco
+                    and item.valor_unitario != produto.preco_efetivo
+                ):
+                    raise Exception(
+                        f"O preço de {produto.nome} mudou para "
+                        f"{_moeda(produto.preco_efetivo)}. Atualize o "
+                        "item no carrinho e tente de novo."
                     )
 
                 # checa/baixa o estoque da LOJA que esta vendendo, nao
@@ -464,59 +499,73 @@ class VendaService:
 
             db.commit()
 
-            db.refresh(venda)
-
-            for produto in produtos_com_estoque_baixo:
-
-                db.refresh(produto)
-
-                NotificacaoService.enviar_para_admins(
-                    db,
-                    "Produto acabando",
-                    f"{produto.nome} está com estoque baixo "
-                    f"({produto.estoque} un.).",
-                )
-
-            if venda.cliente_id and "PRAZO" in (
-                venda.forma_pagamento, venda.forma_pagamento_2
-            ):
-                _verificar_limite_credito(db, venda.cliente_id)
-
-            if venda.cliente_id:
-                threading.Thread(
-                    target=_enviar_comprovante_whatsapp_em_segundo_plano,
-                    args=(venda.id,),
-                    daemon=True,
-                ).start()
-
-            nome_cliente = None
-
-            if venda.cliente_id:
-                cliente_venda = (
-                    db.query(Cliente)
-                    .filter(Cliente.id == venda.cliente_id)
-                    .first()
-                )
-                nome_cliente = cliente_venda.nome if cliente_venda else None
-
-            no_fiado = "PRAZO" in (
-                venda.forma_pagamento, venda.forma_pagamento_2
-            )
-
-            NotificacaoService.enviar_para_admins(
-                db,
-                "Venda no fiado" if no_fiado else "Nova venda",
-                f"Venda #{venda.id} — {_moeda(venda.valor_total)}"
-                + (f" ({nome_cliente})" if nome_cliente else ""),
-            )
-
-            return venda
-
         except Exception as e:
 
             db.rollback()
 
             raise Exception(str(e))
+
+        # Daqui pra baixo a venda JA esta gravada: nenhum erro de aviso
+        # (notificacao, limite de credito, WhatsApp) pode virar HTTP 400
+        # -- o caixa veria "erro", reenviaria e a venda sairia em dobro.
+        try:
+            VendaService._avisos_pos_venda(db, venda, produtos_com_estoque_baixo)
+        except Exception:
+            traceback.print_exc()
+            db.rollback()
+
+        db.refresh(venda)
+
+        return venda
+
+    @staticmethod
+    def _avisos_pos_venda(db: Session, venda: Venda, produtos_com_estoque_baixo):
+
+        db.refresh(venda)
+
+        for produto in produtos_com_estoque_baixo:
+
+            db.refresh(produto)
+
+            NotificacaoService.enviar_para_admins(
+                db,
+                "Produto acabando",
+                f"{produto.nome} está com estoque baixo "
+                f"({produto.estoque} un.).",
+            )
+
+        if venda.cliente_id and "PRAZO" in (
+            venda.forma_pagamento, venda.forma_pagamento_2
+        ):
+            _verificar_limite_credito(db, venda.cliente_id)
+
+        if venda.cliente_id:
+            threading.Thread(
+                target=_enviar_comprovante_whatsapp_em_segundo_plano,
+                args=(venda.id,),
+                daemon=True,
+            ).start()
+
+        nome_cliente = None
+
+        if venda.cliente_id:
+            cliente_venda = (
+                db.query(Cliente)
+                .filter(Cliente.id == venda.cliente_id)
+                .first()
+            )
+            nome_cliente = cliente_venda.nome if cliente_venda else None
+
+        no_fiado = "PRAZO" in (
+            venda.forma_pagamento, venda.forma_pagamento_2
+        )
+
+        NotificacaoService.enviar_para_admins(
+            db,
+            "Venda no fiado" if no_fiado else "Nova venda",
+            f"Venda #{venda.id} — {_moeda(venda.valor_total)}"
+            + (f" ({nome_cliente})" if nome_cliente else ""),
+        )
 
     # ==================================================
     # VENDA SUSPENSA (carrinho salvo pra retomar depois -- status
@@ -643,9 +692,14 @@ class VendaService:
         motivo: str | None = None,
     ):
 
-        venda = VendaRepository.buscar_por_id(
-            db,
-            venda_id,
+        # FOR UPDATE: dois cancelamentos simultaneos da mesma venda
+        # (dois terminais, duplo clique) passavam os dois pela checagem
+        # de status e estornavam estoque/caixa/fiado em dobro
+        venda = (
+            db.query(Venda)
+            .filter(Venda.id == venda_id)
+            .with_for_update()
+            .first()
         )
 
         if venda is None:
@@ -654,12 +708,22 @@ class VendaService:
         if venda.status == StatusVenda.CANCELADA.value:
             raise Exception("Essa venda já está cancelada.")
 
+        # venda suspensa nunca baixou estoque nem entrou no caixa --
+        # "cancelar" ela aqui devolveria estoque que nunca saiu
+        if venda.status != StatusVenda.FINALIZADA.value:
+            raise Exception(
+                "Essa venda está suspensa, não finalizada. Exclua a "
+                "venda suspensa em vez de cancelar."
+            )
+
         # Toda parcela (dinheiro ou nao) gera um MovimentoCaixa de
         # ESTORNO -- e MovimentoCaixa.caixa_id e obrigatorio -- entao
         # o cancelamento sempre precisa de um caixa aberto pra
         # registrar o estorno, mesmo quando a venda foi 100% pix/
         # cartao/prazo e nenhum dinheiro fisico esta envolvido.
-        if not CaixaRepository.buscar_aberto(db, usuario_id, venda.loja_id):
+        if not CaixaRepository.buscar_aberto(
+            db, usuario_id, venda.loja_id, para_atualizar=True
+        ):
             raise Exception(
                 "O caixa já está fechado. Abra um caixa antes de "
                 "cancelar essa venda para que o estorno seja "
@@ -711,7 +775,9 @@ class VendaService:
             # aberto. So dinheiro fisico mexe no saldo da gaveta
             # (pix/cartao/prazo nunca afetaram saldo_final na criacao,
             # entao tambem nao devem afetar no estorno).
-            caixa = CaixaRepository.buscar_aberto(db, usuario_id, venda.loja_id)
+            caixa = CaixaRepository.buscar_aberto(
+                db, usuario_id, venda.loja_id, para_atualizar=True
+            )
 
             if caixa:
 

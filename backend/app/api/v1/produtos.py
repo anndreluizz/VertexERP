@@ -1,7 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import exigir_permissao, get_current_user, resolver_loja_id
+from app.auth.dependencies import (
+    exigir_permissao,
+    get_current_user,
+    resolver_loja_id,
+    usuario_tem_permissao,
+)
+from app.models.produto import Produto
 from app.database.session import SessionLocal
 from app.schemas.produto import (
     ProdutoCreate,
@@ -207,6 +213,59 @@ def marcar_foto_principal(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+_CAMPOS_DE_PRECO = (
+    "preco_venda",
+    "preco_promocional",
+)
+
+# Datas da promocao tambem mudam o preco cobrado (esticar a promocao =
+# vender barato por mais tempo), mas o formulario do desktop SEMPRE
+# manda uma data (o widget nao tem "vazio") -- entao so' contam quando
+# o produto ja tem data salva. Sem data no banco + data vinda do
+# formulario = so' o valor padrao do widget, nao uma mudanca.
+_CAMPOS_DE_DATA_PROMOCAO = (
+    "promocao_inicio",
+    "promocao_fim",
+)
+
+
+def _exigir_permissao_se_mudar_preco(db, usuario, produto_id, dados):
+    """Mudar preco de venda/promocao exige produtos.editar_preco --
+    senao a trava de preco da venda (VendaService.criar) era contornada
+    em dois cliques: baixa o preco do produto, vende, volta o preco.
+    Editar o resto do cadastro (nome, estoque minimo...) continua
+    liberado. O formulario manda todos os campos, entao so' conta o
+    que MUDOU de verdade."""
+
+    if usuario_tem_permissao(db, usuario, "produtos.editar_preco"):
+        return
+
+    atual = db.query(Produto).filter(Produto.id == produto_id).first()
+
+    if atual is None:
+        return  # a rota ja devolve 404
+
+    enviados = dados.dict(exclude_unset=True)
+
+    mudou_preco = any(
+        campo in enviados and enviados[campo] != getattr(atual, campo)
+        for campo in _CAMPOS_DE_PRECO
+    )
+
+    mudou_data = any(
+        campo in enviados
+        and getattr(atual, campo) is not None
+        and enviados[campo] != getattr(atual, campo)
+        for campo in _CAMPOS_DE_DATA_PROMOCAO
+    )
+
+    if mudou_preco or mudou_data:
+        raise HTTPException(
+            status_code=403,
+            detail="Você não tem permissão para alterar preços.",
+        )
+
+
 @router.put("/{produto_id}", response_model=ProdutoResponse)
 def atualizar(
     produto_id: int,
@@ -215,6 +274,8 @@ def atualizar(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    _exigir_permissao_se_mudar_preco(db, usuario, produto_id, dados)
+
     produto = ProdutoService.atualizar(
         db,
         produto_id,

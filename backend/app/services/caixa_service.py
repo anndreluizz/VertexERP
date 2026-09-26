@@ -17,6 +17,13 @@ class CaixaService:
     @staticmethod
     def abrir(db: Session, dados: CaixaCreate, usuario_id: int, loja_id: int | None = None):
 
+        # trava a linha do usuario ate o commit: duplo clique em "Abrir
+        # caixa" (ou dois terminais com o mesmo login) passava as duas
+        # requisicoes pela checagem abaixo e criava DOIS caixas abertos.
+        # Trava no usuario (e nao indice unico no banco) pra nao arriscar
+        # a migracao falhar num banco que ja tenha duplicados.
+        db.query(User).filter(User.id == usuario_id).with_for_update().first()
+
         caixa = CaixaRepository.buscar_aberto(db, usuario_id, loja_id)
 
         if caixa:
@@ -53,7 +60,9 @@ class CaixaService:
         loja_id: int | None = None,
     ):
 
-        caixa = CaixaRepository.buscar_aberto(db, usuario_id, loja_id)
+        caixa = CaixaRepository.buscar_aberto(
+            db, usuario_id, loja_id, para_atualizar=True
+        )
 
         if not caixa:
             raise Exception("Nenhum caixa aberto.")

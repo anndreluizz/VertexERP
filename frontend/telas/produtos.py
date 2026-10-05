@@ -34,7 +34,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QComboBox,
-    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
@@ -44,7 +43,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone, icone_pixmap
-from design.widgets import Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
+from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
 from services.worker import rodar_em_thread, em_paralelo
 from services import api
 from utils.formatacao import formatar_moeda
@@ -93,6 +92,7 @@ class _CardKPIClicavel(CardKPI):
 # rótulo exibido -> chave interna do filtro de status
 FILTROS_STATUS = [
     ("Todos", "TODOS"),
+    ("Repor", "REPOR"),
     ("Estoque baixo", "ESTOQUE_BAIXO"),
     ("Sem estoque", "SEM_ESTOQUE"),
     ("Ativos", "ATIVOS"),
@@ -101,6 +101,7 @@ FILTROS_STATUS = [
 
 _ICONES_FILTRO_STATUS = {
     "TODOS": "package",
+    "REPOR": "refresh-cw",
     "ESTOQUE_BAIXO": "alert-triangle",
     "SEM_ESTOQUE": "x",
     "ATIVOS": "check",
@@ -214,26 +215,10 @@ class Produtos(QWidget):
 
         layout.addLayout(cabecalho)
 
-        # ======================
-        # AREA ROLAVEL (todo o resto da pagina) -- so o cabecalho acima
-        # fica fixo, o resto rola quando nao couber na tela.
-        # ======================
-
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setStyleSheet(
-            "QScrollArea { border: none; background: transparent; }"
-        )
-
-        conteudo = QWidget()
-        conteudo.setStyleSheet("background:transparent;")
-
-        conteudo_layout = QVBoxLayout(conteudo)
-        conteudo_layout.setContentsMargins(0, 0, 0, 0)
-        conteudo_layout.setSpacing(16)
-
-        self.scroll.setWidget(conteudo)
-        layout.addWidget(self.scroll, stretch=1)
+        # Sem rolagem da página inteira: cabeçalho, números e filtros
+        # ficam fixos e só a tabela rola. Antes a página toda rolava e
+        # a tabela (o conteúdo principal) ficava espremida lá embaixo.
+        conteudo_layout = layout
 
         # ======================
         # CARDS DE RESUMO
@@ -242,108 +227,105 @@ class Produtos(QWidget):
         resumo_layout = QGridLayout()
         resumo_layout.setSpacing(14)
 
-        self.card_total = _CardKPIClicavel("Total de Produtos", "package", tokens.PRIMARIA)
-        self.card_itens = _CardKPIClicavel("Itens em Estoque", "package", tokens.PRIMARIA_ESCURA)
-        self.card_alerta = _CardKPIClicavel("Estoque em Alerta", "alert-triangle", tokens.ALERTA)
-        self.card_sem_estoque = _CardKPIClicavel("Sem Estoque", "x", tokens.ERRO)
-        self.card_patrimonio = _CardKPIClicavel("Valor em Estoque", "dollar-sign", tokens.SECUNDARIA)
-        self.card_categorias = CardKPI("Categorias Ativas", "filter", tokens.PRIMARIA)
-        self.card_inativos = _CardKPIClicavel("Produtos Inativos", "eye-off", tokens.TEXTO_TERCIARIO)
+        # 4 números numa linha (eram 7 em duas linhas, todos com a
+        # mesma legenda repetida). Categorias e inativos viraram
+        # legenda do primeiro card; "sem estoque" e "estoque baixo"
+        # viraram um card só de reposição.
+        self.card_total = _CardKPIClicavel("Produtos ativos", "package", tokens.PRIMARIA)
+        self.card_itens = _CardKPIClicavel("Unidades em estoque", "package", tokens.PRIMARIA)
+        self.card_patrimonio = _CardKPIClicavel(
+            "Valor em estoque", "dollar-sign", tokens.PRIMARIA, destaque=True
+        )
+        self.card_alerta = _CardKPIClicavel("Precisam de reposição", "alert-triangle", tokens.ALERTA)
 
-        resumo_layout.addWidget(self.card_total, 0, 0)
-        resumo_layout.addWidget(self.card_itens, 0, 1)
-        resumo_layout.addWidget(self.card_alerta, 0, 2)
-        resumo_layout.addWidget(self.card_sem_estoque, 0, 3)
-        resumo_layout.addWidget(self.card_patrimonio, 1, 0)
-        resumo_layout.addWidget(self.card_categorias, 1, 1)
-        resumo_layout.addWidget(self.card_inativos, 1, 2)
-
-        for coluna in range(4):
+        for coluna, card in enumerate((
+            self.card_patrimonio, self.card_total, self.card_itens, self.card_alerta,
+        )):
+            resumo_layout.addWidget(card, 0, coluna)
             resumo_layout.setColumnStretch(coluna, 1)
 
-        # cliques nos cards reaproveitam os mesmos filtros de status já
-        # existentes (pills "Ativos"/"Estoque baixo"/... logo abaixo) --
-        # nao criam um filtro novo, só atalham pra um já existente.
+        # cliques nos cards reaproveitam os filtros de status já
+        # existentes (pills logo abaixo) -- só atalham pra um deles
         self.card_total.clicado.connect(lambda: self.selecionar_status("ATIVOS"))
         self.card_itens.clicado.connect(lambda: self.selecionar_status("ATIVOS"))
-        self.card_alerta.clicado.connect(lambda: self.selecionar_status("ESTOQUE_BAIXO"))
-        self.card_sem_estoque.clicado.connect(lambda: self.selecionar_status("SEM_ESTOQUE"))
         self.card_patrimonio.clicado.connect(lambda: self.selecionar_status("ATIVOS"))
-        self.card_inativos.clicado.connect(lambda: self.selecionar_status("INATIVOS"))
-
-        for card in (
-            self.card_total, self.card_itens, self.card_alerta,
-            self.card_sem_estoque, self.card_patrimonio,
-        ):
-            card.lbl_variacao.setText(
-                f'<span style="color:{tokens.TEXTO_TERCIARIO};">'
-                f"Considerando apenas produtos ativos</span>"
-            )
-            card.lbl_variacao.show()
+        self.card_alerta.clicado.connect(lambda: self.selecionar_status("REPOR"))
 
         conteudo_layout.addLayout(resumo_layout)
 
         # ======================
-        # BUSCA + FILTRO DE STATUS
+        # BUSCA + CATEGORIA + ORDENAÇÃO
         # ======================
+
+        estilo_combo = f"""
+            QComboBox {{
+                border:1px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
+                padding:0 12px; background:{tokens.CARD}; color:{tokens.TEXTO};
+            }}
+        """
 
         barra = QHBoxLayout()
         barra.setSpacing(10)
 
-        self.pesquisa = CampoTexto("Buscar produto pelo nome ou código de barras...")
+        self.pesquisa = CampoTexto("Buscar por nome, código ou código de barras...")
+        self.pesquisa.setMinimumWidth(260)
         self.pesquisa.textChanged.connect(self.filtrar_produtos)
-
         barra.addWidget(self.pesquisa, stretch=1)
+
+        # categoria em lista (e não uma fileira de botões): loja com 20,
+        # 30 categorias estourava a largura da tela
+        self.combo_categoria = QComboBox()
+        self.combo_categoria.setMinimumHeight(40)
+        self.combo_categoria.setMinimumWidth(190)
+        self.combo_categoria.setCursor(Qt.PointingHandCursor)
+        self.combo_categoria.setStyleSheet(estilo_combo)
+        self.combo_categoria.currentIndexChanged.connect(
+            lambda _i: self.selecionar_categoria(self.combo_categoria.currentData())
+        )
+        barra.addWidget(self.combo_categoria)
+
+        self.combo_ordenacao = QComboBox()
+        for rotulo, chave in ORDENACOES:
+            self.combo_ordenacao.addItem(f"Ordenar: {rotulo}", chave)
+        self.combo_ordenacao.setMinimumHeight(40)
+        self.combo_ordenacao.setCursor(Qt.PointingHandCursor)
+        self.combo_ordenacao.setStyleSheet(estilo_combo)
+        self.combo_ordenacao.currentIndexChanged.connect(self.alterar_ordenacao)
+        barra.addWidget(self.combo_ordenacao)
+
+        conteudo_layout.addLayout(barra)
+
+        # ======================
+        # FILTROS DE STATUS (pílulas com contagem)
+        # ======================
+
+        linha_status = QHBoxLayout()
+        linha_status.setSpacing(8)
 
         for rotulo, chave in FILTROS_STATUS:
 
             bt = QPushButton(rotulo)
+            bt.setProperty("rotulo", rotulo)
             bt.setCheckable(True)
             bt.setCursor(Qt.PointingHandCursor)
-            bt.setMinimumHeight(44)
-            bt.setIcon(icone(
-                _ICONES_FILTRO_STATUS.get(chave, "package"),
-                cor=tokens.TEXTO_SECUNDARIO, tamanho=15,
-            ))
+            bt.setMinimumHeight(36)
             bt.clicked.connect(
                 lambda checked, c=chave: self.selecionar_status(c)
             )
 
             self.botoes_status[chave] = bt
-            barra.addWidget(bt)
+            linha_status.addWidget(bt)
 
-        conteudo_layout.addLayout(barra)
-
-        # ======================
-        # FILTRO DE CATEGORIAS (ABAS) + ORDENAÇÃO
-        # ======================
-
-        linha_categorias = QHBoxLayout()
-        linha_categorias.setSpacing(8)
-
-        self.categorias_layout = QHBoxLayout()
-        self.categorias_layout.setSpacing(8)
-
-        linha_categorias.addLayout(self.categorias_layout, stretch=1)
+        linha_status.addStretch()
 
         self.lbl_contagem = QLabel("")
         self.lbl_contagem.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO_TERCIARIO};
             font-size:{tokens.TAMANHO_SM}px;
         """)
-        linha_categorias.addWidget(self.lbl_contagem)
+        linha_status.addWidget(self.lbl_contagem)
 
-        linha_categorias.addSpacing(8)
-
-        self.combo_ordenacao = QComboBox()
-        for rotulo, chave in ORDENACOES:
-            self.combo_ordenacao.addItem(rotulo, chave)
-        self.combo_ordenacao.setMinimumHeight(34)
-        self.combo_ordenacao.currentIndexChanged.connect(self.alterar_ordenacao)
-
-        linha_categorias.addWidget(self.combo_ordenacao)
-
-        conteudo_layout.addLayout(linha_categorias)
+        conteudo_layout.addLayout(linha_status)
 
         # ======================
         # TABELA
@@ -365,7 +347,7 @@ class Produtos(QWidget):
             "Ações",
         ])
 
-        self.tabela.verticalHeader().setDefaultSectionSize(64)
+        self.tabela.verticalHeader().setDefaultSectionSize(56)
 
         self.tabela.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch
@@ -417,18 +399,18 @@ class Produtos(QWidget):
                 color: {tokens.TEXTO};
             }}
             QHeaderView::section {{
-                background: {tokens.FUNDO};
+                background: {tokens.CARD};
                 color: {tokens.TEXTO_SECUNDARIO};
                 font-weight: 700;
                 font-size: {tokens.TAMANHO_XS}px;
-                padding: 8px;
+                padding: 10px 8px;
                 border: none;
                 border-bottom: 1px solid {tokens.BORDA};
             }}
         """)
 
-        self.tabela.setMinimumHeight(360)
-        conteudo_layout.addWidget(self.tabela)
+        self.tabela.setMinimumHeight(200)
+        conteudo_layout.addWidget(self.tabela, stretch=1)
 
         self.painel_erro = PainelErro()
         self.painel_erro.tentar_novamente.connect(self.carregar)
@@ -442,7 +424,7 @@ class Produtos(QWidget):
             font-size:{tokens.TAMANHO_MD}px; padding:32px;
         """)
         self.lbl_vazio.hide()
-        conteudo_layout.addWidget(self.lbl_vazio)
+        conteudo_layout.addWidget(self.lbl_vazio, stretch=1)
 
         # ======================
         # RODAPÉ
@@ -468,35 +450,24 @@ class Produtos(QWidget):
         self.bt_atualizar = BotaoSecundario("Atualizar", icone_nome="refresh-cw")
         self.bt_atualizar.clicked.connect(self.carregar)
 
+        dicas = QLabel(
+            "Ctrl+N novo  ·  F5 atualizar  ·  Delete excluir  ·  "
+            "duplo clique edita"
+        )
+        dicas.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px;
+        """)
+
         rodape.addWidget(self.bt_excluir_selecionados)
+        rodape.addSpacing(12)
+        rodape.addWidget(dicas)
         rodape.addStretch()
         rodape.addWidget(self.lbl_resumo_rodape)
         rodape.addSpacing(12)
         rodape.addWidget(self.bt_atualizar)
 
         conteudo_layout.addLayout(rodape)
-
-        # ==========================================
-        # DICAS DE ATALHOS
-        # ==========================================
-
-        dicas = QLabel(
-            "Ctrl+N Novo produto    ·    "
-            "F5 Atualizar    ·    "
-            "Delete Excluir selecionado    ·    "
-            "Duplo clique Editar"
-        )
-
-        dicas.setAlignment(Qt.AlignCenter)
-
-        dicas.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_SM}px; padding:6px;
-        """)
-
-        conteudo_layout.addWidget(dicas)
-
-        conteudo_layout.addStretch()
 
         # ==========================================
         # EVENTOS
@@ -669,12 +640,31 @@ class Produtos(QWidget):
         )
 
         self.card_total.definir_valor(str(len(ativos)))
-        self.card_itens.definir_valor(str(itens_em_estoque))
-        self.card_alerta.definir_valor(str(em_alerta))
-        self.card_sem_estoque.definir_valor(str(sem_estoque))
+        self.card_total.definir_legenda(
+            f"em {categorias_ativas} categoria{'s' if categorias_ativas != 1 else ''}"
+            + (f" · {inativos} inativo{'s' if inativos != 1 else ''}" if inativos else "")
+        )
+        self.card_itens.definir_valor(f"{itens_em_estoque:,}".replace(",", "."))
+        self.card_itens.definir_legenda("somando todos os produtos ativos")
         self.card_patrimonio.definir_valor(formatar_moeda(patrimonio))
-        self.card_categorias.definir_valor(str(categorias_ativas))
-        self.card_inativos.definir_valor(str(inativos))
+        self.card_patrimonio.definir_legenda("pelo preço de custo")
+        self.card_alerta.definir_valor(str(em_alerta))
+        self.card_alerta.definir_legenda(
+            f"{sem_estoque} sem estoque · {em_alerta - sem_estoque} abaixo do mínimo"
+            if em_alerta else "estoque em dia"
+        )
+
+        estoque_baixo = em_alerta - sem_estoque
+        contagem = {
+            "TODOS": len(self.produtos),
+            "REPOR": em_alerta,
+            "ESTOQUE_BAIXO": estoque_baixo,
+            "SEM_ESTOQUE": sem_estoque,
+            "ATIVOS": len(ativos),
+            "INATIVOS": inativos,
+        }
+        for chave, botao in self.botoes_status.items():
+            botao.setText(f"{botao.property('rotulo')}  {contagem.get(chave, 0)}")
 
         # sem selo de variação (ex.: "↑ 12%") aqui de propósito -- a
         # API não guarda um retrato de "produtos/valor em estoque de
@@ -703,22 +693,22 @@ class Produtos(QWidget):
             botao.setChecked(selecionado)
             botao.setIcon(icone(
                 _ICONES_FILTRO_STATUS.get(k, "package"),
-                cor="white" if selecionado else tokens.TEXTO_SECUNDARIO,
-                tamanho=15,
+                cor=tokens.PRIMARIA if selecionado else tokens.TEXTO_SECUNDARIO,
+                tamanho=14,
             ))
 
             botao.setStyleSheet(f"""
                 QPushButton {{
-                    background: {tokens.PRIMARIA if selecionado else tokens.CARD};
-                    color: {"white" if selecionado else tokens.TEXTO};
-                    border-radius: {tokens.RADIUS_SM}px;
-                    border: 1px solid {tokens.PRIMARIA if selecionado else tokens.BORDA};
-                    font-weight: 700;
+                    background: {tokens.PRIMARIA_CLARA if selecionado else tokens.CARD};
+                    color: {tokens.PRIMARIA if selecionado else tokens.TEXTO_SECUNDARIO};
+                    border-radius: 18px;
+                    border: 1px solid {tokens.PRIMARIA_CLARA if selecionado else tokens.BORDA};
+                    font-weight: {700 if selecionado else 600};
                     font-size: {tokens.TAMANHO_SM}px;
                     padding: 0 14px;
                 }}
                 QPushButton:hover {{
-                    background: {tokens.PRIMARIA_HOVER if selecionado else tokens.FUNDO};
+                    background: {tokens.PRIMARIA_CLARA if selecionado else tokens.FUNDO};
                 }}
             """)
 
@@ -755,65 +745,26 @@ class Produtos(QWidget):
 
     def atualizar_filtro_categorias(self):
 
-        while self.categorias_layout.count():
-            item = self.categorias_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
+        atual = self.filtro_categoria
 
-        self.botoes_categoria = {}
+        self.combo_categoria.blockSignals(True)
+        self.combo_categoria.clear()
+        self.combo_categoria.addItem("Todas as categorias", None)
+        for c in self.categorias:
+            if c.get("ativo", True):
+                self.combo_categoria.addItem(c["nome"], c["nome"])
 
-        nomes = ["TODOS"] + [
-            c["nome"]
-            for c in self.categorias
-            if c.get("ativo", True)
-        ]
-
-        for nome in nomes:
-
-            bt = QPushButton(nome)
-            bt.setCheckable(True)
-            bt.setCursor(Qt.PointingHandCursor)
-            bt.setMinimumHeight(32)
-            bt.clicked.connect(
-                lambda checked, n=nome: self.selecionar_categoria(n)
-            )
-
-            self.botoes_categoria[nome] = bt
-            self.categorias_layout.addWidget(bt)
-
-        self.categorias_layout.addStretch()
-
-        self._marcar_categoria_selecionada("TODOS")
+        # mantém a categoria escolhida entre recargas (F5, voltar pra
+        # tela); se ela sumiu, volta pra "Todas"
+        indice = self.combo_categoria.findData(atual)
+        self.combo_categoria.setCurrentIndex(max(indice, 0))
+        self.filtro_categoria = self.combo_categoria.currentData()
+        self.combo_categoria.blockSignals(False)
 
     def selecionar_categoria(self, nome):
 
-        self.filtro_categoria = None if nome == "TODOS" else nome
-        self._marcar_categoria_selecionada(nome)
+        self.filtro_categoria = nome or None
         self.filtrar_produtos()
-
-    def _marcar_categoria_selecionada(self, nome):
-
-        for chave, botao in self.botoes_categoria.items():
-
-            selecionado = chave == nome
-
-            botao.setChecked(selecionado)
-
-            botao.setStyleSheet(f"""
-                QPushButton {{
-                    background: {tokens.SIDEBAR if selecionado else tokens.CARD};
-                    color: {tokens.TEXTO_CLARO if selecionado else tokens.TEXTO};
-                    border: 1px solid {tokens.SIDEBAR if selecionado else tokens.BORDA};
-                    border-radius: {tokens.RADIUS_PILL}px;
-                    padding: 0 14px;
-                    font-weight: 700;
-                    font-size: {tokens.TAMANHO_SM}px;
-                }}
-                QPushButton:hover {{
-                    background: {tokens.SIDEBAR_HOVER if selecionado else tokens.FUNDO};
-                }}
-            """)
 
     # ==========================================
     # FILTRAR PRODUTOS
@@ -833,7 +784,13 @@ class Produtos(QWidget):
                 if (p.get("categoria") or "") == self.filtro_categoria
             ]
 
-        if self.filtro_status == "ESTOQUE_BAIXO":
+        if self.filtro_status == "REPOR":
+            produtos = [
+                p for p in produtos
+                if p.get("ativo", True)
+                and p["estoque"] <= p.get("estoque_minimo", 0)
+            ]
+        elif self.filtro_status == "ESTOQUE_BAIXO":
             produtos = [
                 p for p in produtos
                 if p.get("ativo", True)
@@ -959,13 +916,11 @@ class Produtos(QWidget):
                 )
             )
 
-            self.tabela.setItem(
-                linha,
-                3,
-                QTableWidgetItem(
-                    produto["nome"]
-                )
-            )
+            item_nome = QTableWidgetItem(produto["nome"])
+            fonte_nome = item_nome.font()
+            fonte_nome.setBold(True)
+            item_nome.setFont(fonte_nome)
+            self.tabela.setItem(linha, 3, item_nome)
 
             self.tabela.setCellWidget(
                 linha, 4, self._badge_centralizado(
@@ -988,13 +943,12 @@ class Produtos(QWidget):
                 self._badge_centralizado(str(estoque), variante_estoque)
             )
 
-            self.tabela.setItem(
-                linha,
-                6,
-                QTableWidgetItem(
-                    formatar_moeda(produto["preco_venda"])
-                )
-            )
+            item_preco = QTableWidgetItem(formatar_moeda(produto["preco_venda"]))
+            item_preco.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            fonte_preco = item_preco.font()
+            fonte_preco.setBold(True)
+            item_preco.setFont(fonte_preco)
+            self.tabela.setItem(linha, 6, item_preco)
 
             ativo = produto.get("ativo", True)
             self.tabela.setCellWidget(
@@ -1175,20 +1129,34 @@ class Produtos(QWidget):
 
         lbl = QLabel()
         lbl.setAlignment(Qt.AlignCenter)
-        lbl.setFixedSize(48, 48)
+        lbl.setFixedSize(44, 44)
 
         pixmap = self._obter_pixmap_produto(produto)
 
         if pixmap:
-            lbl.setPixmap(self._pixmap_arredondado(pixmap, 44, raio=10))
+            lbl.setPixmap(self._pixmap_arredondado(pixmap, 42, raio=10))
         else:
+            # sem foto: inicial do nome com a cor do Avatar (mesma
+            # paleta da lista de clientes), em vez do mesmo ícone de
+            # caixinha repetido em todas as linhas
+            nome = produto.get("nome") or "?"
+            indice = sum(ord(c) for c in nome) % len(Avatar.CORES_FUNDO)
+            lbl.setText(nome.strip()[:1].upper())
             lbl.setStyleSheet(f"""
-                background:{tokens.PRIMARIA_CLARA};
+                background:{Avatar.CORES_FUNDO[indice]};
+                color:{Avatar.CORES_TEXTO[indice]};
                 border-radius:{tokens.RADIUS_SM}px;
+                font-size:{tokens.TAMANHO_LG}px; font-weight:800;
             """)
-            lbl.setPixmap(icone_pixmap("package", cor=tokens.PRIMARIA, tamanho=18))
 
-        return lbl
+        # centralizado na célula (sozinho, o QLabel grudava no topo)
+        celula = QWidget()
+        celula.setStyleSheet("background:transparent;")
+        lay = QHBoxLayout(celula)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setAlignment(Qt.AlignCenter)
+        lay.addWidget(lbl)
+        return celula
 
     def _pixmap_arredondado(self, pixmap, tamanho, raio=10):
 

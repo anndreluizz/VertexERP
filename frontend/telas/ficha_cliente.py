@@ -36,7 +36,6 @@ from services.movimento_fiado_service import (
     listar_movimentos_cliente,
     registrar_pagamento,
     lancar_fiado_manual,
-    lancar_haver,
     editar_movimento,
     excluir_movimento,
 )
@@ -100,7 +99,6 @@ from design.widgets import (
     Card,
     CardKPI,
     DialogoPadrao,
-    campo_rotulado,
     SecaoCard,
 )
 
@@ -1187,98 +1185,6 @@ class RegistrarPagamentoDialog(DialogoPadrao):
         """
 
 
-class LancarHaverDialog(DialogoPadrao):
-    """Crédito manual em favor do cliente (desconto, devolução,
-    cortesia) -- reduz o saldo devedor igual um pagamento, mas nunca é
-    dinheiro recebido de verdade, então nunca mexe no caixa."""
-
-    def __init__(self, cliente, saldo_devedor, parent=None):
-
-        super().__init__(
-            "Lançar Haver",
-            "Desconto, devolução ou cortesia que abate do fiado.",
-            "gift", tokens.ALERTA, tokens.ALERTA_CLARO,
-            largura=DialogoPadrao.PEQUENO, parent=parent,
-        )
-
-        self.cliente = cliente
-
-        self.valor = QLineEdit()
-        self.valor.setPlaceholderText("0,00")
-        self.valor.setAlignment(Qt.AlignCenter)
-        self.valor.setStyleSheet(f"""
-            QLineEdit {{
-                font-size:32px; font-weight:800; color:{tokens.ALERTA};
-                border:none; border-bottom:2px solid {tokens.BORDA};
-                padding:6px 0; background:transparent;
-            }}
-            QLineEdit:focus {{ border-bottom-color:{tokens.ALERTA}; }}
-        """)
-
-        self.descricao = CampoTexto("Ex: desconto combinado, devolução de item")
-
-        self.corpo.addWidget(campo_rotulado(
-            "Valor do crédito (R$)", self.valor,
-            f"{cliente['nome']} deve hoje {formatar_moeda(saldo_devedor)}. "
-            "O haver não entra no caixa.",
-        ))
-        self.corpo.addWidget(campo_rotulado("Motivo", self.descricao))
-        self.corpo.addStretch()
-
-        self.bt_confirmar = BotaoPrimario("Lançar Haver", icone_nome="check")
-        self.bt_confirmar.setAutoDefault(False)
-        self.bt_confirmar.clicked.connect(self.confirmar)
-        self.definir_botoes(self.bt_confirmar)
-
-        self.ajustar_altura()
-        self.valor.setFocus()
-
-    def confirmar(self):
-
-        try:
-            valor = float(self.valor.text().replace(",", "."))
-        except ValueError:
-            QMessageBox.warning(self, "Atenção", "Informe um valor válido.")
-            return
-
-        if valor <= 0:
-            QMessageBox.warning(
-                self, "Atenção", "Informe um valor maior que zero."
-            )
-            return
-
-        self.bt_confirmar.setEnabled(False)
-
-        rodar_em_thread(
-            self,
-            lancar_haver,
-            self.cliente["id"],
-            valor,
-            self.descricao.text().strip() or "Haver",
-            ao_sucesso=self._ao_confirmar_sucesso,
-            ao_erro=self._ao_confirmar_erro,
-            ao_finalizar=self._ao_confirmar_finalizado,
-        )
-
-    def _ao_confirmar_finalizado(self):
-        self.bt_confirmar.setEnabled(True)
-
-    def _ao_confirmar_erro(self, erro):
-        QMessageBox.critical(self, "Erro", str(erro))
-
-    def _ao_confirmar_sucesso(self, response):
-
-        if response.status_code in (200, 201):
-            self.accept()
-        else:
-            try:
-                erro = response.json()["detail"]
-            except Exception:
-                erro = response.text
-
-            QMessageBox.critical(self, "Erro", str(erro))
-
-
 class FichaClienteDialog(QDialog):
 
     _TIMELINE_PAGINA = 30  # scroll incremental: 30 lançamentos por vez
@@ -1514,7 +1420,7 @@ class FichaClienteDialog(QDialog):
 
     def _construir_botoes_acao(self):
         """Uma linha só: as ações do fiado à esquerda (lançar, receber,
-        haver) e as de documento à direita (extrato, CSV)."""
+        pagamento) e as de documento à direita (extrato, CSV)."""
 
         layout = QHBoxLayout()
         layout.setSpacing(10)
@@ -1527,13 +1433,6 @@ class FichaClienteDialog(QDialog):
         self.bt_pagar.setAutoDefault(False)
         self.bt_pagar.clicked.connect(self.registrar_pagamento)
 
-        self.bt_haver = BotaoSecundario("Lançar Haver", icone_nome="gift")
-        self.bt_haver.setAutoDefault(False)
-        self.bt_haver.clicked.connect(self.lancar_haver)
-        # haver abate divida sem entrar dinheiro -- backend exige
-        # fiado.corrigir (ver api/v1/financeiro.py)
-        self.bt_haver.setVisible(api.usuario_tem_permissao("fiado.corrigir"))
-
         self.bt_extrato = BotaoSecundario("Imprimir Extrato", icone_nome="printer")
         self.bt_extrato.setAutoDefault(False)
         self.bt_extrato.clicked.connect(self.imprimir_extrato)
@@ -1544,7 +1443,6 @@ class FichaClienteDialog(QDialog):
 
         layout.addWidget(self.bt_lancar_fiado)
         layout.addWidget(self.bt_pagar)
-        layout.addWidget(self.bt_haver)
         layout.addStretch()
         layout.addWidget(self.bt_extrato)
         layout.addWidget(self.bt_csv)
@@ -2121,7 +2019,6 @@ class FichaClienteDialog(QDialog):
             ("TODOS", "Todos"),
             ("COMPRA", "Compras"),
             ("PAGAMENTO", "Pagamentos"),
-            ("HAVER", "Haver"),
             ("AJUSTES", "Ajustes"),
             ("30DIAS", "30 dias"),
         ]
@@ -2141,7 +2038,7 @@ class FichaClienteDialog(QDialog):
 
     _ICONES_FILTRO_TIMELINE = {
         "TODOS": "filter", "COMPRA": "shopping-cart", "PAGAMENTO": "dollar-sign",
-        "HAVER": "gift", "AJUSTES": "refresh-cw", "30DIAS": "calendar",
+        "AJUSTES": "refresh-cw", "30DIAS": "calendar",
     }
 
     def _marcar_filtro_timeline(self, chave):
@@ -2195,8 +2092,6 @@ class FichaClienteDialog(QDialog):
             return tipo == "COMPRA" and not estorno
         if filtro == "PAGAMENTO":
             return tipo == "PAGAMENTO" and not estorno
-        if filtro == "HAVER":
-            return tipo == "HAVER" and not estorno
         if filtro == "AJUSTES":
             return estorno
         if filtro == "30DIAS":
@@ -2949,7 +2844,6 @@ class FichaClienteDialog(QDialog):
 
     def _definir_controles_carregando(self, carregando: bool):
         self.bt_lancar_fiado.setEnabled(not carregando)
-        self.bt_haver.setEnabled(not carregando)
         # bt_pagar fica de fora -- carregar() decide se ele deveria
         # estar habilitado (saldo > 0) assim que o saldo chegar
 
@@ -2961,7 +2855,6 @@ class FichaClienteDialog(QDialog):
     def _ao_carregar_finalizado(self):
         self._carregando = False
         self.bt_lancar_fiado.setEnabled(True)
-        self.bt_haver.setEnabled(True)
 
     def _ao_carregar_sucesso(self, resultado):
 
@@ -3152,38 +3045,6 @@ class FichaClienteDialog(QDialog):
     def _ao_saldo_para_fiado_sucesso(self, saldo_atual):
 
         dialogo = LancarFiadoDialog(self.cliente, saldo_atual, parent=self)
-
-        if dialogo.exec() != QDialog.Accepted:
-            return
-
-        self.carregar()
-
-    def lancar_haver(self):
-
-        self.bt_haver.setEnabled(False)
-        rodar_em_thread(
-            self,
-            saldo_cliente,
-            self.cliente["id"],
-            ao_sucesso=self._ao_saldo_para_haver_sucesso,
-            ao_erro=self._ao_movimento_mutacao_erro,
-            ao_finalizar=self._ao_saldo_haver_finalizado,
-        )
-
-    def _ao_saldo_haver_finalizado(self):
-        self.bt_haver.setEnabled(True)
-
-    def _ao_saldo_para_haver_sucesso(self, saldo):
-
-        if saldo <= 0:
-            QMessageBox.information(
-                self,
-                "Haver",
-                "Este cliente não tem saldo devedor pra aplicar um crédito.",
-            )
-            return
-
-        dialogo = LancarHaverDialog(self.cliente, saldo, parent=self)
 
         if dialogo.exec() != QDialog.Accepted:
             return

@@ -1,8 +1,8 @@
 from datetime import datetime
 
 from PySide6.QtWidgets import QMessageBox
-from PySide6.QtCore import Qt, QTimer, QBuffer, QIODevice, QSize, QDate
-from PySide6.QtGui import QColor, QPixmap
+from PySide6.QtCore import Qt, QTimer, QBuffer, QIODevice, QDate
+from PySide6.QtGui import QColor, QKeySequence, QPixmap, QShortcut
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QCheckBox,
     QDateEdit,
+    QGridLayout,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
@@ -58,10 +59,15 @@ from widgets.tables.standard_table import StandardTable
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.responsive import tamanho_fixo_seguro
-from design.widgets import Card
+from design.widgets import (
+    Badge, BotaoSecundario, BotaoSucesso, CabecalhoDialogo, Card,
+)
+from utils.formatacao import formatar_moeda
 from utils.maiusculas import forcar_maiusculas
 
-_TAMANHO_PREVIA = 110
+_FOTO_LARGURA = 292
+_FOTO_ALTURA = 220
+_LARGURA_COLUNA_DIREITA = 340
 
 def _criar_categoria_com_nome(nome):
     """Roda na worker thread -- o nome viaja junto com a resposta (nao
@@ -88,6 +94,12 @@ def _buscar_miniatura_com_info(produto_id, foto):
 
 
 class CadastroProdutoWindow(QDialog):
+    """Cadastro de produto em duas colunas: à esquerda os dados
+    (Identificação, Preço e estoque, Promoção e -- editando -- Kit e
+    Variações), à direita a foto e um resumo ao vivo de preço, custo,
+    lucro, margem e estoque. Tudo visível de uma vez (sem o antigo
+    "Mais opções" recolhido); Enter continua andando pelos campos
+    essenciais e cadastra no último."""
 
     def __init__(self, produto=None, produto_pai=None):
         super().__init__()
@@ -104,7 +116,19 @@ class CadastroProdutoWindow(QDialog):
         self.imagem_bytes = None
         self.modo_venda = "UN"
 
+        if produto:
+            titulo_texto = "Editar Produto"
+            subtitulo_texto = "Atualize os dados do produto no sistema."
+        elif produto_pai:
+            titulo_texto = f"Nova Variação de \"{produto_pai['nome']}\""
+            subtitulo_texto = "Mesmo produto em outra cor/tamanho, com código e estoque próprios."
+        else:
+            titulo_texto = "Novo Produto"
+            subtitulo_texto = "Bipe o código de barras ou digite o nome. Enter passa pro próximo campo."
+
+        self.setWindowTitle(titulo_texto)
         self.setStyleSheet(f"background:{tokens.FUNDO};")
+        tamanho_fixo_seguro(self, 1200, 880)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -114,145 +138,54 @@ class CadastroProdutoWindow(QDialog):
         # CABEÇALHO
         # ======================
 
-        cabecalho = QHBoxLayout()
-        cabecalho.setContentsMargins(30, 24, 30, 20)
-        cabecalho.setSpacing(14)
-
-        icone_cabecalho = QLabel()
-        icone_cabecalho.setFixedSize(52, 52)
-        icone_cabecalho.setAlignment(Qt.AlignCenter)
-        icone_cabecalho.setStyleSheet(f"""
-            background:{tokens.PRIMARIA_CLARA};
-            border-radius:{tokens.RADIUS_MD}px;
-        """)
-        icone_cabecalho.setPixmap(icone_pixmap("package", cor=tokens.PRIMARIA, tamanho=24))
-
-        col_titulo = QVBoxLayout()
-        col_titulo.setSpacing(2)
-
-        if produto:
-            titulo_texto = "Editar Produto"
-        elif produto_pai:
-            titulo_texto = f"Nova Variação de \"{produto_pai['nome']}\""
-        else:
-            titulo_texto = "Novo Produto"
-
-        titulo = QLabel(titulo_texto)
-        titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XL}px;
-            font-weight:800; color:{tokens.TEXTO};
-        """)
-
-        subtitulo_texto = (
-            "Atualize os dados do produto no sistema."
-            if produto else
-            "Preencha o essencial -- o resto fica em Mais opções."
+        cabecalho = CabecalhoDialogo(
+            "package", tokens.PRIMARIA, tokens.PRIMARIA_CLARA,
+            titulo_texto, subtitulo_texto,
+            fechavel=True, ao_fechar=self.reject,
         )
-
-        subtitulo = QLabel(subtitulo_texto)
-        subtitulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_SM}px;
-            color:{tokens.TEXTO_TERCIARIO};
-        """)
-
-        col_titulo.addWidget(titulo)
-        col_titulo.addWidget(subtitulo)
+        cabecalho.setStyleSheet(f"background:{tokens.CARD};")
 
         self.favorito = QPushButton("Favorito")
         self.favorito.setCheckable(True)
         self.favorito.setCursor(Qt.PointingHandCursor)
-        self.favorito.setMinimumHeight(38)
-        self.favorito.setToolTip(
-            "Produtos favoritos ficam em destaque na busca do PDV"
-        )
+        self.favorito.setMinimumHeight(36)
+        self.favorito.setToolTip("Produtos favoritos ficam em destaque na busca do PDV")
         self.favorito.toggled.connect(self._atualizar_estilo_favorito)
+        # entra antes do X: a linha do CabecalhoDialogo é
+        # [ícone, títulos, stretch, X]
+        cabecalho.layout().itemAt(0).layout().insertWidget(3, self.favorito)
 
-        bt_fechar = QPushButton()
-        bt_fechar.setFixedSize(34, 34)
-        bt_fechar.setCursor(Qt.PointingHandCursor)
-        bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
-        bt_fechar.setToolTip("Fechar")
-        bt_fechar.setAccessibleName("Fechar")
-        bt_fechar.setStyleSheet(f"""
-            QPushButton {{ background:transparent; border:none; border-radius:8px; }}
-            QPushButton:hover {{ background:{tokens.BORDA}; }}
-        """)
-        bt_fechar.clicked.connect(self.reject)
-
-        cabecalho.addWidget(icone_cabecalho)
-        cabecalho.addLayout(col_titulo)
-        cabecalho.addStretch()
-        cabecalho.addWidget(self.favorito)
-        cabecalho.addWidget(bt_fechar)
-
-        layout.addLayout(cabecalho)
-
-        linha_separadora = QFrame()
-        linha_separadora.setFixedHeight(1)
-        linha_separadora.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
-        layout.addWidget(linha_separadora)
+        layout.addWidget(cabecalho)
 
         # ======================
-        # CORPO
+        # CORPO (rola só na vertical)
         # ======================
 
-        # cadastro rapido: so' o essencial (codigo, nome, precos,
-        # estoque, categoria, unidade) fica sempre visivel; o resto
-        # (marca, cor, foto, promocao, kit, variacoes...) mora em
-        # "Mais opcoes", recolhido por padrao em produto novo. Com
-        # tudo aberto nao cabe em telas de 900px -> corpo rola, e
-        # cabecalho/rodape ficam fixos
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
 
         corpo_widget = QWidget()
         corpo_widget.setStyleSheet("background:transparent;")
 
-        corpo = QVBoxLayout(corpo_widget)
-        corpo.setContentsMargins(30, 20, 30, 16)
-        corpo.setSpacing(16)
+        corpo = QHBoxLayout(corpo_widget)
+        corpo.setContentsMargins(28, 20, 28, 20)
+        corpo.setSpacing(20)
 
-        # ---- essencial ----
+        esquerda = QVBoxLayout()
+        esquerda.setSpacing(16)
+        direita = QVBoxLayout()
+        direita.setSpacing(16)
 
-        cartao_rapido, corpo_rapido = self._construir_cartao_secao(
-            "Dados do produto",
-            "Bipe o código de barras ou digite o nome. Enter passa pro "
-            "próximo campo.",
+        # ---------- Identificação ----------
+
+        cartao_ident, corpo_ident = self._construir_cartao_secao(
+            "Identificação", "Como o produto aparece na busca, no PDV e no cupom.",
             "edit-2", tokens.PRIMARIA,
         )
 
-        # preenchidas mais abaixo, conforme os campos sao criados --
-        # ja entram no cartao aqui pra ficar na ordem certa
-        linha_valores_rapido = QHBoxLayout()
-        linha_valores_rapido.setSpacing(12)
-
-        self.lbl_margem = QLabel()
-        self.lbl_margem.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px;
-        """)
-
-        linha_categoria_modo = QHBoxLayout()
-        linha_categoria_modo.setSpacing(12)
-
-        # ---- mais opções ----
-
-        cartao_detalhes, corpo_detalhes = self._construir_cartao_secao(
-            "Detalhes",
-            "Marca, coleção, cor, tamanho e descrição.",
-            "edit-2", tokens.PRIMARIA,
-        )
-
-        corpo_rapido.addWidget(self._rotulo_campo("Código de barras (opcional)"))
-
-        linha_codigo = QHBoxLayout()
-        linha_codigo.setSpacing(8)
-
-        self.codigo_barras = QLineEdit()
-        self.codigo_barras.setPlaceholderText("Bipar ou digitar o código de barras...")
-        self.codigo_barras.setMinimumHeight(42)
-        self.codigo_barras.setStyleSheet(self._estilo_input())
+        self.codigo_barras = self._input("Bipar ou digitar o código de barras...")
         # Enter (o leitor de codigo manda um no fim) busca em silencio
         # -- bolsa/roupa quase nunca esta' na base publica e um aviso
         # "nao encontrado" a cada bipada travaria o cadastro rapido.
@@ -260,9 +193,7 @@ class CadastroProdutoWindow(QDialog):
         self.codigo_barras.returnPressed.connect(
             lambda: self.buscar_automatico(silencioso=True)
         )
-        self.codigo_barras.textChanged.connect(
-            self.agendar_busca_automatica
-        )
+        self.codigo_barras.textChanged.connect(self.agendar_busca_automatica)
 
         self.timer_busca_automatica = QTimer(self)
         self.timer_busca_automatica.setSingleShot(True)
@@ -272,213 +203,56 @@ class CadastroProdutoWindow(QDialog):
 
         self.bt_buscar = QPushButton()
         self.bt_buscar.setCursor(Qt.PointingHandCursor)
-        self.bt_buscar.setFixedSize(42, 42)
+        self.bt_buscar.setFixedSize(44, 44)
         self.bt_buscar.setToolTip("Consultar produto pelo código (Open Food Facts)")
         self.bt_buscar.setAccessibleName("Consultar produto pelo código")
         self.bt_buscar.setIcon(icone("search", cor="white", tamanho=18))
         self.bt_buscar.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.SECUNDARIA};
-                border-radius:{tokens.RADIUS_SM}px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.SECUNDARIA_HOVER};
-            }}
+            QPushButton {{ background:{tokens.PRIMARIA}; border-radius:{tokens.RADIUS_SM}px; }}
+            QPushButton:hover {{ background:{tokens.PRIMARIA_HOVER}; }}
         """)
-        self.bt_buscar.clicked.connect(
-            lambda: self.buscar_automatico(silencioso=False)
-        )
+        self.bt_buscar.clicked.connect(lambda: self.buscar_automatico(silencioso=False))
 
-        linha_codigo.addWidget(self.codigo_barras)
-        linha_codigo.addWidget(self.bt_buscar)
-
-        corpo_rapido.addLayout(linha_codigo)
-
-        corpo_rapido.addWidget(self._rotulo_campo("Nome do produto", obrigatorio=True))
-
-        self.nome = QLineEdit()
-        self.nome.setPlaceholderText("Ex.: Mochila Preta Escolar")
-        self.nome.setMinimumHeight(42)
-        self.nome.setStyleSheet(self._estilo_input())
-
-        corpo_rapido.addWidget(self.nome)
-
-        corpo_rapido.addLayout(linha_valores_rapido)
-        corpo_rapido.addWidget(self.lbl_margem)
-        corpo_rapido.addLayout(linha_categoria_modo)
-
-        col_categoria = QVBoxLayout()
-        col_categoria.setSpacing(6)
-        col_categoria.addWidget(self._rotulo_campo("Categoria"))
-
-        linha_categoria = QHBoxLayout()
-        linha_categoria.setSpacing(8)
+        self.nome = self._input("Ex.: Mochila Preta Escolar")
 
         self.categoria = QComboBox()
         self.categoria.setEditable(True)
-        self.categoria.setMinimumHeight(42)
+        self.categoria.setMinimumHeight(44)
         self.categoria.setStyleSheet(self._estilo_input("QComboBox"))
         self._carregar_categorias()
 
-        self.bt_nova_categoria = QPushButton()
-        self.bt_nova_categoria.setCursor(Qt.PointingHandCursor)
-        self.bt_nova_categoria.setFixedSize(42, 42)
-        self.bt_nova_categoria.setToolTip("Criar nova categoria")
-        self.bt_nova_categoria.setAccessibleName("Criar nova categoria")
-        self.bt_nova_categoria.setIcon(icone("plus", cor=tokens.TEXTO, tamanho=16))
-        self.bt_nova_categoria.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.FUNDO};
-                color:{tokens.TEXTO};
-                border-radius:{tokens.RADIUS_SM}px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.BORDA};
-            }}
-        """)
-        self.bt_nova_categoria.clicked.connect(self.criar_nova_categoria)
-
-        self.bt_gerenciar_categorias = QPushButton()
-        self.bt_gerenciar_categorias.setCursor(Qt.PointingHandCursor)
-        self.bt_gerenciar_categorias.setFixedSize(42, 42)
-        self.bt_gerenciar_categorias.setToolTip(
-            "Gerenciar categorias (editar/excluir)"
+        self.bt_nova_categoria = self._botao_icone("plus", "Criar nova categoria", self.criar_nova_categoria)
+        self.bt_gerenciar_categorias = self._botao_icone(
+            "menu", "Gerenciar categorias (editar/excluir)", self.gerenciar_categorias,
         )
-        self.bt_gerenciar_categorias.setAccessibleName(
-            "Gerenciar categorias"
-        )
-        self.bt_gerenciar_categorias.setIcon(
-            icone("menu", cor=tokens.TEXTO, tamanho=17)
-        )
-        self.bt_gerenciar_categorias.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.FUNDO};
-                color:{tokens.TEXTO};
-                border-radius:{tokens.RADIUS_SM}px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.BORDA};
-            }}
-        """)
-        self.bt_gerenciar_categorias.clicked.connect(
-            self.gerenciar_categorias
-        )
-
-        linha_categoria.addWidget(self.categoria)
-        linha_categoria.addWidget(self.bt_nova_categoria)
-        linha_categoria.addWidget(self.bt_gerenciar_categorias)
-
-        col_categoria.addLayout(linha_categoria)
-        linha_categoria_modo.addLayout(col_categoria, 3)
-
-        corpo_detalhes.addWidget(self._rotulo_campo("Marca (opcional)"))
-
-        linha_marca = QHBoxLayout()
-        linha_marca.setSpacing(8)
 
         self.marca = QComboBox()
         self.marca.setEditable(False)
-        self.marca.setMinimumHeight(42)
+        self.marca.setMinimumHeight(44)
         self.marca.setStyleSheet(self._estilo_input("QComboBox"))
         self._carregar_marcas()
 
-        self.bt_nova_marca = QPushButton()
-        self.bt_nova_marca.setCursor(Qt.PointingHandCursor)
-        self.bt_nova_marca.setFixedSize(42, 42)
-        self.bt_nova_marca.setToolTip("Criar nova marca")
-        self.bt_nova_marca.setAccessibleName("Criar nova marca")
-        self.bt_nova_marca.setIcon(icone("plus", cor=tokens.TEXTO, tamanho=16))
-        self.bt_nova_marca.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.FUNDO};
-                color:{tokens.TEXTO};
-                border-radius:{tokens.RADIUS_SM}px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.BORDA};
-            }}
-        """)
-        self.bt_nova_marca.clicked.connect(self.criar_nova_marca)
-
-        self.bt_gerenciar_marcas = QPushButton()
-        self.bt_gerenciar_marcas.setCursor(Qt.PointingHandCursor)
-        self.bt_gerenciar_marcas.setFixedSize(42, 42)
-        self.bt_gerenciar_marcas.setToolTip("Gerenciar marcas (editar/excluir)")
-        self.bt_gerenciar_marcas.setAccessibleName("Gerenciar marcas")
-        self.bt_gerenciar_marcas.setIcon(
-            icone("menu", cor=tokens.TEXTO, tamanho=17)
+        self.bt_nova_marca = self._botao_icone("plus", "Criar nova marca", self.criar_nova_marca)
+        self.bt_gerenciar_marcas = self._botao_icone(
+            "menu", "Gerenciar marcas (editar/excluir)", self.gerenciar_marcas,
         )
-        self.bt_gerenciar_marcas.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.FUNDO};
-                color:{tokens.TEXTO};
-                border-radius:{tokens.RADIUS_SM}px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.BORDA};
-            }}
-        """)
-        self.bt_gerenciar_marcas.clicked.connect(self.gerenciar_marcas)
 
-        linha_marca.addWidget(self.marca)
-        linha_marca.addWidget(self.bt_nova_marca)
-        linha_marca.addWidget(self.bt_gerenciar_marcas)
-
-        corpo_detalhes.addLayout(linha_marca)
-
-        corpo_detalhes.addWidget(self._rotulo_campo("Coleção (opcional)"))
-
-        self.colecao = QLineEdit()
-        self.colecao.setPlaceholderText("Ex.: Verão 2026, Linha Premium...")
-        self.colecao.setMinimumHeight(42)
-        self.colecao.setStyleSheet(self._estilo_input())
-
-        corpo_detalhes.addWidget(self.colecao)
-
-        linha_variacao = QHBoxLayout()
-        linha_variacao.setSpacing(12)
-
-        col_cor = QVBoxLayout()
-        col_cor.setSpacing(6)
-        col_cor.addWidget(self._rotulo_campo("Cor (opcional)"))
-        self.cor = QLineEdit()
-        self.cor.setPlaceholderText("Ex.: Azul")
-        self.cor.setMinimumHeight(42)
-        self.cor.setStyleSheet(self._estilo_input())
-        col_cor.addWidget(self.cor)
-
-        col_tamanho = QVBoxLayout()
-        col_tamanho.setSpacing(6)
-        col_tamanho.addWidget(self._rotulo_campo("Tamanho (opcional)"))
-        self.tamanho = QLineEdit()
-        self.tamanho.setPlaceholderText("Ex.: P, M, 42...")
-        self.tamanho.setMinimumHeight(42)
-        self.tamanho.setStyleSheet(self._estilo_input())
-        col_tamanho.addWidget(self.tamanho)
-
-        linha_variacao.addLayout(col_cor)
-        linha_variacao.addLayout(col_tamanho)
-
-        corpo_detalhes.addLayout(linha_variacao)
-
-        corpo_detalhes.addWidget(self._rotulo_campo("Descrição (opcional)"))
+        self.colecao = self._input("Ex.: Verão 2026, Linha Premium...")
+        self.cor = self._input("Ex.: Azul")
+        self.tamanho = self._input("Ex.: P, M, 42...")
 
         self.descricao = QPlainTextEdit()
-        self.descricao.setPlaceholderText(
-            "Ex.: refrigerante, embalagem, sabor, observações..."
-        )
-        self.descricao.setFixedHeight(88)
+        self.descricao.setPlaceholderText("Ex.: refrigerante, embalagem, sabor, observações...")
+        self.descricao.setFixedHeight(80)
         self.descricao.setStyleSheet(f"""
             QPlainTextEdit {{
-                border: 1px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
                 padding: 8px 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
                 background: {tokens.CARD};
             }}
-            QPlainTextEdit:focus {{ border: 1px solid {tokens.SECUNDARIA}; }}
+            QPlainTextEdit:focus {{ border-color: {tokens.PRIMARIA}; }}
         """)
         self.descricao.textChanged.connect(self._limitar_descricao)
-
-        corpo_detalhes.addWidget(self.descricao)
 
         self.lbl_contador_descricao = QLabel("0/300")
         self.lbl_contador_descricao.setAlignment(Qt.AlignRight)
@@ -486,292 +260,154 @@ class CadastroProdutoWindow(QDialog):
             background:transparent; color:{tokens.TEXTO_TERCIARIO};
             font-size:{tokens.TAMANHO_XS}px;
         """)
-        corpo_detalhes.addWidget(self.lbl_contador_descricao)
 
-        corpo_detalhes.addStretch()
+        grade_ident = QGridLayout()
+        grade_ident.setHorizontalSpacing(14)
+        grade_ident.setVerticalSpacing(14)
+        grade_ident.addWidget(self._campo(
+            "Código de barras", self._linha(self.codigo_barras, self.bt_buscar),
+        ), 0, 0, 1, 3)
+        grade_ident.addWidget(self._campo("Nome do produto", self.nome, obrigatorio=True), 1, 0, 1, 3)
+        grade_ident.addWidget(self._campo(
+            "Categoria", self._linha(self.categoria, self.bt_nova_categoria, self.bt_gerenciar_categorias),
+        ), 2, 0, 1, 2)
+        grade_ident.addWidget(self._campo(
+            "Marca", self._linha(self.marca, self.bt_nova_marca, self.bt_gerenciar_marcas),
+        ), 2, 2)
+        grade_ident.addWidget(self._campo("Coleção", self.colecao), 3, 0)
+        grade_ident.addWidget(self._campo("Cor", self.cor), 3, 1)
+        grade_ident.addWidget(self._campo("Tamanho", self.tamanho), 3, 2)
+        grade_ident.addWidget(self._campo("Descrição", self.descricao), 4, 0, 1, 3)
+        grade_ident.addWidget(self.lbl_contador_descricao, 5, 0, 1, 3)
+        for coluna in range(3):
+            grade_ident.setColumnStretch(coluna, 1)
+        corpo_ident.addLayout(grade_ident)
 
-        # ---- precos / estoque / unidade (vao pro cartao essencial) ----
+        esquerda.addWidget(cartao_ident)
 
-        col_preco = QVBoxLayout()
-        col_preco.setSpacing(6)
-        col_preco.addWidget(self._rotulo_campo("Preço de venda (R$)", obrigatorio=True))
-        self.preco_venda = QDoubleSpinBox()
-        self.preco_venda.setMaximum(999999.99)
-        self.preco_venda.setDecimals(2)
-        self.preco_venda.setPrefix("R$ ")
-        self.preco_venda.setMinimumHeight(42)
-        self.preco_venda.setStyleSheet(self._estilo_input("QDoubleSpinBox"))
-        col_preco.addWidget(self.preco_venda)
+        # ---------- Preço e estoque ----------
 
-        col_custo = QVBoxLayout()
-        col_custo.setSpacing(6)
-        col_custo.addWidget(self._rotulo_campo("Custo de compra (R$)"))
-        self.preco_custo = QDoubleSpinBox()
-        self.preco_custo.setMaximum(999999.99)
-        self.preco_custo.setDecimals(2)
-        self.preco_custo.setPrefix("R$ ")
-        self.preco_custo.setMinimumHeight(42)
-        self.preco_custo.setStyleSheet(self._estilo_input("QDoubleSpinBox"))
-        col_custo.addWidget(self.preco_custo)
-
-        col_estoque = QVBoxLayout()
-        col_estoque.setSpacing(6)
-        col_estoque.addWidget(self._rotulo_campo(
-            "Estoque" if produto else "Estoque inicial"
-        ))
-        self.estoque = QSpinBox()
-        self.estoque.setMaximum(999999)
-        self.estoque.setMinimumHeight(42)
-        self.estoque.setStyleSheet(self._estilo_input("QSpinBox"))
-        col_estoque.addWidget(self.estoque)
-
-        linha_valores_rapido.addLayout(col_preco)
-        linha_valores_rapido.addLayout(col_custo)
-        linha_valores_rapido.addLayout(col_estoque)
-
-        self.preco_venda.valueChanged.connect(self._atualizar_margem)
-        self.preco_custo.valueChanged.connect(self._atualizar_margem)
-        self._atualizar_margem()
-
-        # UN/KG/L -- define a unidade do produto (antes tinha tambem um
-        # combo "Unidade de medida" desabilitado que so' repetia isto)
-        col_modo = QVBoxLayout()
-        col_modo.setSpacing(6)
-        col_modo.addWidget(self._rotulo_campo("Vendido por"))
-
-        linha_modo = QHBoxLayout()
-        linha_modo.setSpacing(4)
-
-        self.botoes_modo = {}
-
-        for rotulo, valor in [
-            ("UNID", "UN"), ("KG", "KG"), ("LITRO", "L"),
-        ]:
-            bt = QPushButton(rotulo)
-            bt.setCursor(Qt.PointingHandCursor)
-            bt.setCheckable(True)
-            bt.setMinimumHeight(42)
-            bt.clicked.connect(
-                lambda checked, v=valor: self.selecionar_modo(v)
-            )
-            self.botoes_modo[valor] = bt
-            linha_modo.addWidget(bt)
-
-        col_modo.addLayout(linha_modo)
-        linha_categoria_modo.addLayout(col_modo, 2)
-
-        # ---- mais opções: estoque mínimo + promoção ----
-
-        direita = QVBoxLayout()
-        direita.setSpacing(16)
-
-        cartao_valores, corpo_valores = self._construir_cartao_secao(
-            "Estoque mínimo e promoção",
-            "Alerta de reposição e preço promocional por período.",
+        cartao_preco, corpo_preco = self._construir_cartao_secao(
+            "Preço e estoque", "O custo é opcional, mas é ele que mostra o lucro.",
             "dollar-sign", tokens.SECUNDARIA,
         )
 
-        corpo_valores.addWidget(self._rotulo_campo("Estoque mínimo (alerta)"))
+        self.preco_venda = self._dinheiro()
+        self.preco_custo = self._dinheiro()
+
+        self.estoque = QSpinBox()
+        self.estoque.setMaximum(999999)
+        self.estoque.setMinimumHeight(44)
+        self.estoque.setStyleSheet(self._estilo_input("QSpinBox"))
+
         self.estoque_minimo = QSpinBox()
         self.estoque_minimo.setMaximum(999999)
-        self.estoque_minimo.setMinimumHeight(42)
+        self.estoque_minimo.setMinimumHeight(44)
         self.estoque_minimo.setToolTip(
-            "Quando o estoque atingir o mínimo, o produto aparece no "
-            "alerta de estoque."
+            "Quando o estoque atingir o mínimo, o produto aparece no alerta de estoque."
         )
         self.estoque_minimo.setStyleSheet(self._estilo_input("QSpinBox"))
-        corpo_valores.addWidget(self.estoque_minimo)
+
+        # UN/KG/L -- define a unidade do produto
+        seletor_modo = QWidget()
+        seletor_modo.setStyleSheet("background:transparent;")
+        linha_modo = QHBoxLayout(seletor_modo)
+        linha_modo.setContentsMargins(0, 0, 0, 0)
+        linha_modo.setSpacing(4)
+        self.botoes_modo = {}
+        for rotulo, valor in [("Unidade", "UN"), ("Kg", "KG"), ("Litro", "L")]:
+            bt = QPushButton(rotulo)
+            bt.setCursor(Qt.PointingHandCursor)
+            bt.setCheckable(True)
+            bt.setMinimumHeight(44)
+            bt.clicked.connect(lambda checked, v=valor: self.selecionar_modo(v))
+            self.botoes_modo[valor] = bt
+            linha_modo.addWidget(bt)
+
+        self.lbl_margem = QLabel()
+        self.lbl_margem.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px;
+        """)
+
+        grade_preco = QGridLayout()
+        grade_preco.setHorizontalSpacing(14)
+        grade_preco.setVerticalSpacing(14)
+        grade_preco.addWidget(self._campo("Preço de venda (R$)", self.preco_venda, obrigatorio=True), 0, 0)
+        grade_preco.addWidget(self._campo("Custo de compra (R$)", self.preco_custo), 0, 1)
+        grade_preco.addWidget(self._campo("Vendido por", seletor_modo), 0, 2)
+        grade_preco.addWidget(self.lbl_margem, 1, 0, 1, 3)
+        grade_preco.addWidget(self._campo(
+            "Estoque atual" if produto else "Estoque inicial", self.estoque,
+        ), 2, 0)
+        grade_preco.addWidget(self._campo("Estoque mínimo (alerta)", self.estoque_minimo), 2, 1)
+        for coluna in range(3):
+            grade_preco.setColumnStretch(coluna, 1)
+        corpo_preco.addLayout(grade_preco)
+
+        esquerda.addWidget(cartao_preco)
+
+        # ---------- Promoção ----------
+
+        cartao_promo, corpo_promo = self._construir_cartao_secao(
+            "Promoção", "Preço especial por um período -- volta sozinho ao normal depois.",
+            "trending-up", tokens.ALERTA,
+        )
 
         linha_promocao_titulo = QHBoxLayout()
-        linha_promocao_titulo.setSpacing(8)
-
-        self.em_promocao_check = QCheckBox("Preço promocional")
+        self.em_promocao_check = QCheckBox("Ativar preço promocional")
         self.em_promocao_check.setStyleSheet(
             f"background:transparent; color:{tokens.TEXTO}; "
-            f"font-weight:700; font-size:{tokens.TAMANHO_SM}px;"
+            f"font-weight:600; font-size:{tokens.TAMANHO_SM}px;"
         )
         self.em_promocao_check.toggled.connect(self._alternar_promocao)
-        linha_promocao_titulo.addWidget(self.em_promocao_check)
-        linha_promocao_titulo.addStretch()
 
         self.bt_historico_precos = QPushButton("Histórico de preços")
         self.bt_historico_precos.setCursor(Qt.PointingHandCursor)
         self.bt_historico_precos.setStyleSheet(f"""
             QPushButton {{
-                background:transparent; color:{tokens.SECUNDARIA};
-                font-weight:700; font-size:{tokens.TAMANHO_SM}px;
-                border:none; padding:0;
+                background:transparent; color:{tokens.PRIMARIA};
+                font-weight:700; font-size:{tokens.TAMANHO_SM}px; border:none; padding:0;
             }}
-            QPushButton:hover {{ color:{tokens.SECUNDARIA_HOVER}; }}
+            QPushButton:hover {{ color:{tokens.PRIMARIA_HOVER}; }}
         """)
         self.bt_historico_precos.clicked.connect(self.ver_historico_precos)
         self.bt_historico_precos.setVisible(self.produto is not None)
+
+        linha_promocao_titulo.addWidget(self.em_promocao_check)
+        linha_promocao_titulo.addStretch()
         linha_promocao_titulo.addWidget(self.bt_historico_precos)
+        corpo_promo.addLayout(linha_promocao_titulo)
 
-        corpo_valores.addLayout(linha_promocao_titulo)
+        self.preco_promocional = self._dinheiro()
+        self.promocao_inicio = self._data(QDate.currentDate())
+        self.promocao_fim = self._data(QDate.currentDate().addDays(7))
 
-        linha_promocao = QHBoxLayout()
-        linha_promocao.setSpacing(16)
-
-        col_preco_promo = QVBoxLayout()
-        col_preco_promo.setSpacing(6)
-        col_preco_promo.addWidget(self._rotulo_campo("Preço promocional (R$)"))
-        self.preco_promocional = QDoubleSpinBox()
-        self.preco_promocional.setMaximum(999999.99)
-        self.preco_promocional.setDecimals(2)
-        self.preco_promocional.setPrefix("R$ ")
-        self.preco_promocional.setMinimumHeight(42)
-        self.preco_promocional.setStyleSheet(self._estilo_input("QDoubleSpinBox"))
-        col_preco_promo.addWidget(self.preco_promocional)
-
-        col_promo_inicio = QVBoxLayout()
-        col_promo_inicio.setSpacing(6)
-        col_promo_inicio.addWidget(self._rotulo_campo("Válida de"))
-        self.promocao_inicio = QDateEdit()
-        self.promocao_inicio.setCalendarPopup(True)
-        self.promocao_inicio.setDisplayFormat("dd/MM/yyyy")
-        self.promocao_inicio.setDate(QDate.currentDate())
-        self.promocao_inicio.setMinimumHeight(42)
-        self.promocao_inicio.setStyleSheet(self._estilo_input("QDateEdit"))
-        col_promo_inicio.addWidget(self.promocao_inicio)
-
-        col_promo_fim = QVBoxLayout()
-        col_promo_fim.setSpacing(6)
-        col_promo_fim.addWidget(self._rotulo_campo("Até"))
-        self.promocao_fim = QDateEdit()
-        self.promocao_fim.setCalendarPopup(True)
-        self.promocao_fim.setDisplayFormat("dd/MM/yyyy")
-        self.promocao_fim.setDate(QDate.currentDate().addDays(7))
-        self.promocao_fim.setMinimumHeight(42)
-        self.promocao_fim.setStyleSheet(self._estilo_input("QDateEdit"))
-        col_promo_fim.addWidget(self.promocao_fim)
-
-        linha_promocao.addLayout(col_preco_promo)
-        linha_promocao.addLayout(col_promo_inicio)
-        linha_promocao.addLayout(col_promo_fim)
-
-        corpo_valores.addLayout(linha_promocao)
+        grade_promo = QGridLayout()
+        grade_promo.setHorizontalSpacing(14)
+        grade_promo.addWidget(self._campo("Preço promocional (R$)", self.preco_promocional), 0, 0)
+        grade_promo.addWidget(self._campo("Válida de", self.promocao_inicio), 0, 1)
+        grade_promo.addWidget(self._campo("Até", self.promocao_fim), 0, 2)
+        for coluna in range(3):
+            grade_promo.setColumnStretch(coluna, 1)
+        corpo_promo.addLayout(grade_promo)
 
         self._alternar_promocao(False)
+        esquerda.addWidget(cartao_promo)
 
-        cartao_foto, corpo_foto = self._construir_cartao_secao(
-            "Foto do produto",
-            "Adicione uma imagem para facilitar a identificação.",
-            "package", tokens.PRIMARIA,
-        )
-
-        linha_foto = QHBoxLayout()
-        linha_foto.setSpacing(14)
-
-        self.bt_adicionar_imagem = QPushButton(
-            "Clique para adicionar uma imagem\nPNG, JPG ou WEBP (máx. 5MB)"
-        )
-        self.bt_adicionar_imagem.setCursor(Qt.PointingHandCursor)
-        self.bt_adicionar_imagem.setMinimumHeight(_TAMANHO_PREVIA)
-        self.bt_adicionar_imagem.setIcon(
-            icone("package", cor=tokens.TEXTO_SECUNDARIO, tamanho=24)
-        )
-        self.bt_adicionar_imagem.setIconSize(QSize(24, 24))
-        self.bt_adicionar_imagem.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.FUNDO}; border:1.5px dashed {tokens.BORDA_FORTE};
-                border-radius:{tokens.RADIUS_MD}px; color:{tokens.TEXTO_SECUNDARIO};
-                font-weight:700; font-size:{tokens.TAMANHO_SM}px; padding:14px;
-            }}
-            QPushButton:hover {{ background:{tokens.BORDA}; }}
-        """)
-        self.bt_adicionar_imagem.clicked.connect(
-            self.adicionar_imagem
-        )
-
-        col_previa = QVBoxLayout()
-        col_previa.setSpacing(6)
-
-        self.lbl_foto = QLabel()
-        self.lbl_foto.setFixedSize(_TAMANHO_PREVIA, _TAMANHO_PREVIA)
-        self.lbl_foto.setAlignment(Qt.AlignCenter)
-        self.lbl_foto.setStyleSheet(f"""
-            background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_MD}px;
-        """)
-        self.lbl_foto.setPixmap(
-            icone_pixmap("package", cor=tokens.TEXTO_TERCIARIO, tamanho=32)
-        )
-
-        lbl_previa_legenda = QLabel("Pré-visualização")
-        lbl_previa_legenda.setAlignment(Qt.AlignCenter)
-        lbl_previa_legenda.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px;
-        """)
-
-        col_previa.addWidget(self.lbl_foto)
-        col_previa.addWidget(lbl_previa_legenda)
-
-        linha_foto.addWidget(self.bt_adicionar_imagem, stretch=1)
-        linha_foto.addLayout(col_previa)
-
-        corpo_foto.addLayout(linha_foto)
-
-        # ---- galeria de fotos adicionais -- so' funciona editando um
-        # produto ja existente, porque anexar foto extra usa
-        # POST /produtos/{id}/fotos, que precisa de um id que produto
-        # novo ainda nao tem (a foto principal acima continua indo
-        # pelo caminho de sempre, funciona pra produto novo tambem) ----
-        if self.produto:
-
-            lbl_galeria = QLabel(
-                "Fotos adicionais (clique na estrela pra tornar principal)"
-            )
-            lbl_galeria.setWordWrap(True)
-            lbl_galeria.setStyleSheet(f"""
-                background:transparent; color:{tokens.TEXTO_TERCIARIO};
-                font-size:{tokens.TAMANHO_XS}px; font-weight:700;
-                margin-top:8px;
-            """)
-            corpo_foto.addWidget(lbl_galeria)
-
-            self.linha_galeria = QHBoxLayout()
-            self.linha_galeria.setSpacing(8)
-
-            self.bt_adicionar_foto_extra = QPushButton()
-            self.bt_adicionar_foto_extra.setFixedSize(56, 56)
-            self.bt_adicionar_foto_extra.setCursor(Qt.PointingHandCursor)
-            self.bt_adicionar_foto_extra.setToolTip("Adicionar mais uma foto")
-            self.bt_adicionar_foto_extra.setAccessibleName(
-                "Adicionar mais uma foto"
-            )
-            self.bt_adicionar_foto_extra.setIcon(
-                icone("plus", cor=tokens.TEXTO_SECUNDARIO, tamanho=18)
-            )
-            self.bt_adicionar_foto_extra.setStyleSheet(f"""
-                QPushButton {{
-                    background:{tokens.FUNDO}; border:1.5px dashed {tokens.BORDA_FORTE};
-                    border-radius:{tokens.RADIUS_SM}px;
-                }}
-                QPushButton:hover {{ background:{tokens.BORDA}; }}
-            """)
-            self.bt_adicionar_foto_extra.clicked.connect(
-                self.adicionar_foto_extra
-            )
-
-            self.linha_galeria.addWidget(self.bt_adicionar_foto_extra)
-            self.linha_galeria.addStretch()
-
-            corpo_foto.addLayout(self.linha_galeria)
-
-            self._carregar_galeria_fotos()
+        # ---------- Kit / Combo ----------
 
         cartao_kit, corpo_kit = self._construir_cartao_secao(
             "Kit / Combo",
-            "Venda vários produtos como um só -- o estoque baixado é "
-            "o dos componentes, não o do kit.",
+            "Venda vários produtos como um só -- o estoque baixado é o dos "
+            "componentes, não o do kit.",
             "package", tokens.ALERTA,
         )
 
         self.eh_kit_check = QCheckBox("Este produto é um kit/combo")
         self.eh_kit_check.setStyleSheet(
             f"background:transparent; color:{tokens.TEXTO}; "
-            f"font-weight:700; font-size:{tokens.TAMANHO_SM}px;"
+            f"font-weight:600; font-size:{tokens.TAMANHO_SM}px;"
         )
         self.eh_kit_check.toggled.connect(self._alternar_kit)
         corpo_kit.addWidget(self.eh_kit_check)
@@ -782,57 +418,23 @@ class CadastroProdutoWindow(QDialog):
         layout_painel_kit.setSpacing(8)
 
         self.tabela_kit = StandardTable(["Componente", "Quantidade"])
-        self.tabela_kit.setMaximumHeight(140)
+        self.tabela_kit.setMaximumHeight(160)
         layout_painel_kit.addWidget(self.tabela_kit)
 
         linha_botoes_kit = QHBoxLayout()
         linha_botoes_kit.setSpacing(8)
-
-        self.bt_adicionar_componente = QPushButton("Adicionar componente")
-        self.bt_adicionar_componente.setCursor(Qt.PointingHandCursor)
-        self.bt_adicionar_componente.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.FUNDO}; color:{tokens.TEXTO};
-                border:1px solid {tokens.BORDA};
-                border-radius:{tokens.RADIUS_SM}px; padding:8px 14px;
-            }}
-            QPushButton:hover {{ background:{tokens.BORDA}; }}
-        """)
-        self.bt_adicionar_componente.clicked.connect(
-            self.adicionar_componente_kit
-        )
+        self.bt_adicionar_componente = BotaoSecundario("Adicionar componente", icone_nome="plus")
+        self.bt_adicionar_componente.clicked.connect(self.adicionar_componente_kit)
+        self.bt_remover_componente = BotaoSecundario("Remover selecionado", icone_nome="trash-2")
+        self.bt_remover_componente.clicked.connect(self.remover_componente_kit)
         linha_botoes_kit.addWidget(self.bt_adicionar_componente)
-
-        self.bt_remover_componente = QPushButton("Remover selecionado")
-        self.bt_remover_componente.setCursor(Qt.PointingHandCursor)
-        self.bt_remover_componente.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.ERRO_CLARO}; color:{tokens.ERRO};
-                border-radius:{tokens.RADIUS_SM}px; padding:8px 14px;
-            }}
-            QPushButton:hover {{ background:{tokens.ERRO}; color:{tokens.TEXTO_CLARO}; }}
-        """)
-        self.bt_remover_componente.clicked.connect(
-            self.remover_componente_kit
-        )
         linha_botoes_kit.addWidget(self.bt_remover_componente)
         linha_botoes_kit.addStretch()
-
         layout_painel_kit.addLayout(linha_botoes_kit)
 
         corpo_kit.addWidget(self.painel_kit)
 
         if self.produto is None:
-            aviso_kit = QLabel(
-                "Salve o produto primeiro pra poder adicionar os "
-                "componentes do kit."
-            )
-            aviso_kit.setWordWrap(True)
-            aviso_kit.setStyleSheet(
-                f"background:transparent; color:{tokens.TEXTO_TERCIARIO}; "
-                f"font-size:{tokens.TAMANHO_XS}px;"
-            )
-            corpo_kit.addWidget(aviso_kit)
             self.painel_kit.setVisible(False)
         else:
             self.kit_itens = []
@@ -840,97 +442,149 @@ class CadastroProdutoWindow(QDialog):
 
         self._alternar_kit(False)
 
+        # kit e variação precisam do id do produto -- só aparecem
+        # editando; a referência segura os cartões vivos porque os
+        # métodos ainda leem eh_kit_check/painel_kit
+        self._cartao_kit = cartao_kit
+        if self.produto:
+            esquerda.addWidget(cartao_kit)
+
+        # ---------- Variações ----------
+
         if self._pode_ter_variacoes:
 
             cartao_variacoes, corpo_variacoes = self._construir_cartao_secao(
                 "Variações",
-                "Mesmo produto em cores/tamanhos diferentes, cada um "
-                "com código e estoque próprios.",
+                "Mesmo produto em cores/tamanhos diferentes, cada um com "
+                "código e estoque próprios.",
                 "package", tokens.SECUNDARIA,
             )
 
-            self.tabela_variacoes = StandardTable(
-                ["Nome", "Cor", "Tamanho", "Estoque"]
-            )
-            self.tabela_variacoes.setMaximumHeight(140)
+            self.tabela_variacoes = StandardTable(["Nome", "Cor", "Tamanho", "Estoque"])
+            self.tabela_variacoes.setMaximumHeight(160)
             corpo_variacoes.addWidget(self.tabela_variacoes)
 
-            self.bt_nova_variacao = QPushButton("Nova variação")
-            self.bt_nova_variacao.setCursor(Qt.PointingHandCursor)
-            self.bt_nova_variacao.setStyleSheet(f"""
-                QPushButton {{
-                    background:{tokens.FUNDO}; color:{tokens.TEXTO};
-                    border:1px solid {tokens.BORDA};
-                    border-radius:{tokens.RADIUS_SM}px; padding:8px 14px;
-                }}
-                QPushButton:hover {{ background:{tokens.BORDA}; }}
-            """)
+            self.bt_nova_variacao = BotaoSecundario("Nova variação", icone_nome="plus")
             self.bt_nova_variacao.clicked.connect(self.nova_variacao)
-            corpo_variacoes.addWidget(self.bt_nova_variacao)
+            linha_variacao = QHBoxLayout()
+            linha_variacao.addWidget(self.bt_nova_variacao)
+            linha_variacao.addStretch()
+            corpo_variacoes.addLayout(linha_variacao)
 
             if self.produto is None:
-                aviso_variacoes = QLabel(
-                    "Salve o produto primeiro pra poder cadastrar "
-                    "variações."
-                )
-                aviso_variacoes.setWordWrap(True)
-                aviso_variacoes.setStyleSheet(
-                    f"background:transparent; "
-                    f"color:{tokens.TEXTO_TERCIARIO}; "
-                    f"font-size:{tokens.TAMANHO_XS}px;"
-                )
-                corpo_variacoes.addWidget(aviso_variacoes)
                 self.bt_nova_variacao.setEnabled(False)
             else:
                 self._carregar_variacoes()
 
-            # variacao e kit so' funcionam depois de salvar (precisam
-            # do id do produto) -- em produto novo nem aparecem; a
-            # referencia segura o cartao vivo, os metodos ainda leem
-            # eh_kit_check/painel_kit
             self._cartao_variacoes = cartao_variacoes
             if self.produto:
-                direita.addWidget(cartao_variacoes)
+                esquerda.addWidget(cartao_variacoes)
 
-        self._cartao_kit = cartao_kit
-
-        direita.addWidget(cartao_valores)
-        if self.produto:
-            direita.addWidget(cartao_kit)
-        direita.addStretch()
-
-        esquerda = QVBoxLayout()
-        esquerda.setSpacing(16)
-        esquerda.addWidget(cartao_detalhes)
-        esquerda.addWidget(cartao_foto)
         esquerda.addStretch()
 
-        self.painel_mais = QWidget()
-        self.painel_mais.setStyleSheet("background:transparent;")
-        layout_mais = QHBoxLayout(self.painel_mais)
-        layout_mais.setContentsMargins(0, 0, 0, 0)
-        layout_mais.setSpacing(16)
-        layout_mais.addLayout(esquerda, 1)
-        layout_mais.addLayout(direita, 1)
+        # ---------- Foto (coluna direita) ----------
 
-        self.bt_mais_opcoes = QPushButton()
-        self.bt_mais_opcoes.setCursor(Qt.PointingHandCursor)
-        self.bt_mais_opcoes.setStyleSheet(f"""
-            QPushButton {{
-                background:transparent; color:{tokens.SECUNDARIA};
-                font-weight:700; font-size:{tokens.TAMANHO_SM}px;
-                border:none; padding:4px 0; text-align:left;
-            }}
-            QPushButton:hover {{ color:{tokens.SECUNDARIA_HOVER}; }}
-        """)
-        self.bt_mais_opcoes.clicked.connect(
-            lambda: self._alternar_mais_opcoes(not self.painel_mais.isVisible())
+        cartao_foto, corpo_foto = self._construir_cartao_secao(
+            "Foto", "Aparece na busca e no PDV.", "eye", tokens.PRIMARIA,
         )
 
-        corpo.addWidget(cartao_rapido)
-        corpo.addWidget(self.bt_mais_opcoes)
-        corpo.addWidget(self.painel_mais)
-        corpo.addStretch()
+        self.lbl_foto = QLabel()
+        self.lbl_foto.setFixedSize(_FOTO_LARGURA, _FOTO_ALTURA)
+        self.lbl_foto.setAlignment(Qt.AlignCenter)
+        self.lbl_foto.setStyleSheet(f"""
+            background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_MD}px;
+        """)
+        self.lbl_foto.setPixmap(icone_pixmap("package", cor=tokens.TEXTO_TERCIARIO, tamanho=44))
+        corpo_foto.addWidget(self.lbl_foto, 0, Qt.AlignHCenter)
+
+        self.bt_adicionar_imagem = QPushButton("Escolher imagem  ·  PNG, JPG ou WEBP")
+        self.bt_adicionar_imagem.setCursor(Qt.PointingHandCursor)
+        self.bt_adicionar_imagem.setMinimumHeight(40)
+        self.bt_adicionar_imagem.setIcon(icone("plus", cor=tokens.PRIMARIA, tamanho=15))
+        self.bt_adicionar_imagem.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD}; border:1.5px dashed {tokens.BORDA_FORTE};
+                border-radius:{tokens.RADIUS_SM}px; color:{tokens.PRIMARIA};
+                font-weight:600; font-size:{tokens.TAMANHO_SM}px; padding:0 12px;
+            }}
+            QPushButton:hover {{ background:{tokens.PRIMARIA_CLARA}; border-color:{tokens.PRIMARIA}; }}
+        """)
+        self.bt_adicionar_imagem.clicked.connect(self.adicionar_imagem)
+        corpo_foto.addWidget(self.bt_adicionar_imagem)
+
+        # galeria de fotos adicionais -- só editando: anexar foto extra
+        # usa POST /produtos/{id}/fotos, que precisa do id do produto
+        if self.produto:
+
+            lbl_galeria = QLabel("Mais fotos (a estrela torna principal)")
+            lbl_galeria.setWordWrap(True)
+            lbl_galeria.setStyleSheet(f"""
+                background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+                font-size:{tokens.TAMANHO_XS}px; font-weight:600; margin-top:4px;
+            """)
+            corpo_foto.addWidget(lbl_galeria)
+
+            self.linha_galeria = QHBoxLayout()
+            self.linha_galeria.setSpacing(8)
+
+            self.bt_adicionar_foto_extra = QPushButton()
+            self.bt_adicionar_foto_extra.setFixedSize(56, 56)
+            self.bt_adicionar_foto_extra.setCursor(Qt.PointingHandCursor)
+            self.bt_adicionar_foto_extra.setToolTip("Adicionar mais uma foto")
+            self.bt_adicionar_foto_extra.setAccessibleName("Adicionar mais uma foto")
+            self.bt_adicionar_foto_extra.setIcon(icone("plus", cor=tokens.TEXTO_SECUNDARIO, tamanho=18))
+            self.bt_adicionar_foto_extra.setStyleSheet(f"""
+                QPushButton {{
+                    background:{tokens.FUNDO}; border:1.5px dashed {tokens.BORDA_FORTE};
+                    border-radius:{tokens.RADIUS_SM}px;
+                }}
+                QPushButton:hover {{ background:{tokens.BORDA}; }}
+            """)
+            self.bt_adicionar_foto_extra.clicked.connect(self.adicionar_foto_extra)
+
+            self.linha_galeria.addWidget(self.bt_adicionar_foto_extra)
+            self.linha_galeria.addStretch()
+            corpo_foto.addLayout(self.linha_galeria)
+
+            self._carregar_galeria_fotos()
+
+        direita.addWidget(cartao_foto)
+
+        # ---------- Resumo ao vivo (coluna direita) ----------
+
+        cartao_resumo, corpo_resumo = self._construir_cartao_secao(
+            "Resumo", "Atualiza enquanto você digita.", "bar-chart-2", tokens.SECUNDARIA,
+        )
+
+        self.lbl_resumo_preco = QLabel("R$ 0,00")
+        self.lbl_resumo_preco.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_XXL}px; font-weight:800;
+        """)
+        self.badge_resumo_promo = Badge("Em promoção", "alerta")
+        self.badge_resumo_promo.hide()
+
+        linha_preco_resumo = QHBoxLayout()
+        linha_preco_resumo.addWidget(self.lbl_resumo_preco)
+        linha_preco_resumo.addStretch()
+        linha_preco_resumo.addWidget(self.badge_resumo_promo, 0, Qt.AlignVCenter)
+        corpo_resumo.addLayout(linha_preco_resumo)
+
+        self.lbl_resumo_custo = self._linha_resumo(corpo_resumo, "Custo")
+        self.lbl_resumo_lucro = self._linha_resumo(corpo_resumo, "Lucro por unidade")
+        self.lbl_resumo_margem = self._linha_resumo(corpo_resumo, "Margem")
+        self.lbl_resumo_estoque = self._linha_resumo(corpo_resumo, "Estoque")
+
+        direita.addWidget(cartao_resumo)
+        direita.addStretch()
+
+        coluna_direita = QWidget()
+        coluna_direita.setStyleSheet("background:transparent;")
+        coluna_direita.setFixedWidth(_LARGURA_COLUNA_DIREITA)
+        coluna_direita.setLayout(direita)
+
+        corpo.addLayout(esquerda, 1)
+        corpo.addWidget(coluna_direita, 0, Qt.AlignTop)
 
         scroll.setWidget(corpo_widget)
         layout.addWidget(scroll, 1)
@@ -939,50 +593,47 @@ class CadastroProdutoWindow(QDialog):
         # RODAPÉ
         # ======================
 
-        rodape = QHBoxLayout()
-        rodape.setContentsMargins(30, 16, 30, 24)
+        rodape_frame = QFrame()
+        rodape_frame.setObjectName("RodapeProduto")
+        rodape_frame.setStyleSheet(f"""
+            #RodapeProduto {{ background:{tokens.CARD}; border-top:1px solid {tokens.BORDA}; }}
+        """)
+        rodape = QHBoxLayout(rodape_frame)
+        rodape.setContentsMargins(28, 14, 28, 14)
         rodape.setSpacing(10)
 
-        self.bt_cancelar = QPushButton("Cancelar")
-        self.bt_cancelar.setCursor(Qt.PointingHandCursor)
-        self.bt_cancelar.setMinimumHeight(46)
-        self.bt_cancelar.setIcon(icone("x", cor=tokens.TEXTO_SECUNDARIO, tamanho=15))
-        self.bt_cancelar.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.CARD}; color:{tokens.TEXTO};
-                border:1.5px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
-                font-weight:700; padding:0 18px;
-            }}
-            QPushButton:hover {{ background:{tokens.FUNDO}; }}
+        dicas = QLabel("Enter avança  ·  Ctrl+S salva  ·  Esc fecha")
+        dicas.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px;
         """)
+
+        self.bt_cancelar = BotaoSecundario("Cancelar")
+        self.bt_cancelar.setMinimumWidth(140)
         self.bt_cancelar.clicked.connect(self.reject)
 
-        texto_salvar = "Salvar Alterações" if produto else "Cadastrar Produto"
-
-        self.bt_salvar = QPushButton(texto_salvar)
-        self.bt_salvar.setCursor(Qt.PointingHandCursor)
-        self.bt_salvar.setMinimumHeight(46)
+        self.bt_salvar = BotaoSucesso(
+            "Salvar Alterações" if produto else "Cadastrar Produto", icone_nome="check",
+        )
         self.bt_salvar.setMinimumWidth(220)
-        self.bt_salvar.setIcon(icone("check", cor="white", tamanho=16))
-        self.bt_salvar.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.SECUNDARIA};
-                color:{tokens.TEXTO_CLARO};
-                font-weight:700;
-                border-radius:{tokens.RADIUS_SM}px;
-                padding: 0 20px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.SECUNDARIA_HOVER};
-            }}
-        """)
         self.bt_salvar.clicked.connect(self.salvar)
 
-        rodape.addWidget(self.bt_cancelar)
+        rodape.addWidget(dicas)
         rodape.addStretch()
+        rodape.addWidget(self.bt_cancelar)
         rodape.addWidget(self.bt_salvar)
 
-        layout.addLayout(rodape)
+        layout.addWidget(rodape_frame)
+
+        QShortcut(QKeySequence("Ctrl+S"), self, self.salvar)
+
+        # resumo ao vivo
+        self.preco_venda.valueChanged.connect(self._atualizar_margem)
+        self.preco_custo.valueChanged.connect(self._atualizar_margem)
+        self.estoque.valueChanged.connect(self._atualizar_margem)
+        self.estoque_minimo.valueChanged.connect(self._atualizar_margem)
+        self.em_promocao_check.toggled.connect(self._atualizar_margem)
+        self.preco_promocional.valueChanged.connect(self._atualizar_margem)
 
         self._atualizar_estilo_favorito(False)
         self.selecionar_modo("UN")
@@ -999,10 +650,6 @@ class CadastroProdutoWindow(QDialog):
             botao.setAutoDefault(False)
             botao.setDefault(False)
 
-        # editando (ou criando variacao, que comeca pela cor/tamanho)
-        # abre tudo; produto novo abre so' o essencial
-        self._alternar_mais_opcoes(bool(self.produto or self.produto_pai))
-
         if self.produto:
             self.preencher_campos()
             self.codigo_barras.setFocus()
@@ -1012,42 +659,142 @@ class CadastroProdutoWindow(QDialog):
         else:
             self.codigo_barras.setFocus()
 
+        self._atualizar_margem()
+
     # ==========================================
-    # CADASTRO RÁPIDO
+    # PEÇAS DO FORMULÁRIO
     # ==========================================
 
-    def _alternar_mais_opcoes(self, aberto):
+    def _input(self, placeholder):
+        campo = QLineEdit()
+        campo.setPlaceholderText(placeholder)
+        campo.setMinimumHeight(44)
+        campo.setStyleSheet(self._estilo_input())
+        return campo
 
-        self.painel_mais.setVisible(aberto)
+    def _dinheiro(self):
+        campo = QDoubleSpinBox()
+        campo.setMaximum(999999.99)
+        campo.setDecimals(2)
+        campo.setPrefix("R$ ")
+        campo.setMinimumHeight(44)
+        campo.setStyleSheet(self._estilo_input("QDoubleSpinBox"))
+        return campo
 
-        if aberto:
-            self.bt_mais_opcoes.setText("▾  Menos opções")
-            tamanho_fixo_seguro(self, 1120, 860)
-        else:
-            self.bt_mais_opcoes.setText(
-                "▸  Mais opções  (marca, cor, tamanho, foto, promoção, "
-                "estoque mínimo, descrição...)"
-            )
-            tamanho_fixo_seguro(self, 760, 700)
+    def _data(self, data):
+        campo = QDateEdit()
+        campo.setCalendarPopup(True)
+        campo.setDisplayFormat("dd/MM/yyyy")
+        campo.setDate(data)
+        campo.setMinimumHeight(44)
+        campo.setStyleSheet(self._estilo_input("QDateEdit"))
+        return campo
+
+    def _botao_icone(self, icone_nome, dica, ao_clicar):
+        botao = QPushButton()
+        botao.setCursor(Qt.PointingHandCursor)
+        botao.setFixedSize(44, 44)
+        botao.setToolTip(dica)
+        botao.setAccessibleName(dica)
+        botao.setIcon(icone(icone_nome, cor=tokens.TEXTO_SECUNDARIO, tamanho=16))
+        botao.setStyleSheet(f"""
+            QPushButton {{
+                background:{tokens.CARD}; border:1.5px solid {tokens.BORDA};
+                border-radius:{tokens.RADIUS_SM}px;
+            }}
+            QPushButton:hover {{ background:{tokens.PRIMARIA_CLARA}; border-color:{tokens.PRIMARIA}; }}
+        """)
+        botao.clicked.connect(ao_clicar)
+        return botao
+
+    @staticmethod
+    def _linha(*widgets):
+        """Campo + botões grudados na mesma linha (ex.: categoria + / ≡)."""
+        linha = QWidget()
+        linha.setStyleSheet("background:transparent;")
+        layout = QHBoxLayout(linha)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        layout.addWidget(widgets[0], 1)
+        for widget in widgets[1:]:
+            layout.addWidget(widget)
+        return linha
+
+    def _campo(self, rotulo, widget, obrigatorio=False):
+        bloco = QWidget()
+        bloco.setStyleSheet("background:transparent;")
+        layout = QVBoxLayout(bloco)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        layout.addWidget(self._rotulo_campo(rotulo, obrigatorio))
+        layout.addWidget(widget)
+        return bloco
+
+    def _linha_resumo(self, layout, rotulo):
+        linha = QHBoxLayout()
+        lbl = QLabel(rotulo)
+        lbl.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
+        valor = QLabel("—")
+        valor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        valor.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+        """)
+        linha.addWidget(lbl)
+        linha.addStretch()
+        linha.addWidget(valor)
+        layout.addLayout(linha)
+        return valor
 
     def _atualizar_margem(self, *_):
 
         venda = self.preco_venda.value()
         custo = self.preco_custo.value()
+        promo = self.em_promocao_check.isChecked() and self.preco_promocional.value() > 0
+        preco_efetivo = self.preco_promocional.value() if promo else venda
 
-        if venda <= 0 or custo <= 0:
-            self.lbl_margem.setText(
-                "Informe o custo pra ver a margem de lucro."
-            )
+        self.lbl_resumo_preco.setText(formatar_moeda(preco_efetivo))
+        self.badge_resumo_promo.setVisible(promo)
+        self.lbl_resumo_custo.setText(formatar_moeda(custo) if custo > 0 else "—")
+
+        unidade = {"UN": "un", "KG": "kg", "L": "L"}.get(self.modo_venda, "un")
+        estoque = self.estoque.value()
+        minimo = self.estoque_minimo.value()
+        cor_estoque = tokens.ERRO if estoque <= 0 else (
+            tokens.ALERTA if minimo and estoque <= minimo else tokens.TEXTO
+        )
+        self.lbl_resumo_estoque.setText(f"{estoque} {unidade}")
+        self.lbl_resumo_estoque.setStyleSheet(f"""
+            background:transparent; color:{cor_estoque};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+        """)
+
+        if preco_efetivo <= 0 or custo <= 0:
+            self.lbl_margem.setText("Informe o custo pra ver o lucro e a margem.")
+            self.lbl_resumo_lucro.setText("—")
+            self.lbl_resumo_margem.setText("—")
             return
 
-        lucro = venda - custo
-        margem = lucro / venda * 100
-        texto_lucro = f"{lucro:.2f}".replace(".", ",")
+        lucro = preco_efetivo - custo
+        margem = lucro / preco_efetivo * 100
+        cor = tokens.SECUNDARIA_HOVER if lucro > 0 else tokens.ERRO
 
         self.lbl_margem.setText(
-            f"Lucro por unidade: R$ {texto_lucro}  ·  margem {margem:.0f}%"
+            f"Lucro por unidade: {formatar_moeda(lucro)}  ·  margem {margem:.0f}%"
+            + ("  (com o preço promocional)" if promo else "")
         )
+        for lbl, texto in (
+            (self.lbl_resumo_lucro, formatar_moeda(lucro)),
+            (self.lbl_resumo_margem, f"{margem:.0f}%"),
+        ):
+            lbl.setText(texto)
+            lbl.setStyleSheet(f"""
+                background:transparent; color:{cor};
+                font-size:{tokens.TAMANHO_SM}px; font-weight:800;
+            """)
 
     def keyPressEvent(self, event):
         """Enter anda pelos campos essenciais na ordem em que se
@@ -1160,14 +907,14 @@ class CadastroProdutoWindow(QDialog):
         lbl.setTextFormat(Qt.RichText)
         lbl.setStyleSheet(f"""
             background:transparent; font-size:{tokens.TAMANHO_SM}px;
-            font-weight:700; color:{tokens.TEXTO};
+            font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
         """)
         return lbl
 
     def _estilo_input(self, widget="QLineEdit"):
         return f"""
             {widget} {{
-                border: 1px solid {tokens.BORDA};
+                border: 1.5px solid {tokens.BORDA};
                 border-radius: {tokens.RADIUS_SM}px;
                 padding: 0 12px;
                 font-size: {tokens.TAMANHO_MD}px;
@@ -1175,11 +922,19 @@ class CadastroProdutoWindow(QDialog):
                 background: {tokens.CARD};
             }}
             {widget}:focus {{
-                border: 1px solid {tokens.SECUNDARIA};
+                border: 1.5px solid {tokens.PRIMARIA};
+            }}
+            {widget}:disabled {{
+                background: {tokens.FUNDO};
+                color: {tokens.TEXTO_TERCIARIO};
             }}
         """
 
     def _atualizar_estilo_favorito(self, marcado):
+
+        self.favorito.setIcon(icone(
+            "star-filled" if marcado else "star", cor=tokens.ALERTA, tamanho=15,
+        ))
 
         self.favorito.setStyleSheet(f"""
             QPushButton {{
@@ -1594,16 +1349,21 @@ class CadastroProdutoWindow(QDialog):
 
             botao.setStyleSheet(f"""
                 QPushButton {{
-                    background: {tokens.SIDEBAR if selecionado else tokens.FUNDO};
-                    color: {tokens.TEXTO_CLARO if selecionado else tokens.TEXTO};
+                    background: {tokens.PRIMARIA_CLARA if selecionado else tokens.CARD};
+                    color: {tokens.PRIMARIA if selecionado else tokens.TEXTO_SECUNDARIO};
+                    border: 1.5px solid {tokens.PRIMARIA if selecionado else tokens.BORDA};
                     border-radius: {tokens.RADIUS_SM}px;
-                    font-weight: bold;
-                    font-size: {tokens.TAMANHO_XS}px;
+                    font-weight: {700 if selecionado else 600};
+                    font-size: {tokens.TAMANHO_SM}px;
                 }}
                 QPushButton:hover {{
-                    background: {tokens.SIDEBAR_HOVER if selecionado else tokens.BORDA};
+                    border-color: {tokens.PRIMARIA};
                 }}
             """)
+
+        # o resumo mostra a unidade junto do estoque
+        if hasattr(self, "lbl_resumo_estoque"):
+            self._atualizar_margem()
 
     # ==========================================
     # BUSCA AUTOMÁTICA PELO CÓDIGO DE BARRAS
@@ -1740,7 +1500,7 @@ class CadastroProdutoWindow(QDialog):
 
         self.lbl_foto.setPixmap(
             pixmap.scaled(
-                _TAMANHO_PREVIA, _TAMANHO_PREVIA,
+                _FOTO_LARGURA, _FOTO_ALTURA,
                 Qt.KeepAspectRatio, Qt.SmoothTransformation,
             )
         )

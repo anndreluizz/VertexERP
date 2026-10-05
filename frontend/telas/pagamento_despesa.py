@@ -59,6 +59,7 @@ from design.widgets import (
     BotaoSecundario,
     BotaoSucesso,
     CabecalhoDialogo,
+    DialogoPadrao,
     CampoTexto,
 )
 from utils.formatacao import formatar_moeda
@@ -95,7 +96,7 @@ class PagamentoDespesaDialog(QDialog):
         self.comprovante_tipo_arquivo = None
 
         self.setWindowTitle("Pagamento de Despesa")
-        tamanho_fixo_seguro(self, 480, 560)
+        tamanho_fixo_seguro(self, DialogoPadrao.MEDIO, 640)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         raiz = QVBoxLayout(self)
@@ -105,6 +106,7 @@ class PagamentoDespesaDialog(QDialog):
         self.cabecalho = CabecalhoDialogo(
             "credit-card", tokens.SUCESSO, tokens.SUCESSO_CLARO,
             "Confirmar Pagamento", "Revise os dados antes de confirmar",
+            fechavel=True, ao_fechar=self.reject,
         )
         raiz.addWidget(self.cabecalho)
 
@@ -126,8 +128,8 @@ class PagamentoDespesaDialog(QDialog):
 
         pagina = QFrame()
         layout = QVBoxLayout(pagina)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(12)
+        layout.setContentsMargins(28, 20, 28, 20)
+        layout.setSpacing(14)
 
         bloco_dados = QFrame()
         bloco_dados.setStyleSheet(f"""
@@ -135,8 +137,8 @@ class PagamentoDespesaDialog(QDialog):
         """)
 
         dados_layout = QVBoxLayout(bloco_dados)
-        dados_layout.setContentsMargins(16, 14, 16, 14)
-        dados_layout.setSpacing(6)
+        dados_layout.setContentsMargins(18, 16, 18, 16)
+        dados_layout.setSpacing(10)
 
         self.lbl_categoria = self._linha_dado(dados_layout, "Categoria")
         self.lbl_descricao = self._linha_dado(dados_layout, "Descrição")
@@ -147,8 +149,8 @@ class PagamentoDespesaDialog(QDialog):
 
         lbl_forma_titulo = QLabel("Forma de pagamento")
         lbl_forma_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
         """)
         layout.addWidget(lbl_forma_titulo)
 
@@ -175,8 +177,8 @@ class PagamentoDespesaDialog(QDialog):
 
         lbl_obs_titulo = QLabel("Observação (opcional)")
         lbl_obs_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
         """)
 
         self.observacao = CampoTexto("Ex: pago com desconto combinado...")
@@ -186,8 +188,8 @@ class PagamentoDespesaDialog(QDialog):
 
         lbl_comprovante_titulo = QLabel("Comprovante (opcional)")
         lbl_comprovante_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
         """)
         layout.addWidget(lbl_comprovante_titulo)
 
@@ -226,15 +228,16 @@ class PagamentoDespesaDialog(QDialog):
         botoes.setSpacing(10)
 
         bt_cancelar = BotaoSecundario("Cancelar")
-        bt_cancelar.setMinimumHeight(46)
+        bt_cancelar.setMinimumWidth(140)
         bt_cancelar.setAutoDefault(False)
         bt_cancelar.clicked.connect(self.reject)
 
-        self.bt_confirmar = BotaoSucesso("Confirmar Pagamento")
-        self.bt_confirmar.setMinimumHeight(46)
+        self.bt_confirmar = BotaoSucesso("Confirmar Pagamento", icone_nome="check")
+        self.bt_confirmar.setMinimumWidth(200)
         self.bt_confirmar.setAutoDefault(False)
         self.bt_confirmar.clicked.connect(self.confirmar)
 
+        botoes.addStretch()
         botoes.addWidget(bt_cancelar)
         botoes.addWidget(self.bt_confirmar)
 

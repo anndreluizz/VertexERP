@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.responsive import tamanho_fixo_seguro
-from design.widgets import BotaoSucesso, CampoTexto
+from design.widgets import BotaoSecundario, BotaoSucesso, CabecalhoDialogo, CampoTexto
 from services.api import configuracoes
 from services.pix_utils import montar_payload_pix
 from services.worker import rodar_em_thread
@@ -186,21 +186,9 @@ class PagamentoWindow(QDialog):
     # ======================================
 
     def _construir_cabecalho(self):
-
-        cabecalho = QFrame()
-        cabecalho.setStyleSheet(f"background:{tokens.SIDEBAR};")
-        cabecalho.setFixedHeight(56)
-
-        cab_layout = QHBoxLayout(cabecalho)
-        cab_layout.setContentsMargins(24, 0, 24, 0)
-        cab_layout.setSpacing(14)
-
-        titulo = QLabel("Pagamento")
-        titulo.setStyleSheet(
-            f"background:transparent; color:{tokens.TEXTO_CLARO}; "
-            f"font-size:16px; font-weight:bold;"
-        )
-        cab_layout.addWidget(titulo)
+        """Topo claro no padrão das outras subtelas (CabecalhoDialogo):
+        ícone, "Pagamento" e o resumo da venda embaixo; o Cancelar (Esc)
+        fica na ponta direita, no lugar do X."""
 
         qtd = len(self.itens)
         detalhe = f"{qtd} {'item' if qtd == 1 else 'itens'}  ·  Subtotal R$ {_fmt(self.subtotal)}"
@@ -209,31 +197,18 @@ class PagamentoWindow(QDialog):
         if self.acrescimo > EPSILON:
             detalhe += f"  ·  Acréscimo R$ {_fmt(self.acrescimo)}"
 
-        lbl_detalhe = QLabel(detalhe)
-        lbl_detalhe.setStyleSheet(
-            f"background:transparent; color:{tokens.TEXTO_SIDEBAR_APAGADO}; font-size:12px;"
+        cabecalho = CabecalhoDialogo(
+            "credit-card", tokens.PRIMARIA, tokens.PRIMARIA_CLARA,
+            "Pagamento", detalhe,
         )
-        cab_layout.addWidget(lbl_detalhe)
-        cab_layout.addStretch()
 
-        self.bt_cancelar = QPushButton("Cancelar (Esc)")
+        self.bt_cancelar = BotaoSecundario("Cancelar (Esc)", icone_nome="x")
         self.bt_cancelar.setAutoDefault(False)
         self.bt_cancelar.setFocusPolicy(Qt.NoFocus)
-        self.bt_cancelar.setCursor(Qt.PointingHandCursor)
-        self.bt_cancelar.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.SIDEBAR_HOVER};
-                color:{tokens.TEXTO_CLARO};
-                border-radius:{tokens.RADIUS_SM}px;
-                padding:8px 14px;
-                font-weight:600;
-            }}
-            QPushButton:hover {{
-                background:{tokens.ERRO};
-            }}
-        """)
         self.bt_cancelar.clicked.connect(self.reject)
-        cab_layout.addWidget(self.bt_cancelar)
+        # a primeira linha do CabecalhoDialogo termina num stretch --
+        # o botão entra depois dele, na ponta direita
+        cabecalho.layout().itemAt(0).layout().addWidget(self.bt_cancelar)
 
         return cabecalho
 

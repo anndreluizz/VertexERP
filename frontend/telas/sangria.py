@@ -1,154 +1,57 @@
-from PySide6.QtWidgets import QMessageBox
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QLabel,
-    QDoubleSpinBox,
-    QLineEdit,
-    QHBoxLayout,
-    QPushButton,
-)
+from PySide6.QtWidgets import QDoubleSpinBox, QMessageBox
 
 from design import tokens
-from design.icons import icone, icone_pixmap
-from design.responsive import tamanho_fixo_seguro
-from design.widgets import BotaoPerigo, BotaoSecundario
+from design.widgets import BotaoPerigo, CampoTexto, DialogoPadrao, campo_rotulado
 
 
-class SangriaWindow(QDialog):
+class MovimentoGavetaDialog(DialogoPadrao):
+    """Base de Sangria e Suprimento (eram dois arquivos quase iguais):
+    valor + motivo, no molde padrão das subtelas."""
 
-    def __init__(self):
-        super().__init__()
+    TIPO = ""
 
-        self.setWindowTitle("Sangria")
-        tamanho_fixo_seguro(self, 420, 320)
-        self.setStyleSheet(f"background:{tokens.CARD};")
+    def __init__(self, titulo, subtitulo, icone_nome, cor, cor_fundo, placeholder, botao):
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 22, 24, 24)
-        layout.setSpacing(4)
-
-        linha_cabecalho = QHBoxLayout()
-        linha_cabecalho.setSpacing(14)
-
-        icone_circulo = QLabel()
-        icone_circulo.setFixedSize(48, 48)
-        icone_circulo.setAlignment(Qt.AlignCenter)
-        icone_circulo.setStyleSheet(f"""
-            background:{tokens.ERRO_CLARO}; border-radius:24px;
-        """)
-        icone_circulo.setPixmap(icone_pixmap("arrow-down", cor=tokens.ERRO, tamanho=20))
-        linha_cabecalho.addWidget(icone_circulo)
-
-        col_titulo = QVBoxLayout()
-        col_titulo.setSpacing(2)
-
-        titulo = QLabel("Sangria")
-        titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO};
-            font-size:{tokens.TAMANHO_XL}px; font-weight:800;
-        """)
-
-        subtitulo = QLabel("Retirada de dinheiro da gaveta")
-        subtitulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_SM}px;
-        """)
-
-        col_titulo.addWidget(titulo)
-        col_titulo.addWidget(subtitulo)
-
-        linha_cabecalho.addLayout(col_titulo, 1)
-
-        bt_fechar = QPushButton()
-        bt_fechar.setFixedSize(30, 30)
-        bt_fechar.setCursor(Qt.PointingHandCursor)
-        bt_fechar.setAutoDefault(False)
-        bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
-        bt_fechar.setToolTip("Fechar")
-        bt_fechar.setAccessibleName("Fechar")
-        bt_fechar.setStyleSheet(f"""
-            QPushButton {{ background:transparent; border:none; border-radius:6px; }}
-            QPushButton:hover {{ background:{tokens.FUNDO}; }}
-        """)
-        bt_fechar.clicked.connect(self.reject)
-        linha_cabecalho.addWidget(bt_fechar, 0, Qt.AlignTop)
-
-        layout.addLayout(linha_cabecalho)
-        layout.addSpacing(14)
-
-        lbl_valor = QLabel("VALOR")
-        lbl_valor.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
-        """)
-        layout.addWidget(lbl_valor)
+        super().__init__(
+            titulo, subtitulo, icone_nome, cor, cor_fundo,
+            largura=DialogoPadrao.PEQUENO,
+        )
 
         self.valor = QDoubleSpinBox()
         self.valor.setMinimum(0)
         self.valor.setMaximum(99999999)
         self.valor.setDecimals(2)
         self.valor.setPrefix("R$ ")
-        self.valor.setMinimumHeight(44)
+        self.valor.setMinimumHeight(52)
         self.valor.setStyleSheet(f"""
             QDoubleSpinBox {{
                 border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
-                padding: 0 10px; font-size: {tokens.TAMANHO_LG}px; font-weight: 700;
-                color: {tokens.ERRO}; background: {tokens.CARD};
+                padding: 0 12px; font-size: {tokens.TAMANHO_XL}px; font-weight: 800;
+                color: {cor}; background: {tokens.CARD};
             }}
+            QDoubleSpinBox:focus {{ border-color: {cor}; }}
         """)
 
-        layout.addWidget(self.valor)
-        layout.addSpacing(12)
+        self.descricao = CampoTexto(placeholder)
 
-        lbl_descricao = QLabel("DESCRIÇÃO")
-        lbl_descricao.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
-        """)
-        layout.addWidget(lbl_descricao)
+        self.corpo.addWidget(campo_rotulado("Valor", self.valor))
+        self.corpo.addWidget(campo_rotulado("Motivo", self.descricao))
+        self.corpo.addStretch()
 
-        self.descricao = QLineEdit()
-        self.descricao.setPlaceholderText("Motivo da sangria")
-        self.descricao.setMinimumHeight(44)
-        self.descricao.setStyleSheet(f"""
-            QLineEdit {{
-                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
-                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
-            }}
-            QLineEdit:focus {{ border: 1.5px solid {tokens.PRIMARIA}; }}
-        """)
+        self.bt_confirmar = botao
+        self.bt_confirmar.setAutoDefault(False)
+        self.bt_confirmar.clicked.connect(self.confirmar)
+        self.bt_cancelar = self.definir_botoes(self.bt_confirmar)
 
-        layout.addWidget(self.descricao)
-
-        layout.addStretch()
-
-        botoes = QHBoxLayout()
-        botoes.setSpacing(10)
-
-        self.bt_cancelar = BotaoSecundario("Cancelar")
-        self.bt_confirmar = BotaoPerigo("Confirmar Sangria")
+        self.ajustar_altura()
         self.valor.setFocus()
-
-        botoes.addWidget(self.bt_cancelar)
-        botoes.addWidget(self.bt_confirmar)
-
-        layout.addLayout(botoes)
-
-        self.bt_cancelar.clicked.connect(
-            self.reject
-        )
-
-        self.bt_confirmar.clicked.connect(
-            self.confirmar
-        )
+        self.valor.selectAll()
 
     @property
     def dados(self):
 
         return {
-            "tipo": "SANGRIA",
+            "tipo": self.TIPO,
             "valor": float(self.valor.value()),
             "descricao": self.descricao.text(),
         }
@@ -156,21 +59,25 @@ class SangriaWindow(QDialog):
     def confirmar(self):
 
         if self.valor.value() <= 0:
-            QMessageBox.warning(
-                self,
-                "Aviso",
-                "Informe um valor."
-            )
-
+            QMessageBox.warning(self, "Aviso", "Informe um valor.")
+            self.valor.setFocus()
             return
 
         if self.descricao.text().strip() == "":
-            QMessageBox.warning(
-                self,
-                "Aviso",
-                "Informe uma descrição."
-            )
-
+            QMessageBox.warning(self, "Aviso", "Informe uma descrição.")
+            self.descricao.setFocus()
             return
 
         self.accept()
+
+
+class SangriaWindow(MovimentoGavetaDialog):
+
+    TIPO = "SANGRIA"
+
+    def __init__(self):
+        super().__init__(
+            "Sangria", "Retirada de dinheiro da gaveta",
+            "arrow-down", tokens.ERRO, tokens.ERRO_CLARO,
+            "Motivo da sangria", BotaoPerigo("Confirmar Sangria", icone_nome="check"),
+        )

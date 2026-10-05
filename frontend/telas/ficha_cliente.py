@@ -81,7 +81,6 @@ def _buscar_dados_ficha_cliente(cliente_id):
 
 from design import tokens
 from design.icons import icone, icone_pixmap
-from design.responsive import tamanho_fixo_seguro
 from utils.formatacao import formatar_moeda
 from utils.documento_html import (
     ESTILO_BODY,
@@ -100,6 +99,8 @@ from design.widgets import (
     CampoTexto,
     Card,
     CardKPI,
+    DialogoPadrao,
+    campo_rotulado,
     SecaoCard,
 )
 
@@ -241,7 +242,7 @@ class _OpcaoTipoRegistro(QFrame):
         super().mousePressEvent(event)
 
 
-class LancarFiadoDialog(QDialog):
+class LancarFiadoDialog(DialogoPadrao):
     """Lançamento manual de uma compra fiada — pensado pra migrar o
     saldo que já existia nas fichas de papel (caderninho tradicional),
     onde a loja quer registrar o valor e os itens sem precisar recriar
@@ -249,26 +250,18 @@ class LancarFiadoDialog(QDialog):
 
     def __init__(self, cliente, saldo_atual, parent=None):
 
-        super().__init__(parent)
+        super().__init__(
+            "Lançar Fiado",
+            "Registra uma compra fiada ou uma dívida anterior do cliente.",
+            "shopping-cart", tokens.PRIMARIA, tokens.PRIMARIA_CLARA,
+            largura=DialogoPadrao.MEDIO, parent=parent,
+        )
 
         self.cliente = cliente
         self._saldo_atual = saldo_atual
         self._tipo_registro = "compra"
 
-        self.setWindowTitle("Lançar Fiado")
-        tamanho_fixo_seguro(self, 640, 780)
-        self.setStyleSheet(f"background:{tokens.CARD};")
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(16)
-
-        layout.addLayout(self._construir_cabecalho_dialogo())
-
-        linha_divisoria = QFrame()
-        linha_divisoria.setFixedHeight(1)
-        linha_divisoria.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
-        layout.addWidget(linha_divisoria)
+        layout = self.corpo
 
         layout.addWidget(self._construir_cartao_cliente())
 
@@ -276,10 +269,10 @@ class LancarFiadoDialog(QDialog):
 
         layout.addLayout(self._construir_linha_valor())
 
-        lbl_itens_titulo = QLabel("DESCRIÇÃO (ITENS COMPRADOS)")
+        lbl_itens_titulo = QLabel("Descrição (itens comprados)")
         lbl_itens_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
         """)
 
         self.itens = CampoTexto("Ex: mochila, caderno")
@@ -296,10 +289,10 @@ class LancarFiadoDialog(QDialog):
         layout.addWidget(self.itens)
         layout.addWidget(lbl_itens_dica)
 
-        lbl_data_titulo = QLabel("DATA DA COMPRA")
+        lbl_data_titulo = QLabel("Data da compra")
         lbl_data_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
         """)
 
         self.data = QDateEdit()
@@ -335,76 +328,13 @@ class LancarFiadoDialog(QDialog):
 
         layout.addStretch()
 
-        botoes = QHBoxLayout()
-        botoes.setSpacing(10)
-
-        bt_cancelar = BotaoSecundario("Cancelar", icone_nome="x")
-        bt_cancelar.setMinimumHeight(46)
-        bt_cancelar.setAutoDefault(False)
-        bt_cancelar.clicked.connect(self.reject)
-
         self.bt_confirmar = BotaoSucesso("Lançar Fiado", icone_nome="check")
-        self.bt_confirmar.setMinimumHeight(46)
         self.bt_confirmar.setAutoDefault(False)
         self.bt_confirmar.clicked.connect(self.confirmar)
+        self.definir_botoes(self.bt_confirmar)
 
-        botoes.addWidget(bt_cancelar)
-        botoes.addWidget(self.bt_confirmar)
-
-        layout.addLayout(botoes)
-
+        self.ajustar_altura()
         self.valor.setFocus()
-
-    def _construir_cabecalho_dialogo(self):
-
-        linha = QHBoxLayout()
-        linha.setSpacing(14)
-
-        icone_circulo = QLabel()
-        icone_circulo.setFixedSize(52, 52)
-        icone_circulo.setAlignment(Qt.AlignCenter)
-        icone_circulo.setStyleSheet(f"""
-            background:{tokens.PRIMARIA_CLARA}; border-radius:26px;
-        """)
-        icone_circulo.setPixmap(icone_pixmap("shopping-cart", cor=tokens.PRIMARIA, tamanho=22))
-        linha.addWidget(icone_circulo)
-
-        col = QVBoxLayout()
-        col.setSpacing(2)
-
-        titulo = QLabel("Lançar Fiado")
-        titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XL}px;
-            font-weight:800; color:{tokens.TEXTO};
-        """)
-
-        subtitulo = QLabel("Registra uma compra fiada ou uma dívida anterior do cliente.")
-        subtitulo.setWordWrap(True)
-        subtitulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_SM}px;
-            color:{tokens.TEXTO_TERCIARIO};
-        """)
-
-        col.addWidget(titulo)
-        col.addWidget(subtitulo)
-
-        linha.addLayout(col, 1)
-
-        bt_fechar = QPushButton()
-        bt_fechar.setFixedSize(30, 30)
-        bt_fechar.setCursor(Qt.PointingHandCursor)
-        bt_fechar.setAutoDefault(False)
-        bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
-        bt_fechar.setToolTip("Fechar")
-        bt_fechar.setAccessibleName("Fechar")
-        bt_fechar.setStyleSheet(f"""
-            QPushButton {{ background:transparent; border:none; border-radius:6px; }}
-            QPushButton:hover {{ background:{tokens.FUNDO}; }}
-        """)
-        bt_fechar.clicked.connect(self.reject)
-        linha.addWidget(bt_fechar, 0, Qt.AlignTop)
-
-        return linha
 
     def _construir_cartao_cliente(self):
 
@@ -563,10 +493,10 @@ class LancarFiadoDialog(QDialog):
         col_valor = QVBoxLayout()
         col_valor.setSpacing(6)
 
-        lbl_valor_titulo = QLabel("VALOR DA COMPRA (R$)")
+        lbl_valor_titulo = QLabel("Valor da compra (R$)")
         lbl_valor_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
         """)
 
         self.valor = QLineEdit()
@@ -794,37 +724,29 @@ class LancarFiadoDialog(QDialog):
         QMessageBox.critical(self, "Erro", str(erro))
 
 
-class RegistrarPagamentoDialog(QDialog):
+class RegistrarPagamentoDialog(DialogoPadrao):
 
     def __init__(self, cliente, saldo_devedor, parent=None):
 
-        super().__init__(parent)
+        super().__init__(
+            "Registrar Pagamento",
+            "Registra um pagamento do cliente no sistema.",
+            "dollar-sign", tokens.SECUNDARIA_HOVER, tokens.SUCESSO_CLARO,
+            largura=DialogoPadrao.MEDIO, parent=parent,
+        )
 
         self.cliente = cliente
         self.forma_pagamento = "DINHEIRO"
         self._saldo_devedor = saldo_devedor
 
-        self.setWindowTitle("Registrar Pagamento")
-        tamanho_fixo_seguro(self, 640, 760)
-        self.setStyleSheet(f"background:{tokens.CARD};")
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(16)
-
-        layout.addLayout(self._construir_cabecalho_dialogo())
-
-        linha_divisoria = QFrame()
-        linha_divisoria.setFixedHeight(1)
-        linha_divisoria.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
-        layout.addWidget(linha_divisoria)
+        layout = self.corpo
 
         layout.addWidget(self._construir_cartao_cliente())
 
-        lbl_valor_titulo = QLabel("VALOR A PAGAR (R$)")
+        lbl_valor_titulo = QLabel("Valor a pagar (R$)")
         lbl_valor_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
         """)
         layout.addWidget(lbl_valor_titulo)
 
@@ -881,10 +803,10 @@ class RegistrarPagamentoDialog(QDialog):
         """)
         layout.addWidget(lbl_saldo_dica)
 
-        lbl_forma_titulo = QLabel("FORMA DE PAGAMENTO")
+        lbl_forma_titulo = QLabel("Forma de pagamento")
         lbl_forma_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
         """)
 
         layout.addWidget(lbl_forma_titulo)
@@ -914,10 +836,10 @@ class RegistrarPagamentoDialog(QDialog):
 
         layout.addLayout(formas_layout)
 
-        lbl_obs_titulo = QLabel("OBSERVAÇÃO (OPCIONAL)")
+        lbl_obs_titulo = QLabel("Observação (opcional)")
         lbl_obs_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
         """)
 
         self.observacao = CampoTexto("Ex: pagamento parcial, combinado...")
@@ -925,10 +847,10 @@ class RegistrarPagamentoDialog(QDialog):
         layout.addWidget(lbl_obs_titulo)
         layout.addWidget(self.observacao)
 
-        lbl_data_titulo = QLabel("DATA DO PAGAMENTO")
+        lbl_data_titulo = QLabel("Data do pagamento")
         lbl_data_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
         """)
 
         linha_data = QHBoxLayout()
@@ -964,77 +886,15 @@ class RegistrarPagamentoDialog(QDialog):
 
         layout.addStretch()
 
-        botoes = QHBoxLayout()
-        botoes.setSpacing(10)
-
-        bt_cancelar = BotaoSecundario("Cancelar", icone_nome="x")
-        bt_cancelar.setMinimumHeight(46)
-        bt_cancelar.setAutoDefault(False)
-        bt_cancelar.clicked.connect(self.reject)
-
         self.bt_confirmar = BotaoSucesso("Confirmar Pagamento", icone_nome="check")
-        self.bt_confirmar.setMinimumHeight(46)
         self.bt_confirmar.setAutoDefault(False)
         self.bt_confirmar.clicked.connect(self.confirmar)
+        self.definir_botoes(self.bt_confirmar)
 
-        botoes.addWidget(bt_cancelar)
-        botoes.addWidget(self.bt_confirmar)
-
-        layout.addLayout(botoes)
-
+        self.ajustar_altura()
         self.selecionar_forma("DINHEIRO")
         self.valor.setFocus()
         self.valor.selectAll()
-
-    def _construir_cabecalho_dialogo(self):
-
-        linha = QHBoxLayout()
-        linha.setSpacing(14)
-
-        icone_circulo = QLabel()
-        icone_circulo.setFixedSize(52, 52)
-        icone_circulo.setAlignment(Qt.AlignCenter)
-        icone_circulo.setStyleSheet(f"""
-            background:{tokens.SUCESSO_CLARO}; border-radius:26px;
-        """)
-        icone_circulo.setPixmap(icone_pixmap("dollar-sign", cor=tokens.SECUNDARIA_HOVER, tamanho=22))
-        linha.addWidget(icone_circulo)
-
-        col = QVBoxLayout()
-        col.setSpacing(2)
-
-        titulo = QLabel("Registrar Pagamento")
-        titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XL}px;
-            font-weight:800; color:{tokens.TEXTO};
-        """)
-
-        subtitulo = QLabel("Registra um pagamento do cliente no sistema.")
-        subtitulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_SM}px;
-            color:{tokens.TEXTO_TERCIARIO};
-        """)
-
-        col.addWidget(titulo)
-        col.addWidget(subtitulo)
-
-        linha.addLayout(col, 1)
-
-        bt_fechar = QPushButton()
-        bt_fechar.setFixedSize(30, 30)
-        bt_fechar.setCursor(Qt.PointingHandCursor)
-        bt_fechar.setAutoDefault(False)
-        bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
-        bt_fechar.setToolTip("Fechar")
-        bt_fechar.setAccessibleName("Fechar")
-        bt_fechar.setStyleSheet(f"""
-            QPushButton {{ background:transparent; border:none; border-radius:6px; }}
-            QPushButton:hover {{ background:{tokens.FUNDO}; }}
-        """)
-        bt_fechar.clicked.connect(self.reject)
-        linha.addWidget(bt_fechar, 0, Qt.AlignTop)
-
-        return linha
 
     def _construir_cartao_cliente(self):
 
@@ -1327,50 +1187,21 @@ class RegistrarPagamentoDialog(QDialog):
         """
 
 
-class LancarHaverDialog(QDialog):
+class LancarHaverDialog(DialogoPadrao):
     """Crédito manual em favor do cliente (desconto, devolução,
     cortesia) -- reduz o saldo devedor igual um pagamento, mas nunca é
     dinheiro recebido de verdade, então nunca mexe no caixa."""
 
     def __init__(self, cliente, saldo_devedor, parent=None):
 
-        super().__init__(parent)
+        super().__init__(
+            "Lançar Haver",
+            "Desconto, devolução ou cortesia que abate do fiado.",
+            "gift", tokens.ALERTA, tokens.ALERTA_CLARO,
+            largura=DialogoPadrao.PEQUENO, parent=parent,
+        )
 
         self.cliente = cliente
-
-        self.setWindowTitle("Lançar Haver")
-        tamanho_fixo_seguro(self, 420, 420)
-        self.setStyleSheet(f"background:{tokens.CARD};")
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(14)
-
-        titulo = QLabel("Lançar Haver")
-        titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XL}px;
-            font-weight:800; color:{tokens.TEXTO};
-        """)
-
-        subtitulo = QLabel(
-            f"Crédito em favor de {cliente['nome']} (desconto, devolução, "
-            f"cortesia). Saldo devedor atual: {formatar_moeda(saldo_devedor)}."
-        )
-        subtitulo.setWordWrap(True)
-        subtitulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_SM}px;
-            color:{tokens.TEXTO_TERCIARIO};
-        """)
-
-        layout.addWidget(titulo)
-        layout.addWidget(subtitulo)
-        layout.addSpacing(6)
-
-        lbl_valor_titulo = QLabel("VALOR DO CRÉDITO (R$)")
-        lbl_valor_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
 
         self.valor = QLineEdit()
         self.valor.setPlaceholderText("0,00")
@@ -1381,42 +1212,25 @@ class LancarHaverDialog(QDialog):
                 border:none; border-bottom:2px solid {tokens.BORDA};
                 padding:6px 0; background:transparent;
             }}
-        """)
-
-        layout.addWidget(lbl_valor_titulo)
-        layout.addWidget(self.valor)
-
-        lbl_desc_titulo = QLabel("MOTIVO")
-        lbl_desc_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+            QLineEdit:focus {{ border-bottom-color:{tokens.ALERTA}; }}
         """)
 
         self.descricao = CampoTexto("Ex: desconto combinado, devolução de item")
 
-        layout.addWidget(lbl_desc_titulo)
-        layout.addWidget(self.descricao)
+        self.corpo.addWidget(campo_rotulado(
+            "Valor do crédito (R$)", self.valor,
+            f"{cliente['nome']} deve hoje {formatar_moeda(saldo_devedor)}. "
+            "O haver não entra no caixa.",
+        ))
+        self.corpo.addWidget(campo_rotulado("Motivo", self.descricao))
+        self.corpo.addStretch()
 
-        layout.addStretch()
-
-        botoes = QHBoxLayout()
-        botoes.setSpacing(10)
-
-        bt_cancelar = BotaoSecundario("Cancelar")
-        bt_cancelar.setMinimumHeight(46)
-        bt_cancelar.setAutoDefault(False)
-        bt_cancelar.clicked.connect(self.reject)
-
-        self.bt_confirmar = BotaoPrimario("Salvar")
-        self.bt_confirmar.setMinimumHeight(46)
+        self.bt_confirmar = BotaoPrimario("Lançar Haver", icone_nome="check")
         self.bt_confirmar.setAutoDefault(False)
         self.bt_confirmar.clicked.connect(self.confirmar)
+        self.definir_botoes(self.bt_confirmar)
 
-        botoes.addWidget(bt_cancelar)
-        botoes.addWidget(self.bt_confirmar)
-
-        layout.addLayout(botoes)
-
+        self.ajustar_altura()
         self.valor.setFocus()
 
     def confirmar(self):

@@ -4,7 +4,6 @@ from datetime import date, datetime
 
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtWidgets import (
-    QDialog,
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
@@ -13,7 +12,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QFileDialog,
     QFrame,
-    QScrollArea,
     QWidget,
     QMessageBox,
 )
@@ -34,7 +32,10 @@ from telas.gerenciar_centros_custo import GerenciarCentrosCustoDialog
 from telas.gerenciar_plano_contas import GerenciarPlanoContasDialog
 
 from design import tokens
-from design.widgets import BotaoPerigo, BotaoSecundario, CabecalhoDialogo, CampoTexto
+from design.widgets import (
+    BotaoPerigo, BotaoSecundario, CampoTexto, DialogoPadrao, campo_rotulado,
+    grade_formulario, titulo_secao,
+)
 from utils.formatacao import formatar_moeda
 
 
@@ -47,11 +48,21 @@ def _parse_valor(texto):
         return 0.0
 
 
-class CadastroDespesaDialog(QDialog):
+class CadastroDespesaDialog(DialogoPadrao):
+    """Nova / Editar despesa no molde padrão das subtelas: duas colunas
+    agrupadas em Despesa / Classificação / Pagamento e documento (era
+    uma coluna de 440px com rolagem comprida)."""
 
     def __init__(self, conta=None, duplicar_de=None, parent=None):
 
-        super().__init__(parent)
+        editando = conta is not None
+
+        super().__init__(
+            "Editar Despesa" if editando else "Nova Despesa",
+            "Contas e despesas do estabelecimento",
+            "wallet", tokens.ALERTA, tokens.ALERTA_CLARO,
+            largura=DialogoPadrao.GRANDE, parent=parent,
+        )
 
         self.conta = conta
 
@@ -65,173 +76,13 @@ class CadastroDespesaDialog(QDialog):
         self.documento_nome_arquivo = None
         self.documento_tipo_arquivo = None
 
-        editando = conta is not None
-
-        self.setWindowTitle(
-            "Editar Despesa" if editando else "Nova Despesa"
-        )
-        self.setFixedWidth(440)
-        self.resize(440, 680)
-        self.setStyleSheet(f"background:{tokens.CARD};")
-
-        raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(0, 0, 0, 0)
-        raiz.setSpacing(0)
-
         # ======================
-        # CABEÇALHO
+        # DESPESA
         # ======================
 
-        raiz.addWidget(CabecalhoDialogo(
-            "wallet", tokens.ALERTA, tokens.ALERTA_CLARO,
-            "Editar Despesa" if editando else "Nova Despesa",
-            "Contas e despesas do estabelecimento",
-            fechavel=True, ao_fechar=self.reject,
-        ))
-
-        # ======================
-        # CORPO (rolável)
-        # ======================
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet(
-            "QScrollArea { border: none; background: transparent; }"
-        )
-
-        corpo_widget = QWidget()
-        corpo_widget.setStyleSheet(f"background:{tokens.CARD};")
-
-        corpo_scroll_layout = QVBoxLayout(corpo_widget)
-        corpo_scroll_layout.setContentsMargins(24, 20, 24, 20)
-        corpo_scroll_layout.setSpacing(12)
-
-        self.descricao = self._campo(
-            corpo_scroll_layout, "Descrição", "Ex: aluguel, funcionária, luz..."
-        )
-
-        cabecalho_categoria = QHBoxLayout()
-
-        lbl_categoria = QLabel("Categoria")
-        lbl_categoria.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
-
-        bt_gerenciar_categorias = QPushButton("Gerenciar")
-        bt_gerenciar_categorias.setAutoDefault(False)
-        bt_gerenciar_categorias.setCursor(Qt.PointingHandCursor)
-        bt_gerenciar_categorias.setStyleSheet(f"""
-            QPushButton {{
-                background:transparent; border:none;
-                color:{tokens.PRIMARIA}; font-size:{tokens.TAMANHO_XS}px; font-weight:700;
-            }}
-            QPushButton:hover {{ color:{tokens.PRIMARIA_HOVER}; }}
-        """)
-        bt_gerenciar_categorias.clicked.connect(self.gerenciar_categorias)
-
-        cabecalho_categoria.addWidget(lbl_categoria)
-        cabecalho_categoria.addStretch()
-        cabecalho_categoria.addWidget(bt_gerenciar_categorias)
-
-        self.categoria = QComboBox()
-        self.categoria.setMinimumHeight(44)
-        self.categoria.setCursor(Qt.PointingHandCursor)
-        self.categoria.setStyleSheet(f"""
-            QComboBox {{
-                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
-                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
-            }}
-        """)
-        self._carregar_categorias()
-
-        corpo_scroll_layout.addLayout(cabecalho_categoria)
-        corpo_scroll_layout.addWidget(self.categoria)
-
-        cabecalho_centro_custo = QHBoxLayout()
-
-        lbl_centro_custo = QLabel("Centro de Custo (opcional)")
-        lbl_centro_custo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
-
-        bt_gerenciar_centros_custo = QPushButton("Gerenciar")
-        bt_gerenciar_centros_custo.setAutoDefault(False)
-        bt_gerenciar_centros_custo.setCursor(Qt.PointingHandCursor)
-        bt_gerenciar_centros_custo.setStyleSheet(f"""
-            QPushButton {{
-                background:transparent; border:none;
-                color:{tokens.PRIMARIA}; font-size:{tokens.TAMANHO_XS}px; font-weight:700;
-            }}
-            QPushButton:hover {{ color:{tokens.PRIMARIA_HOVER}; }}
-        """)
-        bt_gerenciar_centros_custo.clicked.connect(self.gerenciar_centros_custo)
-
-        cabecalho_centro_custo.addWidget(lbl_centro_custo)
-        cabecalho_centro_custo.addStretch()
-        cabecalho_centro_custo.addWidget(bt_gerenciar_centros_custo)
-
-        self.centro_custo = QComboBox()
-        self.centro_custo.setMinimumHeight(44)
-        self.centro_custo.setCursor(Qt.PointingHandCursor)
-        self.centro_custo.setStyleSheet(f"""
-            QComboBox {{
-                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
-                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
-            }}
-        """)
-        self._carregar_centros_custo()
-
-        corpo_scroll_layout.addLayout(cabecalho_centro_custo)
-        corpo_scroll_layout.addWidget(self.centro_custo)
-
-        cabecalho_plano_conta = QHBoxLayout()
-
-        lbl_plano_conta = QLabel("Plano de Contas (opcional)")
-        lbl_plano_conta.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
-
-        bt_gerenciar_plano_contas = QPushButton("Gerenciar")
-        bt_gerenciar_plano_contas.setAutoDefault(False)
-        bt_gerenciar_plano_contas.setCursor(Qt.PointingHandCursor)
-        bt_gerenciar_plano_contas.setStyleSheet(f"""
-            QPushButton {{
-                background:transparent; border:none;
-                color:{tokens.PRIMARIA}; font-size:{tokens.TAMANHO_XS}px; font-weight:700;
-            }}
-            QPushButton:hover {{ color:{tokens.PRIMARIA_HOVER}; }}
-        """)
-        bt_gerenciar_plano_contas.clicked.connect(self.gerenciar_plano_contas)
-
-        cabecalho_plano_conta.addWidget(lbl_plano_conta)
-        cabecalho_plano_conta.addStretch()
-        cabecalho_plano_conta.addWidget(bt_gerenciar_plano_contas)
-
-        self.plano_conta = QComboBox()
-        self.plano_conta.setMinimumHeight(44)
-        self.plano_conta.setCursor(Qt.PointingHandCursor)
-        self.plano_conta.setStyleSheet(f"""
-            QComboBox {{
-                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
-                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
-            }}
-        """)
-        self._carregar_planos_conta()
-
-        corpo_scroll_layout.addLayout(cabecalho_plano_conta)
-        corpo_scroll_layout.addWidget(self.plano_conta)
-
-        self.valor = self._campo(corpo_scroll_layout, "Valor (R$)", "0,00")
+        self.descricao = CampoTexto("Ex: aluguel, funcionária, luz...")
+        self.valor = CampoTexto("0,00")
         self.valor.textChanged.connect(self._atualizar_valor_final)
-
-        lbl_vencimento = QLabel("Vencimento")
-        lbl_vencimento.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
 
         self.vencimento = QDateEdit()
         self.vencimento.setCalendarPopup(True)
@@ -242,42 +93,54 @@ class CadastroDespesaDialog(QDialog):
             QDateEdit {{
                 border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
                 padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
+                background: {tokens.CARD};
             }}
+            QDateEdit:focus {{ border-color: {tokens.PRIMARIA}; }}
         """)
 
-        corpo_scroll_layout.addWidget(lbl_vencimento)
-        corpo_scroll_layout.addWidget(self.vencimento)
+        self.corpo.addWidget(titulo_secao("Despesa"))
+        self.corpo.addLayout(grade_formulario(
+            (campo_rotulado("Descrição *", self.descricao), 0, 0, 1, 2),
+            (campo_rotulado("Valor (R$) *", self.valor), 1, 0),
+            (campo_rotulado("Vencimento", self.vencimento), 1, 1),
+        ))
 
-        self.numero_boleto = self._campo(
-            corpo_scroll_layout,
-            "Código de barras (boleto)",
-            "Bipe o boleto ou digite a linha digitável",
+        # ======================
+        # CLASSIFICAÇÃO
+        # ======================
+
+        self.categoria = self._combo()
+        self._carregar_categorias()
+        self.centro_custo = self._combo()
+        self._carregar_centros_custo()
+        self.plano_conta = self._combo()
+        self._carregar_planos_conta()
+
+        grade_classificacao = grade_formulario(
+            (self._combo_com_gerenciar("Categoria", self.categoria, self.gerenciar_categorias), 0, 0),
+            (self._combo_com_gerenciar("Centro de custo", self.centro_custo, self.gerenciar_centros_custo), 0, 1),
+            (self._combo_com_gerenciar("Plano de contas", self.plano_conta, self.gerenciar_plano_contas), 0, 2),
         )
+        grade_classificacao.setColumnStretch(2, 1)
 
-        # ---- anexo do boleto/nota (PDF ou foto) ----
+        self.corpo.addWidget(titulo_secao("Classificação"))
+        self.corpo.addLayout(grade_classificacao)
 
-        lbl_anexo = QLabel("Documento")
-        lbl_anexo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
-        corpo_scroll_layout.addWidget(lbl_anexo)
+        # ======================
+        # PAGAMENTO E DOCUMENTO
+        # ======================
 
-        linha_anexo = QHBoxLayout()
+        self.numero_boleto = CampoTexto("Bipe o boleto ou digite a linha digitável")
+        self.observacoes = CampoTexto("Anotações internas sobre essa despesa")
+
+        linha_anexo_widget = QWidget()
+        linha_anexo_widget.setStyleSheet("background:transparent;")
+        linha_anexo = QHBoxLayout(linha_anexo_widget)
+        linha_anexo.setContentsMargins(0, 0, 0, 0)
         linha_anexo.setSpacing(8)
 
-        self.bt_anexar = QPushButton("Anexar Boleto")
-        self.bt_anexar.setCursor(Qt.PointingHandCursor)
+        self.bt_anexar = BotaoSecundario("Anexar boleto", icone_nome="file-text")
         self.bt_anexar.setAutoDefault(False)
-        self.bt_anexar.setMinimumHeight(38)
-        self.bt_anexar.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.FUNDO}; border:1.5px solid {tokens.BORDA};
-                border-radius:{tokens.RADIUS_SM}px; padding:0 14px;
-                font-size:{tokens.TAMANHO_SM}px; font-weight:600; color:{tokens.TEXTO};
-            }}
-            QPushButton:hover {{ background:{tokens.BORDA}; }}
-        """)
         self.bt_anexar.clicked.connect(self.escolher_documento)
 
         self.lbl_arquivo_anexado = QLabel("Nenhum arquivo anexado")
@@ -303,13 +166,12 @@ class CadastroDespesaDialog(QDialog):
         linha_anexo.addWidget(self.lbl_arquivo_anexado, stretch=1)
         linha_anexo.addWidget(self.bt_remover_anexo)
 
-        corpo_scroll_layout.addLayout(linha_anexo)
-
-        self.observacoes = self._campo(
-            corpo_scroll_layout,
-            "Observações",
-            "Anotações internas sobre essa despesa",
-        )
+        self.corpo.addWidget(titulo_secao("Pagamento e documento"))
+        self.corpo.addLayout(grade_formulario(
+            (campo_rotulado("Código de barras (boleto)", self.numero_boleto), 0, 0),
+            (campo_rotulado("Documento (PDF ou foto)", linha_anexo_widget), 0, 1),
+            (campo_rotulado("Observações", self.observacoes), 1, 0, 1, 2),
+        ))
 
         # ---- desconto / juros / multa (colapsável) ----
 
@@ -323,7 +185,7 @@ class CadastroDespesaDialog(QDialog):
             }}
         """)
         self.bt_alternar_ajuste.clicked.connect(self._alternar_bloco_ajuste)
-        corpo_scroll_layout.addWidget(self.bt_alternar_ajuste)
+        self.corpo.addWidget(self.bt_alternar_ajuste)
 
         self.bloco_ajuste = QFrame()
         self.bloco_ajuste.setVisible(False)
@@ -348,8 +210,8 @@ class CadastroDespesaDialog(QDialog):
 
         lbl_final_titulo = QLabel("Valor final (será salvo)")
         lbl_final_titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:600;
         """)
 
         self.lbl_valor_final = QLabel("R$ 0,00")
@@ -365,42 +227,20 @@ class CadastroDespesaDialog(QDialog):
 
         ajuste_layout.addLayout(linha_final)
 
-        corpo_scroll_layout.addWidget(self.bloco_ajuste)
-
-        corpo_scroll_layout.addStretch()
-
-        scroll.setWidget(corpo_widget)
-        raiz.addWidget(scroll, stretch=1)
+        self.corpo.addWidget(self.bloco_ajuste)
+        self.corpo.addStretch()
 
         # ======================
         # RODAPÉ
         # ======================
 
-        rodape = QFrame()
-        rodape.setStyleSheet(f"""
-            background:{tokens.FUNDO}; border-top:1px solid {tokens.BORDA};
-        """)
-
-        rodape_layout = QHBoxLayout(rodape)
-        rodape_layout.setContentsMargins(24, 14, 24, 14)
-        rodape_layout.setSpacing(10)
-
-        bt_cancelar = BotaoSecundario("Cancelar")
-        bt_cancelar.setMinimumHeight(46)
-        bt_cancelar.setAutoDefault(False)
-        bt_cancelar.clicked.connect(self.reject)
-
         self.bt_salvar = BotaoPerigo(
-            "Salvar Alterações" if editando else "Cadastrar Despesa"
+            "Salvar Alterações" if editando else "Cadastrar Despesa",
+            icone_nome="check",
         )
-        self.bt_salvar.setMinimumHeight(46)
         self.bt_salvar.setAutoDefault(False)
         self.bt_salvar.clicked.connect(self.salvar)
-
-        rodape_layout.addWidget(bt_cancelar)
-        rodape_layout.addWidget(self.bt_salvar)
-
-        raiz.addWidget(rodape)
+        self.definir_botoes(self.bt_salvar)
 
         if editando:
             self._preencher(conta)
@@ -409,25 +249,58 @@ class CadastroDespesaDialog(QDialog):
 
         self._atualizar_valor_final()
 
+        self.ajustar_altura()
         self.descricao.setFocus()
 
-    # ======================================
+    def _combo(self):
+        combo = QComboBox()
+        combo.setMinimumHeight(44)
+        combo.setCursor(Qt.PointingHandCursor)
+        combo.setStyleSheet(f"""
+            QComboBox {{
+                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
+                background: {tokens.CARD};
+            }}
+            QComboBox:focus {{ border-color: {tokens.PRIMARIA}; }}
+        """)
+        return combo
 
-    def _campo(self, layout, rotulo, placeholder):
+    def _combo_com_gerenciar(self, rotulo, combo, ao_gerenciar):
+        """Rótulo + link "Gerenciar" na mesma linha, combo embaixo."""
 
+        bloco = QWidget()
+        bloco.setStyleSheet("background:transparent;")
+        layout = QVBoxLayout(bloco)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        cabecalho = QHBoxLayout()
         lbl = QLabel(rotulo)
         lbl.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
         """)
+        bt = QPushButton("Gerenciar")
+        bt.setAutoDefault(False)
+        bt.setCursor(Qt.PointingHandCursor)
+        bt.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; border:none;
+                color:{tokens.PRIMARIA}; font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+            }}
+            QPushButton:hover {{ color:{tokens.PRIMARIA_HOVER}; }}
+        """)
+        bt.clicked.connect(ao_gerenciar)
+        cabecalho.addWidget(lbl)
+        cabecalho.addStretch()
+        cabecalho.addWidget(bt)
 
-        campo = CampoTexto(placeholder)
-        campo.setMinimumHeight(44)
+        layout.addLayout(cabecalho)
+        layout.addWidget(combo)
+        return bloco
 
-        layout.addWidget(lbl)
-        layout.addWidget(campo)
-
-        return campo
+    # ======================================
 
     def _campo_ajuste(self, layout, rotulo):
 
@@ -436,8 +309,8 @@ class CadastroDespesaDialog(QDialog):
 
         lbl = QLabel(rotulo)
         lbl.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
         """)
 
         campo = CampoTexto("0,00")

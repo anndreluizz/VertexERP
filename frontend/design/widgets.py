@@ -838,7 +838,9 @@ class DialogoPadrao(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle(titulo)
-        self.setStyleSheet(f"background:{tokens.FUNDO};")
+        # fundo branco (CARD): os cartões de resumo das subtelas usam
+        # FUNDO pra se destacar -- num fundo FUNDO eles sumiriam
+        self.setStyleSheet(f"background:{tokens.CARD};")
         self.setMinimumWidth(largura)
         self.resize(largura, 600)
 
@@ -897,7 +899,11 @@ class DialogoPadrao(QDialog):
         """Altura do conteúdo, limitada a 90% da área útil da tela --
         passando disso o corpo rola e cabeçalho/rodapé ficam fixos."""
 
+        # conteúdo que chega depois (thread) ainda não foi medido: força
+        # o layout a recalcular antes de ler o sizeHint
+        self.corpo.invalidate()
         self.corpo.activate()
+        self._corpo_widget.adjustSize()
         altura = (
             self.cabecalho.sizeHint().height()
             + self._corpo_widget.sizeHint().height()

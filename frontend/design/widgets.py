@@ -277,7 +277,7 @@ class _BotaoAnimado(QPushButton):
         cor_normal="#2563EB",
         cor_hover="#1D4ED8",
         cor_texto="#FFFFFF",
-        cor_desabilitado="#E5E7EB",
+        cor_desabilitado=None,
         contorno=False,
         altura=44,
     ):
@@ -288,7 +288,9 @@ class _BotaoAnimado(QPushButton):
         self._cor_hover = QColor(cor_hover)
         self._cor_atual = QColor(cor_normal)
         self._cor_texto = QColor(cor_texto)
-        self._cor_desabilitado = QColor(cor_desabilitado)
+        # padrão vem do tema (BORDA): o cinza fixo #E5E7EB ficava um bloco
+        # claro no tema escuro
+        self._cor_desabilitado = QColor(cor_desabilitado or tokens.BORDA)
         self._contorno = contorno
         self._icone_nome = icone_nome
 

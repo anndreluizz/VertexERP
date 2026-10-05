@@ -861,33 +861,34 @@ class ContasPagar(QWidget):
                 self.lista_layout.addWidget(linha)
 
     def _cabecalho_grupo(self, titulo, cor, contas):
+        """Faixa do grupo: nome, quantidade e total juntos, à esquerda.
+        O total ficava à direita, quase embaixo dos valores das contas,
+        e num grupo de uma conta só repetia o mesmo número duas vezes."""
 
         total = sum(float(c.get("valor", 0) or 0) for c in contas)
+        qtd = len(contas)
 
         cab = QWidget()
         cab.setStyleSheet(f"background:{tokens.FUNDO};")
         lay = QHBoxLayout(cab)
-        # mesmas margens/colunas da DespesaLinha (borda 4 + margem 16 à
-        # esquerda; à direita: margem 16, menu 30, botão Pagar 96 e os
-        # dois espaçamentos de 14) -- o total cai embaixo dos valores
         lay.setContentsMargins(20, 8, 16, 8)
-        lay.setSpacing(0)
+        lay.setSpacing(10)
 
-        lbl = QLabel(f"{titulo.upper()}  ·  {len(contas)}")
+        lbl = QLabel(titulo.upper())
         lbl.setStyleSheet(f"""
             background:transparent; color:{cor};
             font-size:{tokens.TAMANHO_XS}px; font-weight:800; letter-spacing:0.5px;
         """)
-        lbl_total = QLabel(formatar_moeda(total))
-        lbl_total.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
-            font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+        lbl_resumo = QLabel(
+            f"{qtd} conta{'s' if qtd != 1 else ''}  ·  {formatar_moeda(total)}"
+        )
+        lbl_resumo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:600;
         """)
         lay.addWidget(lbl)
+        lay.addWidget(lbl_resumo)
         lay.addStretch()
-        lay.addWidget(lbl_total)
-        # alinha o total do grupo com a coluna de valores das linhas
-        lay.addSpacing(14 + 96 + 14 + 30)
         return cab
 
     # ==========================================

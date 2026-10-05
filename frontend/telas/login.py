@@ -166,6 +166,11 @@ class LoginWindow(QWidget):
         self.setWindowTitle("Vertex ERP")
         self.resize(1180, 720)
         self.setMinimumSize(1000, 680)
+        # abre maximizada (ocupando a tela, com a barra de tarefas
+        # visível) -- os 3 lugares que criam a janela só chamam show(),
+        # e o estado definido aqui já vale pra esse show(). Ao sair do
+        # maximizado, volta pro tamanho de 1180x720 acima.
+        self.setWindowState(Qt.WindowMaximized)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         layout = QHBoxLayout(self)

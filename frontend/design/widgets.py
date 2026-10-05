@@ -171,6 +171,20 @@ class CardKPI(Card):
         )
         self.lbl_variacao.show()
 
+    def definir_legenda(self, texto):
+        """Linha de contexto neutra abaixo do valor (ex.: "de 274
+        cadastros") -- mesmo lugar do selo de variação, pra quando não
+        existe percentual de comparação mas o número sozinho fica sem
+        referência. Texto vazio esconde."""
+
+        if not texto:
+            self.lbl_variacao.hide()
+            return
+
+        cor = "rgba(255, 255, 255, 0.75)" if self._destaque else tokens.TEXTO_TERCIARIO
+        self.lbl_variacao.setText(f'<span style="color:{cor};">{texto}</span>')
+        self.lbl_variacao.show()
+
     def definir_valor(self, texto):
         # o fade sutil da um "respiro" visual toda vez que o numero
         # muda (carregamento inicial ou um recarregar/filtro) -- sem

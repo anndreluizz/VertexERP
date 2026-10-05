@@ -11,8 +11,8 @@ from services.movimento_fiado_service import listar_movimentos
 from services.venda_service import listar_vendas
 from services import cliente_analise
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QShortcut, QKeySequence
+from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtGui import QShortcut, QKeySequence, QPainter, QColor
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone, icone_pixmap
-from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
+from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
 from services.worker import rodar_em_thread, em_paralelo
 from utils.formatacao import formatar_moeda
 from widgets.estado_async import PainelErro, cartoes_esqueleto
@@ -69,15 +69,6 @@ ORDENACOES = [
     ("Cliente Mais Antigo", "CADASTRO_ANTIGO"),
     ("Cliente Mais Novo", "CADASTRO_NOVO"),
 ]
-
-_CORES_PONTUACAO = {
-    "🔴": tokens.ERRO,
-    "🟠": tokens.ALERTA,
-    "🟡": tokens.ALERTA,
-    "🔵": tokens.PRIMARIA,
-    "🟢": tokens.SECUNDARIA,
-}
-
 
 def _buscar_dados_clientes(loja_id):
     """Roda na worker thread (ver services/worker.py) -- as 3 chamadas
@@ -127,198 +118,390 @@ def _buscar_dados_clientes(loja_id):
         if m.get("tipo") == "PAGAMENTO"
     )
 
-    return clientes, agregados_por_cliente, vendas_por_cliente, recebido_fiado_total
+    return (
+        clientes,
+        agregados_por_cliente,
+        vendas_por_cliente,
+        recebido_fiado_total,
+        movimentos_por_cliente,
+    )
 
 
-class ClienteCard(QFrame):
+def _status_cliente(cliente, agr, prazo_dias):
+    """(texto, variante do Badge) do selo de cada linha -- prioridade:
+    inativo > inadimplente > perto do limite > devendo > em dia. É o
+    que faz quem precisa de atenção saltar aos olhos na lista sem abrir
+    a ficha."""
 
-    clicado = Signal(dict)
-    reativar_solicitado = Signal(dict)
+    if not cliente.get("ativo", True):
+        return "Inativo", "neutro"
 
-    def __init__(self, cliente, saldo_fiado, pontuacao="", ultima_movimentacao=None):
+    if not agr:
+        return "Sem movimento", "neutro"
+
+    if cliente_analise.eh_inadimplente(agr, prazo_dias):
+        return f"Atrasado · {agr.get('dias_sem_movimentacao')} dias", "erro"
+
+    if cliente_analise.eh_em_dia(agr):
+        return "Em dia", "sucesso"
+
+    limite = float(cliente.get("limite_credito") or 0)
+    if limite > 0 and agr["saldo_devedor"] / limite >= 0.85:
+        return "Perto do limite", "alerta"
+
+    return "Fiado em aberto", "info"
+
+
+def _cor_variante(variante):
+    return {
+        "erro": tokens.ERRO,
+        "alerta": tokens.ALERTA,
+        "sucesso": tokens.SECUNDARIA,
+        "info": tokens.PRIMARIA,
+    }.get(variante, tokens.TEXTO_TERCIARIO)
+
+
+def _rotulo(texto, tamanho=None, cor=None, peso=400):
+    lbl = QLabel(texto)
+    lbl.setStyleSheet(f"""
+        background:transparent; border:none;
+        font-size:{tamanho or tokens.TAMANHO_SM}px;
+        font-weight:{peso}; color:{cor or tokens.TEXTO};
+    """)
+    return lbl
+
+
+def _limpar_layout(layout):
+    while layout.count():
+        item = layout.takeAt(0)
+        if item.widget():
+            # esconde já -- o deleteLater só roda na próxima volta do
+            # event loop e o widget velho apareceria por cima do novo
+            item.widget().hide()
+            item.widget().deleteLater()
+        elif item.layout():
+            _limpar_layout(item.layout())
+
+
+def _perfil(agr, prazo_dias):
+    """'Cliente Frequente' etc. de calcular_pontuacao, sem o emoji do
+    começo (pode não renderizar em toda máquina) e sem o 'Cliente'."""
+    if not agr:
+        return "—"
+    texto = cliente_analise.calcular_pontuacao(agr, prazo_dias)
+    return texto.partition(" ")[2].replace("Cliente ", "") or texto
+
+
+def _data_curta(valor):
+    return valor.strftime("%d/%m/%Y") if valor else "—"
+
+
+class _BarraLimite(QWidget):
+    """Barrinha fina de quanto do limite de crédito já foi usado --
+    pintada à mão (QProgressBar com stylesheet não arredonda o
+    preenchimento direito em todo estilo do Qt)."""
+
+    def __init__(self, fracao, cor, parent=None):
+        super().__init__(parent)
+        self._fracao = max(0.0, min(1.0, fracao))
+        self._cor = QColor(cor)
+        self.setFixedHeight(6)
+
+    def paintEvent(self, _evento):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(Qt.NoPen)
+        raio = self.height() / 2
+        p.setBrush(QColor(tokens.BORDA))
+        p.drawRoundedRect(self.rect(), raio, raio)
+        if self._fracao > 0:
+            cheio = self.rect()
+            cheio.setWidth(max(int(self.width() * self._fracao), self.height()))
+            p.setBrush(self._cor)
+            p.drawRoundedRect(cheio, raio, raio)
+
+
+class ClienteLinha(QFrame):
+    """Uma linha da lista de clientes: avatar, nome/telefone, uso do
+    limite, saldo e selo de status. Clique seleciona (mostra no painel
+    ao lado); duplo clique ou Enter abre a ficha completa."""
+
+    selecionado = Signal(dict)
+    abrir = Signal(dict)
+
+    def __init__(self, cliente, agr, prazo_dias):
 
         super().__init__()
 
         self.cliente = cliente
-
+        self.setObjectName("ClienteLinha")
         self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet(f"""
-            QFrame {{
-                background: {tokens.CARD};
-                border-radius: {tokens.RADIUS_LG}px;
-                border: 1px solid {tokens.BORDA};
-            }}
-            QFrame:hover {{
-                border: 1px solid {tokens.PRIMARIA};
-            }}
-        """)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setAccessibleName(cliente.get("nome") or "Cliente")
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(12)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 11, 16, 11)
+        layout.setSpacing(14)
 
-        topo = QHBoxLayout()
-        topo.setSpacing(12)
-
-        avatar = Avatar(cliente.get("nome", ""), tamanho=44)
+        layout.addWidget(Avatar(cliente.get("nome", ""), tamanho=36))
 
         col_nome = QVBoxLayout()
-        col_nome.setSpacing(2)
-
-        linha_nome = QHBoxLayout()
-        linha_nome.setSpacing(8)
-
-        nome = QLabel(cliente.get("nome") or "")
-        nome.setStyleSheet(f"""
-            background:transparent; border:none;
-            font-size:{tokens.TAMANHO_MD}px; font-weight:700; color:{tokens.TEXTO};
-        """)
-
-        ativo = cliente.get("ativo", True)
-
-        badge = Badge("Ativo" if ativo else "Inativo", "sucesso" if ativo else "erro")
-
-        linha_nome.addWidget(nome)
-        linha_nome.addWidget(badge)
-        linha_nome.addStretch()
-
-        contato = cliente.get("telefone") or "Sem telefone"
-
-        lbl_contato = QLabel(contato)
-        lbl_contato.setStyleSheet(f"""
-            background:transparent; border:none;
-            font-size:{tokens.TAMANHO_SM}px; color:{tokens.TEXTO_SECUNDARIO};
-        """)
-
-        local = cliente.get("cidade") or cliente.get("endereco") or ""
-
-        col_nome.addLayout(linha_nome)
-        col_nome.addWidget(lbl_contato)
-
-        if local:
-            lbl_local = QLabel(local)
-            lbl_local.setStyleSheet(f"""
-                background:transparent; border:none;
-                font-size:{tokens.TAMANHO_SM}px; color:{tokens.TEXTO_SECUNDARIO};
-            """)
-            col_nome.addWidget(lbl_local)
-
-        topo.addWidget(avatar)
-        topo.addLayout(col_nome, stretch=1)
-
-        # menu de 3 pontos -- mesma acao de clicar no card (abrir a
-        # ficha); nao duplica nenhum menu novo, so' mais um jeito de
-        # chegar la', igual o resto do card ja permite
-        bt_menu = QPushButton()
-        bt_menu.setFixedSize(28, 28)
-        bt_menu.setCursor(Qt.PointingHandCursor)
-        bt_menu.setIcon(icone("more-vertical", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
-        bt_menu.setToolTip("Mais opções")
-        bt_menu.setAccessibleName("Mais opções")
-        bt_menu.setStyleSheet(f"""
-            QPushButton {{ background:transparent; border:none; border-radius:6px; }}
-            QPushButton:hover {{ background:{tokens.FUNDO}; }}
-        """)
-        bt_menu.clicked.connect(lambda: self.clicado.emit(self.cliente))
-        topo.addWidget(bt_menu, 0, Qt.AlignTop)
-
-        layout.addLayout(topo)
-
-        if pontuacao:
-
-            # tira o emoji do inicio (risco de nao renderizar em toda
-            # maquina) -- a cor ja carrega o mesmo sinal visualmente
-            emoji, _, texto_pontuacao = pontuacao.partition(" ")
-            cor = _CORES_PONTUACAO.get(emoji, tokens.TEXTO_SECUNDARIO)
-
-            lbl_pontuacao = QLabel(texto_pontuacao or pontuacao)
-            lbl_pontuacao.setStyleSheet(f"""
-                background:transparent; border:none;
-                font-size:{tokens.TAMANHO_XS}px; font-weight:700; color:{cor};
-            """)
-            layout.addWidget(lbl_pontuacao)
-
-        linha_stats = QHBoxLayout()
-        linha_stats.setSpacing(10)
-
-        cor_fiado = tokens.ERRO if saldo_fiado > 0 else tokens.SECUNDARIA
-        linha_stats.addWidget(
-            self._caixinha("dollar-sign", "Fiado", formatar_moeda(saldo_fiado), cor_fiado)
+        col_nome.setSpacing(1)
+        col_nome.addWidget(
+            _rotulo(cliente.get("nome") or "", tokens.TAMANHO_MD, peso=600)
         )
+        col_nome.addWidget(_rotulo(
+            cliente.get("telefone") or "Sem telefone",
+            tokens.TAMANHO_SM, tokens.TEXTO_SECUNDARIO,
+        ))
+        layout.addLayout(col_nome, stretch=1)
 
-        texto_data = (
-            ultima_movimentacao.strftime("%d/%m/%Y") if ultima_movimentacao else "—"
-        )
-        linha_stats.addWidget(
-            self._caixinha("calendar", "Último Movimento", texto_data, tokens.TEXTO)
-        )
+        saldo = float((agr or {}).get("saldo_devedor", 0) or 0)
+        texto_status, variante = _status_cliente(cliente, agr, prazo_dias)
 
-        layout.addLayout(linha_stats)
+        # uso do limite -- só quem tem limite definido; sem limite, um
+        # espaço vazio do mesmo tamanho mantém as colunas alinhadas
+        col_limite = QWidget()
+        col_limite.setFixedWidth(110)
+        col_limite.setStyleSheet("background:transparent;")
+        lim_layout = QVBoxLayout(col_limite)
+        lim_layout.setContentsMargins(0, 0, 0, 0)
+        lim_layout.setSpacing(4)
 
-        bt_ver = BotaoSecundario("Ver cliente", icone_nome="user")
-        bt_ver.setMinimumHeight(38)
-        bt_ver.clicked.connect(lambda: self.clicado.emit(self.cliente))
-        layout.addWidget(bt_ver)
+        limite = float(cliente.get("limite_credito") or 0)
+        if limite > 0:
+            fracao = max(saldo, 0) / limite
+            lim_layout.addWidget(_BarraLimite(fracao, _cor_variante(variante)))
+            lim_layout.addWidget(_rotulo(
+                f"{fracao:.0%} do limite", tokens.TAMANHO_XS, tokens.TEXTO_TERCIARIO
+            ))
+        layout.addWidget(col_limite)
 
-        if not ativo:
-            bt_reativar = QPushButton("Reativar")
-            bt_reativar.setCursor(Qt.PointingHandCursor)
-            bt_reativar.setMinimumHeight(34)
-            bt_reativar.setStyleSheet(f"""
-                QPushButton {{
-                    background:{tokens.SECUNDARIA}; color:white;
-                    border:none; border-radius:{tokens.RADIUS_SM}px;
-                    font-size:{tokens.TAMANHO_SM}px;
-                    font-weight:700;
-                }}
-                QPushButton:hover {{ background:{tokens.SECUNDARIA_HOVER}; }}
-            """)
-            bt_reativar.clicked.connect(
-                lambda: self.reativar_solicitado.emit(self.cliente)
-            )
-            layout.addWidget(bt_reativar)
+        # largura fixa pra barra de limite ficar na mesma coluna em toda
+        # linha, não importa o tamanho do valor/selo
+        col_valor_w = QWidget()
+        col_valor_w.setFixedWidth(150)
+        col_valor_w.setStyleSheet("background:transparent;")
+        col_valor = QVBoxLayout(col_valor_w)
+        col_valor.setContentsMargins(0, 0, 0, 0)
+        col_valor.setSpacing(3)
+        lbl_saldo = _rotulo(formatar_moeda(saldo), tokens.TAMANHO_MD, peso=700)
+        lbl_saldo.setAlignment(Qt.AlignRight)
+        col_valor.addWidget(lbl_saldo)
+        col_valor.addWidget(Badge(texto_status, variante), 0, Qt.AlignRight)
+        layout.addWidget(col_valor_w)
 
-    def _caixinha(self, icone_nome, rotulo, valor, cor_valor):
+        self.definir_selecionado(False)
 
-        caixa = QFrame()
-        caixa.setStyleSheet(f"""
-            QFrame {{ background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px; }}
+    def definir_selecionado(self, ativo):
+
+        fundo = tokens.PRIMARIA_CLARA if ativo else "transparent"
+        borda = tokens.PRIMARIA if ativo else "transparent"
+        self.setStyleSheet(f"""
+            #ClienteLinha {{
+                background:{fundo};
+                border:none;
+                border-left:3px solid {borda};
+                border-bottom:1px solid {tokens.BORDA};
+            }}
+            #ClienteLinha:hover {{
+                background:{tokens.PRIMARIA_CLARA if ativo else tokens.FUNDO};
+            }}
+            #ClienteLinha:focus {{ border-left:3px solid {tokens.PRIMARIA}; }}
         """)
-
-        cx_layout = QVBoxLayout(caixa)
-        cx_layout.setContentsMargins(10, 8, 10, 8)
-        cx_layout.setSpacing(3)
-
-        topo_caixa = QHBoxLayout()
-        topo_caixa.setSpacing(5)
-
-        lbl_icone = QLabel()
-        lbl_icone.setPixmap(icone_pixmap(icone_nome, cor=tokens.TEXTO_TERCIARIO, tamanho=12))
-        lbl_icone.setStyleSheet("background:transparent; border:none;")
-        topo_caixa.addWidget(lbl_icone)
-
-        lbl_rotulo = QLabel(rotulo)
-        lbl_rotulo.setStyleSheet(f"""
-            background:transparent; border:none;
-            font-size:10px; color:{tokens.TEXTO_TERCIARIO};
-        """)
-        topo_caixa.addWidget(lbl_rotulo)
-        topo_caixa.addStretch()
-
-        cx_layout.addLayout(topo_caixa)
-
-        lbl_valor = QLabel(valor)
-        lbl_valor.setStyleSheet(f"""
-            background:transparent; border:none;
-            font-size:13px; font-weight:800; color:{cor_valor};
-        """)
-        cx_layout.addWidget(lbl_valor)
-
-        return caixa
 
     def mousePressEvent(self, event):
-        self.clicado.emit(self.cliente)
+        self.selecionado.emit(self.cliente)
         super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        self.abrir.emit(self.cliente)
+        super().mouseDoubleClickEvent(event)
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            self.abrir.emit(self.cliente)
+            return
+        super().keyPressEvent(event)
+
+    def focusInEvent(self, event):
+        # navegar com Tab já seleciona, igual a clicar
+        self.selecionado.emit(self.cliente)
+        super().focusInEvent(event)
+
+
+class PainelCliente(Card):
+    """Painel à direita da lista com o resumo do cliente selecionado --
+    saldo, limite, datas e as últimas movimentações do fiado, mais
+    atalhos pras ações do dia a dia (receber, cobrar, abrir a ficha)."""
+
+    abrir_ficha = Signal(dict)
+    receber = Signal(dict)
+    cobrar = Signal(dict)
+    reativar = Signal(dict)
+
+    def __init__(self, parent=None):
+
+        super().__init__(parent)
+
+        self.setFixedWidth(360)
+
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(20, 20, 20, 20)
+        self._layout.setSpacing(16)
+
+        self.mostrar(None)
+
+    def mostrar(self, cliente, agr=None, movimentos=None, prazo_dias=None):
+
+        _limpar_layout(self._layout)
+
+        if cliente is None:
+            vazio = _rotulo(
+                "Escolha um cliente na lista pra ver o resumo aqui.",
+                tokens.TAMANHO_BASE, tokens.TEXTO_TERCIARIO,
+            )
+            vazio.setWordWrap(True)
+            vazio.setAlignment(Qt.AlignCenter)
+            self._layout.addStretch()
+            self._layout.addWidget(vazio)
+            self._layout.addStretch()
+            return
+
+        agr = agr or {}
+        prazo_dias = prazo_dias or cliente_analise.PRAZO_INADIMPLENCIA_PADRAO
+
+        # ---- cabeçalho
+        topo = QHBoxLayout()
+        topo.setSpacing(12)
+        topo.addWidget(Avatar(cliente.get("nome", ""), tamanho=48))
+        col = QVBoxLayout()
+        col.setSpacing(2)
+        nome = _rotulo(cliente.get("nome") or "", tokens.TAMANHO_LG, peso=700)
+        nome.setWordWrap(True)
+        col.addWidget(nome)
+        contato = " · ".join(
+            p for p in (f"Cód. {cliente.get('id')}", cliente.get("telefone")) if p
+        )
+        col.addWidget(_rotulo(contato, tokens.TAMANHO_SM, tokens.TEXTO_SECUNDARIO))
+        topo.addLayout(col, stretch=1)
+        self._layout.addLayout(topo)
+
+        # ---- saldo em destaque
+        saldo = float(agr.get("saldo_devedor", 0) or 0)
+        texto_status, variante = _status_cliente(cliente, agr, prazo_dias)
+
+        caixa = QFrame()
+        caixa.setStyleSheet(
+            f"QFrame {{ background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_MD}px; }}"
+        )
+        cx = QHBoxLayout(caixa)
+        cx.setContentsMargins(16, 14, 16, 14)
+        esq = QVBoxLayout()
+        esq.setSpacing(2)
+        esq.addWidget(
+            _rotulo("SALDO DEVEDOR", tokens.TAMANHO_XS, tokens.TEXTO_TERCIARIO, 700)
+        )
+        cor_saldo = tokens.ERRO if variante == "erro" else tokens.TEXTO
+        esq.addWidget(_rotulo(formatar_moeda(saldo), tokens.TAMANHO_XXL, cor_saldo, 800))
+        cx.addLayout(esq, stretch=1)
+        dir_ = QVBoxLayout()
+        dir_.setSpacing(4)
+        dir_.addWidget(Badge(texto_status, variante), 0, Qt.AlignRight)
+        limite = float(cliente.get("limite_credito") or 0)
+        lbl_lim = _rotulo(
+            f"Limite {formatar_moeda(limite)}" if limite > 0 else "Sem limite definido",
+            tokens.TAMANHO_XS, tokens.TEXTO_TERCIARIO,
+        )
+        lbl_lim.setAlignment(Qt.AlignRight)
+        dir_.addWidget(lbl_lim)
+        cx.addLayout(dir_)
+        self._layout.addWidget(caixa)
+
+        # ---- datas
+        datas = QGridLayout()
+        datas.setHorizontalSpacing(12)
+        datas.setVerticalSpacing(6)
+        for linha, (rotulo, valor) in enumerate((
+            ("Última compra", _data_curta(agr.get("ultima_compra"))),
+            ("Último pagamento", _data_curta(agr.get("ultimo_pagamento"))),
+            ("Compras no fiado", str(agr.get("qtd_compras", 0))),
+            ("Perfil", _perfil(agr, prazo_dias)),
+        )):
+            datas.addWidget(
+                _rotulo(rotulo, tokens.TAMANHO_SM, tokens.TEXTO_SECUNDARIO), linha, 0
+            )
+            v = _rotulo(valor, tokens.TAMANHO_SM, peso=600)
+            v.setAlignment(Qt.AlignRight)
+            datas.addWidget(v, linha, 1)
+        self._layout.addLayout(datas)
+
+        # ---- últimas movimentações
+        self._layout.addWidget(
+            _rotulo("ÚLTIMAS MOVIMENTAÇÕES", tokens.TAMANHO_XS, tokens.TEXTO_TERCIARIO, 700)
+        )
+
+        recentes = sorted(
+            movimentos or [],
+            key=lambda m: str(m.get("data") or ""),
+            reverse=True,
+        )[:5]
+
+        if not recentes:
+            self._layout.addWidget(_rotulo(
+                "Nenhuma movimentação no fiado ainda.",
+                tokens.TAMANHO_SM, tokens.TEXTO_TERCIARIO,
+            ))
+
+        for mov in recentes:
+            pagamento = mov.get("tipo") == "PAGAMENTO"
+            linha = QHBoxLayout()
+            linha.setSpacing(10)
+            col_mov = QVBoxLayout()
+            col_mov.setSpacing(0)
+            descricao = mov.get("descricao") or (
+                "Pagamento" if pagamento else "Compra no fiado"
+            )
+            lbl_desc = _rotulo(descricao, tokens.TAMANHO_SM, peso=500)
+            lbl_desc.setWordWrap(True)
+            col_mov.addWidget(lbl_desc)
+            col_mov.addWidget(_rotulo(
+                _data_curta(cliente_analise._parse_data(mov.get("data"))),
+                tokens.TAMANHO_XS, tokens.TEXTO_TERCIARIO,
+            ))
+            linha.addLayout(col_mov, stretch=1)
+            valor = float(mov.get("valor", 0) or 0)
+            linha.addWidget(_rotulo(
+                f"{'+' if pagamento else '−'} {formatar_moeda(valor)}",
+                tokens.TAMANHO_SM,
+                tokens.SECUNDARIA if pagamento else tokens.TEXTO,
+                700,
+            ), 0, Qt.AlignTop)
+            self._layout.addLayout(linha)
+
+        self._layout.addStretch()
+
+        # ---- ações
+        if not cliente.get("ativo", True):
+            bt_reativar = BotaoPrimario("Reativar cliente", icone_nome="check")
+            bt_reativar.clicked.connect(lambda: self.reativar.emit(cliente))
+            self._layout.addWidget(bt_reativar)
+        elif saldo > 0.009:
+            acoes = QHBoxLayout()
+            acoes.setSpacing(8)
+            bt_receber = BotaoPrimario("Receber", icone_nome="wallet")
+            bt_receber.clicked.connect(lambda: self.receber.emit(cliente))
+            acoes.addWidget(bt_receber, stretch=1)
+            if cliente.get("telefone"):
+                bt_cobrar = BotaoSecundario("Cobrar", icone_nome="message-circle")
+                bt_cobrar.setToolTip("Enviar mensagem de cobrança pelo WhatsApp")
+                bt_cobrar.clicked.connect(lambda: self.cobrar.emit(cliente))
+                acoes.addWidget(bt_cobrar, stretch=1)
+            self._layout.addLayout(acoes)
+
+        bt_ficha = BotaoSecundario("Abrir ficha completa", icone_nome="user")
+        bt_ficha.clicked.connect(lambda: self.abrir_ficha.emit(cliente))
+        self._layout.addWidget(bt_ficha)
 
 
 class Clientes(QWidget):
@@ -332,6 +515,9 @@ class Clientes(QWidget):
         self._clientes_filtrados = []
         self.vendas_por_cliente = {}
         self.agregados_por_cliente = {}
+        self.movimentos_por_cliente = {}
+        self._selecionado_id = None
+        self._linhas = {}
         self.filtro_status = "TODOS"
         self._carregando = False
         self.ordenacao = "MOVIMENTO_RECENTE"
@@ -416,21 +602,23 @@ class Clientes(QWidget):
         resumo_layout = QGridLayout()
         resumo_layout.setSpacing(14)
 
-        self.card_total = CardKPI("Cadastros (Total)", "users", tokens.PRIMARIA)
-        self.card_ativos = CardKPI("Clientes Ativos", "check", tokens.SECUNDARIA)
-        self.card_sem_movimento = CardKPI("Sem Movimento", "alert-triangle", tokens.ALERTA)
+        # 4 números que respondem "quanto tenho na rua e quem preciso
+        # cobrar" -- as contagens de Ativos/Sem Movimento/Novos que antes
+        # tinham card próprio agora aparecem no próprio botão de filtro
+        self.card_a_receber = CardKPI(
+            "Fiado em aberto", "credit-card", tokens.PRIMARIA, destaque=True
+        )
+        self.card_recebido_fiado = CardKPI("Recebido de fiado", "wallet", tokens.SECUNDARIA)
+        self.card_devendo = CardKPI("Clientes devendo", "users", tokens.PRIMARIA)
         self.card_inadimplentes = CardKPI("Inadimplentes", "alert-triangle", tokens.ERRO)
-        self.card_recebido_fiado = CardKPI("Recebido de Fiado", "wallet", tokens.SECUNDARIA)
-        self.card_a_receber = CardKPI("A Receber (Fiado em aberto)", "credit-card", tokens.ERRO)
 
-        resumo_layout.addWidget(self.card_total, 0, 0)
-        resumo_layout.addWidget(self.card_ativos, 0, 1)
-        resumo_layout.addWidget(self.card_sem_movimento, 0, 2)
-        resumo_layout.addWidget(self.card_inadimplentes, 0, 3)
-        resumo_layout.addWidget(self.card_recebido_fiado, 0, 4)
-        resumo_layout.addWidget(self.card_a_receber, 0, 5)
-
-        for coluna in range(6):
+        for coluna, card in enumerate((
+            self.card_a_receber,
+            self.card_recebido_fiado,
+            self.card_devendo,
+            self.card_inadimplentes,
+        )):
+            resumo_layout.addWidget(card, 0, coluna)
             resumo_layout.setColumnStretch(coluna, 1)
 
         layout.addLayout(resumo_layout)
@@ -452,9 +640,10 @@ class Clientes(QWidget):
         for rotulo, chave in FILTROS:
 
             bt = QPushButton(rotulo)
+            bt.setProperty("rotulo", rotulo)
             bt.setCheckable(True)
             bt.setCursor(Qt.PointingHandCursor)
-            bt.setMinimumHeight(44)
+            bt.setMinimumHeight(36)
             bt.setIcon(icone(_ICONES_FILTRO.get(chave, "users"), cor=tokens.TEXTO_SECUNDARIO, tamanho=15))
             bt.clicked.connect(
                 lambda checked, c=chave: self.selecionar_status(c)
@@ -541,6 +730,17 @@ class Clientes(QWidget):
         # GRID DE CLIENTES
         # ======================
 
+        # lista (esquerda) + resumo do cliente selecionado (direita)
+        self.area_lista = QWidget()
+        self.area_lista.setStyleSheet("background:transparent;")
+        corpo = QHBoxLayout(self.area_lista)
+        corpo.setContentsMargins(0, 0, 0, 0)
+        corpo.setSpacing(16)
+
+        self.card_lista = Card()
+        lista_layout = QVBoxLayout(self.card_lista)
+        lista_layout.setContentsMargins(0, 6, 0, 6)
+
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setStyleSheet(
@@ -549,13 +749,26 @@ class Clientes(QWidget):
 
         self.grid_widget = QWidget()
         self.grid_widget.setStyleSheet("background:transparent;")
+        # grid de 1 coluna (e não QVBoxLayout) só pra continuar
+        # compatível com cartoes_esqueleto() no carregamento
         self.grid_layout = QGridLayout(self.grid_widget)
-        self.grid_layout.setSpacing(14)
+        self.grid_layout.setContentsMargins(0, 0, 0, 0)
+        self.grid_layout.setSpacing(0)
         self.grid_layout.setAlignment(Qt.AlignTop)
 
         self.scroll.setWidget(self.grid_widget)
+        lista_layout.addWidget(self.scroll)
 
-        layout.addWidget(self.scroll, stretch=1)
+        self.painel = PainelCliente()
+        self.painel.abrir_ficha.connect(self.ver_ficha)
+        self.painel.receber.connect(self.receber_pagamento)
+        self.painel.cobrar.connect(self.cobrar_whatsapp)
+        self.painel.reativar.connect(self.reativar_cliente)
+
+        corpo.addWidget(self.card_lista, stretch=1)
+        corpo.addWidget(self.painel)
+
+        layout.addWidget(self.area_lista, stretch=1)
 
         self.lbl_vazio = QLabel(
             "Nenhum cliente cadastrado ainda.\n"
@@ -623,10 +836,11 @@ class Clientes(QWidget):
 
         self.painel_erro.hide()
         self.lbl_vazio.setVisible(False)
-        self.scroll.setVisible(True)
+        self.area_lista.setVisible(True)
         self._definir_controles_carregando(True)
 
-        cartoes_esqueleto(self.grid_layout)
+        self._linhas = {}
+        cartoes_esqueleto(self.grid_layout, n=7, colunas=1, altura=58)
         self.lbl_contagem.setText("Carregando...")
 
         loja_id = self.combo_loja_filtro.currentData()
@@ -662,6 +876,7 @@ class Clientes(QWidget):
                 self.agregados_por_cliente,
                 self.vendas_por_cliente,
                 self.recebido_fiado_total,
+                self.movimentos_por_cliente,
             ) = dados
 
             self.atualizar_cards_resumo()
@@ -671,7 +886,7 @@ class Clientes(QWidget):
 
     def _ao_carregar_erro(self, erro):
         self.grid_layout_limpar()
-        self.scroll.setVisible(False)
+        self.area_lista.setVisible(False)
         self.lbl_vazio.setVisible(False)
         self.painel_erro.definir_mensagem(
             f"Não foi possível carregar os clientes.\n{erro}"
@@ -697,10 +912,11 @@ class Clientes(QWidget):
     def atualizar_cards_resumo(self):
 
         total = len(self.clientes)
+        contagem = {chave: 0 for _, chave in FILTROS}
+        contagem["TODOS"] = total
 
-        ativos = 0
-        sem_movimento = 0
-        inadimplentes = 0
+        devendo = 0
+        valor_inadimplente = 0.0
 
         for cliente in self.clientes:
 
@@ -710,26 +926,41 @@ class Clientes(QWidget):
                 continue
 
             if cliente_analise.eh_ativo(agr):
-                ativos += 1
-
+                contagem["ATIVOS"] += 1
             if cliente_analise.eh_sem_movimento(agr, self.prazo_inadimplencia):
-                sem_movimento += 1
-
+                contagem["SEM_MOVIMENTO"] += 1
             if cliente_analise.eh_inadimplente(agr, self.prazo_inadimplencia):
-                inadimplentes += 1
+                contagem["INADIMPLENTES"] += 1
+                valor_inadimplente += agr["saldo_devedor"]
+            if cliente_analise.eh_em_dia(agr):
+                contagem["EM_DIA"] += 1
+            else:
+                devendo += 1
+            if cliente_analise.eh_novo(agr):
+                contagem["NOVOS"] += 1
 
         total_a_receber = sum(
             float(c.get("saldo_fiado", 0) or 0) for c in self.clientes
         )
 
-        self.card_total.definir_valor(str(total))
-        self.card_ativos.definir_valor(str(ativos))
-        self.card_sem_movimento.definir_valor(str(sem_movimento))
-        self.card_inadimplentes.definir_valor(str(inadimplentes))
+        self.card_a_receber.definir_valor(formatar_moeda(total_a_receber))
+        self.card_a_receber.definir_legenda(
+            f"{devendo} cliente{'s' if devendo != 1 else ''} com saldo"
+        )
         self.card_recebido_fiado.definir_valor(
             formatar_moeda(self.recebido_fiado_total)
         )
-        self.card_a_receber.definir_valor(formatar_moeda(total_a_receber))
+        self.card_recebido_fiado.definir_legenda("pagamentos de fiado registrados")
+        self.card_devendo.definir_valor(str(devendo))
+        self.card_devendo.definir_legenda(f"de {total} cadastros")
+        self.card_inadimplentes.definir_valor(str(contagem["INADIMPLENTES"]))
+        self.card_inadimplentes.definir_legenda(
+            f"{formatar_moeda(valor_inadimplente)} parados há mais de "
+            f"{self.prazo_inadimplencia} dias"
+        )
+
+        for chave, botao in self.botoes_status.items():
+            botao.setText(f"{botao.property('rotulo')}  {contagem.get(chave, 0)}")
 
     # ==========================================
     # FILTRO DE STATUS
@@ -746,22 +977,24 @@ class Clientes(QWidget):
             botao.setChecked(selecionado)
             botao.setIcon(icone(
                 _ICONES_FILTRO.get(k, "users"),
-                cor="white" if selecionado else tokens.TEXTO_SECUNDARIO,
-                tamanho=15,
+                cor=tokens.PRIMARIA if selecionado else tokens.TEXTO_SECUNDARIO,
+                tamanho=14,
             ))
 
+            # pílula clara (e não azul cheio) -- o azul cheio fica
+            # reservado pro botão de ação principal da tela
             botao.setStyleSheet(f"""
                 QPushButton {{
-                    background: {tokens.PRIMARIA if selecionado else tokens.CARD};
-                    color: {"white" if selecionado else tokens.TEXTO};
-                    border-radius: {tokens.RADIUS_SM}px;
-                    border: 1px solid {tokens.PRIMARIA if selecionado else tokens.BORDA};
-                    font-weight: 700;
+                    background: {tokens.PRIMARIA_CLARA if selecionado else tokens.CARD};
+                    color: {tokens.PRIMARIA if selecionado else tokens.TEXTO_SECUNDARIO};
+                    border-radius: 18px;
+                    border: 1px solid {tokens.PRIMARIA_CLARA if selecionado else tokens.BORDA};
+                    font-weight: {700 if selecionado else 600};
                     font-size: {tokens.TAMANHO_SM}px;
                     padding: 0 14px;
                 }}
                 QPushButton:hover {{
-                    background: {tokens.PRIMARIA_HOVER if selecionado else tokens.FUNDO};
+                    background: {tokens.PRIMARIA_CLARA if selecionado else tokens.FUNDO};
                 }}
             """)
 
@@ -921,35 +1154,55 @@ class Clientes(QWidget):
             item = self.grid_layout.takeAt(0)
             widget = item.widget()
             if widget:
+                widget.hide()
                 widget.deleteLater()
 
-        colunas = 3
+        self._linhas = {}
 
         for indice, cliente in enumerate(clientes):
 
-            agr = self.agregados_por_cliente.get(cliente["id"], {})
-            pontuacao = (
-                cliente_analise.calcular_pontuacao(
-                    agr, self.prazo_inadimplencia
-                )
-                if agr else ""
-            )
-
-            card = ClienteCard(
+            linha = ClienteLinha(
                 cliente,
-                cliente.get("saldo_fiado", 0),
-                pontuacao=pontuacao,
-                ultima_movimentacao=agr.get("ultima_movimentacao"),
+                self.agregados_por_cliente.get(cliente["id"]),
+                self.prazo_inadimplencia,
             )
-            card.clicado.connect(self.ver_ficha)
-            card.reativar_solicitado.connect(self.reativar_cliente)
+            linha.selecionado.connect(self.selecionar_cliente)
+            linha.abrir.connect(self.ver_ficha)
 
-            self.grid_layout.addWidget(
-                card, indice // colunas, indice % colunas
-            )
+            self._linhas[cliente["id"]] = linha
+            self.grid_layout.addWidget(linha, indice, 0)
 
-        self.scroll.setVisible(len(clientes) > 0)
+        self.area_lista.setVisible(len(clientes) > 0)
         self.lbl_vazio.setVisible(len(clientes) == 0)
+
+        # mantém o mesmo cliente selecionado entre recargas/filtros; se
+        # ele saiu da lista, cai pro primeiro da lista atual
+        ids = [c["id"] for c in clientes]
+        if self._selecionado_id not in ids:
+            self._selecionado_id = ids[0] if ids else None
+        self._atualizar_selecao()
+
+    def selecionar_cliente(self, cliente):
+
+        if cliente["id"] == self._selecionado_id:
+            return
+        self._selecionado_id = cliente["id"]
+        self._atualizar_selecao()
+
+    def _atualizar_selecao(self):
+
+        for cid, linha in self._linhas.items():
+            linha.definir_selecionado(cid == self._selecionado_id)
+
+        cliente = next(
+            (c for c in self.clientes if c["id"] == self._selecionado_id), None
+        )
+        self.painel.mostrar(
+            cliente,
+            self.agregados_por_cliente.get(self._selecionado_id),
+            self.movimentos_por_cliente.get(self._selecionado_id, []),
+            self.prazo_inadimplencia,
+        )
 
     # ==========================================
     # AÇÕES
@@ -966,7 +1219,24 @@ class Clientes(QWidget):
 
     def ver_ficha(self, cliente):
 
+        self._abrir_ficha(cliente)
+
+    def receber_pagamento(self, cliente):
+        # reaproveita o fluxo de pagamento da ficha (checagem de saldo,
+        # diálogo, recibo) em vez de duplicar aqui -- a ficha abre e já
+        # chama o "Registrar pagamento" assim que aparece na tela
+        self._abrir_ficha(cliente, acao="registrar_pagamento")
+
+    def cobrar_whatsapp(self, cliente):
+        self._abrir_ficha(cliente, acao="enviar_cobranca_whatsapp")
+
+    def _abrir_ficha(self, cliente, acao=None):
+
         tela = FichaClienteDialog(cliente, parent=self)
+
+        if acao:
+            QTimer.singleShot(0, getattr(tela, acao))
+
         tela.exec()
 
         self.carregar()

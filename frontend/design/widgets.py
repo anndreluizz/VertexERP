@@ -1,6 +1,8 @@
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, QVariantAnimation
 from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
     QFrame,
     QGraphicsDropShadowEffect,
     QHBoxLayout,
@@ -8,7 +10,9 @@ from PySide6.QtWidgets import (
     QLayout,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
+    QWidget,
 )
 
 from design import tokens
@@ -805,3 +809,172 @@ class FlowLayout(QLayout):
             altura_linha = max(altura_linha, tamanho_item.height())
 
         return y + altura_linha - rect.y() + baixo
+
+
+# ==========================================
+# DIÁLOGO PADRÃO — molde único das subtelas
+# ==========================================
+
+class DialogoPadrao(QDialog):
+    """Molde das subtelas (cadastros, pagamentos, confirmações): topo
+    com CabecalhoDialogo, corpo com rolagem só quando precisa e rodapé
+    com Cancelar + ação principal alinhados à direita. Três larguras
+    fixas pra todas as subtelas terem o mesmo tamanho de "família":
+    PEQUENO (confirmação de um valor), MEDIO (pagamento/lançamento) e
+    GRANDE (cadastro em duas colunas).
+
+    Uso: monta o conteúdo em self.corpo, chama definir_botoes() com o
+    botão principal e, no fim do __init__, ajustar_altura()."""
+
+    PEQUENO = 520
+    MEDIO = 680
+    GRANDE = 820
+
+    def __init__(
+        self, titulo, subtitulo, icone_nome,
+        cor=None, cor_fundo=None, largura=MEDIO, parent=None,
+    ):
+
+        super().__init__(parent)
+
+        self.setWindowTitle(titulo)
+        self.setStyleSheet(f"background:{tokens.FUNDO};")
+        self.setMinimumWidth(largura)
+        self.resize(largura, 600)
+
+        raiz = QVBoxLayout(self)
+        raiz.setContentsMargins(0, 0, 0, 0)
+        raiz.setSpacing(0)
+
+        self.cabecalho = CabecalhoDialogo(
+            icone_nome, cor or tokens.PRIMARIA, cor_fundo or tokens.PRIMARIA_CLARA,
+            titulo, subtitulo, fechavel=True, ao_fechar=self.reject,
+        )
+        raiz.addWidget(self.cabecalho)
+
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
+
+        self._corpo_widget = QWidget()
+        self._corpo_widget.setStyleSheet("background:transparent;")
+        self.corpo = QVBoxLayout(self._corpo_widget)
+        self.corpo.setContentsMargins(28, 18, 28, 18)
+        self.corpo.setSpacing(16)
+
+        self._scroll.setWidget(self._corpo_widget)
+        raiz.addWidget(self._scroll, stretch=1)
+
+        self._rodape_frame = QFrame()
+        self._rodape_frame.setObjectName("RodapeDialogo")
+        self._rodape_frame.setStyleSheet(f"""
+            #RodapeDialogo {{ background:{tokens.CARD}; border-top:1px solid {tokens.BORDA}; }}
+        """)
+        self.rodape = QHBoxLayout(self._rodape_frame)
+        self.rodape.setContentsMargins(28, 14, 28, 14)
+        self.rodape.setSpacing(10)
+        raiz.addWidget(self._rodape_frame)
+
+    def definir_botoes(self, principal, texto_cancelar="Cancelar"):
+        """Cancelar + botão principal à direita. Devolve o Cancelar
+        (quem precisa desabilitar durante o salvamento guarda ele)."""
+
+        self.bt_cancelar = BotaoSecundario(texto_cancelar)
+        self.bt_cancelar.setAutoDefault(False)
+        self.bt_cancelar.setMinimumWidth(140)
+        self.bt_cancelar.clicked.connect(self.reject)
+
+        principal.setMinimumWidth(200)
+
+        self.rodape.addStretch()
+        self.rodape.addWidget(self.bt_cancelar)
+        self.rodape.addWidget(principal)
+
+        return self.bt_cancelar
+
+    def ajustar_altura(self):
+        """Altura do conteúdo, limitada a 90% da área útil da tela --
+        passando disso o corpo rola e cabeçalho/rodapé ficam fixos."""
+
+        self.corpo.activate()
+        altura = (
+            self.cabecalho.sizeHint().height()
+            + self._corpo_widget.sizeHint().height()
+            + self._rodape_frame.sizeHint().height()
+            + 2
+        )
+        tela = (self.screen() or QApplication.primaryScreen()).availableGeometry()
+        self.resize(self.width(), min(altura, int(tela.height() * 0.9)))
+
+
+def campo_rotulado(rotulo, widget, dica=None):
+    """Rótulo (em cima) + campo + dica opcional (embaixo), como um bloco
+    só -- é a peça que vai nas grades de formulário das subtelas."""
+
+    bloco = QWidget()
+    bloco.setStyleSheet("background:transparent;")
+    layout = QVBoxLayout(bloco)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(6)
+
+    lbl = QLabel(rotulo)
+    lbl.setStyleSheet(f"""
+        background:transparent; font-size:{tokens.TAMANHO_SM}px;
+        font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
+    """)
+    lbl.setBuddy(widget)
+    layout.addWidget(lbl)
+    layout.addWidget(widget)
+
+    if dica:
+        lbl_dica = QLabel(dica)
+        lbl_dica.setWordWrap(True)
+        lbl_dica.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
+        layout.addWidget(lbl_dica)
+
+    return bloco
+
+
+def grade_formulario(*itens):
+    """Grade de formulário em 2 colunas iguais; cada item é
+    (widget, linha, coluna[, linhas, colunas] | [, alinhamento])."""
+
+    from PySide6.QtWidgets import QGridLayout
+
+    grade = QGridLayout()
+    grade.setHorizontalSpacing(16)
+    grade.setVerticalSpacing(14)
+    for widget, *posicao in itens:
+        grade.addWidget(widget, *posicao)
+    grade.setColumnStretch(0, 1)
+    grade.setColumnStretch(1, 1)
+    return grade
+
+
+def titulo_secao(texto):
+    """Título de grupo dentro de um formulário ("DADOS PESSOAIS",
+    "CONTATO"...) com a linha fina embaixo."""
+
+    bloco = QWidget()
+    bloco.setStyleSheet("background:transparent;")
+    layout = QVBoxLayout(bloco)
+    layout.setContentsMargins(0, 4, 0, 0)
+    layout.setSpacing(8)
+
+    lbl = QLabel(texto.upper())
+    lbl.setStyleSheet(f"""
+        background:transparent; font-size:{tokens.TAMANHO_XS}px;
+        font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.6px;
+    """)
+    linha = QFrame()
+    linha.setFixedHeight(1)
+    linha.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
+
+    layout.addWidget(lbl)
+    layout.addWidget(linha)
+
+    return bloco

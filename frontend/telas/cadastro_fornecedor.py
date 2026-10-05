@@ -1,18 +1,15 @@
 from utils.maiusculas import forcar_maiusculas
 from PySide6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
+    QCheckBox,
     QDoubleSpinBox,
-    QFrame,
-    QScrollArea,
-    QWidget,
     QMessageBox,
 )
 
 from design import tokens
-from design.widgets import BotaoPrimario, BotaoSecundario
+from design.widgets import (
+    BotaoPrimario, CampoTexto, DialogoPadrao, campo_rotulado, grade_formulario,
+    titulo_secao,
+)
 from services.fornecedor_service import cadastrar_fornecedor, atualizar_fornecedor
 from services.worker import rodar_em_thread
 from utils.validacao import email_valido
@@ -21,85 +18,61 @@ from widgets.fields.phone_field import PhoneField
 from widgets.fields.email_field import EmailField
 
 
-class CadastroFornecedorDialog(QDialog):
+class CadastroFornecedorDialog(DialogoPadrao):
+    """Novo e Editar fornecedor -- mesmo molde do cadastro de cliente:
+    duas colunas agrupadas em Empresa / Contato e endereço / Compras."""
 
     def __init__(self, fornecedor=None, parent=None):
 
-        super().__init__(parent)
+        editando = fornecedor is not None
+
+        super().__init__(
+            "Editar Fornecedor" if editando else "Novo Fornecedor",
+            "Usado na importação de NF-e e no cadastro de compras",
+            "truck",
+            largura=DialogoPadrao.GRANDE,
+            parent=parent,
+        )
 
         self.fornecedor = fornecedor
         self.fornecedor_salvo = None
 
-        editando = fornecedor is not None
+        # ---- empresa ----
 
-        self.setWindowTitle("Editar Fornecedor" if editando else "Novo Fornecedor")
-        self.setFixedWidth(440)
-        self.resize(440, 600)
-        self.setStyleSheet(f"background:{tokens.FUNDO};")
+        self.razao_social = CampoTexto("Nome Ltda")
+        self.nome_fantasia = CampoTexto("Como a loja chama o fornecedor")
+        self.cnpj = CpfCnpjField("00.000.000/0000-00")
 
-        raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(0, 0, 0, 0)
-        raiz.setSpacing(0)
+        self.corpo.addWidget(titulo_secao("Empresa"))
+        self.corpo.addLayout(grade_formulario(
+            (campo_rotulado("Razão social *", self.razao_social), 0, 0, 1, 2),
+            (campo_rotulado("Nome fantasia", self.nome_fantasia), 1, 0),
+            (campo_rotulado("CNPJ *", self.cnpj), 1, 1),
+        ))
 
-        cabecalho = QFrame()
-        cabecalho.setStyleSheet(f"background:{tokens.SIDEBAR};")
+        # ---- contato e endereço ----
 
-        cab_layout = QVBoxLayout(cabecalho)
-        cab_layout.setContentsMargins(24, 20, 24, 20)
-        cab_layout.setSpacing(2)
+        self.telefone = PhoneField("(00) 00000-0000")
+        self.email = EmailField("email@exemplo.com")
+        self.cidade = CampoTexto("Cidade")
+        self.estado = CampoTexto("UF")
+        self.estado.setMaxLength(2)
+        self.estado.setFixedWidth(80)
 
-        titulo = QLabel(
-            "EDITAR FORNECEDOR" if editando else "+ NOVO FORNECEDOR"
+        grade_contato = grade_formulario(
+            (campo_rotulado("Telefone", self.telefone), 0, 0),
+            (campo_rotulado("E-mail", self.email), 0, 1, 1, 2),
+            (campo_rotulado("Cidade", self.cidade), 1, 0, 1, 2),
+            (campo_rotulado("UF", self.estado), 1, 2),
         )
-        titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_CLARO};
-            font-size:{tokens.TAMANHO_LG}px; font-weight:800;
-        """)
 
-        subtitulo = QLabel("Usado na importação de NF-e e no cadastro de compras")
-        subtitulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SIDEBAR_APAGADO};
-            font-size:{tokens.TAMANHO_SM}px;
-        """)
-
-        cab_layout.addWidget(titulo)
-        cab_layout.addWidget(subtitulo)
-
-        raiz.addWidget(cabecalho)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
-
-        corpo_widget = QWidget()
-        corpo_widget.setStyleSheet("background:transparent;")
-
-        corpo = QVBoxLayout(corpo_widget)
-        corpo.setContentsMargins(24, 20, 24, 20)
-        corpo.setSpacing(14)
-
-        self.razao_social = self._campo(corpo, "RAZÃO SOCIAL", "Nome Ltda")
-        self.nome_fantasia = self._campo(corpo, "NOME FANTASIA", "Nome Fantasia")
-        self.cnpj = self._campo(
-            corpo, "CNPJ", "00.000.000/0000-00", cls=CpfCnpjField
-        )
-        self.telefone = self._campo(
-            corpo, "TELEFONE", "(00) 00000-0000", cls=PhoneField
-        )
-        self.email = self._campo(
-            corpo, "E-MAIL", "email@exemplo.com", cls=EmailField
-        )
-        self.cidade = self._campo(corpo, "CIDADE", "Cidade")
-        self.estado = self._campo(corpo, "ESTADO (UF)", "Ex.: SP")
+        self.corpo.addWidget(titulo_secao("Contato e endereço"))
+        self.corpo.addLayout(grade_contato)
 
         # cadastro em MAIUSCULAS -- e-mail/CPF/telefone ficam de fora
         forcar_maiusculas(self.razao_social, self.nome_fantasia, self.cidade, self.estado)
 
-        lbl_margem = QLabel("MARGEM PADRÃO DE VENDA (%)")
-        lbl_margem.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
+        # ---- compras ----
 
         self.margem_padrao = QDoubleSpinBox()
         self.margem_padrao.setRange(0, 999)
@@ -112,29 +85,37 @@ class CadastroFornecedorDialog(QDialog):
                 padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
                 background: {tokens.CARD};
             }}
+            QDoubleSpinBox:focus {{ border-color: {tokens.PRIMARIA}; }}
         """)
 
-        corpo.addWidget(lbl_margem)
-        corpo.addWidget(self.margem_padrao)
-        corpo.addStretch()
+        # reativar um fornecedor excluído (soft-delete) não tinha como
+        # pela tela -- agora o próprio Editar tem a opção
+        self.chk_ativo = QCheckBox("Fornecedor ativo")
+        self.chk_ativo.setChecked(True)
 
-        scroll.setWidget(corpo_widget)
-        raiz.addWidget(scroll, stretch=1)
+        itens_compras = [(campo_rotulado(
+            "Margem padrão de venda", self.margem_padrao,
+            "Sugerida no preço de venda dos produtos importados de NF-e.",
+        ), 0, 0)]
+        if editando:
+            itens_compras.append((campo_rotulado(
+                "Situação", self.chk_ativo,
+                "Desmarque pra tirar o fornecedor das listas de compra e importação.",
+            ), 0, 1))
 
-        rodape = QHBoxLayout()
-        rodape.setContentsMargins(24, 16, 24, 20)
+        self.corpo.addWidget(titulo_secao("Compras"))
+        self.corpo.addLayout(grade_formulario(*itens_compras))
+        self.corpo.addStretch()
 
-        self.bt_cancelar = BotaoSecundario("Cancelar")
-        self.bt_cancelar.clicked.connect(self.reject)
+        # ---- rodapé ----
 
-        self.bt_salvar = BotaoPrimario("Salvar")
+        self.bt_salvar = BotaoPrimario(
+            "Salvar Alterações" if editando else "Cadastrar Fornecedor",
+            icone_nome="check",
+        )
+        self.bt_salvar.setAutoDefault(False)
         self.bt_salvar.clicked.connect(self.salvar)
-
-        rodape.addWidget(self.bt_cancelar)
-        rodape.addStretch()
-        rodape.addWidget(self.bt_salvar)
-
-        raiz.addLayout(rodape)
+        self.bt_cancelar = self.definir_botoes(self.bt_salvar)
 
         if fornecedor:
             self.razao_social.setText(fornecedor.get("razao_social", ""))
@@ -145,25 +126,10 @@ class CadastroFornecedorDialog(QDialog):
             self.cidade.setText(fornecedor.get("cidade") or "")
             self.estado.setText(fornecedor.get("estado") or "")
             self.margem_padrao.setValue(float(fornecedor.get("margem_padrao") or 0))
+            self.chk_ativo.setChecked(fornecedor.get("ativo", True))
 
-    def _campo(self, layout, rotulo, placeholder, cls=None):
-        from design.widgets import CampoTexto
-
-        cls = cls or CampoTexto
-
-        lbl = QLabel(rotulo)
-        lbl.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
-
-        campo = cls(placeholder)
-        campo.setMinimumHeight(44)
-
-        layout.addWidget(lbl)
-        layout.addWidget(campo)
-
-        return campo
+        self.ajustar_altura()
+        self.razao_social.setFocus()
 
     def salvar(self):
 
@@ -171,14 +137,17 @@ class CadastroFornecedorDialog(QDialog):
 
         if not razao_social:
             QMessageBox.warning(self, "Atenção", "Informe a razão social.")
+            self.razao_social.setFocus()
             return
 
         if not self.cnpj.valido:
             QMessageBox.warning(self, "Atenção", "Informe um CNPJ válido.")
+            self.cnpj.setFocus()
             return
 
         if self.email.text().strip() and not email_valido(self.email.text()):
             QMessageBox.warning(self, "Atenção", "E-mail inválido.")
+            self.email.setFocus()
             return
 
         dados = {
@@ -193,7 +162,7 @@ class CadastroFornecedorDialog(QDialog):
         }
 
         if self.fornecedor:
-            dados["ativo"] = self.fornecedor.get("ativo", True)
+            dados["ativo"] = self.chk_ativo.isChecked()
             func, args = atualizar_fornecedor, (self.fornecedor["id"], dados)
         else:
             func, args = cadastrar_fornecedor, (dados,)

@@ -869,11 +869,32 @@ class PagamentoWindow(QDialog):
                 tokens.ALERTA_CLARO, tokens.ALERTA_TEXTO,
             )
 
+        # ---- aviso do meio: o que fazer agora ----
+        if self.pagamentos and not self.quitado():
+            self.lbl_escolha_forma.setText(
+                f"Falta R$ {_fmt(self.falta())}  ·  escolha a 2ª forma (teclas 1 a 5)"
+                if len(self.pagamentos) < MAX_FORMAS else
+                f"Falta R$ {_fmt(self.falta())}  ·  já são {MAX_FORMAS} formas: "
+                "remova uma (Del) pra trocar"
+            )
+        else:
+            self.lbl_escolha_forma.setText("Escolha a forma de pagamento (teclas 1 a 5)")
+
+        # dividir: só na 1ª forma (depois o valor já vem com o que falta)
+        self.lbl_dica_valor.setText(
+            "Enter lança  ·  pra dividir em 2 formas, digite só a parte desta  ·  Esc volta"
+            if not self.pagamentos else
+            "Enter lança o restante  ·  Esc volta pras formas"
+        )
+
         # ---- lista de pagamentos ----
         while self.lista_pagamentos.count():
-            item = self.lista_pagamentos.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            widget = self.lista_pagamentos.takeAt(0).widget()
+            if widget:
+                # tira da tela já -- só o deleteLater deixava a linha
+                # antiga desenhada até o próximo ciclo (linha "fantasma")
+                widget.setParent(None)
+                widget.deleteLater()
 
         for indice, pagamento in enumerate(self.pagamentos):
             self.lista_pagamentos.addWidget(self._linha_pagamento(indice, pagamento))
@@ -888,31 +909,57 @@ class PagamentoWindow(QDialog):
         lancada = any(p["forma"] == valor for p in self.pagamentos)
         atual = valor == self.forma_atual
 
+        # forma que não dá mais pra usar (venda paga, ou já são 2 formas
+        # e esta não é uma delas) fica apagada em vez de parecer
+        # clicável e só responder com aviso
+        bloqueada = not lancada and (
+            self.quitado() or len(self.pagamentos) >= MAX_FORMAS
+        )
+
         # cada forma com a sua cor (a mesma do fiado e da despesa);
         # forma que já tem pagamento lançado troca o ícone por um check
         estilo, texto = estilo_botao_forma(
             valor, atual, extra="text-align:left; padding:4px 14px; font-size:15px;",
         )
+        if bloqueada:
+            texto = tokens.TEXTO_TERCIARIO
+            estilo += f"""
+                QPushButton {{
+                    background:{tokens.FUNDO}; color:{texto}; border:1.5px solid {tokens.BORDA};
+                }}
+            """
         botao.setStyleSheet(estilo)
         botao.setIcon(icone("check" if lancada and not atual else icone_nome, cor=texto, tamanho=18))
 
     def _linha_pagamento(self, indice, pagamento):
 
+        forma = pagamento["forma"]
+        cor = cor_forma_pagamento(forma)
+
+        # faixa na cor da forma, como os botões à esquerda
         linha = QFrame()
         linha.setObjectName("linhaPagamento")
         linha.setStyleSheet(f"""
             QFrame#linhaPagamento {{
                 background:{tokens.FUNDO};
                 border:1px solid {tokens.BORDA};
+                border-left:4px solid {cor};
                 border-radius:{tokens.RADIUS_SM}px;
             }}
         """)
 
         layout = QHBoxLayout(linha)
-        layout.setContentsMargins(12, 8, 8, 8)
+        layout.setContentsMargins(12, 10, 8, 10)
         layout.setSpacing(10)
 
-        forma = pagamento["forma"]
+        # venda dividida: deixa claro qual é a 1ª e a 2ª forma
+        if len(self.pagamentos) > 1:
+            lbl_ordem = QLabel(f"{indice + 1}ª")
+            lbl_ordem.setStyleSheet(
+                f"background:transparent; border:none; font-size:12px; "
+                f"font-weight:800; color:{tokens.TEXTO_TERCIARIO};"
+            )
+            layout.addWidget(lbl_ordem)
 
         lbl_icone = QLabel()
         lbl_icone.setPixmap(icone_pixmap(ICONES_FORMA[forma], cor=cor_forma_pagamento(forma), tamanho=16))

@@ -17,6 +17,12 @@ from design.widgets import Card, BotaoPrimario, BotaoSecundario
 from services import preferencias_service
 
 
+# KPIs escondidos de fábrica (quem nunca personalizou o Início): contagens
+# que quase não mudam no dia ou que já aparecem em outro bloco (estoque
+# em alerta está no quadro de Alertas). Ficam disponíveis pra ligar aqui.
+KPIS_OCULTOS_PADRAO = ("ticket", "clientes", "produtos", "estoque")
+
+
 def _reordenar_ids(registro, ordem_salva):
 
     ids_registro = [c["id"] for c in registro]
@@ -104,6 +110,8 @@ class PersonalizarDashboardDialog(QDialog):
 
     def _preferencia_kpis(self):
         salvo = preferencias_service.carregar(self.usuario_id, "dashboard_kpis", {})
+        if not salvo:
+            return [], list(KPIS_OCULTOS_PADRAO)
         return salvo.get("ordem", []), salvo.get("ocultos", [])
 
     def _preferencia_paineis_ocultos(self):

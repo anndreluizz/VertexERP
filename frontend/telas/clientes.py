@@ -346,15 +346,37 @@ class PainelCliente(Card):
 
         self.setFixedWidth(360)
 
-        self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(20, 20, 20, 20)
+        externo = QVBoxLayout(self)
+        externo.setContentsMargins(0, 0, 0, 16)
+        externo.setSpacing(12)
+
+        # o resumo rola sozinho e os botões ficam fixos embaixo -- sem
+        # isso a altura mínima do painel (todo o conteúdo empilhado)
+        # forçava a tela inteira a ficar alta e, em janela menor, o fim
+        # da lista de clientes ficava cortado sem conseguir rolar até lá
+        rolagem = QScrollArea()
+        rolagem.setWidgetResizable(True)
+        rolagem.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        rolagem.setStyleSheet("QScrollArea { border:none; background:transparent; }")
+        conteudo = QWidget()
+        conteudo.setStyleSheet("background:transparent;")
+        self._layout = QVBoxLayout(conteudo)
+        self._layout.setContentsMargins(20, 20, 20, 4)
         self._layout.setSpacing(16)
+        rolagem.setWidget(conteudo)
+        externo.addWidget(rolagem, stretch=1)
+
+        self._acoes = QVBoxLayout()
+        self._acoes.setContentsMargins(20, 0, 20, 0)
+        self._acoes.setSpacing(8)
+        externo.addLayout(self._acoes)
 
         self.mostrar(None)
 
     def mostrar(self, cliente, agr=None, movimentos=None, prazo_dias=None):
 
         _limpar_layout(self._layout)
+        _limpar_layout(self._acoes)
 
         if cliente is None:
             vazio = _rotulo(
@@ -485,7 +507,7 @@ class PainelCliente(Card):
         if not cliente.get("ativo", True):
             bt_reativar = BotaoPrimario("Reativar cliente", icone_nome="check")
             bt_reativar.clicked.connect(lambda: self.reativar.emit(cliente))
-            self._layout.addWidget(bt_reativar)
+            self._acoes.addWidget(bt_reativar)
         elif saldo > 0.009:
             acoes = QHBoxLayout()
             acoes.setSpacing(8)
@@ -497,11 +519,11 @@ class PainelCliente(Card):
                 bt_cobrar.setToolTip("Enviar mensagem de cobrança pelo WhatsApp")
                 bt_cobrar.clicked.connect(lambda: self.cobrar.emit(cliente))
                 acoes.addWidget(bt_cobrar, stretch=1)
-            self._layout.addLayout(acoes)
+            self._acoes.addLayout(acoes)
 
         bt_ficha = BotaoSecundario("Abrir ficha completa", icone_nome="user")
         bt_ficha.clicked.connect(lambda: self.abrir_ficha.emit(cliente))
-        self._layout.addWidget(bt_ficha)
+        self._acoes.addWidget(bt_ficha)
 
 
 class Clientes(QWidget):
@@ -627,13 +649,73 @@ class Clientes(QWidget):
         # BUSCA + FILTRO
         # ======================
 
+        # linha 1: busca + prazo/ordenação/loja; linha 2: filtros de
+        # status + contagem. (Antes os 6 filtros dividiam a linha com a
+        # busca e espremiam o campo até cortar o texto de exemplo.)
         barra = QHBoxLayout()
         barra.setSpacing(10)
 
         self.pesquisa = CampoTexto("Buscar por nome, telefone ou CPF/CNPJ...")
+        self.pesquisa.setMinimumWidth(260)
         self.pesquisa.textChanged.connect(self.filtrar_clientes)
 
         barra.addWidget(self.pesquisa, stretch=1)
+
+        def _legenda(texto):
+            lbl = QLabel(texto)
+            lbl.setStyleSheet(f"""
+                background:transparent; color:{tokens.TEXTO_TERCIARIO};
+                font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+            """)
+            return lbl
+
+        estilo_combo = f"""
+            QComboBox {{
+                border:1px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
+                padding:0 12px; background:{tokens.CARD}; color:{tokens.TEXTO};
+            }}
+        """
+
+        self.combo_prazo = QComboBox()
+        for dias in cliente_analise.PRAZOS_INADIMPLENCIA:
+            self.combo_prazo.addItem(f"Atraso: {dias} dias", dias)
+        self.combo_prazo.setCurrentIndex(
+            cliente_analise.PRAZOS_INADIMPLENCIA.index(
+                cliente_analise.PRAZO_INADIMPLENCIA_PADRAO
+            )
+        )
+        self.combo_prazo.setToolTip("Prazo de inadimplência")
+        self.combo_prazo.setMinimumHeight(40)
+        self.combo_prazo.setCursor(Qt.PointingHandCursor)
+        self.combo_prazo.setStyleSheet(estilo_combo)
+        self.combo_prazo.currentIndexChanged.connect(self.alterar_prazo_inadimplencia)
+
+        self.combo_ordenacao = QComboBox()
+        for rotulo, chave in ORDENACOES:
+            self.combo_ordenacao.addItem(rotulo, chave)
+        self.combo_ordenacao.setToolTip("Ordenar por")
+        self.combo_ordenacao.setMinimumHeight(40)
+        self.combo_ordenacao.setMinimumWidth(250)
+        self.combo_ordenacao.setCursor(Qt.PointingHandCursor)
+        self.combo_ordenacao.setStyleSheet(estilo_combo)
+        self.combo_ordenacao.currentIndexChanged.connect(self.alterar_ordenacao)
+
+        self.combo_loja_filtro = QComboBox()
+        self.combo_loja_filtro.setMinimumHeight(40)
+        self.combo_loja_filtro.setCursor(Qt.PointingHandCursor)
+        self.combo_loja_filtro.setStyleSheet(estilo_combo)
+        self._carregar_combo_lojas()
+        self.combo_loja_filtro.currentIndexChanged.connect(self.carregar)
+
+        barra.addWidget(self.combo_prazo)
+        barra.addWidget(_legenda("Ordenar:"))
+        barra.addWidget(self.combo_ordenacao)
+        barra.addWidget(self.combo_loja_filtro)
+
+        layout.addLayout(barra)
+
+        barra_ordenacao = QHBoxLayout()
+        barra_ordenacao.setSpacing(8)
 
         self.botoes_status = {}
 
@@ -650,70 +732,7 @@ class Clientes(QWidget):
             )
 
             self.botoes_status[chave] = bt
-            barra.addWidget(bt)
-
-        layout.addLayout(barra)
-
-        # ======================
-        # PRAZO DE INADIMPLÊNCIA + ORDENAÇÃO
-        # ======================
-
-        barra_ordenacao = QHBoxLayout()
-        barra_ordenacao.setSpacing(10)
-
-        lbl_prazo = QLabel("Prazo de inadimplência:")
-        lbl_prazo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_SM}px; font-weight:700;
-        """)
-
-        self.combo_prazo = QComboBox()
-        for dias in cliente_analise.PRAZOS_INADIMPLENCIA:
-            self.combo_prazo.addItem(f"{dias} dias", dias)
-        self.combo_prazo.setCurrentIndex(
-            cliente_analise.PRAZOS_INADIMPLENCIA.index(
-                cliente_analise.PRAZO_INADIMPLENCIA_PADRAO
-            )
-        )
-        self.combo_prazo.setMinimumHeight(34)
-        self.combo_prazo.currentIndexChanged.connect(self.alterar_prazo_inadimplencia)
-
-        barra_ordenacao.addWidget(lbl_prazo)
-        barra_ordenacao.addWidget(self.combo_prazo)
-
-        barra_ordenacao.addSpacing(20)
-
-        lbl_ordenar = QLabel("Ordenar por:")
-        lbl_ordenar.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_SM}px; font-weight:700;
-        """)
-        barra_ordenacao.addWidget(lbl_ordenar)
-
-        self.combo_ordenacao = QComboBox()
-        for rotulo, chave in ORDENACOES:
-            self.combo_ordenacao.addItem(rotulo, chave)
-        self.combo_ordenacao.setMinimumHeight(34)
-        self.combo_ordenacao.setMinimumWidth(260)
-        self.combo_ordenacao.currentIndexChanged.connect(self.alterar_ordenacao)
-
-        barra_ordenacao.addWidget(self.combo_ordenacao)
-
-        barra_ordenacao.addSpacing(20)
-
-        self.combo_loja_filtro = QComboBox()
-        self.combo_loja_filtro.setMinimumHeight(34)
-        self.combo_loja_filtro.setCursor(Qt.PointingHandCursor)
-        self.combo_loja_filtro.setStyleSheet(f"""
-            QComboBox {{
-                border:1px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
-                padding:0 12px; background:{tokens.CARD}; color:{tokens.TEXTO};
-            }}
-        """)
-        self._carregar_combo_lojas()
-        self.combo_loja_filtro.currentIndexChanged.connect(self.carregar)
-
-        barra_ordenacao.addWidget(self.combo_loja_filtro)
+            barra_ordenacao.addWidget(bt)
 
         barra_ordenacao.addStretch()
 

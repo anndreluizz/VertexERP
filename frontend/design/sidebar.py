@@ -1,5 +1,5 @@
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from design import tokens
+from design.fonts import fonte
 from design.icons import icone, icone_pixmap
 from utils.acessibilidade import movimento_reduzido
 from design.widgets import Avatar
@@ -37,7 +38,7 @@ class ItemMenuLateral(QPushButton):
         self.setCheckable(True)
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedHeight(46)
-        self.setFont(QFont(tokens.FONTE_FAMILIA_PADRAO, tokens.TAMANHO_MD))
+        self.setFont(fonte(tokens.TAMANHO_BASE))
 
         self._opacidade_fundo = 0.0
         self._anim = QPropertyAnimation(self, b"opacidadeFundo", self)

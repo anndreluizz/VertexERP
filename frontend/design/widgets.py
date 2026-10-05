@@ -1,5 +1,5 @@
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, QVariantAnimation
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from design import tokens
+from design.fonts import fonte
 from design.animations import fade_in
 from design.icons import icone, icone_pixmap
 from utils.acessibilidade import movimento_reduzido
@@ -293,7 +294,7 @@ class _BotaoAnimado(QPushButton):
 
         self.setCursor(Qt.PointingHandCursor)
         self.setMinimumHeight(altura)
-        self.setFont(QFont(tokens.FONTE_FAMILIA_PADRAO, tokens.TAMANHO_MD))
+        self.setFont(fonte(tokens.TAMANHO_BASE))
 
         self._anim = QVariantAnimation(self)
         self._anim.setDuration(150)

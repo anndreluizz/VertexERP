@@ -1,7 +1,7 @@
-from PySide6.QtGui import QPalette, QColor, QFont
+from PySide6.QtGui import QPalette, QColor
 
 from design import tokens
-from design.fonts import carregar_fonte_inter
+from design.fonts import carregar_fonte_inter, fonte
 
 
 def aplicar_tema(app, escuro: bool = False):
@@ -20,7 +20,7 @@ def aplicar_tema(app, escuro: bool = False):
     familia_fonte = carregar_fonte_inter()
 
     app.setStyle("Fusion")
-    app.setFont(QFont(familia_fonte, tokens.TAMANHO_MD))
+    app.setFont(fonte(tokens.TAMANHO_BASE))
 
     paleta = QPalette()
     paleta.setColor(QPalette.Window, QColor(tokens.FUNDO))

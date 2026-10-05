@@ -55,14 +55,16 @@ class ItemMenuLateral(QPushButton):
 
     opacidadeFundo = property(getOpacidadeFundo, setOpacidadeFundo)
 
+    # o hover anima sempre, inclusive com o item ativo: o paintEvent já
+    # ignora _opacidade_fundo quando isChecked(). Antes, sair com o mouse
+    # de um item recém-clicado (já ativo) não zerava o hover, e quando
+    # outro item virava o ativo este ficava com o fundo de hover aceso.
     def enterEvent(self, event):
-        if not self.isChecked():
-            self._animar(1.0)
+        self._animar(1.0)
         super().enterEvent(event)
 
     def leaveEvent(self, event):
-        if not self.isChecked():
-            self._animar(0.0)
+        self._animar(0.0)
         super().leaveEvent(event)
 
     def _animar(self, destino):

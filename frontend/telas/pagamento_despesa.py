@@ -60,6 +60,7 @@ from design.widgets import (
     BotaoSucesso,
     CabecalhoDialogo,
     DialogoPadrao,
+    estilo_botao_forma,
     CampoTexto,
 )
 from utils.formatacao import formatar_moeda
@@ -96,7 +97,7 @@ class PagamentoDespesaDialog(QDialog):
         self.comprovante_tipo_arquivo = None
 
         self.setWindowTitle("Pagamento de Despesa")
-        tamanho_fixo_seguro(self, DialogoPadrao.MEDIO, 640)
+        tamanho_fixo_seguro(self, DialogoPadrao.MEDIO, 700)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         raiz = QVBoxLayout(self)
@@ -165,7 +166,7 @@ class PagamentoDespesaDialog(QDialog):
             bt.setCheckable(True)
             bt.setCursor(Qt.PointingHandCursor)
             bt.setAutoDefault(False)
-            bt.setMinimumHeight(44)
+            bt.setMinimumHeight(56)
             bt.clicked.connect(
                 lambda checked, v=valor: self.selecionar_forma(v)
             )
@@ -298,18 +299,7 @@ class PagamentoDespesaDialog(QDialog):
             selecionado = chave == valor
 
             botao.setChecked(selecionado)
-
-            botao.setStyleSheet(f"""
-                QPushButton {{
-                    background: {tokens.SECUNDARIA if selecionado else tokens.FUNDO};
-                    color: {"white" if selecionado else tokens.TEXTO};
-                    border-radius: {tokens.RADIUS_SM}px;
-                    font-weight: 700;
-                }}
-                QPushButton:hover {{
-                    background: {tokens.SECUNDARIA_HOVER if selecionado else tokens.BORDA};
-                }}
-            """)
+            botao.setStyleSheet(estilo_botao_forma(chave, selecionado)[0])
 
     # mesmo motivo/limite de cadastro_despesa.py::escolher_documento --
     # sem isso, uma foto de celular sem compressao pode derrubar o

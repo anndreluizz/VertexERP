@@ -18,7 +18,10 @@ from PySide6.QtWidgets import (
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.responsive import tamanho_fixo_seguro
-from design.widgets import BotaoSecundario, BotaoSucesso, CabecalhoDialogo, CampoTexto
+from design.widgets import (
+    BotaoSecundario, BotaoSucesso, CabecalhoDialogo, CampoTexto, cor_forma_pagamento,
+    estilo_botao_forma,
+)
 from services.api import configuracoes
 from services.pix_utils import montar_payload_pix
 from services.worker import rodar_em_thread
@@ -146,7 +149,7 @@ class PagamentoWindow(QDialog):
         self._timer_pix.timeout.connect(self.gerar_qrcode_pix)
 
         self.setWindowTitle("Pagamento")
-        tamanho_fixo_seguro(self, 980, 700)
+        tamanho_fixo_seguro(self, 1140, 800)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         raiz = QVBoxLayout(self)
@@ -279,7 +282,7 @@ class PagamentoWindow(QDialog):
     def _construir_coluna_formas(self):
 
         coluna = QFrame()
-        coluna.setFixedWidth(280)
+        coluna.setFixedWidth(330)
         coluna.setStyleSheet(
             f"background:{tokens.FUNDO}; border-right:1px solid {tokens.BORDA};"
         )
@@ -297,7 +300,7 @@ class PagamentoWindow(QDialog):
             bt = QPushButton(f"  {numero}   {rotulo}")
             bt.setAutoDefault(False)
             bt.setCursor(Qt.PointingHandCursor)
-            bt.setMinimumHeight(50)
+            bt.setMinimumHeight(58)
             bt.setIconSize(QSize(18, 18))
             bt.clicked.connect(lambda checked=False, v=valor: self.selecionar_forma(v))
 
@@ -885,28 +888,13 @@ class PagamentoWindow(QDialog):
         lancada = any(p["forma"] == valor for p in self.pagamentos)
         atual = valor == self.forma_atual
 
-        if atual:
-            fundo, texto, borda = tokens.PRIMARIA, tokens.TEXTO_CLARO, tokens.PRIMARIA
-        elif lancada:
-            fundo, texto, borda = tokens.SUCESSO_CLARO, tokens.SECUNDARIA_HOVER, tokens.SECUNDARIA
-        else:
-            fundo, texto, borda = tokens.CARD, tokens.TEXTO, tokens.BORDA
-
-        botao.setIcon(icone(icone_nome, cor=texto, tamanho=18))
-        botao.setStyleSheet(f"""
-            QPushButton {{
-                background: {fundo};
-                color: {texto};
-                border: 1.5px solid {borda};
-                border-radius: {tokens.RADIUS_SM}px;
-                font-weight: 700;
-                font-size: 14px;
-                text-align: left;
-                padding: 4px 12px;
-            }}
-            QPushButton:hover {{ border-color: {tokens.PRIMARIA}; }}
-            QPushButton:focus {{ border: 2px solid {tokens.PRIMARIA}; }}
-        """)
+        # cada forma com a sua cor (a mesma do fiado e da despesa);
+        # forma que já tem pagamento lançado troca o ícone por um check
+        estilo, texto = estilo_botao_forma(
+            valor, atual, extra="text-align:left; padding:4px 14px; font-size:15px;",
+        )
+        botao.setStyleSheet(estilo)
+        botao.setIcon(icone("check" if lancada and not atual else icone_nome, cor=texto, tamanho=18))
 
     def _linha_pagamento(self, indice, pagamento):
 
@@ -927,7 +915,7 @@ class PagamentoWindow(QDialog):
         forma = pagamento["forma"]
 
         lbl_icone = QLabel()
-        lbl_icone.setPixmap(icone_pixmap(ICONES_FORMA[forma], cor=tokens.TEXTO_SECUNDARIO, tamanho=16))
+        lbl_icone.setPixmap(icone_pixmap(ICONES_FORMA[forma], cor=cor_forma_pagamento(forma), tamanho=16))
         lbl_icone.setStyleSheet("background:transparent; border:none;")
         layout.addWidget(lbl_icone)
 

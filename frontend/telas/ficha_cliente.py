@@ -99,6 +99,7 @@ from design.widgets import (
     Card,
     CardKPI,
     DialogoPadrao,
+    estilo_botao_forma,
     SecaoCard,
 )
 
@@ -820,7 +821,7 @@ class RegistrarPagamentoDialog(DialogoPadrao):
             bt.setCheckable(True)
             bt.setCursor(Qt.PointingHandCursor)
             bt.setAutoDefault(False)
-            bt.setMinimumHeight(46)
+            bt.setMinimumHeight(56)
             bt.setIcon(icone(
                 _ICONES_FORMA_PAGAMENTO.get(valor, "dollar-sign"),
                 cor=tokens.TEXTO, tamanho=15,
@@ -974,23 +975,12 @@ class RegistrarPagamentoDialog(DialogoPadrao):
             selecionado = chave == valor
 
             botao.setChecked(selecionado)
+            estilo, cor_texto = estilo_botao_forma(chave, selecionado)
+            botao.setStyleSheet(estilo)
             botao.setIcon(icone(
                 _ICONES_FORMA_PAGAMENTO.get(chave, "dollar-sign"),
-                cor=tokens.TEXTO_CLARO if selecionado else tokens.TEXTO,
-                tamanho=15,
+                cor=cor_texto, tamanho=17,
             ))
-
-            botao.setStyleSheet(f"""
-                QPushButton {{
-                    background: {tokens.SECUNDARIA if selecionado else tokens.FUNDO};
-                    color: {tokens.TEXTO_CLARO if selecionado else tokens.TEXTO};
-                    border-radius: {tokens.RADIUS_SM}px;
-                    font-weight: 700;
-                }}
-                QPushButton:hover {{
-                    background: {tokens.SECUNDARIA_HOVER if selecionado else tokens.BORDA};
-                }}
-            """)
 
     def confirmar(self):
 

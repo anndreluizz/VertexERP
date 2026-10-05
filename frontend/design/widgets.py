@@ -826,9 +826,9 @@ class DialogoPadrao(QDialog):
     Uso: monta o conteúdo em self.corpo, chama definir_botoes() com o
     botão principal e, no fim do __init__, ajustar_altura()."""
 
-    PEQUENO = 520
-    MEDIO = 680
-    GRANDE = 820
+    PEQUENO = 560
+    MEDIO = 760
+    GRANDE = 860
 
     def __init__(
         self, titulo, subtitulo, icone_nome,
@@ -984,3 +984,53 @@ def titulo_secao(texto):
     layout.addWidget(linha)
 
     return bloco
+
+
+# ==========================================
+# FORMAS DE PAGAMENTO — uma cor por forma
+# ==========================================
+
+# (tema claro, tema escuro) -- mesma cor em toda tela que mostra formas
+# de pagamento (PDV, fiado, despesa), pra Dinheiro ser sempre verde,
+# PIX sempre verde-azulado etc.; o escuro usa o tom claro da mesma cor
+_CORES_FORMA = {
+    "DINHEIRO": ("#15803D", "#4ADE80"),
+    "PIX": ("#0F766E", "#2DD4BF"),
+    "DEBITO": ("#1D4ED8", "#60A5FA"),
+    "CARTAO": ("#1D4ED8", "#60A5FA"),
+    "CREDITO": ("#6D28D9", "#A78BFA"),
+    "PRAZO": ("#B45309", "#FBBF24"),
+    "CHEQUE": ("#B45309", "#FBBF24"),
+    "TRANSFERENCIA": ("#BE185D", "#F472B6"),
+}
+
+
+def cor_forma_pagamento(forma):
+    claro, escuro = _CORES_FORMA.get(forma, (tokens.PRIMARIA, tokens.PRIMARIA))
+    return escuro if tokens.ESCURO_ATIVO else claro
+
+
+def estilo_botao_forma(forma, selecionado, extra=""):
+    """(stylesheet, cor do ícone) do botão de uma forma de pagamento:
+    tingido com a cor da forma quando solto, cheio quando escolhido.
+    `extra` entra no bloco QPushButton (alinhamento, padding...)."""
+
+    cor = QColor(cor_forma_pagamento(forma))
+    rgb = f"{cor.red()}, {cor.green()}, {cor.blue()}"
+
+    if selecionado:
+        texto = tokens.FUNDO if tokens.ESCURO_ATIVO else "#FFFFFF"
+        fundo, borda, fundo_hover = cor.name(), cor.name(), cor.darker(110).name()
+    else:
+        texto = cor.name()
+        fundo, borda, fundo_hover = f"rgba({rgb}, 0.08)", f"rgba({rgb}, 0.35)", f"rgba({rgb}, 0.16)"
+
+    return f"""
+        QPushButton {{
+            background:{fundo}; color:{texto}; border:1.5px solid {borda};
+            border-radius:{tokens.RADIUS_SM}px; font-weight:700;
+            font-size:{tokens.TAMANHO_MD}px; {extra}
+        }}
+        QPushButton:hover {{ background:{fundo_hover}; border-color:{cor.name()}; }}
+        QPushButton:focus {{ border:2px solid {cor.name()}; }}
+    """, texto

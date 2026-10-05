@@ -141,6 +141,9 @@ class PrincipalWindow(QMainWindow):
 
         self.setWindowTitle("Vertex ERP")
         self.resize(1400, 800)
+        # abre maximizada, igual a tela de login -- quem cria a janela
+        # so' chama show(), e esse estado ja vale pra ele
+        self.setWindowState(Qt.WindowMaximized)
         self.setStyleSheet(f"QMainWindow {{ background: {tokens.FUNDO}; }}")
 
         # info_usuario/config podem vir ja' prontos de quem chamou (ver

@@ -1,16 +1,20 @@
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, QVariantAnimation
-from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QFontMetrics, QKeySequence, QPainter, QPainterPath, QPen, QShortcut
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QDialog,
     QFrame,
     QGraphicsDropShadowEffect,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLayout,
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -1034,3 +1038,245 @@ def estilo_botao_forma(forma, selecionado, extra=""):
         QPushButton:hover {{ background:{fundo_hover}; border-color:{cor.name()}; }}
         QPushButton:focus {{ border:2px solid {cor.name()}; }}
     """, texto
+
+
+# ==========================================
+# LISTAS — tabelas/árvores das subtelas de "Gerenciar"
+# ==========================================
+
+def estilo_lista():
+    """Stylesheet das listas das subtelas (QTableWidget e QTreeWidget):
+    linhas altas, seleção suave na cor primária e cabeçalho discreto."""
+
+    return f"""
+        QTableWidget, QTreeWidget {{
+            border:1.5px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_MD}px;
+            background:{tokens.CARD}; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_MD}px; outline:none;
+            alternate-background-color:{tokens.FUNDO};
+        }}
+        QTableWidget::item, QTreeWidget::item {{
+            padding:0 12px; border:none; border-bottom:1px solid {tokens.BORDA};
+        }}
+        QTableWidget::item:hover, QTreeWidget::item:hover {{ background:{tokens.FUNDO}; }}
+        QTableWidget::item:selected, QTreeWidget::item:selected {{
+            background:{tokens.PRIMARIA_CLARA}; color:{tokens.PRIMARIA}; font-weight:700;
+        }}
+        QHeaderView::section {{
+            background:{tokens.FUNDO}; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:800; padding:8px 12px;
+            border:none; border-bottom:1px solid {tokens.BORDA};
+        }}
+    """
+
+
+def tabela_lista(colunas):
+    """QTableWidget no padrão das subtelas: seleção de linha única, sem
+    edição na célula e com o estilo de estilo_lista()."""
+
+    tabela = QTableWidget()
+    tabela.setColumnCount(len(colunas))
+    tabela.setHorizontalHeaderLabels([c.upper() for c in colunas])
+    tabela.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+    tabela.horizontalHeader().setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    tabela.horizontalHeader().setHighlightSections(False)
+    tabela.verticalHeader().setDefaultSectionSize(46)
+    tabela.verticalHeader().setVisible(False)
+    tabela.setShowGrid(False)
+    tabela.setSelectionBehavior(QAbstractItemView.SelectRows)
+    tabela.setSelectionMode(QAbstractItemView.SingleSelection)
+    tabela.setEditTriggers(QAbstractItemView.NoEditTriggers)
+    tabela.setFocusPolicy(Qt.StrongFocus)
+    tabela.setStyleSheet(estilo_lista())
+    return tabela
+
+
+def pedir_texto(
+    parent, titulo, rotulo, valor="", icone_nome="edit-2", maiusculas=False,
+    subtitulo="Altere o nome e salve", texto_botao="Salvar",
+):
+    """Substitui o QInputDialog (caixinha cinza do Windows) por uma
+    subtela no molde padrão. Devolve (texto, ok) como o QInputDialog."""
+
+    dialogo = DialogoPadrao(
+        titulo, subtitulo, icone_nome,
+        largura=DialogoPadrao.PEQUENO, parent=parent,
+    )
+
+    campo = CampoTexto()
+    campo.setText(valor)
+    if maiusculas:
+        from utils.maiusculas import forcar_maiusculas
+        forcar_maiusculas(campo)
+    campo.returnPressed.connect(dialogo.accept)
+    dialogo.corpo.addWidget(campo_rotulado(rotulo, campo))
+    dialogo.corpo.addStretch()
+
+    bt_salvar = BotaoSucesso(texto_botao, icone_nome="check")
+    bt_salvar.setAutoDefault(False)
+    bt_salvar.clicked.connect(dialogo.accept)
+    dialogo.definir_botoes(bt_salvar)
+    dialogo.ajustar_altura()
+
+    campo.setFocus()
+    campo.selectAll()
+
+    ok = dialogo.exec() == QDialog.Accepted
+    return campo.text(), ok
+
+
+class DialogoGerenciar(DialogoPadrao):
+    """Molde das listas simples de cadastro (categorias, marcas, centros
+    de custo...): campo + Adicionar no topo, lista com contador e rodapé
+    com Editar/Excluir à esquerda e Fechar à direita.
+
+    Cria self.novo_nome, self.bt_adicionar, self.tabela, self.bt_editar
+    e self.bt_excluir e liga cada um ao método de mesmo nome na
+    subclasse (adicionar/editar/excluir). A subclasse preenche a lista
+    com preencher_nomes()."""
+
+    def __init__(
+        self, titulo, subtitulo, icone_nome, placeholder,
+        item_singular, item_plural, maiusculas=True, parent=None,
+    ):
+
+        super().__init__(
+            titulo, subtitulo, icone_nome,
+            largura=DialogoPadrao.PEQUENO, parent=parent,
+        )
+        self.resize(DialogoPadrao.PEQUENO, 640)
+
+        self._item_singular = item_singular
+        self._item_plural = item_plural
+
+        # ---- adicionar ----
+        linha_nova = QHBoxLayout()
+        linha_nova.setSpacing(10)
+
+        self.novo_nome = CampoTexto(placeholder, cor_foco=tokens.SECUNDARIA)
+        if maiusculas:
+            from utils.maiusculas import forcar_maiusculas
+            forcar_maiusculas(self.novo_nome)
+        self.novo_nome.returnPressed.connect(self._adicionar_se_novo)
+        # o mesmo campo filtra a lista: quem vai cadastrar já vê se o
+        # nome existe (evita "COCA" e "COCA-COLA" duplicados)
+        self.novo_nome.textChanged.connect(self._filtrar)
+
+        self.bt_adicionar = BotaoSucesso("Adicionar", icone_nome="plus")
+        self.bt_adicionar.setAutoDefault(False)
+        self.bt_adicionar.setMinimumHeight(44)
+        self.bt_adicionar.clicked.connect(self._adicionar_se_novo)
+
+        linha_nova.addWidget(self.novo_nome, 1)
+        linha_nova.addWidget(self.bt_adicionar)
+        self.corpo.addLayout(linha_nova)
+
+        # ---- lista ----
+        self.lbl_contador = QLabel("Carregando...")
+        self.lbl_contador.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.5px;
+        """)
+        self.corpo.addWidget(self.lbl_contador)
+
+        self.tabela = tabela_lista(["Nome"])
+        self.tabela.horizontalHeader().setVisible(False)
+        self.tabela.cellDoubleClicked.connect(lambda *_: self.editar())
+        self.corpo.addWidget(self.tabela, stretch=1)
+
+        # atalhos de PDV: F2 edita, Del exclui o item selecionado
+        for tecla, acao in ((Qt.Key_F2, self.editar), (Qt.Key_Delete, self._excluir_por_tecla)):
+            atalho = QShortcut(QKeySequence(tecla), self)
+            atalho.activated.connect(acao)
+
+        self.lbl_dica = QLabel()
+        self.corpo.addWidget(self.lbl_dica)
+
+        # ---- rodapé ----
+        self.bt_editar = BotaoSecundario("Editar", icone_nome="edit-2")
+        self.bt_editar.setAutoDefault(False)
+        self.bt_editar.clicked.connect(self.editar)
+
+        self.bt_excluir = BotaoPerigo("Excluir", icone_nome="trash-2")
+        self.bt_excluir.setAutoDefault(False)
+        self.bt_excluir.clicked.connect(self.excluir)
+
+        self.bt_fechar = BotaoPrimario("Fechar")
+        self.bt_fechar.setAutoDefault(False)
+        self.bt_fechar.setMinimumWidth(140)
+        self.bt_fechar.clicked.connect(self.accept)
+
+        self.rodape.addWidget(self.bt_editar)
+        self.rodape.addWidget(self.bt_excluir)
+        self.rodape.addStretch()
+        self.rodape.addWidget(self.bt_fechar)
+
+        self._mostrar_dica()
+
+    def preencher_nomes(self, nomes):
+
+        self.tabela.setRowCount(len(nomes))
+        for linha, nome in enumerate(nomes):
+            self.tabela.setItem(linha, 0, QTableWidgetItem(nome))
+
+        self._filtrar(self.novo_nome.text())
+
+    def _nomes(self):
+        return [
+            (self.tabela.item(linha, 0).text() if self.tabela.item(linha, 0) else "")
+            for linha in range(self.tabela.rowCount())
+        ]
+
+    def _filtrar(self, texto):
+
+        texto = (texto or "").strip().upper()
+        nomes = self._nomes()
+        visiveis = 0
+        for linha, nome in enumerate(nomes):
+            mostra = texto in nome.upper()
+            self.tabela.setRowHidden(linha, not mostra)
+            visiveis += mostra
+
+        total = len(nomes)
+        nome_item = self._item_singular if total == 1 else self._item_plural
+        if total == 0:
+            self.lbl_contador.setText("NADA CADASTRADO AINDA")
+        elif texto:
+            self.lbl_contador.setText(f"{visiveis} DE {total} {nome_item.upper()}")
+        else:
+            self.lbl_contador.setText(f"{total} {nome_item.upper()}")
+
+        repetido = bool(texto) and texto in (n.upper() for n in nomes)
+        self.bt_adicionar.setEnabled(not repetido)
+        self._mostrar_dica(repetido)
+
+    def _mostrar_dica(self, repetido=False):
+
+        if repetido:
+            self.lbl_dica.setText("Esse nome já está na lista.")
+            cor = tokens.ERRO
+        else:
+            # o botão Excluir some sem permissão -- aí o Del também não vale
+            del_exclui = "" if self.bt_excluir.isHidden() else "  ·  Del exclui"
+            self.lbl_dica.setText(
+                "Digite pra buscar ou cadastrar  ·  Enter adiciona  ·  "
+                f"F2 ou duplo clique edita{del_exclui}"
+            )
+            cor = tokens.TEXTO_TERCIARIO
+        self.lbl_dica.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px; color:{cor};
+        """)
+
+    def _adicionar_se_novo(self):
+        # confere de novo aqui: o carregar() da subclasse reabilita o
+        # botão no fim, mesmo com nome repetido digitado
+        texto = self.novo_nome.text().strip().upper()
+        if texto and texto in (n.upper() for n in self._nomes()):
+            self._mostrar_dica(True)
+            return
+        self.adicionar()
+
+    def _excluir_por_tecla(self):
+        # Del no campo de texto apaga letra, não o item da lista
+        if not self.novo_nome.hasFocus() and self.bt_excluir.isVisible() and self.bt_excluir.isEnabled():
+            self.excluir()

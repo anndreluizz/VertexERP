@@ -864,7 +864,7 @@ class Relatorios(QWidget):
         ))
         self.painel_funil.corpo.addWidget(LinhaBarra(
             "Vendas canceladas",
-            f"{float(dados['taxa_cancelamento']):.1f}% das vendas do período",
+            f"{float(dados['taxa_cancelamento']):.1f}".replace(".", ",") + "% das vendas do período",
             str(dados["canceladas"]),
             dados["canceladas"] / maior_valor * 100,
             tokens.ERRO,
@@ -1112,7 +1112,7 @@ class Relatorios(QWidget):
 
             linha = LinhaBarra(
                 nome,
-                f"{percentual:.1f}% do total",
+                f"{percentual:.1f}".replace(".", ",") + "% do total",
                 formatar_moeda(total),
                 percentual,
                 cor,
@@ -1652,7 +1652,7 @@ class Relatorios(QWidget):
                 linha, 2, QTableWidgetItem(formatar_moeda(item["lucro"]))
             )
             self.tabela_margem_categoria.setItem(
-                linha, 3, QTableWidgetItem(f"{float(item['margem_pct']):.1f}%")
+                linha, 3, QTableWidgetItem(f"{float(item['margem_pct']):.1f}%".replace(".", ","))
             )
 
         # estoque por categoria
@@ -1998,7 +1998,7 @@ class Relatorios(QWidget):
             )
             self.tabela_abc.setItem(
                 linha, 3,
-                QTableWidgetItem(f"{item['percentual_acumulado']:.1f}%"),
+                QTableWidgetItem(f"{item['percentual_acumulado']:.1f}%".replace(".", ",")),
             )
 
             item_classe = QTableWidgetItem(item["classe"])

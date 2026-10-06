@@ -2,7 +2,6 @@ from datetime import datetime
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog,
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
@@ -10,7 +9,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QStackedWidget,
     QMessageBox,
-    QPushButton,
+    QWidget,
 )
 
 from services.caixa_service import caixa_aberto, resumo_caixa, fechar_caixa, listar_movimentos_caixa
@@ -18,9 +17,10 @@ from services import api, comprovante_service, impressora_termica_service, prefe
 from services.worker import rodar_em_thread, em_paralelo
 
 from design import tokens
-from design.icons import icone, icone_pixmap
-from design.responsive import tamanho_fixo_seguro
-from design.widgets import BotaoPerigo, BotaoSecundario, BotaoSucesso
+from design.widgets import (
+    BotaoPerigo, BotaoSecundario, BotaoSucesso, CampoTexto, DialogoPadrao,
+    campo_rotulado, cor_forma_pagamento, titulo_secao,
+)
 from utils.formatacao import formatar_moeda
 
 
@@ -81,10 +81,26 @@ def _confirmar_e_preparar_impressao(valor_contado, observacoes, caixa_id):
     return response, movimentos, responsavel, config
 
 
-class FecharCaixaWindow(QDialog):
+def _texto_para_valor(texto):
+    """Aceita '780', '780,5', '1.234,56' e '1234.56'; None se não for número."""
+    texto = (texto or "").replace("R$", "").strip()
+    if "," in texto:
+        texto = texto.replace(".", "").replace(",", ".")
+    try:
+        return round(float(texto), 2)
+    except ValueError:
+        return None
+
+
+class FecharCaixaWindow(DialogoPadrao):
 
     def __init__(self):
-        super().__init__()
+
+        super().__init__(
+            "Fechar Caixa", "Etapa 1 de 2 · conte o dinheiro em espécie na gaveta",
+            "lock", tokens.ALERTA, tokens.ALERTA_CLARO,
+            largura=DialogoPadrao.MEDIO,
+        )
 
         # pagina 1 (contagem cega) nao depende desses dados -- de
         # proposito, pra nao enviesar quem esta contando o dinheiro
@@ -98,85 +114,21 @@ class FecharCaixaWindow(QDialog):
         self._erro_dados = None
         self.valor_contado = 0.0
 
-        self.setWindowTitle("Fechar Caixa")
-        tamanho_fixo_seguro(self, 460, 680)
-        self.setStyleSheet(f"background:{tokens.CARD};")
-
-        raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(0, 0, 0, 0)
-        raiz.setSpacing(0)
-
-        cabecalho_linha = QHBoxLayout()
-        cabecalho_linha.setContentsMargins(24, 20, 24, 0)
-        cabecalho_linha.setSpacing(14)
-
-        icone_circulo = QLabel()
-        icone_circulo.setFixedSize(48, 48)
-        icone_circulo.setAlignment(Qt.AlignCenter)
-        icone_circulo.setStyleSheet(f"""
-            background:{tokens.ALERTA_CLARO}; border-radius:24px;
-        """)
-        icone_circulo.setPixmap(icone_pixmap("lock", cor=tokens.ALERTA, tamanho=20))
-        cabecalho_linha.addWidget(icone_circulo)
-
-        col_titulo = QVBoxLayout()
-        col_titulo.setSpacing(2)
-
-        self.lbl_titulo = QLabel("Conferência de Caixa")
-        self.lbl_titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO};
-            font-size:{tokens.TAMANHO_XL}px; font-weight:800;
-        """)
-
-        self.lbl_subtitulo = QLabel(
-            "Conte o dinheiro em espécie na gaveta"
-        )
-        self.lbl_subtitulo.setWordWrap(True)
-        self.lbl_subtitulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_SM}px;
-        """)
-
-        col_titulo.addWidget(self.lbl_titulo)
-        col_titulo.addWidget(self.lbl_subtitulo)
-
-        cabecalho_linha.addLayout(col_titulo, 1)
-
-        bt_fechar = QPushButton()
-        bt_fechar.setFixedSize(30, 30)
-        bt_fechar.setCursor(Qt.PointingHandCursor)
-        bt_fechar.setAutoDefault(False)
-        bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
-        bt_fechar.setToolTip("Fechar")
-        bt_fechar.setAccessibleName("Fechar")
-        bt_fechar.setStyleSheet(f"""
-            QPushButton {{ background:transparent; border:none; border-radius:6px; }}
-            QPushButton:hover {{ background:{tokens.FUNDO}; }}
-        """)
-        bt_fechar.clicked.connect(self.reject)
-        cabecalho_linha.addWidget(bt_fechar, 0, Qt.AlignTop)
-
-        raiz.addLayout(cabecalho_linha)
-
         # ---- indicador de etapa (1. Contagem / 2. Conferência) ----
 
         linha_passos = QHBoxLayout()
-        linha_passos.setContentsMargins(24, 14, 24, 0)
-        linha_passos.setSpacing(8)
+        linha_passos.setSpacing(10)
 
-        self.lbl_passo_1 = QLabel("1. Contagem")
-        self.lbl_passo_2 = QLabel("2. Conferência")
-        self.lbl_passo_1.setAlignment(Qt.AlignCenter)
-        self.lbl_passo_2.setAlignment(Qt.AlignCenter)
+        self.lbl_passo_1 = QLabel("1   Contagem")
+        self.lbl_passo_2 = QLabel("2   Conferência")
+        for lbl in (self.lbl_passo_1, self.lbl_passo_2):
+            lbl.setAlignment(Qt.AlignCenter)
+            linha_passos.addWidget(lbl, 1)
 
-        linha_passos.addWidget(self.lbl_passo_1, 1)
-        linha_passos.addWidget(self.lbl_passo_2, 1)
-
-        raiz.addLayout(linha_passos)
-
-        self._marcar_passo_ativo(1)
+        self.corpo.addLayout(linha_passos)
 
         self.paginas = QStackedWidget()
+        self.paginas.setStyleSheet("background:transparent;")
 
         self.pagina_contagem = self._criar_pagina_contagem()
         self.pagina_conferencia = self._criar_pagina_conferencia()
@@ -184,7 +136,29 @@ class FecharCaixaWindow(QDialog):
         self.paginas.addWidget(self.pagina_contagem)
         self.paginas.addWidget(self.pagina_conferencia)
 
-        raiz.addWidget(self.paginas, stretch=1)
+        self.corpo.addWidget(self.paginas, stretch=1)
+
+        # ---- rodapé: Cancelar + Continuar (etapa 1) / Voltar + Confirmar (etapa 2) ----
+
+        self.bt_continuar = BotaoSucesso("Continuar", icone_nome="chevron-right")
+        self.bt_continuar.setAutoDefault(False)
+        self.bt_continuar.clicked.connect(self.avancar_para_conferencia)
+        self.definir_botoes(self.bt_continuar)
+
+        self.bt_voltar = BotaoSecundario("Voltar")
+        self.bt_voltar.setAutoDefault(False)
+        self.bt_voltar.setMinimumWidth(140)
+        self.bt_voltar.clicked.connect(self.voltar_para_contagem)
+
+        self.bt_confirmar = BotaoPerigo("Confirmar Fechamento", icone_nome="lock")
+        self.bt_confirmar.setAutoDefault(False)
+        self.bt_confirmar.setMinimumWidth(200)
+        self.bt_confirmar.clicked.connect(self.confirmar_fechamento)
+
+        self.rodape.addWidget(self.bt_voltar)
+        self.rodape.addWidget(self.bt_confirmar)
+
+        self._marcar_passo_ativo(1)
 
         rodar_em_thread(
             self,
@@ -192,6 +166,9 @@ class FecharCaixaWindow(QDialog):
             ao_sucesso=self._ao_dados_sucesso,
             ao_erro=self._ao_dados_erro,
         )
+
+        self.ajustar_altura()
+        self.valor_input.setFocus()
 
     def _ao_dados_sucesso(self, resultado):
         self.caixa, self.resumo = resultado
@@ -201,22 +178,31 @@ class FecharCaixaWindow(QDialog):
         self._erro_dados = erro
 
     def _marcar_passo_ativo(self, numero):
-        """Realça o passo atual (1 ou 2) no indicador de etapa no topo
-        do diálogo -- deixa claro em que ponto do fluxo (contagem cega
-        vs. conferência final) a pessoa está."""
+        """Realça o passo atual (1 ou 2) no indicador de etapa e troca os
+        botões do rodapé -- deixa claro em que ponto do fluxo (contagem
+        cega vs. conferência final) a pessoa está."""
 
         for n, lbl in ((1, self.lbl_passo_1), (2, self.lbl_passo_2)):
             if n == numero:
                 lbl.setStyleSheet(f"""
                     background:{tokens.PRIMARIA_CLARA}; color:{tokens.PRIMARIA};
-                    border-radius:{tokens.RADIUS_PILL}px; font-weight:700;
-                    font-size:{tokens.TAMANHO_XS}px; padding:6px 0;
+                    border:1.5px solid {tokens.PRIMARIA};
+                    border-radius:{tokens.RADIUS_SM}px; font-weight:800;
+                    font-size:{tokens.TAMANHO_MD}px; padding:9px 0;
                 """)
             else:
                 lbl.setStyleSheet(f"""
-                    background:transparent; color:{tokens.TEXTO_TERCIARIO};
-                    font-weight:600; font-size:{tokens.TAMANHO_XS}px; padding:6px 0;
+                    background:{tokens.FUNDO}; color:{tokens.TEXTO_TERCIARIO};
+                    border:1.5px solid {tokens.BORDA};
+                    border-radius:{tokens.RADIUS_SM}px; font-weight:600;
+                    font-size:{tokens.TAMANHO_MD}px; padding:9px 0;
                 """)
+
+        etapa_1 = numero == 1
+        self.bt_cancelar.setVisible(etapa_1)
+        self.bt_continuar.setVisible(etapa_1)
+        self.bt_voltar.setVisible(not etapa_1)
+        self.bt_confirmar.setVisible(not etapa_1)
 
     # ======================================
     # PÁGINA 1 · CONTAGEM CEGA
@@ -224,73 +210,73 @@ class FecharCaixaWindow(QDialog):
 
     def _criar_pagina_contagem(self):
 
-        pagina = QFrame()
+        pagina = QWidget()
 
         layout = QVBoxLayout(pagina)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(14)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
 
         aviso = QLabel(
-            "Some todo o dinheiro físico presente na gaveta e "
-            "informe o valor total contado. O sistema comparará "
-            "com o valor esperado somente depois da contagem."
+            "Some todo o dinheiro físico presente na gaveta e informe o "
+            "valor total contado. O sistema só mostra o valor esperado "
+            "depois da contagem, pra não influenciar quem está contando."
         )
         aviso.setWordWrap(True)
         aviso.setStyleSheet(f"""
             background:{tokens.ALERTA_CLARO}; color:{tokens.ALERTA_TEXTO};
-            font-size:{tokens.TAMANHO_SM}px; border-radius:{tokens.RADIUS_SM}px;
-            padding:12px;
+            font-size:{tokens.TAMANHO_BASE}px; border-radius:{tokens.RADIUS_SM}px;
+            border-left:4px solid {tokens.ALERTA}; padding:12px 14px;
         """)
-
         layout.addWidget(aviso)
 
-        lbl_valor_titulo = QLabel("VALOR CONTADO EM ESPÉCIE")
-        lbl_valor_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+        # campo grande no mesmo formato do valor da tela de pagamento
+        caixa_valor = QFrame()
+        caixa_valor.setObjectName("caixaValor")
+        caixa_valor.setStyleSheet(f"""
+            QFrame#caixaValor {{
+                background:{tokens.FUNDO}; border:1.5px solid {tokens.BORDA};
+                border-radius:{tokens.RADIUS_MD}px;
+            }}
+        """)
+        linha_valor = QHBoxLayout(caixa_valor)
+        linha_valor.setContentsMargins(20, 6, 20, 6)
+
+        lbl_rs = QLabel("R$")
+        lbl_rs.setStyleSheet(f"""
+            background:transparent; border:none; font-size:24px;
             font-weight:700; color:{tokens.TEXTO_TERCIARIO};
         """)
 
         self.valor_input = QLineEdit()
-        self.valor_input.setPlaceholderText("R$ 0,00")
-        self.valor_input.setAlignment(Qt.AlignCenter)
+        self.valor_input.setPlaceholderText("0,00")
+        self.valor_input.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.valor_input.setMinimumHeight(70)
         self.valor_input.setStyleSheet(f"""
             QLineEdit {{
                 font-size:40px; font-weight:800; color:{tokens.TEXTO};
-                border:none; border-bottom:2px solid {tokens.BORDA};
-                padding:10px 0; background:transparent;
+                border:none; background:transparent;
             }}
         """)
+        self.valor_input.returnPressed.connect(self.avancar_para_conferencia)
 
-        layout.addWidget(lbl_valor_titulo)
-        layout.addWidget(self.valor_input)
+        linha_valor.addWidget(lbl_rs)
+        linha_valor.addWidget(self.valor_input, 1)
+
+        layout.addWidget(campo_rotulado(
+            "Valor contado em espécie", caixa_valor,
+            "Só o dinheiro (cédulas e moedas). PIX e cartão são conferidos "
+            "na próxima etapa.  ·  Enter continua",
+        ))
 
         layout.addStretch()
-
-        rodape = QHBoxLayout()
-        rodape.setSpacing(10)
-
-        bt_cancelar = BotaoSecundario("Cancelar")
-        bt_cancelar.setMinimumHeight(46)
-        bt_cancelar.clicked.connect(self.reject)
-
-        bt_continuar = BotaoSucesso("Continuar")
-        bt_continuar.setMinimumHeight(46)
-        bt_continuar.clicked.connect(self.avancar_para_conferencia)
-
-        rodape.addWidget(bt_cancelar)
-        rodape.addWidget(bt_continuar)
-
-        layout.addLayout(rodape)
 
         return pagina
 
     def avancar_para_conferencia(self):
 
-        try:
-            self.valor_contado = float(
-                self.valor_input.text().replace(",", ".")
-            )
-        except ValueError:
+        valor = _texto_para_valor(self.valor_input.text())
+
+        if valor is None:
             QMessageBox.warning(
                 self,
                 "Atenção",
@@ -298,13 +284,15 @@ class FecharCaixaWindow(QDialog):
             )
             return
 
-        if self.valor_contado < 0:
+        if valor < 0:
             QMessageBox.warning(
                 self,
                 "Atenção",
                 "Informe um valor válido.",
             )
             return
+
+        self.valor_contado = valor
 
         if self._erro_dados is not None:
             QMessageBox.critical(
@@ -330,35 +318,37 @@ class FecharCaixaWindow(QDialog):
 
         self.preencher_conferencia()
 
-        self.lbl_titulo.setText("Resumo do Fechamento")
-        self.lbl_subtitulo.setText(
-            "Confira os valores antes de encerrar o caixa"
+        self.cabecalho.definir_texto(
+            "Fechar Caixa", "Etapa 2 de 2 · confira os valores antes de encerrar"
         )
         self._marcar_passo_ativo(2)
 
         self.paginas.setCurrentWidget(self.pagina_conferencia)
+        self.observacoes_input.setFocus()
 
     # ======================================
     # PÁGINA 2 · CONFERÊNCIA
     # ======================================
 
-    def _linha_valor(self, rotulo, cor=None):
+    def _linha_valor(self, rotulo, cor=None, destaque=False):
 
         cor = cor or tokens.TEXTO
+        tamanho = tokens.TAMANHO_MD if destaque else tokens.TAMANHO_BASE
+        peso_rotulo = 700 if destaque else 400
 
         linha = QHBoxLayout()
 
         lbl_rotulo = QLabel(rotulo)
         lbl_rotulo.setStyleSheet(f"""
-            background:transparent; border:none;
-            font-size:{tokens.TAMANHO_SM}px; color:{tokens.TEXTO_SECUNDARIO};
+            background:transparent; border:none; font-size:{tamanho}px;
+            font-weight:{peso_rotulo}; color:{tokens.TEXTO_SECUNDARIO};
         """)
 
         lbl_valor = QLabel("R$ 0,00")
         lbl_valor.setAlignment(Qt.AlignRight)
         lbl_valor.setStyleSheet(f"""
             background:transparent; border:none;
-            font-size:{tokens.TAMANHO_SM}px; font-weight:700; color:{cor};
+            font-size:{tamanho}px; font-weight:700; color:{cor};
         """)
 
         linha.addWidget(lbl_rotulo)
@@ -373,28 +363,100 @@ class FecharCaixaWindow(QDialog):
         linha.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
         return linha
 
+    def _bloco(self):
+
+        bloco = QFrame()
+        bloco.setObjectName("blocoResumo")
+        bloco.setStyleSheet(f"""
+            QFrame#blocoResumo {{
+                background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_MD}px;
+            }}
+        """)
+        layout = QVBoxLayout(bloco)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(9)
+        return bloco, layout
+
+    def _cartao_numero(self, titulo):
+        """Cartão do topo da conferência: rótulo pequeno + valor grande."""
+
+        cartao = QFrame()
+        cartao.setObjectName("cartaoNumero")
+        layout = QVBoxLayout(cartao)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(4)
+
+        lbl_titulo = QLabel(titulo.upper())
+        lbl_valor = QLabel("R$ 0,00")
+        lbl_extra = QLabel("")
+
+        layout.addWidget(lbl_titulo)
+        layout.addWidget(lbl_valor)
+        layout.addWidget(lbl_extra)
+
+        cartao.lbl_titulo, cartao.lbl_valor, cartao.lbl_extra = lbl_titulo, lbl_valor, lbl_extra
+        self._pintar_cartao(cartao, tokens.TEXTO, tokens.FUNDO, tokens.BORDA)
+        return cartao
+
+    def _pintar_cartao(self, cartao, cor, fundo, borda):
+
+        cartao.setStyleSheet(f"""
+            QFrame#cartaoNumero {{
+                background:{fundo}; border:1.5px solid {borda};
+                border-radius:{tokens.RADIUS_MD}px;
+            }}
+        """)
+        cartao.lbl_titulo.setStyleSheet(f"""
+            background:transparent; border:none; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.5px;
+        """)
+        cartao.lbl_valor.setStyleSheet(f"""
+            background:transparent; border:none; font-size:{tokens.TAMANHO_XXL}px;
+            font-weight:800; color:{cor};
+        """)
+        cartao.lbl_extra.setStyleSheet(f"""
+            background:transparent; border:none; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:700; color:{cor};
+        """)
+
     def _criar_pagina_conferencia(self):
 
-        pagina = QFrame()
+        pagina = QWidget()
 
         layout = QVBoxLayout(pagina)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(8)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
 
-        bloco_previsto = QFrame()
-        bloco_previsto.setStyleSheet(f"""
-            background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px;
-        """)
-        bloco_layout = QVBoxLayout(bloco_previsto)
-        bloco_layout.setContentsMargins(16, 14, 16, 14)
-        bloco_layout.setSpacing(8)
+        # ---- os 3 números que importam: previsto x contado = diferença ----
+
+        linha_cartoes = QHBoxLayout()
+        linha_cartoes.setSpacing(12)
+
+        self.cartao_previsto = self._cartao_numero("Previsto em espécie")
+        self.cartao_contado = self._cartao_numero("Contado na gaveta")
+        self.cartao_diferenca = self._cartao_numero("Diferença")
+
+        # mesma largura nos 3 (o stretch sozinho cede pro texto maior)
+        largura_cartao = (DialogoPadrao.MEDIO - 2 * 28 - 2 * 12) // 3
+        for cartao in (self.cartao_previsto, self.cartao_contado, self.cartao_diferenca):
+            cartao.setFixedWidth(largura_cartao)
+            linha_cartoes.addWidget(cartao, 1)
+
+        layout.addLayout(linha_cartoes)
+
+        # nomes antigos -- o resto do arquivo (e o extrato) lê daqui
+        self.lbl_total_previsto = self.cartao_previsto.lbl_valor
+        self.lbl_valor_contado = self.cartao_contado.lbl_valor
+        self.lbl_diferenca = self.cartao_diferenca.lbl_valor
+
+        # ---- detalhamento em 2 colunas ----
+
+        bloco_previsto, bloco_layout = self._bloco()
 
         linha, self.lbl_troco_inicial = self._linha_valor("Troco inicial")
         bloco_layout.addLayout(linha)
 
-        linha, self.lbl_vendas_dinheiro = self._linha_valor(
-            "Vendas em dinheiro"
-        )
+        linha, self.lbl_vendas_dinheiro = self._linha_valor("Vendas em dinheiro")
         bloco_layout.addLayout(linha)
 
         linha, self.lbl_suprimentos = self._linha_valor(
@@ -402,103 +464,64 @@ class FecharCaixaWindow(QDialog):
         )
         bloco_layout.addLayout(linha)
 
-        linha, self.lbl_sangrias = self._linha_valor(
-            "Sangrias", cor=tokens.ERRO
-        )
+        linha, self.lbl_sangrias = self._linha_valor("Sangrias", cor=tokens.ERRO)
         bloco_layout.addLayout(linha)
 
         bloco_layout.addWidget(self._separador())
 
-        linha, self.lbl_total_previsto = self._linha_valor(
-            "Total previsto em espécie", cor=tokens.PRIMARIA
+        linha, self.lbl_previsto_bloco = self._linha_valor(
+            "Total previsto", cor=tokens.PRIMARIA, destaque=True
         )
         bloco_layout.addLayout(linha)
+        bloco_layout.addStretch()
 
-        layout.addWidget(bloco_previsto)
+        bloco_outros, outros_layout = self._bloco()
 
-        bloco_contado = QFrame()
-        bloco_contado.setStyleSheet(f"""
-            background:{tokens.CARD}; border:1px solid {tokens.BORDA};
-            border-radius:{tokens.RADIUS_SM}px;
-        """)
-        contado_layout = QVBoxLayout(bloco_contado)
-        contado_layout.setContentsMargins(16, 14, 16, 14)
-        contado_layout.setSpacing(8)
-
-        linha, self.lbl_valor_contado = self._linha_valor(
-            "Valor contado"
+        linha, self.lbl_vendas_pix = self._linha_valor(
+            "Vendas PIX", cor=cor_forma_pagamento("PIX")
         )
-        contado_layout.addLayout(linha)
-
-        contado_layout.addWidget(self._separador())
-
-        linha, self.lbl_diferenca = self._linha_valor("Diferença")
-        contado_layout.addLayout(linha)
-
-        layout.addWidget(bloco_contado)
-
-        lbl_obs_titulo = QLabel("OBSERVAÇÕES (OPCIONAL)")
-        lbl_obs_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
-        layout.addWidget(lbl_obs_titulo)
-
-        self.observacoes_input = QLineEdit()
-        self.observacoes_input.setPlaceholderText(
-            "Ex.: diferença por troco errado, sangria não registrada..."
-        )
-        self.observacoes_input.setMinimumHeight(40)
-        self.observacoes_input.setStyleSheet(f"""
-            QLineEdit {{
-                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
-                padding: 0 12px; font-size: {tokens.TAMANHO_SM}px; color: {tokens.TEXTO};
-                background: {tokens.CARD};
-            }}
-            QLineEdit:focus {{ border: 1.5px solid {tokens.PRIMARIA}; }}
-        """)
-        layout.addWidget(self.observacoes_input)
-
-        bloco_outros = QFrame()
-        bloco_outros.setStyleSheet(f"""
-            background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px;
-        """)
-        outros_layout = QVBoxLayout(bloco_outros)
-        outros_layout.setContentsMargins(16, 14, 16, 14)
-        outros_layout.setSpacing(8)
-
-        linha, self.lbl_vendas_pix = self._linha_valor("Vendas PIX")
         outros_layout.addLayout(linha)
 
-        linha, self.lbl_vendas_cartao = self._linha_valor("Vendas cartão")
+        linha, self.lbl_vendas_cartao = self._linha_valor(
+            "Vendas cartão", cor=cor_forma_pagamento("CARTAO")
+        )
         outros_layout.addLayout(linha)
 
+        linha, self.lbl_vendas_prazo = self._linha_valor(
+            "Vendas no crediário", cor=cor_forma_pagamento("PRAZO")
+        )
+        outros_layout.addLayout(linha)
+
+        outros_layout.addStretch()
         outros_layout.addWidget(self._separador())
 
         linha, self.lbl_total_geral = self._linha_valor(
-            "Total geral do turno", cor=tokens.PRIMARIA
+            "Total geral do turno", cor=tokens.PRIMARIA, destaque=True
         )
         outros_layout.addLayout(linha)
 
-        layout.addWidget(bloco_outros)
+        col_dinheiro = QVBoxLayout()
+        col_dinheiro.setSpacing(8)
+        col_dinheiro.addWidget(titulo_secao("Dinheiro na gaveta"))
+        col_dinheiro.addWidget(bloco_previsto, 1)
+
+        col_outros = QVBoxLayout()
+        col_outros.setSpacing(8)
+        col_outros.addWidget(titulo_secao("Outras formas do turno"))
+        col_outros.addWidget(bloco_outros, 1)
+
+        colunas = QHBoxLayout()
+        colunas.setSpacing(16)
+        colunas.addLayout(col_dinheiro, 1)
+        colunas.addLayout(col_outros, 1)
+        layout.addLayout(colunas)
+
+        self.observacoes_input = CampoTexto(
+            "Ex.: diferença por troco errado, sangria não registrada..."
+        )
+        layout.addWidget(campo_rotulado("Observações (opcional)", self.observacoes_input))
 
         layout.addStretch()
-
-        rodape = QHBoxLayout()
-        rodape.setSpacing(10)
-
-        bt_voltar = BotaoSecundario("Voltar")
-        bt_voltar.setMinimumHeight(46)
-        bt_voltar.clicked.connect(self.voltar_para_contagem)
-
-        self.bt_confirmar = BotaoPerigo("Confirmar Fechamento")
-        self.bt_confirmar.setMinimumHeight(46)
-        self.bt_confirmar.clicked.connect(self.confirmar_fechamento)
-
-        rodape.addWidget(bt_voltar)
-        rodape.addWidget(self.bt_confirmar)
-
-        layout.addLayout(rodape)
 
         return pagina
 
@@ -513,45 +536,60 @@ class FecharCaixaWindow(QDialog):
         total_previsto = float(r.get("total_previsto", 0) or 0)
         vendas_pix = float(r.get("vendas_pix", 0) or 0)
         vendas_cartao = float(r.get("vendas_cartao", 0) or 0)
+        vendas_prazo = float(r.get("vendas_prazo", 0) or 0)
         total_geral = float(r.get("total_geral", 0) or 0)
 
         self.lbl_troco_inicial.setText(formatar_moeda(saldo_inicial))
         self.lbl_vendas_dinheiro.setText(formatar_moeda(vendas_dinheiro))
         self.lbl_suprimentos.setText(f"+ {formatar_moeda(suprimentos)}")
         self.lbl_sangrias.setText(f"- {formatar_moeda(sangrias)}")
+        self.lbl_previsto_bloco.setText(formatar_moeda(total_previsto))
+
         self.lbl_total_previsto.setText(formatar_moeda(total_previsto))
+        self.cartao_previsto.lbl_extra.setText("troco + entradas − sangrias")
+        self.cartao_previsto.lbl_extra.setStyleSheet(f"""
+            background:transparent; border:none; font-size:{tokens.TAMANHO_XS}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
 
         self.lbl_valor_contado.setText(formatar_moeda(self.valor_contado))
+        self.cartao_contado.lbl_extra.setText("o que você informou na etapa 1")
+        self.cartao_contado.lbl_extra.setStyleSheet(f"""
+            background:transparent; border:none; font-size:{tokens.TAMANHO_XS}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
 
         diferenca = self.valor_contado - total_previsto
 
         if abs(diferenca) < 0.01:
-            cor = tokens.SECUNDARIA_HOVER
-            texto = "R$ 0,00 (confere)"
+            cor, fundo = tokens.SECUNDARIA_HOVER, tokens.SUCESSO_CLARO
+            texto, extra = "R$ 0,00", "Confere ✓"
         elif diferenca > 0:
-            cor = tokens.PRIMARIA
-            texto = f"+ {formatar_moeda(diferenca)} (sobra)"
+            cor, fundo = tokens.PRIMARIA, tokens.PRIMARIA_CLARA
+            texto, extra = f"+ {formatar_moeda(diferenca)}", "Sobrando na gaveta"
         else:
-            cor = tokens.ERRO
-            texto = f"- {formatar_moeda(abs(diferenca))} (falta)"
+            cor, fundo = tokens.ERRO, tokens.ERRO_CLARO
+            texto, extra = f"- {formatar_moeda(abs(diferenca))}", "Faltando na gaveta"
 
+        self._pintar_cartao(self.cartao_diferenca, cor, fundo, cor)
         self.lbl_diferenca.setText(texto)
-        self.lbl_diferenca.setStyleSheet(f"""
-            background:transparent; border:none;
-            font-size:{tokens.TAMANHO_SM}px; font-weight:700; color:{cor};
-        """)
+        self.cartao_diferenca.lbl_extra.setText(extra)
 
         self.lbl_vendas_pix.setText(formatar_moeda(vendas_pix))
         self.lbl_vendas_cartao.setText(formatar_moeda(vendas_cartao))
+        self.lbl_vendas_prazo.setText(formatar_moeda(vendas_prazo))
         self.lbl_total_geral.setText(formatar_moeda(total_geral))
 
     def voltar_para_contagem(self):
 
-        self.lbl_titulo.setText("Conferência de Caixa")
-        self.lbl_subtitulo.setText("Conte o dinheiro em espécie na gaveta")
+        self.cabecalho.definir_texto(
+            "Fechar Caixa", "Etapa 1 de 2 · conte o dinheiro em espécie na gaveta"
+        )
         self._marcar_passo_ativo(1)
 
         self.paginas.setCurrentWidget(self.pagina_contagem)
+        self.valor_input.setFocus()
+        self.valor_input.selectAll()
 
     def confirmar_fechamento(self):
 

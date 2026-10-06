@@ -344,13 +344,11 @@ def test_alternar_2fa_liga_pra_usuario_desativado(esperar_threads):
         {"id": 1, "nome": "Fulano", "email": "fulano@loja.com", "ativo": True,
          "admin": False, "dois_fatores_ativo": False},
     ]
-    tela.tabela = QTableWidget(1, 5)
+    tela.tabela = QTableWidget(1, 3)
     tela.tabela.setCurrentCell(0, 0)
-    tela.bt_ativar_desativar = QPushButton()
-    tela.bt_admin = QPushButton()
-    tela.bt_perfil = QPushButton()
-    tela.bt_redefinir_senha = QPushButton()
-    tela.bt_2fa = QPushButton()
+    # painel do usuário selecionado (habilita/desabilita durante a ação)
+    tela.painel_conteudo = QWidget()
+    tela._carregando = False
 
     with mock.patch("telas.gerenciar_usuarios.atualizar_usuario") as atualizar_mock, \
          mock.patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \

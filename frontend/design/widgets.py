@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -1280,3 +1281,46 @@ class DialogoGerenciar(DialogoPadrao):
         # Del no campo de texto apaga letra, não o item da lista
         if not self.novo_nome.hasFocus() and self.bt_excluir.isVisible() and self.bt_excluir.isEnabled():
             self.excluir()
+
+
+# ==========================================
+# PILHA DE PÁGINAS — só a página aberta define o tamanho
+# ==========================================
+
+class PilhaPaginas(QStackedWidget):
+    """QStackedWidget mede o mínimo pela MAIOR página, mesmo escondida --
+    uma página alta deixava a janela/subtela inteira maior que a tela
+    (rodapé atrás da barra de tarefas, rolagem na etapa curta). Aqui só
+    a página aberta conta."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.layout().setSizeConstraint(QLayout.SetNoConstraint)
+        self.setStyleSheet("background:transparent;")
+        self.currentChanged.connect(lambda _i: self.updateGeometry())
+
+    def minimumSizeHint(self):
+        atual = self.currentWidget()
+        return atual.minimumSizeHint() if atual else super().minimumSizeHint()
+
+    def sizeHint(self):
+        atual = self.currentWidget()
+        return atual.sizeHint() if atual else super().sizeHint()
+
+
+def estilo_checkbox():
+    """Checkbox com o quadradinho visível nos dois temas (o padrão some
+    em fundo branco)."""
+    return f"""
+        QCheckBox {{
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_SM}px; spacing:8px;
+        }}
+        QCheckBox::indicator {{
+            width:16px; height:16px; border-radius:4px;
+            border:1.5px solid {tokens.BORDA_FORTE}; background:{tokens.CARD};
+        }}
+        QCheckBox::indicator:checked {{
+            border:1.5px solid {tokens.PRIMARIA}; background:{tokens.PRIMARIA};
+        }}
+    """

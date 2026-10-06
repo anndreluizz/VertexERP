@@ -114,7 +114,20 @@ class Configuracoes(QWidget):
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
-        layout = QVBoxLayout(self)
+        # a página inteira rola: em tela de 900px de altura ela não cabia
+        # e empurrava a janela principal pra baixo da barra de tarefas
+        externo = QVBoxLayout(self)
+        externo.setContentsMargins(0, 0, 0, 0)
+        rolagem = QScrollArea()
+        rolagem.setWidgetResizable(True)
+        rolagem.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        rolagem.setStyleSheet("QScrollArea { background:transparent; border:none; }")
+        conteudo = QWidget()
+        conteudo.setStyleSheet(f"background:{tokens.FUNDO};")
+        rolagem.setWidget(conteudo)
+        externo.addWidget(rolagem)
+
+        layout = QVBoxLayout(conteudo)
         layout.setContentsMargins(28, 20, 28, 20)
         layout.setSpacing(16)
 

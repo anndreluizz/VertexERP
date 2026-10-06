@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QHBoxLayout,
     QVBoxLayout,
+    QLayout,
     QStackedWidget,
     QDialog,
     QMessageBox,
@@ -134,6 +135,26 @@ ITENS_MENU = [
 ]
 
 
+class _PilhaPaginas(QStackedWidget):
+    """QStackedWidget mede o mínimo pela MAIOR página, mesmo escondida --
+    uma página alta (Configurações) deixava a janela inteira mais alta
+    que telas de 900px e o Windows cortava o rodapé atrás da barra de
+    tarefas. Aqui só a página aberta conta."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.layout().setSizeConstraint(QLayout.SetNoConstraint)
+        self.currentChanged.connect(lambda _i: self.updateGeometry())
+
+    def minimumSizeHint(self):
+        atual = self.currentWidget()
+        return atual.minimumSizeHint() if atual else super().minimumSizeHint()
+
+    def sizeHint(self):
+        atual = self.currentWidget()
+        return atual.sizeHint() if atual else super().sizeHint()
+
+
 class PrincipalWindow(QMainWindow):
 
     def __init__(self, info_usuario=None, config=None):
@@ -208,7 +229,7 @@ class PrincipalWindow(QMainWindow):
         self.faixa_backup.ver_backups.connect(self._abrir_aba_backup)
         layout_central.addWidget(self.faixa_backup)
 
-        self.paginas = QStackedWidget()
+        self.paginas = _PilhaPaginas()
         layout_central.addWidget(self.paginas, stretch=1)
 
         self.dashboard = Dashboard(usuario_id=info_usuario.get("id"))

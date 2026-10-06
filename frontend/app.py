@@ -65,7 +65,23 @@ from telas.cadastro_inicial import CadastroInicialWindow
 from telas.conectar_servidor import ConectarServidorDialog
 from telas.principal import PrincipalWindow
 
+if sys.platform == "win32":
+    # identidade própria na barra de tarefas -- sem isso o Windows agrupa
+    # a janela como "programa genérico" e mostra um ícone padrão em vez
+    # da logo do Vertex
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("VertexERP.Frontend")
+    except Exception:
+        pass
+
 app = QApplication(sys.argv)
+
+# logo do Vertex em todas as janelas (barra de tarefas, Alt+Tab, título);
+# é o mesmo icone.ico do .exe, copiado pra assets/ pra ir junto no build
+from PySide6.QtGui import QIcon
+from design.paths import caminho_asset
+app.setWindowIcon(QIcon(caminho_asset("icone.ico")))
 
 # Nome de organização/aplicação usado pelo QSettings (preferencias_service)
 # pra resolver onde gravar o .ini de preferências locais.

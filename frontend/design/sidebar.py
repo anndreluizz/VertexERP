@@ -1,5 +1,5 @@
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 from design import tokens
 from design.fonts import fonte
 from design.icons import icone, icone_pixmap
+from design.paths import caminho_asset
 from utils.acessibilidade import movimento_reduzido
 from design.widgets import Avatar
 
@@ -160,14 +161,18 @@ class Sidebar(QFrame):
         cab_layout.setContentsMargins(20, 16, 16, 16)
         cab_layout.setSpacing(12)
 
+        # a logo de verdade (o mesmo icone.ico do .exe e da barra de
+        # tarefas) -- antes era um triângulo genérico num quadrado azul
         self.marca = QLabel()
-        self.marca.setFixedSize(40, 40)
+        self.marca.setFixedSize(42, 42)
         self.marca.setAlignment(Qt.AlignCenter)
-        self.marca.setStyleSheet(f"""
-            background: {tokens.PRIMARIA};
-            border-radius: {tokens.RADIUS_SM}px;
-        """)
-        self.marca.setPixmap(icone_pixmap("vertex-mark", cor="#FFFFFF", tamanho=20))
+        self.marca.setStyleSheet("background:transparent;")
+        # na escala da tela (125%/150%), senão a logo fica borrada
+        tela = QGuiApplication.primaryScreen()
+        escala = tela.devicePixelRatio() if tela else 1.0
+        self.marca.setPixmap(
+            QIcon(caminho_asset("icone.ico")).pixmap(QSize(42, 42), escala)
+        )
 
         col_nome = QVBoxLayout()
         col_nome.setSpacing(0)

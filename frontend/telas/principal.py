@@ -38,6 +38,7 @@ from design import tokens
 from design.icons import icone
 from design.sidebar import Sidebar
 from design.header import Header
+from design.janela import pintar_barra_titulo
 from design.widgets import BotaoSecundario, PilhaPaginas
 from services import api, backup_service
 from services.caixa_service import caixa_aberto, abrir_caixa
@@ -144,6 +145,9 @@ class PrincipalWindow(QMainWindow):
         # so' chama show(), e esse estado ja vale pra ele
         self.setWindowState(Qt.WindowMaximized)
         self.setStyleSheet(f"QMainWindow {{ background: {tokens.FUNDO}; }}")
+        # barra de título do Windows na cor do menu lateral (era a branca
+        # padrão, destoando do menu azul-escuro logo abaixo)
+        pintar_barra_titulo(self, tokens.SIDEBAR, tokens.TEXTO_CLARO)
 
         # info_usuario/config podem vir ja' prontos de quem chamou (ver
         # telas/login.py e telas/cadastro_inicial.py, que buscam isso

@@ -152,6 +152,7 @@ def test_confirmar_atualiza_produto_existente_e_soma_estoque(
                     "quantidade": 7,
                     "custo": "11.00",
                     "preco_venda": "13.20",
+                    "atualizar_preco_venda": True,
                 }
             ],
         },
@@ -167,6 +168,44 @@ def test_confirmar_atualiza_produto_existente_e_soma_estoque(
     assert produto_atualizado["estoque"] == estoque_inicial + 7
     assert float(produto_atualizado["preco_custo"]) == 11.0
     assert float(produto_atualizado["preco_venda"]) == 13.2
+
+
+def test_confirmar_sem_pedir_nao_mexe_no_preco_de_venda_existente(
+    client, auth_headers, fornecedor, produto, db
+):
+    """Sem atualizar_preco_venda, produto ja cadastrado so' ganha custo
+    e estoque novos -- o preco de venda da loja fica como estava."""
+
+    preco_venda_antes = float(produto.preco_venda)
+
+    response = client.post(
+        "/compras/importar-nfe",
+        json={
+            "fornecedor_id": fornecedor.id,
+            "forma_pagamento": "DINHEIRO",
+            "itens": [
+                {
+                    "produto_id": produto.id,
+                    "codigo": produto.codigo,
+                    "descricao": produto.nome,
+                    "quantidade": 3,
+                    "custo": "11.00",
+                    # margem 0%: preco de venda = custo
+                    "preco_venda": "11.00",
+                }
+            ],
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+
+    produto_atualizado = client.get(
+        f"/produtos/{produto.id}", headers=auth_headers
+    ).json()
+
+    assert float(produto_atualizado["preco_custo"]) == 11.0
+    assert float(produto_atualizado["preco_venda"]) == preco_venda_antes
 
 
 def test_confirmar_sem_fornecedor_da_erro(client, auth_headers, produto):

@@ -154,7 +154,8 @@ class ImportacaoNfeService:
                     )
 
                 produto.preco_custo = item.custo
-                produto.preco_venda = item.preco_venda
+                if item.atualizar_preco_venda:
+                    produto.preco_venda = item.preco_venda
                 ProdutoRepository.atualizar(db, produto)
 
             itens_compra.append(

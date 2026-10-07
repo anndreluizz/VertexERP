@@ -23,6 +23,10 @@ LIMITE_NOVO_DIAS = 30
 PRAZOS_INADIMPLENCIA = [30, 60, 90]
 PRAZO_INADIMPLENCIA_PADRAO = 90
 
+# quem quita as compras, em média, em até tantos dias é "bom pagador";
+# acima disso, "paga com atraso"
+PRAZO_BOM_PAGADOR_DIAS = 30
+
 _EPSILON = 0.009  # mesmo limiar de "zero" já usado no resto do projeto
 
 
@@ -37,6 +41,42 @@ def _parse_data(valor):
         return datetime.fromisoformat(texto[:19])
     except Exception:
         return None
+
+
+def _fifo_pagamentos(compras, pagamentos):
+    """Abate cada pagamento das compras mais antigas primeiro (como
+    um caderno de fiado). Devolve (data da compra mais antiga ainda
+    em aberto ou None, prazo médio em dias que o cliente leva pra
+    quitar, ponderado pelo valor, ou None se nunca quitou nada)."""
+
+    def _ordenados(movs):
+        return sorted(
+            (
+                (d, float(m.get("valor", 0) or 0))
+                for m in movs
+                if (d := _parse_data(m.get("data")))
+            ),
+            key=lambda x: x[0],
+        )
+
+    abertas = [[d, v] for d, v in _ordenados(compras)]
+    soma_valor = soma_valor_dias = 0.0
+    i = 0
+
+    for data_pag, valor in _ordenados(pagamentos):
+        while valor > _EPSILON and i < len(abertas):
+            data_compra, resto = abertas[i]
+            abatido = min(resto, valor)
+            soma_valor += abatido
+            soma_valor_dias += abatido * max((data_pag - data_compra).days, 0)
+            abertas[i][1] -= abatido
+            valor -= abatido
+            if abertas[i][1] <= _EPSILON:
+                i += 1
+
+    mais_antiga = abertas[i][0] if i < len(abertas) else None
+    prazo_medio = round(soma_valor_dias / soma_valor) if soma_valor else None
+    return mais_antiga, prazo_medio
 
 
 def calcular_agregados(cliente, movimentos_do_cliente):
@@ -82,6 +122,8 @@ def calcular_agregados(cliente, movimentos_do_cliente):
 
     criado_em = _parse_data(cliente.get("criado_em"))
 
+    compra_em_aberto, prazo_medio = _fifo_pagamentos(compras, pagamentos)
+
     return {
         "saldo_devedor": saldo_devedor,
         "qtd_compras": len(compras),
@@ -99,6 +141,14 @@ def calcular_agregados(cliente, movimentos_do_cliente):
         "dias_desde_ultimo_pagamento": _dias_ate_agora(ultimo_pagamento),
         "dias_sem_movimentacao": _dias_ate_agora(ultima_movimentacao),
         "dias_desde_cadastro": _dias_ate_agora(criado_em),
+        # idade da compra mais antiga ainda não paga -- é isso que mede
+        # atraso (a última movimentação engana: quem compra toda semana
+        # e nunca paga, ou paga R$5 de vez em quando, parecia "em dia")
+        "dias_em_atraso": (
+            _dias_ate_agora(compra_em_aberto)
+            if saldo_devedor > _EPSILON else None
+        ),
+        "prazo_medio_pagamento": prazo_medio,
     }
 
 
@@ -122,13 +172,35 @@ def eh_sem_movimento(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
 
 
 def eh_inadimplente(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
-    """Tem saldo devedor E a última movimentação já passou do prazo
-    configurado (30/60/90 dias)."""
-    dias = agr["dias_sem_movimentacao"]
+    """Tem compra em aberto mais velha que o prazo configurado
+    (30/60/90 dias)."""
+    dias = agr.get("dias_em_atraso")
+    return dias is not None and dias > prazo_dias
+
+
+def eh_bom_pagador(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
+    """Já quitou compras antes, costuma quitar rápido e não tem nada
+    velho em aberto agora. Sem histórico de pagamento não conta --
+    ainda não dá pra saber."""
+    prazo = agr.get("prazo_medio_pagamento")
+    atraso = agr.get("dias_em_atraso")
     return (
-        agr["saldo_devedor"] > _EPSILON
-        and dias is not None
-        and dias > prazo_dias
+        prazo is not None
+        and prazo <= PRAZO_BOM_PAGADOR_DIAS
+        and (atraso is None or atraso <= PRAZO_BOM_PAGADOR_DIAS)
+        and not eh_inadimplente(agr, prazo_dias)
+    )
+
+
+def paga_com_atraso(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
+    """Paga, mas costuma demorar mais que o prazo de bom pagador --
+    ainda não é inadimplente, mas merece atenção antes de vender mais
+    fiado."""
+    prazo = agr.get("prazo_medio_pagamento")
+    return (
+        prazo is not None
+        and prazo > PRAZO_BOM_PAGADOR_DIAS
+        and not eh_inadimplente(agr, prazo_dias)
     )
 
 
@@ -143,8 +215,27 @@ def eh_novo(agr):
     return dias is not None and dias <= LIMITE_NOVO_DIAS
 
 
+def selo_pagador(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
+    """(texto, variante do Badge) do selinho ao lado do nome nas listas,
+    ou None quando não há nada a destacar. "★" e não emoji: emoji nem
+    sempre renderiza no Windows da loja."""
+    if not agr:
+        return None
+    if eh_bom_pagador(agr, prazo_dias):
+        return "★ Bom pagador", "sucesso"
+    if paga_com_atraso(agr, prazo_dias):
+        return "Paga com atraso", "alerta"
+    return None
+
+
 def status_financeiro(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
-    return "Inadimplente" if eh_inadimplente(agr, prazo_dias) else "Em Dia"
+    if eh_inadimplente(agr, prazo_dias):
+        return "Inadimplente"
+    if eh_bom_pagador(agr, prazo_dias):
+        return "Bom Pagador"
+    if paga_com_atraso(agr, prazo_dias):
+        return "Paga com Atraso"
+    return "Em Dia"
 
 
 def status_relacionamento(agr):
@@ -158,7 +249,15 @@ def calcular_aviso(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
     prioridade: inadimplente (mais urgente) > sem movimento > ativo."""
 
     if eh_inadimplente(agr, prazo_dias):
-        return "🔴 Cliente inadimplente"
+        return (
+            f"🔴 Cliente inadimplente · compra em aberto há "
+            f"{agr['dias_em_atraso']} dias"
+        )
+    if paga_com_atraso(agr, prazo_dias):
+        return (
+            f"🟡 Costuma pagar com atraso · leva em média "
+            f"{agr['prazo_medio_pagamento']} dias pra quitar"
+        )
     if eh_sem_movimento(agr, prazo_dias):
         return "🟡 Cliente sem movimentação"
     return "🟢 Cliente Ativo"
@@ -171,12 +270,14 @@ def calcular_pontuacao(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
     atenção, sem precisar fazer conta nenhuma. Critérios (nessa ordem
     de prioridade):
 
-    1. Inadimplente: tem saldo devedor além do prazo configurado.
+    1. Inadimplente: compra em aberto mais velha que o prazo.
     2. Sem Movimento: nenhuma compra/pagamento nos últimos 90 dias
        (mesmo sem dívida).
-    3. Excelente: 5 compras ou mais e ativo.
-    4. Frequente: 2 a 4 compras e ativo.
-    5. Ocasional: 0 ou 1 compra e ativo (inclui cliente novo ainda sem
+    3. Paga com Atraso: quita, mas leva mais de 30 dias em média.
+    4. Excelente: 5 compras ou mais, ativo e bom pagador.
+    5. Frequente: 2 compras ou mais e ativo (inclui quem tem 5+ mas
+       ainda não tem histórico de pagamento).
+    6. Ocasional: 0 ou 1 compra e ativo (inclui cliente novo ainda sem
        histórico suficiente pra virar "frequente")."""
 
     if eh_inadimplente(agr, prazo_dias):
@@ -185,7 +286,10 @@ def calcular_pontuacao(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
     if eh_sem_movimento(agr, prazo_dias):
         return "🟠 Cliente Sem Movimento"
 
-    if agr["qtd_compras"] >= 5:
+    if paga_com_atraso(agr, prazo_dias):
+        return "🟠 Cliente Paga com Atraso"
+
+    if agr["qtd_compras"] >= 5 and eh_bom_pagador(agr, prazo_dias):
         return "🟢 Cliente Excelente"
 
     if agr["qtd_compras"] >= 2:

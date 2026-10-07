@@ -43,6 +43,7 @@ FILTROS = [
     ("Sem Movimento", "SEM_MOVIMENTO"),
     ("Inadimplentes", "INADIMPLENTES"),
     ("Em Dia", "EM_DIA"),
+    ("Bons Pagadores", "BONS_PAGADORES"),
     ("Novos Clientes", "NOVOS"),
 ]
 
@@ -54,6 +55,7 @@ _ICONES_FILTRO = {
     "SEM_MOVIMENTO": "calendar",
     "INADIMPLENTES": "alert-triangle",
     "EM_DIA": "check",
+    "BONS_PAGADORES": "star",
     "NOVOS": "user",
 }
 
@@ -140,7 +142,7 @@ def _status_cliente(cliente, agr, prazo_dias):
         return "Sem movimento", "neutro"
 
     if cliente_analise.eh_inadimplente(agr, prazo_dias):
-        return f"Atrasado · {agr.get('dias_sem_movimentacao')} dias", "erro"
+        return f"Atrasado · {agr.get('dias_em_atraso')} dias", "erro"
 
     if cliente_analise.eh_em_dia(agr):
         return "Em dia", "sucesso"
@@ -247,9 +249,16 @@ class ClienteLinha(QFrame):
 
         col_nome = QVBoxLayout()
         col_nome.setSpacing(1)
-        col_nome.addWidget(
+        linha_nome = QHBoxLayout()
+        linha_nome.setSpacing(8)
+        linha_nome.addWidget(
             _rotulo(cliente.get("nome") or "", tokens.TAMANHO_MD, peso=600)
         )
+        selo = cliente_analise.selo_pagador(agr, prazo_dias)
+        if selo:
+            linha_nome.addWidget(Badge(*selo))
+        linha_nome.addStretch()
+        col_nome.addLayout(linha_nome)
         col_nome.addWidget(_rotulo(
             cliente.get("telefone") or "Sem telefone",
             tokens.TAMANHO_SM, tokens.TEXTO_SECUNDARIO,
@@ -957,6 +966,8 @@ class Clientes(QWidget):
                 devendo += 1
             if cliente_analise.eh_novo(agr):
                 contagem["NOVOS"] += 1
+            if cliente_analise.eh_bom_pagador(agr, self.prazo_inadimplencia):
+                contagem["BONS_PAGADORES"] += 1
 
         total_a_receber = sum(
             float(c.get("saldo_fiado", 0) or 0) for c in self.clientes
@@ -1078,6 +1089,13 @@ class Clientes(QWidget):
         elif self.filtro_status == "NOVOS":
             clientes = [
                 c for c in clientes if cliente_analise.eh_novo(agr(c))
+            ]
+        elif self.filtro_status == "BONS_PAGADORES":
+            clientes = [
+                c for c in clientes
+                if cliente_analise.eh_bom_pagador(
+                    agr(c), self.prazo_inadimplencia
+                )
             ]
 
         if texto != "":

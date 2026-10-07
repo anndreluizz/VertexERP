@@ -81,7 +81,7 @@ def situacao_fiado(cliente):
     disponivel = (limite - saldo) if limite > 0 else None
 
     if agr and cliente_analise.eh_inadimplente(agr):
-        return f"Atrasado · {agr.get('dias_sem_movimentacao')} dias", "erro", disponivel
+        return f"Atrasado · {agr.get('dias_em_atraso')} dias", "erro", disponivel
     if limite > 0 and saldo >= limite - 0.009:
         return "Limite estourado", "erro", disponivel
     if saldo <= 0.009:
@@ -121,7 +121,15 @@ class ItemResultadoCliente(QWidget):
             background:transparent; font-size:{tokens.TAMANHO_SM}px; color:{tokens.TEXTO_SECUNDARIO};
         """)
 
-        col_texto.addWidget(nome)
+        linha_nome = QHBoxLayout()
+        linha_nome.setSpacing(8)
+        linha_nome.addWidget(nome)
+        selo = cliente_analise.selo_pagador(cliente.get("_agr"))
+        if selo:
+            linha_nome.addWidget(Badge(*selo))
+        linha_nome.addStretch()
+
+        col_texto.addLayout(linha_nome)
         col_texto.addWidget(subtitulo)
         layout.addLayout(col_texto, 1)
 

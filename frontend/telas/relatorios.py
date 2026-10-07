@@ -110,7 +110,7 @@ def _buscar_dados_indicadores(data_inicio, data_fim, loja_id):
 
     aging = {"91-120": 0, "121-180": 0, "180+": 0}
     for agr in inadimplentes:
-        dias = agr["dias_sem_movimentacao"]
+        dias = agr["dias_em_atraso"]
         if dias <= 120:
             aging["91-120"] += 1
         elif dias <= 180:

@@ -68,7 +68,7 @@ class VertexTheme {
       useMaterial3: true,
       brightness: brilho,
       colorScheme: esquema,
-      fontFamily: 'Inter',
+      fontFamily: 'Figtree',
       textTheme: texto,
       scaffoldBackgroundColor: c.fundo,
       canvasColor: c.fundo,
@@ -105,7 +105,7 @@ class VertexTheme {
         elevation: 0,
         height: 66,
         indicatorColor: c.primariaClara,
-        indicatorShape: forma(radiusMd),
+        indicatorShape: const StadiumBorder(),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         iconTheme: WidgetStateProperty.resolveWith(
           (s) => IconThemeData(
@@ -117,7 +117,7 @@ class VertexTheme {
         ),
         labelTextStyle: WidgetStateProperty.resolveWith(
           (s) => TextStyle(
-            fontFamily: 'Inter',
+            fontFamily: 'Figtree',
             fontSize: 11.5,
             fontWeight: s.contains(WidgetState.selected)
                 ? FontWeight.w700
@@ -211,13 +211,13 @@ class VertexTheme {
         shape: const StadiumBorder(),
         showCheckmark: false,
         labelStyle: TextStyle(
-          fontFamily: 'Inter',
+          fontFamily: 'Figtree',
           fontSize: 13,
           fontWeight: FontWeight.w600,
           color: c.textoSecundario,
         ),
         secondaryLabelStyle: TextStyle(
-          fontFamily: 'Inter',
+          fontFamily: 'Figtree',
           fontSize: 13,
           fontWeight: FontWeight.w700,
           color: escuro ? c.texto : c.primaria,
@@ -277,7 +277,7 @@ class VertexTheme {
         behavior: SnackBarBehavior.floating,
         backgroundColor: escuro ? c.texto : c.sidebar,
         contentTextStyle: TextStyle(
-          fontFamily: 'Inter',
+          fontFamily: 'Figtree',
           fontSize: 14,
           fontWeight: FontWeight.w500,
           color: escuro ? c.fundo : Colors.white,
@@ -301,7 +301,7 @@ class VertexTheme {
           borderRadius: BorderRadius.circular(radiusSm),
         ),
         textStyle: TextStyle(
-          fontFamily: 'Inter',
+          fontFamily: 'Figtree',
           fontSize: 12,
           color: escuro ? c.fundo : Colors.white,
         ),
@@ -334,7 +334,7 @@ class VertexTheme {
     // fontFamily explicito em todo estilo: quem usa o TextStyle direto
     // (titulo da AppBar, dialogo) nao passa pelo fontFamily do ThemeData
     // e cairia na Roboto do Android.
-    return TextTheme(
+    final base = TextTheme(
       displaySmall: TextStyle(
         fontSize: 32,
         fontWeight: FontWeight.w700,
@@ -385,7 +385,7 @@ class VertexTheme {
         color: c.textoSecundario,
       ),
       labelLarge: const TextStyle(
-        fontFamily: 'Inter',
+        fontFamily: 'Figtree',
         fontSize: 14.5,
         fontWeight: FontWeight.w600,
         letterSpacing: 0,
@@ -401,6 +401,18 @@ class VertexTheme {
         letterSpacing: 0.4,
         color: c.textoSecundario,
       ),
-    ).apply(fontFamily: 'Inter');
+    ).apply(fontFamily: 'Figtree');
+
+    // titulos e valores grandes na Bricolage (mesma dupla do prototipo
+    // aprovado); o corpo continua Figtree
+    TextStyle? display(TextStyle? s) => s?.copyWith(fontFamily: fonteDisplay);
+    return base.copyWith(
+      displaySmall: display(base.displaySmall),
+      headlineMedium: display(base.headlineMedium),
+      headlineSmall: display(base.headlineSmall),
+      titleLarge: display(base.titleLarge),
+    );
   }
+
+  static const fonteDisplay = 'Bricolage';
 }

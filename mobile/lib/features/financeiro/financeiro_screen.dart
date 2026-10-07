@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/formatadores.dart';
 import '../../models/conta_pagar.dart';
 import '../../models/conta_receber.dart';
+import '../../theme/componentes.dart';
 import '../../theme/lista_agrupada.dart';
 import '../../theme/skeleton.dart';
 import '../../theme/vertex_colors.dart';
+import '../../theme/vertex_theme.dart';
 import 'comprovante_screen.dart';
 import 'financeiro_provider.dart';
 import 'historico_conta_screen.dart';
@@ -72,6 +74,7 @@ class _FinanceiroScreenState extends ConsumerState<FinanceiroScreen> {
 /// por cima da mesma lista ja carregada, sem ida nova ao servidor.
 enum FiltroRapidoContaPagar {
   todas,
+  estaSemana,
   aVencer,
   venceHoje,
   vencidas,
@@ -83,6 +86,7 @@ enum FiltroRapidoContaPagar {
 extension _FiltroRapidoInfo on FiltroRapidoContaPagar {
   String get rotulo => switch (this) {
     FiltroRapidoContaPagar.todas => 'Todas',
+    FiltroRapidoContaPagar.estaSemana => 'Esta semana',
     FiltroRapidoContaPagar.aVencer => 'A vencer',
     FiltroRapidoContaPagar.venceHoje => 'Vence hoje',
     FiltroRapidoContaPagar.vencidas => 'Vencidas',
@@ -96,6 +100,7 @@ extension _FiltroRapidoInfo on FiltroRapidoContaPagar {
 
     return switch (this) {
       FiltroRapidoContaPagar.todas => true,
+      FiltroRapidoContaPagar.estaSemana => _venceNaSemana(conta),
       FiltroRapidoContaPagar.aVencer =>
         statusVisual(conta) == StatusVisualConta.aVencer,
       FiltroRapidoContaPagar.venceHoje =>
@@ -110,6 +115,22 @@ extension _FiltroRapidoInfo on FiltroRapidoContaPagar {
       FiltroRapidoContaPagar.semBoleto => !conta.temDocumento,
     };
   }
+}
+
+/// pendente vencendo de hoje ate daqui a 7 dias
+bool _venceNaSemana(ContaPagar conta) {
+  final status = statusVisual(conta);
+  if (status != StatusVisualConta.venceHoje &&
+      status != StatusVisualConta.aVencer) {
+    return false;
+  }
+  final hoje = DateTime.now();
+  final dias = DateTime(
+    conta.dataVencimento.year,
+    conta.dataVencimento.month,
+    conta.dataVencimento.day,
+  ).difference(DateTime(hoje.year, hoje.month, hoje.day)).inDays;
+  return dias <= 7;
 }
 
 bool _combinaComBusca(ContaPagar conta, String termo) {
@@ -146,10 +167,20 @@ class _AbaContasPagarState extends ConsumerState<_AbaContasPagar> {
   Widget build(BuildContext context) {
     final contasAsync = ref.watch(contasPagarProvider);
 
+    final todas = contasAsync.valueOrNull;
+
     return Column(
       children: [
+        if (todas != null)
+          _QuadrosResumo(
+            contas: todas,
+            filtro: _filtro,
+            aoEscolher: (f) => setState(
+              () => _filtro = _filtro == f ? FiltroRapidoContaPagar.todas : f,
+            ),
+          ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
           child: TextField(
             controller: _buscaController,
             onChanged: (valor) => setState(() => _busca = valor),
@@ -179,10 +210,10 @@ class _AbaContasPagarState extends ConsumerState<_AbaContasPagar> {
               final opcao = FiltroRapidoContaPagar.values[indice];
               final selecionado = opcao == _filtro;
 
-              return ChoiceChip(
-                label: Text(opcao.rotulo),
-                selected: selecionado,
-                onSelected: (_) => setState(() => _filtro = opcao),
+              return ChipFiltro(
+                rotulo: opcao.rotulo,
+                ligado: selecionado,
+                aoTocar: () => setState(() => _filtro = opcao),
               );
             },
           ),
@@ -371,8 +402,10 @@ class _LinhaConta extends StatelessWidget {
     required this.detalhe,
     required this.valor,
     required this.aoTocar,
+    this.acao,
   });
 
+  final Widget? acao;
   final StatusVisualConta status;
   final DateTime vencimento;
   final String titulo;
@@ -422,16 +455,22 @@ class _LinhaConta extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            Text(
-              formatarMoeda(valor),
-              style: tema.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                fontFeatures: const [FontFeature.tabularFigures()],
-                color: apagada ? VertexColors.textoTerciario : null,
-                decoration: status == StatusVisualConta.cancelada
-                    ? TextDecoration.lineThrough
-                    : null,
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  formatarMoeda(valor),
+                  style: tema.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                    color: apagada ? VertexColors.textoTerciario : null,
+                    decoration: status == StatusVisualConta.cancelada
+                        ? TextDecoration.lineThrough
+                        : null,
+                  ),
+                ),
+                if (acao != null) ...[const SizedBox(height: 6), acao!],
+              ],
             ),
           ],
         ),
@@ -458,10 +497,214 @@ class _LinhaContaPagar extends StatelessWidget {
         conta.categoria ?? '',
       ].where((p) => p.isNotEmpty).join(' · '),
       valor: conta.valor,
+      acao: status == StatusVisualConta.paga
+          ? null
+          : _BotaoPagar(
+              conta: conta,
+              destaque: status == StatusVisualConta.vencida,
+            ),
       aoTocar: () => showModalBottomSheet(
         context: context,
         isScrollControlled: true,
         builder: (context) => _DetalhesContaPagarSheet(conta: conta),
+      ),
+    );
+  }
+}
+
+class _BotaoPagar extends StatelessWidget {
+  const _BotaoPagar({required this.conta, required this.destaque});
+
+  final ContaPagar conta;
+  final bool destaque;
+
+  @override
+  Widget build(BuildContext context) {
+    Future<void> pagar() async {
+      final mensageiro = ScaffoldMessenger.of(context);
+      final pago = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => RealizarPagamentoScreen(conta: conta),
+        ),
+      );
+      if (pago == true) {
+        mensageiro.showSnackBar(
+          const SnackBar(content: Text('Pagamento confirmado.')),
+        );
+      }
+    }
+
+    const tamanho = Size(0, 32);
+    const espaco = EdgeInsets.symmetric(horizontal: 14);
+    const texto = TextStyle(
+      fontFamily: 'Figtree',
+      fontSize: 13,
+      fontWeight: FontWeight.w700,
+    );
+
+    if (destaque) {
+      return FilledButton(
+        style: FilledButton.styleFrom(
+          minimumSize: tamanho,
+          padding: espaco,
+          textStyle: texto,
+        ),
+        onPressed: pagar,
+        child: const Text('Pagar'),
+      );
+    }
+    return OutlinedButton(
+      style: OutlinedButton.styleFrom(
+        minimumSize: tamanho,
+        padding: espaco,
+        textStyle: texto,
+        foregroundColor: VertexColors.primaria,
+        side: BorderSide(color: VertexColors.borda),
+      ),
+      onPressed: pagar,
+      child: const Text('Pagar'),
+    );
+  }
+}
+
+/// Os 3 quadros do topo (Vencidas / Esta semana / Depois): resumo de
+/// relance e, ao tocar, filtro da lista.
+class _QuadrosResumo extends StatelessWidget {
+  const _QuadrosResumo({
+    required this.contas,
+    required this.filtro,
+    required this.aoEscolher,
+  });
+
+  final List<ContaPagar> contas;
+  final FiltroRapidoContaPagar filtro;
+  final ValueChanged<FiltroRapidoContaPagar> aoEscolher;
+
+  @override
+  Widget build(BuildContext context) {
+    final vencidas = contas
+        .where((c) => statusVisual(c) == StatusVisualConta.vencida)
+        .toList();
+    final semana = contas.where(_venceNaSemana).toList();
+    final depois = contas
+        .where(
+          (c) =>
+              statusVisual(c) == StatusVisualConta.aVencer &&
+              !_venceNaSemana(c),
+        )
+        .toList();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+      child: Row(
+        children: [
+          _Quadro(
+            rotulo: 'Vencidas',
+            contas: vencidas,
+            ligado: filtro == FiltroRapidoContaPagar.vencidas,
+            cor: VertexColors.erro,
+            fundo: VertexColors.erroClaro,
+            aoTocar: () => aoEscolher(FiltroRapidoContaPagar.vencidas),
+          ),
+          const SizedBox(width: 8),
+          _Quadro(
+            rotulo: 'Esta semana',
+            contas: semana,
+            ligado: filtro == FiltroRapidoContaPagar.estaSemana,
+            cor: VertexColors.alertaTexto,
+            fundo: VertexColors.alertaClaro,
+            aoTocar: () => aoEscolher(FiltroRapidoContaPagar.estaSemana),
+          ),
+          const SizedBox(width: 8),
+          _Quadro(
+            rotulo: 'Depois',
+            contas: depois,
+            ligado: filtro == FiltroRapidoContaPagar.aVencer,
+            cor: VertexColors.texto,
+            fundo: VertexColors.card,
+            borda: VertexColors.borda,
+            aoTocar: () => aoEscolher(FiltroRapidoContaPagar.aVencer),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Quadro extends StatelessWidget {
+  const _Quadro({
+    required this.rotulo,
+    required this.contas,
+    required this.ligado,
+    required this.cor,
+    required this.fundo,
+    required this.aoTocar,
+    this.borda,
+  });
+
+  final String rotulo;
+  final List<ContaPagar> contas;
+  final bool ligado;
+  final Color cor;
+  final Color fundo;
+  final Color? borda;
+  final VoidCallback aoTocar;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = contas.fold<double>(0, (t, c) => t + c.valor);
+
+    return Expanded(
+      child: Material(
+        color: fundo,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+            color: ligado ? cor : (borda ?? fundo),
+            width: ligado ? 1.5 : 1,
+          ),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: aoTocar,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  rotulo,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: cor,
+                  ),
+                ),
+                Text(
+                  '${contas.length}',
+                  style: TextStyle(
+                    fontFamily: VertexTheme.fonteDisplay,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: cor,
+                  ),
+                ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    formatarMoeda(total),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cor,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

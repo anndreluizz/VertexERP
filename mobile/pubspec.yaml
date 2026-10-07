@@ -47,7 +47,6 @@ dependencies:
   sqflite: ^2.4.2
   path: ^1.9.1
   open_filex: ^4.5.0
-  fl_chart: ^1.2.0
   share_plus: ^12.0.2
   image_picker: ^1.2.3
   url_launcher: ^6.3.2
@@ -75,11 +74,26 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # Mesma fonte do Desktop (frontend/assets/fonts, SIL OFL 1.1)
+  # Figtree (texto) + Bricolage Grotesque (titulos e valores), SIL OFL 1.1.
+  # Pesos estaticos gerados das fontes variaveis do Google Fonts com
+  # `fonttools varLib.instancer` -- o Android nao aplica o eixo wght de
+  # fonte variavel sozinho e o negrito saia "falso".
   fonts:
-    - family: Inter
+    - family: Figtree
       fonts:
-        - asset: assets/fonts/Inter-Variable.ttf
+        - asset: assets/fonts/Figtree-Regular.ttf
+        - asset: assets/fonts/Figtree-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Figtree-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Figtree-Bold.ttf
+          weight: 700
+    - family: Bricolage
+      fonts:
+        - asset: assets/fonts/BricolageGrotesque-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/BricolageGrotesque-Bold.ttf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:

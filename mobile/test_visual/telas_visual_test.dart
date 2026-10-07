@@ -42,6 +42,16 @@ Future<void> _fonte(String familia, String caminho) async {
   )..addFont(Future.value(ByteData.view(bytes.buffer)))).load();
 }
 
+/// Varios pesos da mesma familia num FontLoader so (Figtree 400..700).
+Future<void> _fontes(String familia, List<String> caminhos) async {
+  final loader = FontLoader(familia);
+  for (final caminho in caminhos) {
+    final bytes = File(caminho).readAsBytesSync();
+    loader.addFont(Future.value(ByteData.view(bytes.buffer)));
+  }
+  await loader.load();
+}
+
 final _agora = DateTime.now();
 String _d(int diasAtras, [int hora = 10]) => DateTime(
   _agora.year,
@@ -64,14 +74,14 @@ const _nomes = [
 
 final _rotas = <String, Object>{
   '/vendas/': [
-    for (var i = 0; i < 12; i++)
+    for (var i = 0; i < 28; i++)
       {
         'id': 1480 - i,
-        'cliente_id': i % 3 == 0 ? null : i,
+        'cliente_id': i % 3 == 0 ? null : i % 8 + 1,
         'usuario_id': 1,
         'usuario_nome': i.isEven ? 'André' : 'Bia',
         'lucro': 40.0 + i * 7,
-        'data': _d(i ~/ 4, 17 - i % 4),
+        'data': _d(i ~/ 4, 19 - (i % 4) * 3),
         'valor_total': [89.9, 245.0, 32.5, 1180.0, 54.9, 310.4][i % 6],
         'desconto': 0,
         'observacao': null,
@@ -80,17 +90,34 @@ final _rotas = <String, Object>{
         'itens': [],
       },
   ],
+  // um cliente de cada situacao: (cliente, tipo, valor, dias atras)
   '/fiado/movimentos': [
-    {
-      'id': 9,
-      'cliente_id': 2,
-      'data': _d(0, 11),
-      'descricao': null,
-      'forma_pagamento': 'PIX',
-      'tipo': 'PAGAMENTO',
-      'valor': 150.0,
-      'venda_id': null,
-    },
+    for (final (i, (cli, tipo, valor, dias)) in const [
+      (1, 'COMPRA', 380.0, 128), // inadimplente
+      (1, 'COMPRA', 92.4, 3),
+      (2, 'COMPRA', 120.0, 40), // bom pagador
+      (2, 'PAGAMENTO', 120.0, 35),
+      (2, 'COMPRA', 64.9, 2),
+      (3, 'COMPRA', 300.0, 90), // paga com atraso
+      (3, 'PAGAMENTO', 300.0, 30),
+      (3, 'COMPRA', 212.5, 25),
+      (4, 'COMPRA', 450.0, 6), // saldo anterior importado
+      (5, 'COMPRA', 80.0, 20), // quitado
+      (5, 'PAGAMENTO', 80.0, 1),
+      (6, 'COMPRA', 199.9, 11), // em dia
+      (7, 'COMPRA', 488.0, 160), // inadimplente perto do limite
+      (8, 'COMPRA', 35.0, 4),
+    ].indexed)
+      {
+        'id': 100 + i,
+        'cliente_id': cli,
+        'data': _d(dias, 11),
+        'descricao': cli == 4 ? 'Saldo anterior' : null,
+        'forma_pagamento': tipo == 'PAGAMENTO' ? 'PIX' : null,
+        'tipo': tipo,
+        'valor': valor,
+        'venda_id': tipo == 'COMPRA' && cli != 4 ? 1300 + i : null,
+      },
   ],
   '/clientes/': [
     for (var i = 0; i < _nomes.length; i++)
@@ -468,10 +495,17 @@ void main() {
           const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
           (_) async => null,
         );
-    await _fonte('Inter', 'assets/fonts/Inter-Variable.ttf');
+    await _fontes('Figtree', [
+      for (final peso in ['Regular', 'Medium', 'SemiBold', 'Bold'])
+        'assets/fonts/Figtree-$peso.ttf',
+    ]);
+    await _fontes('Bricolage', [
+      'assets/fonts/BricolageGrotesque-SemiBold.ttf',
+      'assets/fonts/BricolageGrotesque-Bold.ttf',
+    ]);
     await _fonte(
       'MaterialIcons',
-      'C:/src/flutter/bin/cache/dart-sdk/bin/resources/devtools/assets/fonts/MaterialIcons-Regular.otf',
+      'C:/dev/tools/flutter/bin/cache/artifacts/material_fonts/materialicons-regular.otf',
     );
   });
 

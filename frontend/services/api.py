@@ -294,6 +294,7 @@ def retomar_sessao():
         return False
 
     TOKEN = response.json()["access_token"]
+    preferencias_service.marcar_uso()
 
     return True
 

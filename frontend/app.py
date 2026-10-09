@@ -52,6 +52,7 @@ def _instalar_handler_de_crash():
 
 _instalar_handler_de_crash()
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from requests.exceptions import RequestException
@@ -59,7 +60,11 @@ from requests.exceptions import RequestException
 from design.theme import aplicar_tema
 from services import api
 from services.api import CertificadoServidorMudou, existe_usuario
-from services.preferencias_service import carregar_servidor, carregar_tema_escuro
+from services.preferencias_service import (
+    carregar_servidor,
+    carregar_tema_escuro,
+    marcar_uso,
+)
 from telas.login import LoginWindow
 from telas.cadastro_inicial import CadastroInicialWindow
 from telas.conectar_servidor import ConectarServidorDialog
@@ -152,5 +157,12 @@ else:
     janela = LoginWindow()
 
 janela.show()
+
+# Mantém viva a sessão lembrada enquanto o app está aberto -- ver
+# preferencias_service.carregar_sessao (expira 30 min depois de fechar).
+_timer_uso = QTimer()
+_timer_uso.timeout.connect(marcar_uso)
+_timer_uso.start(60 * 1000)
+app.aboutToQuit.connect(marcar_uso)
 
 sys.exit(app.exec())

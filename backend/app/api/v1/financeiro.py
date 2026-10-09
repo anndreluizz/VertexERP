@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import (
     exigir_permissao,
     get_current_user,
+    resolver_loja_id,
     usuario_tem_permissao,
 )
 from app.database.session import SessionLocal
@@ -54,6 +55,7 @@ def _exigir_permissao_se_abate_sem_dinheiro(db, usuario, dados):
 @router.post("/movimentos", response_model=MovimentoFiadoResponse)
 def criar_movimento(
     dados: MovimentoFiadoCreate,
+    loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
@@ -64,6 +66,10 @@ def criar_movimento(
             db,
             dados,
             usuario.id,
+            loja_id=(
+                resolver_loja_id(db, usuario, loja_id)
+                if dados.registrar_venda else None
+            ),
         )
 
         return MovimentoFiadoResponse.from_orm(movimento)

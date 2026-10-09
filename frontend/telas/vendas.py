@@ -478,9 +478,24 @@ class Vendas(QWidget):
         total_devolvido = sum(float(d["valor_total"]) for d in self.devolucoes_atual)
         if total_devolvido:
             info.append(f"Devolvido: {formatar_moeda(total_devolvido)}")
+        if not venda["itens"]:
+            info.insert(1, "Lançada pela ficha da cliente (fiado)")
         self.lbl_detalhe_info.setText("\n".join(info))
 
-        self.tabela_itens.setRowCount(len(venda["itens"]))
+        if not venda["itens"]:
+            # venda lançada pela ficha da cliente (compra fiada a mão):
+            # sem produto cadastrado, o que foi vendido está na descrição
+            self.tabela_itens.setRowCount(1)
+            for coluna, texto in enumerate([
+                venda.get("observacao") or "Compra no fiado",
+                "",
+                formatar_moeda(float(venda["valor_total"])),
+                "",
+            ]):
+                self.tabela_itens.setItem(0, coluna, QTableWidgetItem(texto))
+        else:
+            self.tabela_itens.setRowCount(len(venda["itens"]))
+
         for linha, item in enumerate(venda["itens"]):
             valores = [
                 item.get("produto_nome") or f"#{item['produto_id']}",

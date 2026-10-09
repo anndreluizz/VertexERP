@@ -118,7 +118,7 @@ class PagamentoWindow(QDialog):
 
     def __init__(
         self, total, itens=None, cliente_id=None, cliente_nome=None,
-        desconto=0.0, acrescimo=0.0,
+        desconto=0.0, acrescimo=0.0, credito_troca=0.0,
     ):
 
         super().__init__()
@@ -135,6 +135,18 @@ class PagamentoWindow(QDialog):
         # venda), "entregue" (o que o cliente deu -- > valor so' em
         # dinheiro, a diferenca e' o troco)}]
         self.pagamentos = []
+
+        # troca na hora (ver PDV.iniciar_troca): o valor da peça
+        # devolvida já saiu do caixa como devolução em dinheiro, então
+        # entra aqui como dinheiro já recebido -- a cliente só paga a
+        # diferença
+        self.credito_troca = round(credito_troca or 0.0, 2)
+        if self.credito_troca > 0:
+            usado = min(self.credito_troca, self.total)
+            self.pagamentos.append(
+                {"forma": "DINHEIRO", "valor": usado, "entregue": usado}
+            )
+
         self.forma_atual = None
         self._enter_do_lancamento = False
 
@@ -158,6 +170,18 @@ class PagamentoWindow(QDialog):
 
         raiz.addWidget(self._construir_cabecalho())
         raiz.addWidget(self._construir_faixa_totais())
+
+        if self.credito_troca > 0:
+            aviso = QLabel(
+                f"Troca: R$ {_fmt(self.credito_troca)} da peça devolvida já "
+                "estão lançados em Dinheiro. Receba só a diferença."
+            )
+            aviso.setWordWrap(True)
+            aviso.setStyleSheet(f"""
+                background:{tokens.ALERTA_CLARO}; color:{tokens.ALERTA_TEXTO};
+                padding:10px 24px; font-size:{tokens.TAMANHO_SM}px; font-weight:600;
+            """)
+            raiz.addWidget(aviso)
 
         corpo = QHBoxLayout()
         corpo.setContentsMargins(0, 0, 0, 0)

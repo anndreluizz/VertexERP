@@ -144,6 +144,10 @@ class Venda(Base):
         return self.cancelado_por.nome if self.cancelado_por else None
 
     @property
+    def cliente_nome(self) -> str | None:
+        return self.cliente.nome if self.cliente else None
+
+    @property
     def usuario_nome(self) -> str | None:
         return self.usuario.nome if self.usuario else None
 

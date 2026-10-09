@@ -241,6 +241,9 @@ class PDV(QWidget):
         self._chave_venda = None
         self.cliente_id = None
         self.cliente_nome = None
+        # troca na hora: valor da peça devolvida que abate desta venda
+        # (ver iniciar_troca)
+        self.credito_troca = 0.0
         self.desconto_valor = 0.0
         self.acrescimo_valor = 0.0
         self._finalizando_venda = False
@@ -510,6 +513,11 @@ class PDV(QWidget):
         cabecalho.addLayout(col_titulo)
         cabecalho.addSpacing(4)
         cabecalho.addWidget(self.badge_caixa, alignment=Qt.AlignVCenter)
+
+        self.badge_troca = Badge("Troca", "alerta")
+        self.badge_troca.setVisible(False)
+        cabecalho.addWidget(self.badge_troca, alignment=Qt.AlignVCenter)
+
         cabecalho.addStretch()
         cabecalho.addWidget(self.bt_retomar)
         cabecalho.addWidget(self.bt_suspender)
@@ -1925,7 +1933,9 @@ class PDV(QWidget):
 
     def cancelar_venda(self):
 
-        if not self.itens:
+        # carrinho vazio mas com troca pendente: cancelar também precisa
+        # tirar o crédito, senão ele iria pra venda do próximo cliente
+        if not self.itens and not self.credito_troca:
             return
 
         resposta = QMessageBox.question(
@@ -1939,9 +1949,38 @@ class PDV(QWidget):
         if resposta == QMessageBox.No:
             return
 
+        if self.credito_troca > 0:
+            QMessageBox.information(
+                self,
+                "Troca",
+                "A devolução já foi registrada. Como a cliente não levou "
+                f"outra peça, devolva {formatar_moeda(self.credito_troca)} "
+                "em dinheiro para ela.",
+            )
+
         self.limpar_venda()
 
+    def iniciar_troca(self, credito, cliente=None):
+        """Chamado pela tela de Vendas depois de registrar a devolução
+        da troca: o valor devolvido vira crédito desta venda (entra
+        como dinheiro já recebido no pagamento)."""
+
+        if self.itens:
+            self.limpar_venda()
+
+        self.credito_troca = round(credito, 2)
+        self.badge_troca.setText(f"Troca: crédito de {formatar_moeda(credito)}")
+        self.badge_troca.setVisible(True)
+
+        if cliente and cliente.get("id"):
+            self.definir_cliente(cliente)
+
+        self.campo_codigo.setFocus()
+
     def limpar_venda(self):
+
+        self.credito_troca = 0.0
+        self.badge_troca.setVisible(False)
 
         self._chave_venda = None
         self.itens.clear()
@@ -2364,6 +2403,7 @@ class PDV(QWidget):
             cliente_nome=self.cliente_nome,
             desconto=self.desconto_valor,
             acrescimo=self.acrescimo_valor,
+            credito_troca=self.credito_troca,
         )
 
         if tela.exec() != QDialog.Accepted:
@@ -2429,6 +2469,16 @@ class PDV(QWidget):
                 parent=self,
             )
             concluida.exec()
+
+            sobra_troca = round(self.credito_troca - total, 2)
+            if sobra_troca > 0:
+                QMessageBox.information(
+                    self,
+                    "Troca",
+                    f"A peça nova saiu mais barata. Devolva R$ "
+                    f"{formatar_moeda(sobra_troca).replace('R$', '').strip()} "
+                    "em dinheiro para a cliente.",
+                )
 
             self.limpar_venda()
 

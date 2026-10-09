@@ -15,6 +15,7 @@ class ItemVendaCreate(BaseModel):
 class ItemVendaResponse(BaseModel):
     id: int
     produto_id: int
+    produto_nome: str | None = None
     quantidade: int
     valor_unitario: Decimal
     subtotal: Decimal
@@ -88,6 +89,7 @@ class VendaResponse(BaseModel):
     id: int
 
     cliente_id: int | None
+    cliente_nome: str | None = None
 
     usuario_id: int | None = None
 
@@ -188,3 +190,14 @@ class ComprovanteVendaResponse(BaseModel):
     observacao: str | None
     situacao: str  # PAGO ou FIADO
     saldo_devedor_cliente: Decimal | None = None
+
+
+class ResumoVendedorItem(BaseModel):
+    """Total vendido por usuário (vendedora) num período -- ver
+    GET /vendas/resumo-vendedores."""
+    usuario_id: int | None
+    usuario_nome: str | None
+    quantidade_vendas: int
+    total_vendido: Decimal
+    total_devolvido: Decimal
+    total_liquido: Decimal

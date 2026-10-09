@@ -1,4 +1,5 @@
 import base64
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -12,7 +13,10 @@ from app.auth.dependencies import (
 )
 from app.database.session import SessionLocal
 from app.models.cliente import Cliente
+from app.schemas.devolucao import DevolucaoCreate, DevolucaoResponse
+from app.services.devolucao_service import DevolucaoService
 from app.schemas.venda import (
+    ResumoVendedorItem,
     VendaCreate,
     VendaResponse,
     VendaSuspensaCreate,
@@ -46,11 +50,28 @@ def listar(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     loja_id: int | None = None,
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+    usuario_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
     loja_id = loja_para_leitura(usuario, loja_id)
-    return VendaService.listar(db, skip, limit, loja_id)
+    return VendaService.listar(
+        db, skip, limit, loja_id, data_inicio, data_fim, usuario_id
+    )
+
+
+@router.get("/resumo-vendedores", response_model=list[ResumoVendedorItem])
+def resumo_vendedores(
+    data_inicio: date,
+    data_fim: date,
+    loja_id: int | None = None,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    loja_id = loja_para_leitura(usuario, loja_id)
+    return VendaService.resumo_vendedores(db, data_inicio, data_fim, loja_id)
 
 
 @router.get("/suspensas", response_model=list[VendaSuspensaResponse])
@@ -134,6 +155,34 @@ def excluir_suspensa(
         )
 
     return {"success": True, "message": "Venda suspensa excluída."}
+
+
+@router.get("/{venda_id}/devolucoes", response_model=list[DevolucaoResponse])
+def listar_devolucoes(
+    venda_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return DevolucaoService.listar_da_venda(db, venda_id)
+
+
+@router.post("/{venda_id}/devolucoes", response_model=DevolucaoResponse)
+def criar_devolucao(
+    venda_id: int,
+    dados: DevolucaoCreate,
+    db: Session = Depends(get_db),
+    usuario=Depends(exigir_permissao("vendas.devolver")),
+):
+    try:
+        devolucao = DevolucaoService.criar(db, venda_id, dados, usuario.id)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if devolucao is None:
+        raise HTTPException(status_code=404, detail="Venda não encontrada")
+
+    return devolucao
 
 
 @router.delete("/{venda_id}")

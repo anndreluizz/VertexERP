@@ -165,8 +165,79 @@ def _parcelas_pagamento(venda_ou_dados, valor_total):
 class VendaService:
 
     @staticmethod
-    def listar(db: Session, skip: int = 0, limit: int = 100, loja_id: int | None = None):
-        return VendaRepository.listar(db, skip, limit, loja_id)
+    def listar(
+        db: Session,
+        skip: int = 0,
+        limit: int = 100,
+        loja_id: int | None = None,
+        data_inicio=None,
+        data_fim=None,
+        usuario_id: int | None = None,
+    ):
+        return VendaRepository.listar(
+            db, skip, limit, loja_id, data_inicio, data_fim, usuario_id
+        )
+
+    @staticmethod
+    def resumo_vendedores(db: Session, data_inicio, data_fim, loja_id: int | None = None):
+        """Quanto cada usuário vendeu no período (vendas finalizadas),
+        menos o que foi devolvido dessas vendas. Cada vendedora entra
+        com o próprio login, então o vendedor é o usuário da venda."""
+
+        from datetime import timedelta
+
+        from sqlalchemy import func
+
+        from app.models.devolucao import Devolucao
+        from app.models.user import User
+
+        fim = data_fim + timedelta(days=1)
+
+        filtros = [
+            Venda.status == StatusVenda.FINALIZADA.value,
+            Venda.data >= data_inicio,
+            Venda.data < fim,
+        ]
+        if loja_id is not None:
+            filtros.append(Venda.loja_id == loja_id)
+
+        devolvido_por_venda = (
+            db.query(
+                Devolucao.venda_id.label("venda_id"),
+                func.sum(Devolucao.valor_total).label("valor"),
+            )
+            .group_by(Devolucao.venda_id)
+            .subquery()
+        )
+
+        linhas = (
+            db.query(
+                Venda.usuario_id,
+                User.nome,
+                func.count(Venda.id),
+                func.coalesce(func.sum(Venda.valor_total), 0),
+                func.coalesce(func.sum(devolvido_por_venda.c.valor), 0),
+            )
+            .outerjoin(User, User.id == Venda.usuario_id)
+            .outerjoin(devolvido_por_venda, devolvido_por_venda.c.venda_id == Venda.id)
+            .filter(*filtros)
+            .group_by(Venda.usuario_id, User.nome)
+            .all()
+        )
+
+        resultado = [
+            {
+                "usuario_id": usuario_id,
+                "usuario_nome": nome,
+                "quantidade_vendas": quantidade,
+                "total_vendido": vendido,
+                "total_devolvido": devolvido,
+                "total_liquido": vendido - devolvido,
+            }
+            for usuario_id, nome, quantidade, vendido, devolvido in linhas
+        ]
+
+        return sorted(resultado, key=lambda r: r["total_liquido"], reverse=True)
 
     @staticmethod
     def buscar(
@@ -714,6 +785,16 @@ class VendaService:
             raise Exception(
                 "Essa venda está suspensa, não finalizada. Exclua a "
                 "venda suspensa em vez de cancelar."
+            )
+
+        # cancelar devolveria de novo o estoque/dinheiro dos itens que
+        # ja voltaram numa devolucao parcial
+        from app.models.devolucao import Devolucao
+
+        if db.query(Devolucao.id).filter(Devolucao.venda_id == venda.id).first():
+            raise Exception(
+                "Essa venda já tem devolução registrada. Para desfazer o "
+                "resto, faça uma devolução dos itens que faltam."
             )
 
         # Toda parcela (dinheiro ou nao) gera um MovimentoCaixa de

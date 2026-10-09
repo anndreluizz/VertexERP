@@ -15,6 +15,7 @@ PERMISSOES_DISPONIVEIS = {
     "plano_contas.excluir": "Excluir contas do plano de contas",
     "compras.cancelar": "Cancelar compras",
     "vendas.cancelar": "Cancelar vendas",
+    "vendas.devolver": "Registrar devolução/troca de itens vendidos",
     "vendas.alterar_preco": "Vender com preço diferente do cadastro",
     "produtos.editar_preco": "Alterar preço de venda e promoções",
     "estoque.ajustar": "Ajustar estoque manualmente",

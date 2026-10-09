@@ -1,18 +1,4 @@
-from utils.maiusculas import forcar_maiusculas
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
-    QMessageBox,
-    QInputDialog,
-)
+from PySide6.QtWidgets import QMessageBox
 
 from services.marca_service import (
     listar_marcas,
@@ -23,174 +9,28 @@ from services.marca_service import (
 from services.worker import rodar_em_thread
 from services import api
 
-from design import tokens
+from design.widgets import DialogoGerenciar, pedir_texto
 
 
 def _listar_marcas_ativas():
     return [c for c in listar_marcas() if c.get("ativo", True)]
 
 
-class GerenciarMarcasDialog(QDialog):
+class GerenciarMarcasDialog(DialogoGerenciar):
     """Mesmo padrao de GerenciarCategoriasDialog/GerenciarCategoriasDespesaDialog
     -- antes desse dialogo, a unica forma de criar uma marca de produto
     era o "+" no cadastro, sem nenhum jeito de corrigir um nome
     digitado errado ou remover uma marca duplicada/nao usada."""
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(
+            "Marcas de Produto", "Marcas usadas no cadastro de produtos", "star",
+            "Nova marca...", "marca", "marcas",
+            maiusculas=True, parent=parent,
+        )
 
         self.marcas = []
         self._carregando = False
-
-        self.setWindowTitle("Gerenciar Marcas")
-        self.resize(480, 480)
-        self.setStyleSheet(f"background:{tokens.CARD};")
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(14)
-
-        titulo = QLabel("Marcas de Produto")
-        titulo.setStyleSheet(
-            f"background:transparent; font-size:18px; "
-            f"font-weight:bold; color:{tokens.TEXTO};"
-        )
-        layout.addWidget(titulo)
-
-        nova_layout = QHBoxLayout()
-
-        self.novo_nome = QLineEdit()
-        forcar_maiusculas(self.novo_nome)
-        self.novo_nome.setPlaceholderText("Nova marca...")
-        self.novo_nome.setMinimumHeight(40)
-        self.novo_nome.setStyleSheet(f"""
-            QLineEdit {{
-                border: 1px solid {tokens.BORDA};
-                border-radius: 8px;
-                padding: 0 12px;
-                font-size: 13px;
-                color: {tokens.TEXTO};
-                background: {tokens.CARD};
-            }}
-            QLineEdit:focus {{
-                border: 1px solid {tokens.SECUNDARIA};
-            }}
-        """)
-        self.novo_nome.returnPressed.connect(self.adicionar)
-
-        self.bt_adicionar = QPushButton("+ Adicionar")
-        self.bt_adicionar.setAutoDefault(False)
-        self.bt_adicionar.setMinimumHeight(40)
-        self.bt_adicionar.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.SECUNDARIA};
-                color:{tokens.TEXTO_CLARO};
-                font-weight:bold;
-                border-radius:8px;
-                padding:0 16px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.SECUNDARIA_HOVER};
-            }}
-        """)
-        self.bt_adicionar.clicked.connect(self.adicionar)
-
-        nova_layout.addWidget(self.novo_nome)
-        nova_layout.addWidget(self.bt_adicionar)
-
-        layout.addLayout(nova_layout)
-
-        self.tabela = QTableWidget()
-        self.tabela.setColumnCount(1)
-        self.tabela.setHorizontalHeaderLabels(["Nome"])
-        self.tabela.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Stretch
-        )
-        self.tabela.verticalHeader().setDefaultSectionSize(40)
-        self.tabela.verticalHeader().setVisible(False)
-        self.tabela.setAlternatingRowColors(True)
-        self.tabela.setSelectionBehavior(QTableWidget.SelectRows)
-        self.tabela.setSelectionMode(QTableWidget.SingleSelection)
-        self.tabela.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.tabela.setStyleSheet(f"""
-            QTableWidget {{
-                border: 1px solid {tokens.BORDA};
-                border-radius: 8px;
-                color: {tokens.TEXTO};
-                background: {tokens.CARD};
-                alternate-background-color: {tokens.FUNDO};
-            }}
-            QTableWidget::item:selected {{
-                background: {tokens.PRIMARIA};
-                color: {tokens.TEXTO_CLARO};
-            }}
-            QHeaderView::section {{
-                background: {tokens.FUNDO};
-                color: {tokens.TEXTO};
-                font-weight: bold;
-                padding: 6px;
-                border: none;
-                border-bottom: 1px solid {tokens.BORDA};
-            }}
-        """)
-
-        layout.addWidget(self.tabela, stretch=1)
-
-        rodape = QHBoxLayout()
-
-        self.bt_editar = QPushButton("Editar")
-        self.bt_editar.setAutoDefault(False)
-        self.bt_editar.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.PRIMARIA};
-                color:{tokens.TEXTO_CLARO};
-                font-weight:bold;
-                border-radius:8px;
-                padding:8px 16px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.PRIMARIA_HOVER};
-            }}
-        """)
-        self.bt_editar.clicked.connect(self.editar)
-
-        self.bt_excluir = QPushButton("Excluir")
-        self.bt_excluir.setAutoDefault(False)
-        self.bt_excluir.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.ERRO};
-                color:{tokens.TEXTO_CLARO};
-                font-weight:bold;
-                border-radius:8px;
-                padding:8px 16px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.ERRO_HOVER};
-            }}
-        """)
-        self.bt_excluir.clicked.connect(self.excluir)
-
-        bt_fechar = QPushButton("Fechar")
-        bt_fechar.setAutoDefault(False)
-        bt_fechar.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.FUNDO};
-                color:{tokens.TEXTO};
-                border-radius:8px;
-                padding:8px 20px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.BORDA};
-            }}
-        """)
-        bt_fechar.clicked.connect(self.accept)
-
-        rodape.addWidget(self.bt_editar)
-        rodape.addWidget(self.bt_excluir)
-        rodape.addStretch()
-        rodape.addWidget(bt_fechar)
-
-        layout.addLayout(rodape)
 
         if not api.usuario_tem_permissao("marcas.excluir"):
             self.bt_excluir.setVisible(False)
@@ -223,12 +63,7 @@ class GerenciarMarcasDialog(QDialog):
 
         self.marcas = marcas
 
-        self.tabela.setRowCount(len(self.marcas))
-
-        for linha, marca in enumerate(self.marcas):
-            self.tabela.setItem(
-                linha, 0, QTableWidgetItem(marca.get("nome", ""))
-            )
+        self.preencher_nomes([marca.get("nome", "") for marca in self.marcas])
 
     def _ao_carregar_erro(self, erro):
         QMessageBox.critical(self, "Erro", f"Não foi possível carregar as marcas.\n{erro}")
@@ -294,12 +129,9 @@ class GerenciarMarcasDialog(QDialog):
         if marca is None:
             return
 
-        novo_nome, ok = QInputDialog.getText(
-            self,
-            "Editar marca",
-            "Nome da marca:",
-            QLineEdit.Normal,
-            marca.get("nome", ""),
+        novo_nome, ok = pedir_texto(
+            self, "Editar marca", "Nome da marca",
+            marca.get("nome", ""), maiusculas=True,
         )
 
         if not ok:

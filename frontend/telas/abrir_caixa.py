@@ -1,8 +1,5 @@
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QHBoxLayout,
     QGridLayout,
     QLabel,
     QLineEdit,
@@ -15,92 +12,23 @@ from services.caixa_service import historico_caixa
 from services.worker import rodar_em_thread
 
 from design import tokens
-from design.icons import icone, icone_pixmap
-from design.responsive import tamanho_fixo_seguro
-from design.widgets import Badge, BotaoSecundario, BotaoSucesso
+from design.widgets import Badge, BotaoSucesso, DialogoPadrao, campo_rotulado, titulo_secao
 from utils.formatacao import formatar_moeda
 
 VALORES_RAPIDOS = [50, 100, 150, 200, 300, 500]
 
 
-class AbrirCaixaWindow(QDialog):
+class AbrirCaixaWindow(DialogoPadrao):
 
     def __init__(self):
-        super().__init__()
-
-        self.setWindowTitle("Abrir Caixa")
-        tamanho_fixo_seguro(self, 460, 640)
-        self.setStyleSheet(f"background:{tokens.CARD};")
-
-        raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(0, 0, 0, 0)
-        raiz.setSpacing(0)
-
-        # ======================
-        # CORPO (com cabeçalho embutido -- ícone + título + fechar,
-        # mesmo padrão dos diálogos da ficha do cliente)
-        # ======================
-
-        corpo = QVBoxLayout()
-        corpo.setContentsMargins(24, 22, 24, 20)
-        corpo.setSpacing(14)
-
-        linha_cabecalho = QHBoxLayout()
-        linha_cabecalho.setSpacing(14)
-
-        icone_circulo = QLabel()
-        icone_circulo.setFixedSize(48, 48)
-        icone_circulo.setAlignment(Qt.AlignCenter)
-        icone_circulo.setStyleSheet(f"""
-            background:{tokens.SUCESSO_CLARO}; border-radius:24px;
-        """)
-        icone_circulo.setPixmap(
-            icone_pixmap("wallet", cor=tokens.SECUNDARIA_HOVER, tamanho=20)
+        super().__init__(
+            "Abrir Caixa", "Informe o troco inicial para liberar o caixa",
+            "wallet", tokens.SECUNDARIA_HOVER, tokens.SUCESSO_CLARO,
+            largura=DialogoPadrao.PEQUENO,
         )
-        linha_cabecalho.addWidget(icone_circulo)
 
-        col_titulo = QVBoxLayout()
-        col_titulo.setSpacing(2)
+        corpo = self.corpo
 
-        titulo = QLabel("Abrir Caixa")
-        titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XL}px;
-            font-weight:800; color:{tokens.TEXTO};
-        """)
-
-        subtitulo = QLabel("Informe o troco inicial para liberar o caixa")
-        subtitulo.setWordWrap(True)
-        subtitulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_SM}px;
-            color:{tokens.TEXTO_TERCIARIO};
-        """)
-
-        col_titulo.addWidget(titulo)
-        col_titulo.addWidget(subtitulo)
-
-        linha_cabecalho.addLayout(col_titulo, 1)
-
-        bt_fechar = QPushButton()
-        bt_fechar.setFixedSize(30, 30)
-        bt_fechar.setCursor(Qt.PointingHandCursor)
-        bt_fechar.setAutoDefault(False)
-        bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
-        bt_fechar.setToolTip("Fechar")
-        bt_fechar.setAccessibleName("Fechar")
-        bt_fechar.setStyleSheet(f"""
-            QPushButton {{ background:transparent; border:none; border-radius:6px; }}
-            QPushButton:hover {{ background:{tokens.FUNDO}; }}
-        """)
-        bt_fechar.clicked.connect(self.reject)
-        linha_cabecalho.addWidget(bt_fechar, 0, Qt.AlignTop)
-
-        corpo.addLayout(linha_cabecalho)
-
-        lbl_valor_titulo = QLabel("VALOR INICIAL (TROCO)")
-        lbl_valor_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
 
         self.valor = QLineEdit()
         self.valor.setPlaceholderText("R$ 0,00")
@@ -113,8 +41,7 @@ class AbrirCaixaWindow(QDialog):
             }}
         """)
 
-        corpo.addWidget(lbl_valor_titulo)
-        corpo.addWidget(self.valor)
+        corpo.addWidget(campo_rotulado("Valor inicial (troco)", self.valor))
 
         valores_layout = QGridLayout()
         valores_layout.setSpacing(8)
@@ -143,13 +70,7 @@ class AbrirCaixaWindow(QDialog):
         # HISTÓRICO DE SESSÕES
         # ======================
 
-        lbl_historico_titulo = QLabel("ÚLTIMAS SESSÕES")
-        lbl_historico_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
-
-        corpo.addWidget(lbl_historico_titulo)
+        corpo.addWidget(titulo_secao("Últimas sessões"))
 
         historico_frame = QFrame()
         historico_frame.setStyleSheet(f"""
@@ -169,34 +90,13 @@ class AbrirCaixaWindow(QDialog):
 
         corpo.addStretch()
 
-        raiz.addLayout(corpo)
-
-        # ======================
-        # RODAPÉ
-        # ======================
-
-        rodape = QFrame()
-        rodape.setStyleSheet(f"""
-            background:{tokens.FUNDO}; border-top:1px solid {tokens.BORDA};
-        """)
-
-        rodape_layout = QHBoxLayout(rodape)
-        rodape_layout.setContentsMargins(24, 14, 24, 14)
-        rodape_layout.setSpacing(10)
-
-        self.bt_cancelar = BotaoSecundario("Cancelar")
-        self.bt_cancelar.setMinimumHeight(46)
-
-        self.bt_abrir = BotaoSucesso("Abrir Caixa")
-        self.bt_abrir.setMinimumHeight(46)
-
-        rodape_layout.addWidget(self.bt_cancelar)
-        rodape_layout.addWidget(self.bt_abrir)
-
-        raiz.addWidget(rodape)
-
-        self.bt_cancelar.clicked.connect(self.reject)
+        self.bt_abrir = BotaoSucesso("Abrir Caixa", icone_nome="check")
+        self.bt_abrir.setAutoDefault(False)
         self.bt_abrir.clicked.connect(self.confirmar)
+        self.bt_cancelar = self.definir_botoes(self.bt_abrir)
+
+        self.ajustar_altura()
+        self.valor.setFocus()
 
     # ======================================
 
@@ -280,6 +180,10 @@ class AbrirCaixaWindow(QDialog):
                 badge_status, linha_indice, 1, Qt.AlignCenter
             )
             self.historico_layout.addWidget(lbl_saldo, linha_indice, 2)
+
+        # adiado: as linhas recém-adicionadas só aparecem (e contam na
+        # medida) no próximo ciclo de eventos
+        QTimer.singleShot(0, self.ajustar_altura)
 
     def confirmar(self):
 

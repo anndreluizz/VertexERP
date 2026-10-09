@@ -1,8 +1,10 @@
+import re
 from datetime import datetime, timedelta
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QStyledItemDelegate,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
@@ -108,7 +110,7 @@ def _buscar_dados_indicadores(data_inicio, data_fim, loja_id):
 
     aging = {"91-120": 0, "121-180": 0, "180+": 0}
     for agr in inadimplentes:
-        dias = agr["dias_sem_movimentacao"]
+        dias = agr["dias_em_atraso"]
         if dias <= 120:
             aging["91-120"] += 1
         elif dias <= 180:
@@ -152,8 +154,8 @@ def _buscar_dados_indicadores(data_inicio, data_fim, loja_id):
 
 from design import tokens
 from design.charts import GraficoArea, GraficoPizza, GraficoHeatmap
-from design.icons import icone
-from design.widgets import BotaoSecundario, CardKPI, SecaoCard
+from design.icons import icone, icone_pixmap
+from design.widgets import BotaoSecundario, CardKPI, SecaoCard, cor_forma_pagamento
 from utils.formatacao import formatar_moeda
 from utils.documento_html import (
     ESTILO_BODY,
@@ -175,14 +177,57 @@ NOMES_FORMA_PAGAMENTO = {
     "PRAZO": "Crediário",
 }
 
-CORES_FORMA_PAGAMENTO = {
-    "DINHEIRO": tokens.SECUNDARIA,
-    "PIX": tokens.PRIMARIA,
-    "DEBITO": tokens.ALERTA,
-    "CREDITO": "#8E24AA",
-    "BOLETO": tokens.TEXTO_SECUNDARIO,
-    "PRAZO": tokens.ERRO,
+class _CoresFormaPagamento:
+    """Mesmas cores do PDV/fiado/despesa (cor_forma_pagamento) -- antes
+    era um dict fixo aqui com outra paleta (Débito laranja, PIX azul) e
+    calculado no import, antes do tema escuro existir. Mantém o .get()
+    porque telas/dashboard.py usa CORES_FORMA_PAGAMENTO.get(forma, cor)."""
+
+    def get(self, forma, _padrao=None):
+        return cor_forma_pagamento(forma)
+
+    def __getitem__(self, forma):
+        return cor_forma_pagamento(forma)
+
+
+CORES_FORMA_PAGAMENTO = _CoresFormaPagamento()
+
+# ícone do sistema no lugar dos emojis antigos (que viravam quadrado em
+# máquina sem fonte de emoji e destoavam do resto do sistema) --
+# PainelSecao continua aceitando o emoji pra não quebrar quem chama
+_ICONE_POR_EMOJI = {
+    "\U0001f4c8": "trending-up", "\U0001f4e6": "package", "\U0001f4b3": "credit-card",
+    "\U0001f53b": "filter", "\U0001f3ec": "store", "\U0001f504": "refresh-cw",
+    "\U0001f4b0": "dollar-sign", "\U0001f4c5": "calendar", "\U0001f525": "bar-chart-2",
+    "\U0001f6d2": "shopping-cart", "\U0001f3ed": "truck", "\u23f1\ufe0f": "calendar",
+    "\U0001f40c": "alert-triangle", "\U0001f534": "alert-triangle", "\U0001f3af": "star",
+    "\U0001f465": "users", "\U0001f550": "calendar",
 }
+
+_NUMERO = re.compile(r"^[\s+\-−–R$]*[\d.,]+\s*(%|x|un\.?|dias?)?$")
+
+
+class _AlinhaNumeros(QStyledItemDelegate):
+    """Valor (R$, %, quantidade) alinhado à direita, como em planilha --
+    e o cabeçalho da coluna acompanha. Vale pra toda tabela que passa
+    por _estilizar_tabela, sem mexer em cada lugar que preenche célula."""
+
+    def __init__(self, tabela):
+        super().__init__(tabela)
+        self._tabela = tabela
+        self._colunas_numericas = set()
+
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        texto = str(index.data() or "").strip()
+        if texto and texto != "—" and _NUMERO.match(texto):
+            option.displayAlignment = Qt.AlignRight | Qt.AlignVCenter
+            coluna = index.column()
+            if coluna not in self._colunas_numericas:
+                self._colunas_numericas.add(coluna)
+                cabecalho = self._tabela.horizontalHeaderItem(coluna)
+                if cabecalho is not None:
+                    cabecalho.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
 
 class LinhaBarra(QFrame):
@@ -268,8 +313,9 @@ class PainelSecao(QFrame):
 
         super().__init__()
 
+        self.setObjectName("painelSecao")
         self.setStyleSheet(f"""
-            QFrame {{
+            QFrame#painelSecao {{
                 background:{tokens.CARD};
                 border-radius:{tokens.RADIUS_LG}px;
                 border:1px solid {tokens.BORDA};
@@ -277,16 +323,21 @@ class PainelSecao(QFrame):
         """)
 
         self.layout_externo = QVBoxLayout(self)
-        self.layout_externo.setContentsMargins(18, 16, 18, 16)
+        self.layout_externo.setContentsMargins(20, 18, 20, 18)
         self.layout_externo.setSpacing(12)
 
         cabecalho = QHBoxLayout()
-        cabecalho.setSpacing(8)
+        cabecalho.setSpacing(10)
 
-        lbl_icone = QLabel(icone)
-        lbl_icone.setStyleSheet(
-            "font-size:16px; background:transparent; border:none;"
-        )
+        nome_icone = _ICONE_POR_EMOJI.get(icone, icone if icone.isascii() else "bar-chart-2")
+        lbl_icone = QLabel()
+        lbl_icone.setFixedSize(30, 30)
+        lbl_icone.setAlignment(Qt.AlignCenter)
+        lbl_icone.setStyleSheet(f"""
+            background:{tokens.PRIMARIA_CLARA}; border:none;
+            border-radius:{tokens.RADIUS_SM}px;
+        """)
+        lbl_icone.setPixmap(icone_pixmap(nome_icone, cor=tokens.PRIMARIA, tamanho=16))
 
         lbl_titulo = QLabel(titulo)
         lbl_titulo.setStyleSheet(f"""
@@ -410,13 +461,21 @@ class Relatorios(QWidget):
         # ABAS
         # ======================
 
-        abas_layout = QHBoxLayout()
-        abas_layout.setSpacing(24)
+        barra_abas = QFrame()
+        barra_abas.setObjectName("barraAbas")
+        barra_abas.setStyleSheet(f"""
+            QFrame#barraAbas {{
+                background:{tokens.BORDA}; border-radius:{tokens.RADIUS_MD}px;
+            }}
+        """)
+        abas_layout = QHBoxLayout(barra_abas)
+        abas_layout.setContentsMargins(4, 4, 4, 4)
+        abas_layout.setSpacing(4)
 
-        self.bt_aba_financeiro = self._botao_aba("Centro Financeiro")
-        self.bt_aba_caixa = self._botao_aba("Relatório de Caixa")
-        self.bt_aba_estoque = self._botao_aba("Relatório de Estoque")
-        self.bt_aba_indicadores = self._botao_aba("Indicadores")
+        self.bt_aba_financeiro = self._botao_aba("Financeiro", "dollar-sign")
+        self.bt_aba_caixa = self._botao_aba("Caixa", "wallet")
+        self.bt_aba_estoque = self._botao_aba("Estoque", "package")
+        self.bt_aba_indicadores = self._botao_aba("Indicadores", "bar-chart-2")
 
         self.bt_aba_financeiro.clicked.connect(
             lambda: self._selecionar_aba(0)
@@ -435,14 +494,11 @@ class Relatorios(QWidget):
         abas_layout.addWidget(self.bt_aba_caixa)
         abas_layout.addWidget(self.bt_aba_estoque)
         abas_layout.addWidget(self.bt_aba_indicadores)
-        abas_layout.addStretch()
 
-        layout.addLayout(abas_layout)
-
-        linha_abas = QFrame()
-        linha_abas.setFixedHeight(1)
-        linha_abas.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
-        layout.addWidget(linha_abas)
+        linha_abas = QHBoxLayout()
+        linha_abas.addWidget(barra_abas)
+        linha_abas.addStretch()
+        layout.addLayout(linha_abas)
 
         self.botoes_aba = [
             self.bt_aba_financeiro,
@@ -498,20 +554,21 @@ class Relatorios(QWidget):
 
         return pagina, conteudo_layout
 
-    def _botao_aba(self, texto):
+    def _botao_aba(self, texto, icone_nome=None):
 
         botao = QPushButton(texto)
         botao.setCheckable(True)
         botao.setCursor(Qt.PointingHandCursor)
+        botao.setMinimumHeight(38)
+        botao.icone_nome = icone_nome
         botao.setStyleSheet(f"""
             QPushButton {{
-                background:transparent; border:none;
-                color:{tokens.TEXTO_TERCIARIO}; font-size:{tokens.TAMANHO_SM}px;
-                font-weight:700; padding-bottom:10px;
+                background:transparent; border:none; border-radius:{tokens.RADIUS_SM}px;
+                color:{tokens.TEXTO_SECUNDARIO}; font-size:{tokens.TAMANHO_MD}px;
+                font-weight:700; padding:0 18px;
             }}
-            QPushButton:checked {{
-                color:{tokens.PRIMARIA}; border-bottom:2px solid {tokens.PRIMARIA};
-            }}
+            QPushButton:hover {{ color:{tokens.TEXTO}; }}
+            QPushButton:checked {{ background:{tokens.CARD}; color:{tokens.PRIMARIA}; }}
         """)
         return botao
 
@@ -526,6 +583,9 @@ class Relatorios(QWidget):
 
         for i, botao in enumerate(self.botoes_aba):
             botao.setChecked(i == indice)
+            if getattr(botao, "icone_nome", None):
+                cor = tokens.PRIMARIA if i == indice else tokens.TEXTO_SECUNDARIO
+                botao.setIcon(icone(botao.icone_nome, cor=cor, tamanho=16))
 
         for i, pagina in enumerate(paginas):
             pagina.setVisible(i == indice)
@@ -538,11 +598,8 @@ class Relatorios(QWidget):
         # por ora so' a aba Centro Financeiro tem um relatorio pra
         # imprimir de verdade (ver imprimir_relatorio_financeiro) --
         # Caixa/Estoque/Indicadores ficam pra uma proxima onda
-        self.bt_imprimir.setEnabled(indice == 0)
-        self.bt_imprimir.setToolTip(
-            "" if indice == 0
-            else "Impressão disponível só para o Centro Financeiro, por enquanto."
-        )
+        # botão cinza em aba que não imprime parecia defeito -- some
+        self.bt_imprimir.setVisible(indice == 0)
 
     # ==========================================
     # PÁGINA: CENTRO FINANCEIRO
@@ -606,12 +663,12 @@ class Relatorios(QWidget):
         self.card_faturamento = CardKPI(
             "Faturamento Bruto", "dollar-sign", tokens.PRIMARIA, destaque=True
         )
-        self.card_volume = CardKPI("Volume de Vendas", "shopping-cart", tokens.PRIMARIA)
-        self.card_ticket = CardKPI("Ticket Médio", "trending-up", tokens.SECUNDARIA)
+        self.card_lucro = CardKPI("Lucro", "trending-up", tokens.SECUNDARIA)
+        self.card_volume = CardKPI("Vendas", "shopping-cart", tokens.PRIMARIA)
+        self.card_ticket = CardKPI("Ticket Médio", "bar-chart-2", tokens.ALERTA)
 
-        cards_layout.addWidget(self.card_faturamento)
-        cards_layout.addWidget(self.card_volume)
-        cards_layout.addWidget(self.card_ticket)
+        for card in (self.card_faturamento, self.card_lucro, self.card_volume, self.card_ticket):
+            cards_layout.addWidget(card, 1)
 
         layout.addLayout(cards_layout)
 
@@ -807,7 +864,7 @@ class Relatorios(QWidget):
         ))
         self.painel_funil.corpo.addWidget(LinhaBarra(
             "Vendas canceladas",
-            f"{float(dados['taxa_cancelamento']):.1f}% das vendas do período",
+            f"{float(dados['taxa_cancelamento']):.1f}".replace(".", ",") + "% das vendas do período",
             str(dados["canceladas"]),
             dados["canceladas"] / maior_valor * 100,
             tokens.ERRO,
@@ -934,10 +991,26 @@ class Relatorios(QWidget):
         faturamento = float(relatorio["receita_total"]["atual"])
         volume = int(relatorio["quantidade_vendas"]["atual"])
         ticket_medio = float(relatorio["ticket_medio"]["atual"])
+        lucro = float((relatorio.get("lucro") or {}).get("atual") or 0)
+        margem = float((relatorio.get("margem_lucro") or {}).get("atual") or 0)
 
         self.card_faturamento.definir_valor(formatar_moeda(faturamento))
+        self.card_lucro.definir_valor(formatar_moeda(lucro))
         self.card_volume.definir_valor(str(volume))
         self.card_ticket.definir_valor(formatar_moeda(ticket_medio))
+
+        # variação contra o período anterior de mesmo tamanho (o backend
+        # manda None quando não tem base -- aí o selo some)
+        for card, chave in (
+            (self.card_faturamento, "receita_total"), (self.card_lucro, "lucro"),
+            (self.card_volume, "quantidade_vendas"), (self.card_ticket, "ticket_medio"),
+        ):
+            variacao = (relatorio.get(chave) or {}).get("variacao_pct")
+            card.definir_variacao(variacao, "vs período anterior")
+            if variacao is None:
+                card.definir_legenda("sem período anterior pra comparar")
+
+        self.card_lucro.definir_legenda(f"margem de {margem:.1f}%".replace(".", ","))
 
         self._atualizar_ranking_produtos(relatorio["top_produtos"])
         self._atualizar_mix_pagamentos(relatorio["formas_pagamento"])
@@ -953,11 +1026,26 @@ class Relatorios(QWidget):
         rotulos_completos = []
         valores = []
 
-        for item in vendas_por_dia:
-            dia = datetime.strptime(item["data"], "%Y-%m-%d")
+        totais = {item["data"]: float(item["total"]) for item in vendas_por_dia}
+
+        # o backend só manda dia que teve venda -- sem completar com zero
+        # o gráfico pulava os dias parados (e com 1 dia só nem desenhava)
+        inicio, fim = self._periodo_selecionado()
+        if inicio is None:
+            inicio = datetime.strptime(min(totais), "%Y-%m-%d").date()
+        dias = []
+        if (fim - inicio).days <= 92:
+            dia = inicio
+            while dia <= fim:
+                dias.append(dia)
+                dia += timedelta(days=1)
+        else:
+            dias = [datetime.strptime(d, "%Y-%m-%d").date() for d in sorted(totais)]
+
+        for dia in dias:
             rotulos.append(dia.strftime("%d/%m"))
             rotulos_completos.append(dia.strftime("%d/%m/%Y"))
-            valores.append(item["total"])
+            valores.append(totais.get(dia.strftime("%Y-%m-%d"), 0.0))
 
         self.grafico_tendencia.definir_dados(rotulos, valores, rotulos_completos)
 
@@ -1024,7 +1112,7 @@ class Relatorios(QWidget):
 
             linha = LinhaBarra(
                 nome,
-                f"{percentual:.1f}% do total",
+                f"{percentual:.1f}".replace(".", ",") + "% do total",
                 formatar_moeda(total),
                 percentual,
                 cor,
@@ -1042,7 +1130,7 @@ class Relatorios(QWidget):
 
         cabecalho_caixa = QHBoxLayout()
 
-        titulo = QLabel("Histórico de Caixas")
+        titulo = QLabel("Histórico de caixas")
         titulo.setStyleSheet(f"""
             font-size:{tokens.TAMANHO_LG}px; font-weight:700; color:{tokens.TEXTO};
             background:transparent;
@@ -1067,13 +1155,25 @@ class Relatorios(QWidget):
 
         layout.addLayout(cabecalho_caixa)
 
+        cards_caixa = QHBoxLayout()
+        cards_caixa.setSpacing(14)
+        self.card_caixas_total = CardKPI("Caixas no histórico", "wallet", tokens.PRIMARIA)
+        self.card_caixas_diferenca = CardKPI("Fechados com diferença", "alert-triangle", tokens.ALERTA)
+        self.card_diferenca_total = CardKPI("Diferença acumulada", "dollar-sign", tokens.ERRO)
+        for card in (self.card_caixas_total, self.card_caixas_diferenca, self.card_diferenca_total):
+            cards_caixa.addWidget(card, 1)
+        layout.addLayout(cards_caixa)
+
         self.tabela_caixa = QTableWidget()
-        self.tabela_caixa.setColumnCount(4)
+        self.tabela_caixa.setColumnCount(7)
         self.tabela_caixa.setHorizontalHeaderLabels([
-            "Data Abertura",
-            "Valor Inicial",
-            "Valor Final",
-            "Status",
+            "Abertura",
+            "Fechamento",
+            "Troco inicial",
+            "Esperado",
+            "Contado",
+            "Diferença",
+            "Situação",
         ])
         self._estilizar_tabela(self.tabela_caixa)
 
@@ -1083,47 +1183,76 @@ class Relatorios(QWidget):
 
         return pagina
 
+    @staticmethod
+    def _data_hora(texto):
+        try:
+            return datetime.fromisoformat(texto).strftime("%d/%m/%Y %H:%M")
+        except (ValueError, TypeError):
+            return texto or "—"
+
     def _atualizar_caixa(self):
 
         self.tabela_caixa.setRowCount(0)
+
+        fechados_com_diferenca = 0
+        diferenca_total = 0.0
 
         for caixa in self.caixas:
 
             linha = self.tabela_caixa.rowCount()
             self.tabela_caixa.insertRow(linha)
 
-            data_abertura = caixa.get("data_abertura", "")
-            try:
-                data_formatada = datetime.fromisoformat(
-                    data_abertura
-                ).strftime("%d/%m/%Y %H:%M")
-            except (ValueError, TypeError):
-                data_formatada = data_abertura
+            aberto = caixa.get("status") == "ABERTO"
+            esperado = caixa.get("saldo_final")
+            contado = caixa.get("valor_contado")
 
-            status = caixa.get("status", "")
-            saldo_final = caixa.get("saldo_final")
+            diferenca = None
+            if not aberto and esperado is not None and contado is not None:
+                diferenca = float(contado) - float(esperado)
+                if abs(diferenca) >= 0.01:
+                    fechados_com_diferenca += 1
+                    diferenca_total += diferenca
 
-            self.tabela_caixa.setItem(
-                linha, 0, QTableWidgetItem(data_formatada)
-            )
-            self.tabela_caixa.setItem(
-                linha, 1,
-                QTableWidgetItem(
-                    formatar_moeda(caixa.get("saldo_inicial", 0))
-                ),
-            )
-            self.tabela_caixa.setItem(
-                linha, 2,
-                QTableWidgetItem(
-                    "—" if status == "ABERTO"
-                    else formatar_moeda(saldo_final)
-                ),
-            )
+            valores = [
+                self._data_hora(caixa.get("data_abertura")),
+                "—" if aberto else self._data_hora(caixa.get("data_fechamento")),
+                formatar_moeda(caixa.get("saldo_inicial", 0)),
+                formatar_moeda(esperado) if esperado is not None else "—",
+                formatar_moeda(contado) if contado is not None else "—",
+            ]
+            for coluna, texto in enumerate(valores):
+                self.tabela_caixa.setItem(linha, coluna, QTableWidgetItem(texto))
 
-            item_status = QTableWidgetItem(
-                "Em aberto" if status == "ABERTO" else "Fechado"
-            )
-            self.tabela_caixa.setItem(linha, 3, item_status)
+            if diferenca is None:
+                item_dif = QTableWidgetItem("—")
+            elif abs(diferenca) < 0.01:
+                item_dif = QTableWidgetItem("R$ 0,00")
+                item_dif.setForeground(QColor(tokens.SECUNDARIA_HOVER))
+            else:
+                sinal = "+ " if diferenca > 0 else "− "
+                item_dif = QTableWidgetItem(sinal + formatar_moeda(abs(diferenca)))
+                item_dif.setForeground(QColor(tokens.PRIMARIA if diferenca > 0 else tokens.ERRO))
+            self.tabela_caixa.setItem(linha, 5, item_dif)
+
+            if aberto:
+                texto_sit, cor_sit = "● Em aberto", tokens.ALERTA
+            elif diferenca is None or abs(diferenca) < 0.01:
+                texto_sit, cor_sit = "● Conferido", tokens.SECUNDARIA_HOVER
+            else:
+                texto_sit = "● Sobra" if diferenca > 0 else "● Falta"
+                cor_sit = tokens.PRIMARIA if diferenca > 0 else tokens.ERRO
+            item_sit = QTableWidgetItem(texto_sit)
+            item_sit.setForeground(QColor(cor_sit))
+            self.tabela_caixa.setItem(linha, 6, item_sit)
+
+        self.card_caixas_total.definir_valor(str(len(self.caixas)))
+        abertos = sum(1 for c in self.caixas if c.get("status") == "ABERTO")
+        self.card_caixas_total.definir_legenda(f"{abertos} em aberto agora")
+        self.card_caixas_diferenca.definir_valor(str(fechados_com_diferenca))
+        self.card_caixas_diferenca.definir_legenda("sobra ou falta na conferência")
+        sinal = "+ " if diferenca_total > 0.009 else ("− " if diferenca_total < -0.009 else "")
+        self.card_diferenca_total.definir_valor(sinal + formatar_moeda(abs(diferenca_total)))
+        self.card_diferenca_total.definir_legenda("contado − esperado, somando tudo")
 
         self.tabela_caixa.setCurrentCell(-1, -1)
         self.tabela_caixa.clearSelection()
@@ -1523,7 +1652,7 @@ class Relatorios(QWidget):
                 linha, 2, QTableWidgetItem(formatar_moeda(item["lucro"]))
             )
             self.tabela_margem_categoria.setItem(
-                linha, 3, QTableWidgetItem(f"{float(item['margem_pct']):.1f}%")
+                linha, 3, QTableWidgetItem(f"{float(item['margem_pct']):.1f}%".replace(".", ","))
             )
 
         # estoque por categoria
@@ -1869,7 +1998,7 @@ class Relatorios(QWidget):
             )
             self.tabela_abc.setItem(
                 linha, 3,
-                QTableWidgetItem(f"{item['percentual_acumulado']:.1f}%"),
+                QTableWidgetItem(f"{item['percentual_acumulado']:.1f}%".replace(".", ",")),
             )
 
             item_classe = QTableWidgetItem(item["classe"])
@@ -1955,7 +2084,10 @@ class Relatorios(QWidget):
 
     def _estilizar_tabela(self, tabela):
 
-        tabela.verticalHeader().setDefaultSectionSize(48)
+        tabela.setItemDelegate(_AlinhaNumeros(tabela))
+        tabela.horizontalHeader().setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        tabela.horizontalHeader().setHighlightSections(False)
+        tabela.verticalHeader().setDefaultSectionSize(44)
         tabela.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch
         )
@@ -1972,25 +2104,29 @@ class Relatorios(QWidget):
         tabela.setShowGrid(False)
         tabela.horizontalHeader().setStretchLastSection(True)
 
+        tabela.setAlternatingRowColors(False)
         tabela.setStyleSheet(f"""
             QTableWidget {{
-                border: 1px solid {tokens.BORDA};
+                border: 1.5px solid {tokens.BORDA};
                 border-radius: {tokens.RADIUS_MD}px;
                 color: {tokens.TEXTO};
                 background: {tokens.CARD};
-                alternate-background-color: {tokens.FUNDO};
-                font-size: {tokens.TAMANHO_BASE}px;
+                font-size: {tokens.TAMANHO_MD}px;
             }}
+            QTableWidget::item {{
+                padding: 0 12px; border-bottom: 1px solid {tokens.BORDA};
+            }}
+            QTableWidget::item:hover {{ background: {tokens.FUNDO}; }}
             QTableWidget::item:selected {{
-                background: {tokens.PRIMARIA};
-                color: white;
+                background: {tokens.PRIMARIA_CLARA};
+                color: {tokens.PRIMARIA};
             }}
             QHeaderView::section {{
                 background: {tokens.FUNDO};
                 color: {tokens.TEXTO_SECUNDARIO};
-                font-weight: 700;
+                font-weight: 800;
                 font-size: {tokens.TAMANHO_XS}px;
-                padding: 8px;
+                padding: 8px 12px;
                 border: none;
                 border-bottom: 1px solid {tokens.BORDA};
             }}

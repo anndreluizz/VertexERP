@@ -2,23 +2,25 @@ import base64
 
 from utils.maiusculas import forcar_maiusculas
 from PySide6.QtCore import Qt, QDate, QBuffer, QIODevice
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
-    QDialog,
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
     QDateEdit,
     QCheckBox,
-    QFrame,
-    QScrollArea,
+    QPushButton,
     QWidget,
     QFileDialog,
     QMessageBox,
 )
 
 from design import tokens
-from design.widgets import CampoTexto, BotaoPrimario, BotaoSecundario
+from design.icons import icone
+from design.widgets import (
+    BotaoPrimario, CampoTexto, DialogoPadrao, campo_rotulado, grade_formulario,
+    titulo_secao,
+)
 from services.cliente_service import (
     cadastrar_cliente,
     atualizar_cliente,
@@ -44,123 +46,84 @@ def _parse_valor_opcional(texto):
         return None
 
 
-class CadastroClienteDialog(QDialog):
+_TAMANHO_FOTO = 96
+
+
+def _foto_redonda(pixmap, lado=_TAMANHO_FOTO):
+    """Foto cortada em círculo (antes era só escalada num quadrado -- o
+    border-radius do QLabel não recorta o pixmap)."""
+
+    pixmap = pixmap.scaled(lado, lado, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+    resultado = QPixmap(lado, lado)
+    resultado.fill(Qt.transparent)
+    pintor = QPainter(resultado)
+    pintor.setRenderHint(QPainter.Antialiasing)
+    caminho = QPainterPath()
+    caminho.addEllipse(0, 0, lado, lado)
+    pintor.setClipPath(caminho)
+    pintor.drawPixmap((lado - pixmap.width()) // 2, (lado - pixmap.height()) // 2, pixmap)
+    pintor.end()
+    return resultado
+
+
+class CadastroClienteDialog(DialogoPadrao):
+    """Novo cliente e Editar cliente usam a mesma tela: formulário em
+    duas colunas agrupado em Dados pessoais e contato / Endereço /
+    Fiado, com a foto ao lado do nome."""
 
     def __init__(self, cliente=None, parent=None):
 
-        super().__init__(parent)
+        editando = cliente is not None
+
+        super().__init__(
+            "Editar Cliente" if editando else "Novo Cliente",
+            "Atualize os dados do cliente" if editando
+            else "Cadastre o cliente pra liberar o fiado dele",
+            "user",
+            largura=DialogoPadrao.GRANDE,
+            parent=parent,
+        )
 
         self.cliente = cliente
         self.cliente_salvo = None
         self.foto_bytes = None
-
-        editando = cliente is not None
-
-        self.setWindowTitle("Editar Cliente" if editando else "Novo Cliente")
-        self.setFixedWidth(460)
-        self.resize(460, 740)
-        self.setStyleSheet(f"background:{tokens.FUNDO};")
-
-        raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(0, 0, 0, 0)
-        raiz.setSpacing(0)
+        self._tem_foto_salva = False
 
         # ======================
-        # CABEÇALHO
+        # FOTO + DADOS PESSOAIS
         # ======================
 
-        cabecalho = QFrame()
-        cabecalho.setStyleSheet(f"background:{tokens.SIDEBAR};")
+        topo = QHBoxLayout()
+        topo.setSpacing(24)
 
-        cab_layout = QVBoxLayout(cabecalho)
-        cab_layout.setContentsMargins(24, 20, 24, 20)
-        cab_layout.setSpacing(2)
-
-        titulo = QLabel("EDITAR CLIENTE" if editando else "+ NOVO CLIENTE")
-        titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_CLARO};
-            font-size:{tokens.TAMANHO_LG}px; font-weight:800;
-        """)
-
-        subtitulo = QLabel(
-            "Atualize os dados do cliente"
-            if editando
-            else "Cadastre o cliente pra liberar o fiado dele"
-        )
-        subtitulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SIDEBAR_APAGADO};
-            font-size:{tokens.TAMANHO_SM}px;
-        """)
-
-        cab_layout.addWidget(titulo)
-        cab_layout.addWidget(subtitulo)
-
-        raiz.addWidget(cabecalho)
-
-        # ======================
-        # CORPO (rolável)
-        # ======================
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
-
-        corpo_widget = QWidget()
-        corpo_widget.setStyleSheet("background:transparent;")
-
-        corpo = QVBoxLayout(corpo_widget)
-        corpo.setContentsMargins(24, 20, 24, 20)
-        corpo.setSpacing(14)
-
-        # ---- foto ----
-
-        linha_foto = QHBoxLayout()
-        linha_foto.setSpacing(14)
+        col_foto = QVBoxLayout()
+        col_foto.setSpacing(6)
+        col_foto.setAlignment(Qt.AlignTop)
 
         self.lbl_avatar = QLabel()
-        self.lbl_avatar.setFixedSize(64, 64)
+        self.lbl_avatar.setFixedSize(_TAMANHO_FOTO, _TAMANHO_FOTO)
         self.lbl_avatar.setAlignment(Qt.AlignCenter)
-        self._exibir_avatar_padrao()
 
-        bt_foto = BotaoSecundario("Alterar Foto")
+        bt_foto = QPushButton("Alterar foto")
+        bt_foto.setCursor(Qt.PointingHandCursor)
+        bt_foto.setAutoDefault(False)
+        bt_foto.setIcon(icone("edit-2", cor=tokens.PRIMARIA, tamanho=13))
+        bt_foto.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; border:none; border-radius:6px;
+                color:{tokens.PRIMARIA}; font-size:{tokens.TAMANHO_SM}px;
+                font-weight:600; padding:4px 8px;
+            }}
+            QPushButton:hover {{ background:{tokens.PRIMARIA_CLARA}; }}
+        """)
         bt_foto.clicked.connect(self.escolher_foto)
 
-        linha_foto.addWidget(self.lbl_avatar)
-        linha_foto.addWidget(bt_foto)
-        linha_foto.addStretch()
+        col_foto.addSpacing(26)
+        col_foto.addWidget(self.lbl_avatar, 0, Qt.AlignHCenter)
+        col_foto.addWidget(bt_foto, 0, Qt.AlignHCenter)
 
-        corpo.addLayout(linha_foto)
-
-        self.nome = self._campo(corpo, "NOME", "Nome completo")
-        self.whatsapp = self._campo(
-            corpo, "WHATSAPP", "(00) 00000-0000", cls=PhoneField
-        )
-        self.cpf = self._campo(
-            corpo, "CPF/CNPJ", "000.000.000-00", cls=CpfCnpjField
-        )
-        self.email = self._campo(
-            corpo, "E-MAIL", "email@exemplo.com", cls=EmailField
-        )
-        self.endereco = self._campo(corpo, "ENDEREÇO", "Rua, número, bairro")
-        self.cidade = self._campo(corpo, "CIDADE", "Cidade")
-        self.estado = self._campo(corpo, "ESTADO (UF)", "Ex.: SP")
-
-        # cadastro em MAIUSCULAS -- e-mail/CPF/telefone ficam de fora
-        forcar_maiusculas(self.nome, self.endereco, self.cidade, self.estado)
-
-        # ---- data de nascimento (opcional) ----
-
-        linha_nascimento = QHBoxLayout()
-        linha_nascimento.setSpacing(10)
-
-        col_nascimento = QVBoxLayout()
-        col_nascimento.setSpacing(4)
-
-        lbl_nascimento = QLabel("DATA DE NASCIMENTO")
-        lbl_nascimento.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
+        self.nome = CampoTexto("Nome completo")
+        self.cpf = CpfCnpjField("000.000.000-00")
 
         self.data_nascimento = QDateEdit()
         self.data_nascimento.setCalendarPopup(True)
@@ -174,11 +137,9 @@ class CadastroClienteDialog(QDialog):
                 padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
                 background: {tokens.CARD};
             }}
+            QDateEdit:focus {{ border-color: {tokens.PRIMARIA}; }}
             QDateEdit:disabled {{ background: {tokens.FUNDO}; color: {tokens.TEXTO_TERCIARIO}; }}
         """)
-
-        col_nascimento.addWidget(lbl_nascimento)
-        col_nascimento.addWidget(self.data_nascimento)
 
         self.chk_sem_nascimento = QCheckBox("Não informar")
         self.chk_sem_nascimento.setChecked(True)
@@ -186,91 +147,136 @@ class CadastroClienteDialog(QDialog):
             lambda marcado: self.data_nascimento.setEnabled(not marcado)
         )
 
-        linha_nascimento.addLayout(col_nascimento, stretch=1)
-        linha_nascimento.addWidget(self.chk_sem_nascimento, 0, Qt.AlignBottom)
+        linha_nascimento = QWidget()
+        linha_nascimento.setStyleSheet("background:transparent;")
+        layout_nascimento = QHBoxLayout(linha_nascimento)
+        layout_nascimento.setContentsMargins(0, 0, 0, 0)
+        layout_nascimento.setSpacing(10)
+        layout_nascimento.addWidget(self.data_nascimento, stretch=1)
+        layout_nascimento.addWidget(self.chk_sem_nascimento)
 
-        corpo.addLayout(linha_nascimento)
+        # contato junto dos dados pessoais, ao lado da foto -- uma seção
+        # a menos e o formulário inteiro cabe sem rolar em 1366x768
+        self.whatsapp = PhoneField("(00) 00000-0000")
+        self.email = EmailField("email@exemplo.com")
 
-        self.limite_credito = self._campo(
-            corpo, "LIMITE DE CRÉDITO NO FIADO (opcional)", "Ex.: 200,00"
+        col_pessoal = QVBoxLayout()
+        col_pessoal.setSpacing(14)
+        col_pessoal.addWidget(titulo_secao("Dados pessoais e contato"))
+        col_pessoal.addLayout(grade_formulario(
+            (campo_rotulado("Nome *", self.nome), 0, 0, 1, 2),
+            (campo_rotulado("CPF/CNPJ", self.cpf), 1, 0),
+            (campo_rotulado("Data de nascimento", linha_nascimento), 1, 1),
+            (campo_rotulado("WhatsApp", self.whatsapp), 2, 0),
+            (campo_rotulado("E-mail", self.email), 2, 1),
+        ))
+
+        topo.addLayout(col_foto)
+        topo.addLayout(col_pessoal, stretch=1)
+        self.corpo.addLayout(topo)
+
+        # ======================
+        # ENDEREÇO
+        # ======================
+
+        self.endereco = CampoTexto("Rua, número, bairro")
+        self.cidade = CampoTexto("Cidade")
+        self.estado = CampoTexto("UF")
+        self.estado.setMaxLength(2)
+
+        # uma linha só (rua larga, cidade, UF estreito) -- com duas, o
+        # bloco do Fiado ficava abaixo da dobra numa tela 1366x768
+        grade_endereco = grade_formulario(
+            (campo_rotulado("Endereço", self.endereco), 0, 0),
+            (campo_rotulado("Cidade", self.cidade), 0, 1),
+            (campo_rotulado("UF", self.estado), 0, 2),
         )
+        grade_endereco.setColumnStretch(0, 3)
+        grade_endereco.setColumnStretch(1, 2)
+        self.estado.setFixedWidth(80)
 
-        dica_limite = QLabel(
-            "Deixe em branco pra não definir limite. Ao ultrapassar, o "
-            "sistema só avisa — não bloqueia a venda."
-        )
-        dica_limite.setWordWrap(True)
-        dica_limite.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            color:{tokens.TEXTO_TERCIARIO};
-        """)
-        corpo.addWidget(dica_limite)
+        self.corpo.addWidget(titulo_secao("Endereço"))
+        self.corpo.addLayout(grade_endereco)
 
-        corpo.addStretch()
+        # cadastro em MAIUSCULAS -- e-mail/CPF/telefone ficam de fora
+        forcar_maiusculas(self.nome, self.endereco, self.cidade, self.estado)
 
-        scroll.setWidget(corpo_widget)
-        raiz.addWidget(scroll, stretch=1)
+        # ======================
+        # FIADO
+        # ======================
+
+        self.limite_credito = CampoTexto("Ex.: 200,00")
+
+        # reativar um cliente desativado só era possível direto no banco
+        # -- agora o próprio Editar tem a opção
+        self.chk_ativo = QCheckBox("Cliente ativo")
+        self.chk_ativo.setChecked(True)
+
+        itens_fiado = [(campo_rotulado(
+            "Limite de crédito (R$)", self.limite_credito,
+            "Em branco = sem limite. Passando do limite o sistema só "
+            "avisa, não bloqueia a venda.",
+        ), 0, 0)]
+
+        if editando:
+            itens_fiado.append((campo_rotulado(
+                "Situação", self.chk_ativo,
+                "Desmarque pra tirar o cliente das listas sem apagar o histórico.",
+            ), 0, 1, Qt.AlignTop))
+
+        self.corpo.addWidget(titulo_secao("Fiado"))
+        self.corpo.addLayout(grade_formulario(*itens_fiado))
+
+        self.corpo.addStretch()
 
         # ======================
         # RODAPÉ
         # ======================
 
-        rodape = QFrame()
-        rodape.setStyleSheet(f"""
-            background:{tokens.CARD}; border-top:1px solid {tokens.BORDA};
-        """)
-
-        rodape_layout = QHBoxLayout(rodape)
-        rodape_layout.setContentsMargins(24, 14, 24, 14)
-        rodape_layout.setSpacing(10)
-
-        self.bt_cancelar = BotaoSecundario("Cancelar")
-        self.bt_cancelar.clicked.connect(self.reject)
-
         self.bt_salvar = BotaoPrimario(
-            "Salvar Alterações" if editando else "Cadastrar Cliente"
+            "Salvar Alterações" if editando else "Cadastrar Cliente",
+            icone_nome="check",
         )
+        self.bt_salvar.setAutoDefault(False)
         self.bt_salvar.clicked.connect(self.salvar)
+        self.bt_cancelar = self.definir_botoes(self.bt_salvar)
 
-        rodape_layout.addWidget(self.bt_cancelar)
-        rodape_layout.addWidget(self.bt_salvar)
-
-        raiz.addWidget(rodape)
+        self._exibir_avatar_padrao()
 
         if editando:
             self._preencher(cliente)
 
+        # iniciais acompanham o nome digitado enquanto não houver foto
+        self.nome.textChanged.connect(self._ao_mudar_nome)
+
+        self.ajustar_altura()
         self.nome.setFocus()
 
     # ======================================
 
-    def _campo(self, layout, rotulo, placeholder, cls=CampoTexto):
-
-        lbl = QLabel(rotulo)
-        lbl.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
-
-        campo = cls(placeholder)
-        campo.setMinimumHeight(44)
-
-        layout.addWidget(lbl)
-        layout.addWidget(campo)
-
-        return campo
+    def _ao_mudar_nome(self, _texto):
+        if self.foto_bytes is None and not self._tem_foto_salva:
+            self._exibir_avatar_padrao()
 
     def _exibir_avatar_padrao(self):
 
-        nome = (self.cliente or {}).get("nome") if self.cliente else ""
-        iniciais = "".join(p[0] for p in (nome or "?").split()[:2]).upper() or "?"
+        partes = (self.nome.text() or "").split()
+        iniciais = (
+            (partes[0][0] + (partes[-1][0] if len(partes) > 1 else "")).upper()
+            if partes else "?"
+        )
 
         self.lbl_avatar.setPixmap(QPixmap())
         self.lbl_avatar.setText(iniciais)
         self.lbl_avatar.setStyleSheet(f"""
             background:{tokens.PRIMARIA_CLARA}; color:{tokens.PRIMARIA};
-            border-radius:32px; font-size:20px; font-weight:800;
+            border-radius:{_TAMANHO_FOTO // 2}px; font-size:30px; font-weight:800;
         """)
+
+    def _exibir_foto(self, pixmap):
+        self.lbl_avatar.setText("")
+        self.lbl_avatar.setStyleSheet("background:transparent;")
+        self.lbl_avatar.setPixmap(_foto_redonda(pixmap))
 
     def _comprimir_imagem(self, caminho, lado_maximo=640, qualidade=82):
         """Mesmo motivo de cadastro_produto.py::_comprimir_imagem --
@@ -316,13 +322,7 @@ class CadastroClienteDialog(QDialog):
 
         pixmap = QPixmap()
         pixmap.loadFromData(self.foto_bytes)
-
-        self.lbl_avatar.setStyleSheet("background:transparent; border-radius:32px;")
-        self.lbl_avatar.setPixmap(
-            pixmap.scaled(
-                64, 64, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
-            )
-        )
+        self._exibir_foto(pixmap)
 
     def _preencher(self, cliente):
 
@@ -333,6 +333,8 @@ class CadastroClienteDialog(QDialog):
         self.endereco.setText(cliente.get("endereco") or "")
         self.cidade.setText(cliente.get("cidade") or "")
         self.estado.setText(cliente.get("estado") or "")
+        self.chk_ativo.setChecked(cliente.get("ativo", True))
+        self._exibir_avatar_padrao()
 
         if cliente.get("limite_credito") is not None:
             self.limite_credito.setText(
@@ -354,14 +356,8 @@ class CadastroClienteDialog(QDialog):
             if foto_bytes:
                 pixmap = QPixmap()
                 pixmap.loadFromData(foto_bytes)
-                self.lbl_avatar.setStyleSheet(
-                    "background:transparent; border-radius:32px;"
-                )
-                self.lbl_avatar.setPixmap(
-                    pixmap.scaled(
-                        64, 64, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
-                    )
-                )
+                self._tem_foto_salva = True
+                self._exibir_foto(pixmap)
 
     # ======================================
 
@@ -371,12 +367,14 @@ class CadastroClienteDialog(QDialog):
 
         if not nome:
             QMessageBox.warning(self, "Atenção", "Informe o nome do cliente.")
+            self.nome.setFocus()
             return
 
         if not email_valido(self.email.text()):
             QMessageBox.warning(
                 self, "Atenção", "Informe um e-mail válido (ex.: nome@exemplo.com)."
             )
+            self.email.setFocus()
             return
 
         dados = {
@@ -400,7 +398,7 @@ class CadastroClienteDialog(QDialog):
             dados["foto_base64"] = base64.b64encode(self.foto_bytes).decode("ascii")
 
         if self.cliente:
-            dados["ativo"] = self.cliente.get("ativo", True)
+            dados["ativo"] = self.chk_ativo.isChecked()
             func, args = atualizar_cliente, (self.cliente["id"], dados)
         else:
             func, args = cadastrar_cliente, (dados,)

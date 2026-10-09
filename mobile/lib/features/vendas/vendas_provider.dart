@@ -37,6 +37,10 @@ extension PeriodoVendasRotulo on PeriodoVendas {
   }
 }
 
+/// maximo que o backend aceita (padrao 100 so cobria uns 3 dias de loja
+/// -- "7 dias" e "Mes" saiam incompletos)
+const _limiteVendas = 500;
+
 final periodoVendasProvider = StateProvider<PeriodoVendas>(
   (ref) => PeriodoVendas.hoje,
 );
@@ -46,7 +50,7 @@ final vendasProvider = FutureProvider.autoDispose<List<Venda>>((ref) async {
   final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
   final resposta = await api.dio.get(
     '/vendas/',
-    queryParameters: lojaId != null ? {'loja_id': lojaId} : null,
+    queryParameters: {'limit': _limiteVendas, 'loja_id': ?lojaId},
   );
 
   final vendas = (resposta.data as List<dynamic>)
@@ -106,53 +110,50 @@ class AtividadeRecebimento extends ItemAtividadeVendas {
 /// numa lista só, mais recente primeiro -- os mesmos chips de período
 /// da tela de Vendas já funcionam em cima disso sem mudança nenhuma,
 /// já que cada item sabe devolver sua própria data.
-final atividadeVendasProvider = FutureProvider.autoDispose<
-  List<ItemAtividadeVendas>
->((ref) async {
-  final api = ref.watch(apiClientProvider);
-  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
-  final filtroLoja = lojaId != null ? {'loja_id': lojaId} : null;
+final atividadeVendasProvider =
+    FutureProvider.autoDispose<List<ItemAtividadeVendas>>((ref) async {
+      final api = ref.watch(apiClientProvider);
+      final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+      final filtroLoja = lojaId != null ? {'loja_id': lojaId} : null;
 
-  final respostaVendas = await api.dio.get(
-    '/vendas/',
-    queryParameters: filtroLoja,
-  );
-  final vendas = (respostaVendas.data as List<dynamic>)
-      .map((json) => Venda.fromJson(json as Map<String, dynamic>))
-      .toList();
+      final respostaVendas = await api.dio.get(
+        '/vendas/',
+        queryParameters: {'limit': _limiteVendas, ...?filtroLoja},
+      );
+      final vendas = (respostaVendas.data as List<dynamic>)
+          .map((json) => Venda.fromJson(json as Map<String, dynamic>))
+          .toList();
 
-  final respostaMovimentos = await api.dio.get('/fiado/movimentos');
-  final recebimentos = (respostaMovimentos.data as List<dynamic>)
-      .map((json) => MovimentoFiado.fromJson(json as Map<String, dynamic>))
-      .where((m) => m.tipo == 'PAGAMENTO')
-      .toList();
+      final respostaMovimentos = await api.dio.get('/fiado/movimentos');
+      final recebimentos = (respostaMovimentos.data as List<dynamic>)
+          .map((json) => MovimentoFiado.fromJson(json as Map<String, dynamic>))
+          .where((m) => m.tipo == 'PAGAMENTO')
+          .toList();
 
-  // so usado pra mostrar o nome do cliente no recebimento de fiado --
-  // se falhar (rede, permissao, etc.), cai pro fallback "Cliente" logo
-  // abaixo em vez de derrubar a lista de vendas inteira por causa de
-  // uma busca secundaria (mesmo criterio de operadoresLookupProvider,
-  // em caixas_provider.dart).
-  Map<int, String> nomesClientes = {};
-  try {
-    final respostaClientes = await api.dio.get('/clientes/');
-    nomesClientes = {
-      for (final json in respostaClientes.data as List<dynamic>)
-        (json as Map<String, dynamic>)['id'] as int: json['nome'] as String,
-    };
-  } catch (_) {
-    // mantem nomesClientes vazio -- ver fallback "Cliente" abaixo
-  }
+      // so usado pra mostrar o nome do cliente no recebimento de fiado --
+      // se falhar (rede, permissao, etc.), cai pro fallback "Cliente" logo
+      // abaixo em vez de derrubar a lista de vendas inteira por causa de
+      // uma busca secundaria (mesmo criterio de operadoresLookupProvider,
+      // em caixas_provider.dart).
+      Map<int, String> nomesClientes = {};
+      try {
+        final respostaClientes = await api.dio.get('/clientes/');
+        nomesClientes = {
+          for (final json in respostaClientes.data as List<dynamic>)
+            (json as Map<String, dynamic>)['id'] as int: json['nome'] as String,
+        };
+      } catch (_) {
+        // mantem nomesClientes vazio -- ver fallback "Cliente" abaixo
+      }
 
-  final itens = <ItemAtividadeVendas>[
-    ...vendas.map(AtividadeVenda.new),
-    ...recebimentos.map(
-      (m) => AtividadeRecebimento(
-        m,
-        nomesClientes[m.clienteId] ?? 'Cliente',
-      ),
-    ),
-  ];
+      final itens = <ItemAtividadeVendas>[
+        ...vendas.map(AtividadeVenda.new),
+        ...recebimentos.map(
+          (m) =>
+              AtividadeRecebimento(m, nomesClientes[m.clienteId] ?? 'Cliente'),
+        ),
+      ];
 
-  itens.sort((a, b) => b.data.compareTo(a.data));
-  return itens;
-});
+      itens.sort((a, b) => b.data.compareTo(a.data));
+      return itens;
+    });

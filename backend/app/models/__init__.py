@@ -36,3 +36,4 @@ from app.models.device_token import DeviceToken
 from app.models.refresh_token import RefreshToken
 from app.models.solicitacao_aprovacao import SolicitacaoAprovacao
 from app.models.notificacao import Notificacao
+from app.models.devolucao import Devolucao, ItemDevolucao

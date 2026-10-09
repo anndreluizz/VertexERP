@@ -42,3 +42,7 @@ class ItemVenda(Base):
     )
 
     produto = relationship("Produto", back_populates="itens_venda")
+
+    @property
+    def produto_nome(self) -> str | None:
+        return self.produto.nome if self.produto else None

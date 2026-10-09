@@ -1,5 +1,5 @@
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter
+from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -12,7 +12,9 @@ from PySide6.QtWidgets import (
 )
 
 from design import tokens
+from design.fonts import fonte
 from design.icons import icone, icone_pixmap
+from design.paths import caminho_asset
 from utils.acessibilidade import movimento_reduzido
 from design.widgets import Avatar
 
@@ -37,7 +39,7 @@ class ItemMenuLateral(QPushButton):
         self.setCheckable(True)
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedHeight(46)
-        self.setFont(QFont(tokens.FONTE_FAMILIA_PADRAO, tokens.TAMANHO_MD))
+        self.setFont(fonte(tokens.TAMANHO_BASE))
 
         self._opacidade_fundo = 0.0
         self._anim = QPropertyAnimation(self, b"opacidadeFundo", self)
@@ -54,14 +56,16 @@ class ItemMenuLateral(QPushButton):
 
     opacidadeFundo = property(getOpacidadeFundo, setOpacidadeFundo)
 
+    # o hover anima sempre, inclusive com o item ativo: o paintEvent já
+    # ignora _opacidade_fundo quando isChecked(). Antes, sair com o mouse
+    # de um item recém-clicado (já ativo) não zerava o hover, e quando
+    # outro item virava o ativo este ficava com o fundo de hover aceso.
     def enterEvent(self, event):
-        if not self.isChecked():
-            self._animar(1.0)
+        self._animar(1.0)
         super().enterEvent(event)
 
     def leaveEvent(self, event):
-        if not self.isChecked():
-            self._animar(0.0)
+        self._animar(0.0)
         super().leaveEvent(event)
 
     def _animar(self, destino):
@@ -157,14 +161,18 @@ class Sidebar(QFrame):
         cab_layout.setContentsMargins(20, 16, 16, 16)
         cab_layout.setSpacing(12)
 
+        # a logo de verdade (o mesmo icone.ico do .exe e da barra de
+        # tarefas) -- antes era um triângulo genérico num quadrado azul
         self.marca = QLabel()
-        self.marca.setFixedSize(40, 40)
+        self.marca.setFixedSize(42, 42)
         self.marca.setAlignment(Qt.AlignCenter)
-        self.marca.setStyleSheet(f"""
-            background: {tokens.PRIMARIA};
-            border-radius: {tokens.RADIUS_SM}px;
-        """)
-        self.marca.setPixmap(icone_pixmap("vertex-mark", cor="#FFFFFF", tamanho=20))
+        self.marca.setStyleSheet("background:transparent;")
+        # na escala da tela (125%/150%), senão a logo fica borrada
+        tela = QGuiApplication.primaryScreen()
+        escala = tela.devicePixelRatio() if tela else 1.0
+        self.marca.setPixmap(
+            QIcon(caminho_asset("icone.ico")).pixmap(QSize(42, 42), escala)
+        )
 
         col_nome = QVBoxLayout()
         col_nome.setSpacing(0)

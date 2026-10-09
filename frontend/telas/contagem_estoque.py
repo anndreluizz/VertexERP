@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -24,6 +25,8 @@ from services.contagem_estoque_service import (
 from services.worker import rodar_em_thread, em_paralelo
 from widgets.tables.standard_table import StandardTable
 from design import tokens
+from design.icons import icone_pixmap
+from design.widgets import BotaoPrimario, Card
 
 
 def _buscar_dados_contagem():
@@ -49,13 +52,6 @@ def _estilo_campo():
             border: 1px solid {tokens.PRIMARIA};
         }}
     """
-
-
-def _estilo_rotulo():
-    return (
-        f"background:transparent; color:{tokens.TEXTO_SECUNDARIO}; "
-        f"font-size:{tokens.TAMANHO_XS}px; font-weight:700;"
-    )
 
 
 def _estilo_botao(cor, cor_hover):
@@ -89,62 +85,87 @@ class ContagemEstoque(QWidget):
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setContentsMargins(28, 20, 28, 24)
         layout.setSpacing(16)
+
+        cabecalho = QHBoxLayout()
+        cabecalho.setSpacing(12)
+
+        icone_titulo = QLabel()
+        icone_titulo.setFixedSize(36, 36)
+        icone_titulo.setAlignment(Qt.AlignCenter)
+        icone_titulo.setStyleSheet(
+            f"background:{tokens.PRIMARIA_CLARA}; border-radius:{tokens.RADIUS_SM}px;"
+        )
+        icone_titulo.setPixmap(icone_pixmap("check", cor=tokens.PRIMARIA, tamanho=18))
+
+        col_titulo = QVBoxLayout()
+        col_titulo.setSpacing(0)
 
         titulo = QLabel("Contagem de Inventário")
         titulo.setStyleSheet(
-            f"background:transparent; font-size:{tokens.TAMANHO_XL}px; "
+            f"background:transparent; font-size:{tokens.TAMANHO_LG}px; "
             f"font-weight:800; color:{tokens.TEXTO};"
         )
-        layout.addWidget(titulo)
 
         subtitulo = QLabel(
-            "Confere o estoque físico contra o que o sistema registra -- "
-            "ao finalizar, as diferenças viram ajustes automáticos de "
-            "estoque, com motivo apontando pra essa contagem."
+            "Confira o estoque físico com o que está no sistema. Ao "
+            "finalizar, as diferenças viram ajustes de estoque automáticos."
         )
         subtitulo.setWordWrap(True)
         subtitulo.setStyleSheet(
             f"background:transparent; font-size:{tokens.TAMANHO_SM}px; "
             f"color:{tokens.TEXTO_TERCIARIO};"
         )
-        layout.addWidget(subtitulo)
+
+        col_titulo.addWidget(titulo)
+        col_titulo.addWidget(subtitulo)
+
+        cabecalho.addWidget(icone_titulo, 0, Qt.AlignTop)
+        cabecalho.addLayout(col_titulo, stretch=1)
+        layout.addLayout(cabecalho)
 
         # ==========================================
         # PAINEL: ABRIR CONTAGEM (sem contagem aberta)
         # ==========================================
-        self.painel_abrir = QWidget()
-        abrir_layout = QHBoxLayout(self.painel_abrir)
-        abrir_layout.setContentsMargins(0, 0, 0, 0)
+        self.painel_abrir = Card()
+        abrir_externo = QVBoxLayout(self.painel_abrir)
+        abrir_externo.setContentsMargins(20, 18, 20, 20)
+        abrir_externo.setSpacing(4)
+
+        lbl_nova = QLabel("Nova contagem")
+        lbl_nova.setStyleSheet(
+            f"background:transparent; font-size:{tokens.TAMANHO_MD}px; "
+            f"font-weight:700; color:{tokens.TEXTO};"
+        )
+        abrir_externo.addWidget(lbl_nova)
+
+        lbl_obs = QLabel(
+            "Dê um nome pra identificar depois no histórico (opcional)."
+        )
+        lbl_obs.setStyleSheet(
+            f"background:transparent; font-size:{tokens.TAMANHO_SM}px; "
+            f"color:{tokens.TEXTO_SECUNDARIO};"
+        )
+        abrir_externo.addWidget(lbl_obs)
+        abrir_externo.addSpacing(10)
+
+        abrir_layout = QHBoxLayout()
         abrir_layout.setSpacing(12)
 
-        col_obs = QVBoxLayout()
-        col_obs.setSpacing(4)
-        lbl_obs = QLabel("OBSERVAÇÃO (opcional)")
-        lbl_obs.setStyleSheet(_estilo_rotulo())
-        col_obs.addWidget(lbl_obs)
-
         self.observacao = QLineEdit()
-        self.observacao.setPlaceholderText("Ex.: contagem mensal de setembro...")
-        self.observacao.setMinimumHeight(38)
+        self.observacao.setPlaceholderText("Ex.: contagem mensal de outubro")
+        self.observacao.setMinimumHeight(42)
         self.observacao.setStyleSheet(_estilo_campo())
-        col_obs.addWidget(self.observacao)
-        abrir_layout.addLayout(col_obs, stretch=1)
+        self.observacao.returnPressed.connect(self.abrir)
+        abrir_layout.addWidget(self.observacao, stretch=1)
 
-        col_botao_abrir = QVBoxLayout()
-        col_botao_abrir.setSpacing(4)
-        col_botao_abrir.addWidget(QLabel(""))  # alinha o botao com o campo
-
-        self.bt_abrir = QPushButton("Iniciar Contagem")
-        self.bt_abrir.setMinimumHeight(38)
-        self.bt_abrir.setCursor(Qt.PointingHandCursor)
-        self.bt_abrir.setStyleSheet(
-            _estilo_botao(tokens.SECUNDARIA, tokens.SECUNDARIA_HOVER)
-        )
+        self.bt_abrir = BotaoPrimario("Iniciar contagem", icone_nome="check")
+        self.bt_abrir.setMinimumHeight(42)
         self.bt_abrir.clicked.connect(self.abrir)
-        col_botao_abrir.addWidget(self.bt_abrir)
-        abrir_layout.addLayout(col_botao_abrir)
+        abrir_layout.addWidget(self.bt_abrir)
+
+        abrir_externo.addLayout(abrir_layout)
 
         layout.addWidget(self.painel_abrir)
 
@@ -208,19 +229,39 @@ class ContagemEstoque(QWidget):
         # ==========================================
         # HISTÓRICO
         # ==========================================
-        lbl_historico = QLabel("HISTÓRICO DE CONTAGENS")
+        lbl_historico = QLabel("Histórico de contagens")
         lbl_historico.setStyleSheet(
-            f"background:transparent; color:{tokens.TEXTO_SECUNDARIO}; "
-            f"font-size:{tokens.TAMANHO_XS}px; font-weight:700; "
-            f"margin-top:8px;"
+            f"background:transparent; color:{tokens.TEXTO}; "
+            f"font-size:{tokens.TAMANHO_MD}px; font-weight:700; "
+            f"margin-top:6px;"
         )
         layout.addWidget(lbl_historico)
 
         self.tabela_historico = StandardTable(
-            ["Data de abertura", "Status", "Encerrada em", "Observação"]
+            ["Aberta em", "Situação", "Encerrada em", "Observação"]
         )
-        self.tabela_historico.setMaximumHeight(180)
-        layout.addWidget(self.tabela_historico)
+        layout.addWidget(self.tabela_historico, stretch=1)
+
+        self.lbl_historico_vazio = QLabel(
+            "Nenhuma contagem feita ainda. A primeira aparece aqui quando "
+            "for finalizada ou cancelada."
+        )
+        self.lbl_historico_vazio.setAlignment(Qt.AlignCenter)
+        self.lbl_historico_vazio.setStyleSheet(
+            f"background:{tokens.CARD}; border:1px dashed {tokens.BORDA}; "
+            f"border-radius:{tokens.RADIUS_MD}px; padding:28px; "
+            f"color:{tokens.TEXTO_TERCIARIO}; font-size:{tokens.TAMANHO_SM}px;"
+        )
+        self.lbl_historico_vazio.setVisible(False)
+        layout.addWidget(self.lbl_historico_vazio)
+
+        # quem fica com a altura que sobra: o painel da contagem aberta
+        # (stretch dele) ou a tabela do histórico; quando nenhum dos dois
+        # está na tela, este enchimento -- senão o Qt espalhava a sobra
+        # como vãos enormes entre os blocos
+        self._enchimento = QWidget()
+        self._enchimento.setStyleSheet("background:transparent;")
+        layout.addWidget(self._enchimento, stretch=1)
 
         self.carregar()
 
@@ -254,7 +295,10 @@ class ContagemEstoque(QWidget):
             self.itens = []
             self.painel_abrir.setVisible(True)
             self.painel_ativo.setVisible(False)
+            # sem contagem aberta o histórico é o conteúdo principal
+            self.tabela_historico.setMaximumHeight(16777215)
         else:
+            self.tabela_historico.setMaximumHeight(200)
             self.itens = self.contagem["itens"]
             self.painel_abrir.setVisible(False)
             self.painel_ativo.setVisible(True)
@@ -288,7 +332,7 @@ class ContagemEstoque(QWidget):
         )
 
         self.lbl_info_contagem.setText(
-            f"Contagem #{self.contagem['id']} aberta em {criado_em} -- "
+            f"Contagem #{self.contagem['id']} aberta em {criado_em} · "
             f"{contados}/{len(self.itens)} produtos contados, "
             f"{divergentes} com diferença."
         )
@@ -312,10 +356,23 @@ class ContagemEstoque(QWidget):
                 linha, 2,
                 QTableWidgetItem("" if contada is None else str(contada)),
             )
-            self.tabela_itens.setItem(linha, 3, QTableWidgetItem(diferenca))
+            celula_diferenca = QTableWidgetItem(diferenca)
+            # falta (negativo) em vermelho, sobra em verde -- o que o
+            # dono precisa ver antes de finalizar
+            if contada is not None and contada != item["quantidade_sistema"]:
+                celula_diferenca.setForeground(QColor(
+                    tokens.ERRO if contada < item["quantidade_sistema"] else tokens.SUCESSO
+                ))
+                fonte_dif = celula_diferenca.font()
+                fonte_dif.setBold(True)
+                celula_diferenca.setFont(fonte_dif)
+            self.tabela_itens.setItem(linha, 3, celula_diferenca)
 
     def _preencher_historico(self, historico):
         self.tabela_historico.setRowCount(len(historico))
+        self.tabela_historico.setVisible(bool(historico))
+        self.lbl_historico_vazio.setVisible(not historico)
+        self._enchimento.setVisible(not historico and self.contagem is None)
 
         for linha, c in enumerate(historico):
             criado_em = datetime.fromisoformat(c["criado_em"]).strftime(
@@ -326,12 +383,12 @@ class ContagemEstoque(QWidget):
                     "%d/%m/%Y %H:%M"
                 )
                 if c.get("finalizado_em")
-                else "--"
+                else "—"
             )
 
             self.tabela_historico.setItem(linha, 0, QTableWidgetItem(criado_em))
             self.tabela_historico.setItem(
-                linha, 1, QTableWidgetItem(c["status"])
+                linha, 1, QTableWidgetItem(str(c["status"]).capitalize())
             )
             self.tabela_historico.setItem(
                 linha, 2, QTableWidgetItem(encerrado_em)

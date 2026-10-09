@@ -1,14 +1,14 @@
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QDialog,
     QVBoxLayout,
     QHBoxLayout,
+    QGridLayout,
     QLabel,
-    QLineEdit,
     QCheckBox,
+    QPushButton,
     QScrollArea,
     QWidget,
-    QTableWidget,
     QTableWidgetItem,
     QHeaderView,
     QMessageBox,
@@ -24,17 +24,58 @@ from services.perfil_service import (
 from services.worker import rodar_em_thread
 
 from design import tokens
-from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, BotaoSucesso, CampoTexto
+from design.widgets import (
+    BotaoPerigo, BotaoSecundario, BotaoSucesso, CampoTexto, DialogoPadrao,
+    campo_rotulado, tabela_lista, titulo_secao,
+)
 
 
-class GerenciarPerfisDialog(QDialog):
+def _estilo_permissao():
+    """Cada permissão é uma linha inteira clicável que fica destacada
+    quando marcada -- o estado aparece de longe, não só no quadradinho."""
+    return f"""
+        QCheckBox {{
+            background:{tokens.CARD}; color:{tokens.TEXTO};
+            border:1.5px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
+            padding:9px 10px; font-size:{tokens.TAMANHO_BASE}px; spacing:10px;
+        }}
+        QCheckBox:hover {{ border-color:{tokens.BORDA_FORTE}; }}
+        QCheckBox:checked {{
+            background:{tokens.PRIMARIA_CLARA}; color:{tokens.PRIMARIA};
+            border-color:{tokens.PRIMARIA}; font-weight:700;
+        }}
+        QCheckBox::indicator {{
+            width:16px; height:16px; border-radius:4px;
+            border:1.5px solid {tokens.BORDA_FORTE}; background:{tokens.CARD};
+        }}
+        QCheckBox::indicator:checked {{
+            border:1.5px solid {tokens.PRIMARIA}; background:{tokens.PRIMARIA};
+        }}
+    """
+
+
+def _estilo_link():
+    return f"""
+        QPushButton {{
+            background:transparent; border:none; color:{tokens.PRIMARIA};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:700; padding:2px 4px;
+        }}
+        QPushButton:hover {{ text-decoration:underline; }}
+    """
+
+
+class GerenciarPerfisDialog(DialogoPadrao):
     """Perfil = nome + subconjunto do catalogo fixo de permissoes (ver
     app/auth/permissoes.py no backend) -- usuario comum com um perfil
     atribuido ganha so' essas acoes, sem virar admin de verdade (ver
     GerenciarUsuariosDialog pra atribuir um perfil a um usuario)."""
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(
+            "Perfis de Acesso", "Escolha o que cada tipo de funcionário pode fazer",
+            "lock", largura=DialogoPadrao.GRANDE, parent=parent,
+        )
+        self.resize(DialogoPadrao.GRANDE, 700)
 
         self.perfis = []
         self.permissoes_disponiveis = {}
@@ -42,95 +83,113 @@ class GerenciarPerfisDialog(QDialog):
         self.perfil_selecionado_id = None
         self._carregando = False
 
-        self.setWindowTitle("Gerenciar Perfis")
-        self.resize(620, 600)
-        self.setStyleSheet(f"background:{tokens.CARD};")
+        # ---- coluna da esquerda: perfis ----
+        col_lista = QVBoxLayout()
+        col_lista.setSpacing(10)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(14)
+        self.bt_novo = BotaoSecundario("Novo perfil", icone_nome="plus")
+        self.bt_novo.setAutoDefault(False)
+        self.bt_novo.clicked.connect(self.novo)
 
-        titulo = QLabel("Perfis de Acesso")
-        titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_LG}px;
-            font-weight:800; color:{tokens.TEXTO};
-        """)
-        layout.addWidget(titulo)
+        col_lista.addWidget(titulo_secao("Perfis"))
+        col_lista.addWidget(self.bt_novo)
 
-        self.tabela = QTableWidget()
-        self.tabela.setColumnCount(2)
-        self.tabela.setHorizontalHeaderLabels(["Nome", "Permissões"])
-        self.tabela.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Stretch
-        )
-        self.tabela.verticalHeader().setDefaultSectionSize(36)
-        self.tabela.verticalHeader().setVisible(False)
-        self.tabela.setAlternatingRowColors(True)
-        self.tabela.setSelectionBehavior(QTableWidget.SelectRows)
-        self.tabela.setSelectionMode(QTableWidget.SingleSelection)
-        self.tabela.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.tabela.setMaximumHeight(160)
+        self.tabela = tabela_lista(["Nome", "Permissões"])
+        self.tabela.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.tabela.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.tabela.itemSelectionChanged.connect(self._ao_selecionar_linha)
-        layout.addWidget(self.tabela)
+        col_lista.addWidget(self.tabela, 1)
 
-        layout.addWidget(self._rotulo("Nome do perfil"))
+        # ---- coluna da direita: perfil em edição ----
+        col_form = QVBoxLayout()
+        col_form.setSpacing(12)
 
-        self.nome = CampoTexto("Ex.: Gerente, Supervisor...", cor_foco=tokens.PRIMARIA)
-        layout.addWidget(self.nome)
+        self.lbl_modo = titulo_secao("Novo perfil")
+        col_form.addWidget(self.lbl_modo)
 
-        layout.addWidget(self._rotulo("Permissões"))
+        self.nome = CampoTexto("Ex.: Gerente, Caixa, Estoquista...", cor_foco=tokens.PRIMARIA)
+        self.nome.returnPressed.connect(self.salvar)
+        col_form.addWidget(campo_rotulado("Nome do perfil", self.nome))
+
+        linha_perm = QHBoxLayout()
+        linha_perm.setSpacing(6)
+        self.lbl_contador = QLabel("Permissões")
+        self.lbl_contador.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
+        """)
+        bt_todas = QPushButton("Marcar todas")
+        bt_nenhuma = QPushButton("Limpar")
+        for bt, marcar in ((bt_todas, True), (bt_nenhuma, False)):
+            bt.setCursor(Qt.PointingHandCursor)
+            bt.setAutoDefault(False)
+            bt.setStyleSheet(_estilo_link())
+            bt.clicked.connect(lambda _c=False, m=marcar: self._marcar_todas(m))
+        linha_perm.addWidget(self.lbl_contador)
+        linha_perm.addStretch()
+        linha_perm.addWidget(bt_todas)
+        linha_perm.addWidget(bt_nenhuma)
+        col_form.addLayout(linha_perm)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet(
-            f"QScrollArea {{ border: 1px solid {tokens.BORDA}; "
-            f"border-radius: {tokens.RADIUS_SM}px; }}"
-        )
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
 
         self.painel_permissoes = QWidget()
-        self.layout_permissoes = QVBoxLayout(self.painel_permissoes)
-        self.layout_permissoes.setContentsMargins(12, 10, 12, 10)
-        self.layout_permissoes.setSpacing(6)
+        self.painel_permissoes.setStyleSheet("background:transparent;")
+        self.layout_permissoes = QGridLayout(self.painel_permissoes)
+        self.layout_permissoes.setContentsMargins(0, 0, 4, 0)
+        self.layout_permissoes.setHorizontalSpacing(8)
+        self.layout_permissoes.setVerticalSpacing(8)
+        self.layout_permissoes.setAlignment(Qt.AlignTop)
         scroll.setWidget(self.painel_permissoes)
+        col_form.addWidget(scroll, 1)
 
-        layout.addWidget(scroll, stretch=1)
+        colunas = QHBoxLayout()
+        colunas.setSpacing(24)
+        colunas.addLayout(col_lista, 2)
+        colunas.addLayout(col_form, 3)
+        self.corpo.addLayout(colunas, 1)
 
-        rodape = QHBoxLayout()
-        rodape.setSpacing(8)
-
-        self.bt_novo = BotaoSecundario("Novo")
-        self.bt_novo.setAutoDefault(False)
-        self.bt_novo.clicked.connect(self.novo)
-        rodape.addWidget(self.bt_novo)
-
-        self.bt_salvar = BotaoSucesso("Salvar")
-        self.bt_salvar.setAutoDefault(False)
-        self.bt_salvar.clicked.connect(self.salvar)
-        rodape.addWidget(self.bt_salvar)
-
-        self.bt_excluir = BotaoPerigo("Excluir")
+        # ---- rodapé: excluir à esquerda; fechar + salvar à direita ----
+        self.bt_excluir = BotaoPerigo("Excluir perfil", icone_nome="trash-2")
         self.bt_excluir.setAutoDefault(False)
         self.bt_excluir.clicked.connect(self.excluir)
-        rodape.addWidget(self.bt_excluir)
+        self.rodape.addWidget(self.bt_excluir)
 
-        rodape.addStretch()
+        self.bt_salvar = BotaoSucesso("Salvar perfil", icone_nome="check")
+        self.bt_salvar.setAutoDefault(False)
+        self.bt_salvar.clicked.connect(self.salvar)
+        self.definir_botoes(self.bt_salvar, texto_cancelar="Fechar")
+        self.bt_cancelar.clicked.disconnect()
+        self.bt_cancelar.clicked.connect(self.accept)
 
-        bt_fechar = BotaoSecundario("Fechar")
-        bt_fechar.setAutoDefault(False)
-        bt_fechar.clicked.connect(self.accept)
-        rodape.addWidget(bt_fechar)
+        # atalhos: Ctrl+S salva, Ctrl+N novo perfil
+        for tecla, acao in (("Ctrl+S", self.salvar), ("Ctrl+N", self.novo)):
+            atalho = QShortcut(QKeySequence(tecla), self)
+            atalho.activated.connect(acao)
 
-        layout.addLayout(rodape)
-
+        self._atualizar_modo()
         self.carregar()
 
-    def _rotulo(self, texto):
-        lbl = QLabel(texto)
-        lbl.setStyleSheet(
-            f"background:transparent; color:{tokens.TEXTO_SECUNDARIO}; "
-            f"font-size:{tokens.TAMANHO_XS}px; font-weight:700;"
-        )
-        return lbl
+    def _marcar_todas(self, marcar):
+        for checkbox in self.checkboxes.values():
+            checkbox.setChecked(marcar)
+
+    def _atualizar_contador(self):
+        total = len(self.checkboxes)
+        marcadas = sum(c.isChecked() for c in self.checkboxes.values())
+        self.lbl_contador.setText(f"Permissões  ·  {marcadas} de {total} marcadas")
+
+    def _atualizar_modo(self):
+        """Título da coluna da direita e botão Excluir conforme está
+        criando um perfil novo ou editando um existente."""
+        editando = self.perfil_selecionado_id is not None
+        lbl = self.lbl_modo.findChild(QLabel)
+        if lbl is not None:
+            lbl.setText("EDITANDO PERFIL" if editando else "NOVO PERFIL")
+        self.bt_excluir.setVisible(editando)
 
     # ======================================
     # CARREGAR
@@ -160,13 +219,15 @@ class GerenciarPerfisDialog(QDialog):
                 item.widget().deleteLater()
 
         self.checkboxes = {}
-        for chave, rotulo in permissoes.items():
+        estilo = _estilo_permissao()
+        for indice, (chave, rotulo) in enumerate(permissoes.items()):
             checkbox = QCheckBox(rotulo)
-            checkbox.setStyleSheet(
-                f"background:transparent; color:{tokens.TEXTO};"
-            )
-            self.layout_permissoes.addWidget(checkbox)
+            checkbox.setCursor(Qt.PointingHandCursor)
+            checkbox.setStyleSheet(estilo)
+            checkbox.toggled.connect(self._atualizar_contador)
+            self.layout_permissoes.addWidget(checkbox, indice, 0)
             self.checkboxes[chave] = checkbox
+        self._atualizar_contador()
 
         rodar_em_thread(
             self,
@@ -183,9 +244,10 @@ class GerenciarPerfisDialog(QDialog):
 
         for linha, perfil in enumerate(perfis):
             self.tabela.setItem(linha, 0, QTableWidgetItem(perfil["nome"]))
-            self.tabela.setItem(
-                linha, 1, QTableWidgetItem(str(len(perfil["permissoes"])))
-            )
+            total = len(self.permissoes_disponiveis) or len(perfil["permissoes"])
+            item_qtd = QTableWidgetItem(f"{len(perfil['permissoes'])} de {total}")
+            item_qtd.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.tabela.setItem(linha, 1, item_qtd)
 
     def _ao_carregar_erro(self, erro):
         QMessageBox.critical(
@@ -218,12 +280,15 @@ class GerenciarPerfisDialog(QDialog):
         for chave, checkbox in self.checkboxes.items():
             checkbox.setChecked(chave in perfil["permissoes"])
 
+        self._atualizar_modo()
+
     def novo(self):
         self.perfil_selecionado_id = None
         self.nome.clear()
         self.tabela.clearSelection()
         for checkbox in self.checkboxes.values():
             checkbox.setChecked(False)
+        self._atualizar_modo()
         self.nome.setFocus()
 
     # ======================================

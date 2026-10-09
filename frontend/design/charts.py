@@ -149,15 +149,17 @@ class GraficoArea(QWidget):
             )
             painter.setPen(pen_grade)
 
-        if not self.pontos or len(self.pontos) < 2:
+        if not self.pontos:
             painter.end()
             return
 
         n = len(self.pontos)
-        passo_x = area_largura / (n - 1)
+        # 1 ponto só (ex.: período "Hoje"): fica no meio, sem linha --
+        # antes não desenhava nada e o gráfico parecia vazio
+        passo_x = area_largura / (n - 1) if n > 1 else 0
 
         def coord(i, valor):
-            x = margem_esq + i * passo_x
+            x = margem_esq + (i * passo_x if n > 1 else area_largura / 2)
             y = margem_topo + area_altura * (1 - (valor / maior_valor))
             return x, y
 
@@ -197,6 +199,12 @@ class GraficoArea(QWidget):
         pen_linha.setJoinStyle(Qt.RoundJoin)
         painter.setPen(pen_linha)
         painter.drawPath(caminho_linha)
+
+        if n == 1:
+            x_unico, y_unico = coord(0, self.pontos[0])
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(cor_linha)
+            painter.drawEllipse(int(x_unico) - 5, int(y_unico) - 5, 10, 10)
 
         painter.setPen(QColor(tokens.TEXTO_TERCIARIO))
 

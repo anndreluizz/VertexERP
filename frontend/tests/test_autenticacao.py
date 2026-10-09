@@ -4,6 +4,7 @@ services/api.py, telas/login.py, telas/verificar_2fa.py e
 telas/gerenciar_usuarios.py."""
 import os
 import tempfile
+import time
 from unittest import mock
 
 import pytest
@@ -344,13 +345,11 @@ def test_alternar_2fa_liga_pra_usuario_desativado(esperar_threads):
         {"id": 1, "nome": "Fulano", "email": "fulano@loja.com", "ativo": True,
          "admin": False, "dois_fatores_ativo": False},
     ]
-    tela.tabela = QTableWidget(1, 5)
+    tela.tabela = QTableWidget(1, 3)
     tela.tabela.setCurrentCell(0, 0)
-    tela.bt_ativar_desativar = QPushButton()
-    tela.bt_admin = QPushButton()
-    tela.bt_perfil = QPushButton()
-    tela.bt_redefinir_senha = QPushButton()
-    tela.bt_2fa = QPushButton()
+    # painel do usuário selecionado (habilita/desabilita durante a ação)
+    tela.painel_conteudo = QWidget()
+    tela._carregando = False
 
     with mock.patch("telas.gerenciar_usuarios.atualizar_usuario") as atualizar_mock, \
          mock.patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
@@ -362,3 +361,48 @@ def test_alternar_2fa_liga_pra_usuario_desativado(esperar_threads):
 
     assert atualizar_mock.call_args[0][1] == {"dois_fatores_ativo": True}
     assert carregar_mock.called
+
+
+# ==================================================
+# Sessão lembrada expira 30 min depois do último uso (sistema fechado)
+# ==================================================
+
+
+def test_sessao_usada_ha_pouco_continua_valendo(configuracao_isolada):
+    preferencias_service.salvar_sessao("refresh-recente")
+
+    with mock.patch.object(preferencias_service.time, "time", return_value=time.time() + 29 * 60):
+        assert preferencias_service.carregar_sessao() == "refresh-recente"
+
+
+def test_sessao_parada_mais_de_30_minutos_expira_e_e_apagada(configuracao_isolada):
+    preferencias_service.salvar_sessao("refresh-velho")
+
+    with mock.patch.object(preferencias_service.time, "time", return_value=time.time() + 31 * 60):
+        assert preferencias_service.carregar_sessao() is None
+
+    assert preferencias_service.carregar_sessao() is None
+
+
+def test_marcar_uso_renova_o_prazo(configuracao_isolada):
+    agora = time.time()
+    preferencias_service.salvar_sessao("refresh-em-uso")
+
+    with mock.patch.object(preferencias_service.time, "time", return_value=agora + 25 * 60):
+        preferencias_service.marcar_uso()
+
+    with mock.patch.object(preferencias_service.time, "time", return_value=agora + 50 * 60):
+        assert preferencias_service.carregar_sessao() == "refresh-em-uso"
+
+
+def test_sessao_sem_ultimo_uso_gravado_expira(configuracao_isolada):
+    # Sessão salva por uma versão antiga do app, sem "ultimo_uso".
+    preferencias_service.salvar_sessao("refresh-antigo")
+    preferencias_service._settings().remove("sessao/ultimo_uso")
+
+    assert preferencias_service.carregar_sessao() is None
+
+
+def test_marcar_uso_sem_sessao_nao_grava_nada(configuracao_isolada):
+    preferencias_service.marcar_uso()
+    assert preferencias_service._settings().value("sessao/ultimo_uso") is None

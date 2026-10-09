@@ -18,7 +18,10 @@ from PySide6.QtWidgets import (
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.responsive import tamanho_fixo_seguro
-from design.widgets import BotaoSucesso, CampoTexto
+from design.widgets import (
+    BotaoSecundario, BotaoSucesso, CabecalhoDialogo, CampoTexto, cor_forma_pagamento,
+    estilo_botao_forma,
+)
 from services.api import configuracoes
 from services.pix_utils import montar_payload_pix
 from services.worker import rodar_em_thread
@@ -115,7 +118,7 @@ class PagamentoWindow(QDialog):
 
     def __init__(
         self, total, itens=None, cliente_id=None, cliente_nome=None,
-        desconto=0.0, acrescimo=0.0,
+        desconto=0.0, acrescimo=0.0, credito_troca=0.0,
     ):
 
         super().__init__()
@@ -132,6 +135,18 @@ class PagamentoWindow(QDialog):
         # venda), "entregue" (o que o cliente deu -- > valor so' em
         # dinheiro, a diferenca e' o troco)}]
         self.pagamentos = []
+
+        # troca na hora (ver PDV.iniciar_troca): o valor da peça
+        # devolvida já saiu do caixa como devolução em dinheiro, então
+        # entra aqui como dinheiro já recebido -- a cliente só paga a
+        # diferença
+        self.credito_troca = round(credito_troca or 0.0, 2)
+        if self.credito_troca > 0:
+            usado = min(self.credito_troca, self.total)
+            self.pagamentos.append(
+                {"forma": "DINHEIRO", "valor": usado, "entregue": usado}
+            )
+
         self.forma_atual = None
         self._enter_do_lancamento = False
 
@@ -146,7 +161,7 @@ class PagamentoWindow(QDialog):
         self._timer_pix.timeout.connect(self.gerar_qrcode_pix)
 
         self.setWindowTitle("Pagamento")
-        tamanho_fixo_seguro(self, 980, 700)
+        tamanho_fixo_seguro(self, 1140, 800)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         raiz = QVBoxLayout(self)
@@ -155,6 +170,18 @@ class PagamentoWindow(QDialog):
 
         raiz.addWidget(self._construir_cabecalho())
         raiz.addWidget(self._construir_faixa_totais())
+
+        if self.credito_troca > 0:
+            aviso = QLabel(
+                f"Troca: R$ {_fmt(self.credito_troca)} da peça devolvida já "
+                "estão lançados em Dinheiro. Receba só a diferença."
+            )
+            aviso.setWordWrap(True)
+            aviso.setStyleSheet(f"""
+                background:{tokens.ALERTA_CLARO}; color:{tokens.ALERTA_TEXTO};
+                padding:10px 24px; font-size:{tokens.TAMANHO_SM}px; font-weight:600;
+            """)
+            raiz.addWidget(aviso)
 
         corpo = QHBoxLayout()
         corpo.setContentsMargins(0, 0, 0, 0)
@@ -186,21 +213,9 @@ class PagamentoWindow(QDialog):
     # ======================================
 
     def _construir_cabecalho(self):
-
-        cabecalho = QFrame()
-        cabecalho.setStyleSheet(f"background:{tokens.SIDEBAR};")
-        cabecalho.setFixedHeight(56)
-
-        cab_layout = QHBoxLayout(cabecalho)
-        cab_layout.setContentsMargins(24, 0, 24, 0)
-        cab_layout.setSpacing(14)
-
-        titulo = QLabel("Pagamento")
-        titulo.setStyleSheet(
-            f"background:transparent; color:{tokens.TEXTO_CLARO}; "
-            f"font-size:16px; font-weight:bold;"
-        )
-        cab_layout.addWidget(titulo)
+        """Topo claro no padrão das outras subtelas (CabecalhoDialogo):
+        ícone, "Pagamento" e o resumo da venda embaixo; o Cancelar (Esc)
+        fica na ponta direita, no lugar do X."""
 
         qtd = len(self.itens)
         detalhe = f"{qtd} {'item' if qtd == 1 else 'itens'}  ·  Subtotal R$ {_fmt(self.subtotal)}"
@@ -209,31 +224,18 @@ class PagamentoWindow(QDialog):
         if self.acrescimo > EPSILON:
             detalhe += f"  ·  Acréscimo R$ {_fmt(self.acrescimo)}"
 
-        lbl_detalhe = QLabel(detalhe)
-        lbl_detalhe.setStyleSheet(
-            f"background:transparent; color:{tokens.TEXTO_SIDEBAR_APAGADO}; font-size:12px;"
+        cabecalho = CabecalhoDialogo(
+            "credit-card", tokens.PRIMARIA, tokens.PRIMARIA_CLARA,
+            "Pagamento", detalhe,
         )
-        cab_layout.addWidget(lbl_detalhe)
-        cab_layout.addStretch()
 
-        self.bt_cancelar = QPushButton("Cancelar (Esc)")
+        self.bt_cancelar = BotaoSecundario("Cancelar (Esc)", icone_nome="x")
         self.bt_cancelar.setAutoDefault(False)
         self.bt_cancelar.setFocusPolicy(Qt.NoFocus)
-        self.bt_cancelar.setCursor(Qt.PointingHandCursor)
-        self.bt_cancelar.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.SIDEBAR_HOVER};
-                color:{tokens.TEXTO_CLARO};
-                border-radius:{tokens.RADIUS_SM}px;
-                padding:8px 14px;
-                font-weight:600;
-            }}
-            QPushButton:hover {{
-                background:{tokens.ERRO};
-            }}
-        """)
         self.bt_cancelar.clicked.connect(self.reject)
-        cab_layout.addWidget(self.bt_cancelar)
+        # a primeira linha do CabecalhoDialogo termina num stretch --
+        # o botão entra depois dele, na ponta direita
+        cabecalho.layout().itemAt(0).layout().addWidget(self.bt_cancelar)
 
         return cabecalho
 
@@ -304,7 +306,7 @@ class PagamentoWindow(QDialog):
     def _construir_coluna_formas(self):
 
         coluna = QFrame()
-        coluna.setFixedWidth(280)
+        coluna.setFixedWidth(330)
         coluna.setStyleSheet(
             f"background:{tokens.FUNDO}; border-right:1px solid {tokens.BORDA};"
         )
@@ -322,7 +324,7 @@ class PagamentoWindow(QDialog):
             bt = QPushButton(f"  {numero}   {rotulo}")
             bt.setAutoDefault(False)
             bt.setCursor(Qt.PointingHandCursor)
-            bt.setMinimumHeight(50)
+            bt.setMinimumHeight(58)
             bt.setIconSize(QSize(18, 18))
             bt.clicked.connect(lambda checked=False, v=valor: self.selecionar_forma(v))
 
@@ -891,11 +893,32 @@ class PagamentoWindow(QDialog):
                 tokens.ALERTA_CLARO, tokens.ALERTA_TEXTO,
             )
 
+        # ---- aviso do meio: o que fazer agora ----
+        if self.pagamentos and not self.quitado():
+            self.lbl_escolha_forma.setText(
+                f"Falta R$ {_fmt(self.falta())}  ·  escolha a 2ª forma (teclas 1 a 5)"
+                if len(self.pagamentos) < MAX_FORMAS else
+                f"Falta R$ {_fmt(self.falta())}  ·  já são {MAX_FORMAS} formas: "
+                "remova uma (Del) pra trocar"
+            )
+        else:
+            self.lbl_escolha_forma.setText("Escolha a forma de pagamento (teclas 1 a 5)")
+
+        # dividir: só na 1ª forma (depois o valor já vem com o que falta)
+        self.lbl_dica_valor.setText(
+            "Enter lança  ·  pra dividir em 2 formas, digite só a parte desta  ·  Esc volta"
+            if not self.pagamentos else
+            "Enter lança o restante  ·  Esc volta pras formas"
+        )
+
         # ---- lista de pagamentos ----
         while self.lista_pagamentos.count():
-            item = self.lista_pagamentos.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            widget = self.lista_pagamentos.takeAt(0).widget()
+            if widget:
+                # tira da tela já -- só o deleteLater deixava a linha
+                # antiga desenhada até o próximo ciclo (linha "fantasma")
+                widget.setParent(None)
+                widget.deleteLater()
 
         for indice, pagamento in enumerate(self.pagamentos):
             self.lista_pagamentos.addWidget(self._linha_pagamento(indice, pagamento))
@@ -910,49 +933,60 @@ class PagamentoWindow(QDialog):
         lancada = any(p["forma"] == valor for p in self.pagamentos)
         atual = valor == self.forma_atual
 
-        if atual:
-            fundo, texto, borda = tokens.PRIMARIA, tokens.TEXTO_CLARO, tokens.PRIMARIA
-        elif lancada:
-            fundo, texto, borda = tokens.SUCESSO_CLARO, tokens.SECUNDARIA_HOVER, tokens.SECUNDARIA
-        else:
-            fundo, texto, borda = tokens.CARD, tokens.TEXTO, tokens.BORDA
+        # forma que não dá mais pra usar (venda paga, ou já são 2 formas
+        # e esta não é uma delas) fica apagada em vez de parecer
+        # clicável e só responder com aviso
+        bloqueada = not lancada and (
+            self.quitado() or len(self.pagamentos) >= MAX_FORMAS
+        )
 
-        botao.setIcon(icone(icone_nome, cor=texto, tamanho=18))
-        botao.setStyleSheet(f"""
-            QPushButton {{
-                background: {fundo};
-                color: {texto};
-                border: 1.5px solid {borda};
-                border-radius: {tokens.RADIUS_SM}px;
-                font-weight: 700;
-                font-size: 14px;
-                text-align: left;
-                padding: 4px 12px;
-            }}
-            QPushButton:hover {{ border-color: {tokens.PRIMARIA}; }}
-            QPushButton:focus {{ border: 2px solid {tokens.PRIMARIA}; }}
-        """)
+        # cada forma com a sua cor (a mesma do fiado e da despesa);
+        # forma que já tem pagamento lançado troca o ícone por um check
+        estilo, texto = estilo_botao_forma(
+            valor, atual, extra="text-align:left; padding:4px 14px; font-size:15px;",
+        )
+        if bloqueada:
+            texto = tokens.TEXTO_TERCIARIO
+            estilo += f"""
+                QPushButton {{
+                    background:{tokens.FUNDO}; color:{texto}; border:1.5px solid {tokens.BORDA};
+                }}
+            """
+        botao.setStyleSheet(estilo)
+        botao.setIcon(icone("check" if lancada and not atual else icone_nome, cor=texto, tamanho=18))
 
     def _linha_pagamento(self, indice, pagamento):
 
+        forma = pagamento["forma"]
+        cor = cor_forma_pagamento(forma)
+
+        # faixa na cor da forma, como os botões à esquerda
         linha = QFrame()
         linha.setObjectName("linhaPagamento")
         linha.setStyleSheet(f"""
             QFrame#linhaPagamento {{
                 background:{tokens.FUNDO};
                 border:1px solid {tokens.BORDA};
+                border-left:4px solid {cor};
                 border-radius:{tokens.RADIUS_SM}px;
             }}
         """)
 
         layout = QHBoxLayout(linha)
-        layout.setContentsMargins(12, 8, 8, 8)
+        layout.setContentsMargins(12, 10, 8, 10)
         layout.setSpacing(10)
 
-        forma = pagamento["forma"]
+        # venda dividida: deixa claro qual é a 1ª e a 2ª forma
+        if len(self.pagamentos) > 1:
+            lbl_ordem = QLabel(f"{indice + 1}ª")
+            lbl_ordem.setStyleSheet(
+                f"background:transparent; border:none; font-size:12px; "
+                f"font-weight:800; color:{tokens.TEXTO_TERCIARIO};"
+            )
+            layout.addWidget(lbl_ordem)
 
         lbl_icone = QLabel()
-        lbl_icone.setPixmap(icone_pixmap(ICONES_FORMA[forma], cor=tokens.TEXTO_SECUNDARIO, tamanho=16))
+        lbl_icone.setPixmap(icone_pixmap(ICONES_FORMA[forma], cor=cor_forma_pagamento(forma), tamanho=16))
         lbl_icone.setStyleSheet("background:transparent; border:none;")
         layout.addWidget(lbl_icone)
 

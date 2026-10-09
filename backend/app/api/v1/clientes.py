@@ -50,7 +50,9 @@ def criar_cliente(
 @router.get("/", response_model=list[ClienteResponse])
 def listar_clientes(
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    # 500 por padrao: o app mobile pede a lista sem 'limit' e com 100
+    # sumiam os clientes a partir do 101o (o Desktop pagina sozinho).
+    limit: int = Query(500, ge=1, le=500),
     loja_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user)

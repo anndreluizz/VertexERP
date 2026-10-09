@@ -58,6 +58,11 @@ class ItemImportacaoRequest(BaseModel):
     quantidade: int
     custo: Decimal
     preco_venda: Decimal
+    # so' vale pra produto ja cadastrado: sem isso o preco de venda
+    # atual da loja fica como esta (o custo e' atualizado sempre).
+    # Antes o preco vinha sempre de custo x margem -- com margem 0% a
+    # importacao derrubava o preco de venda pro preco de custo.
+    atualizar_preco_venda: bool = False
 
 
 class ImportarNFeConfirmarRequest(BaseModel):

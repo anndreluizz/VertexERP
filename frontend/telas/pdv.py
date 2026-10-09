@@ -38,7 +38,6 @@ from PySide6.QtCore import Qt, QTimer, Signal, QSize, QEvent
 from PySide6.QtGui import (
     QShortcut,
     QKeySequence,
-    QFont,
     QTextDocument,
     QCursor,
     QPixmap,
@@ -65,6 +64,7 @@ from PySide6.QtWidgets import (
 )
 
 from design import tokens
+from design.fonts import fonte
 from design.animations import fade_in
 from design.icons import icone, icone_pixmap
 from design.widgets import (
@@ -241,6 +241,9 @@ class PDV(QWidget):
         self._chave_venda = None
         self.cliente_id = None
         self.cliente_nome = None
+        # troca na hora: valor da peça devolvida que abate desta venda
+        # (ver iniciar_troca)
+        self.credito_troca = 0.0
         self.desconto_valor = 0.0
         self.acrescimo_valor = 0.0
         self._finalizando_venda = False
@@ -277,6 +280,11 @@ class PDV(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
+        # sem rolagem horizontal: o conteúdo se ajusta à largura. Antes,
+        # a linha de favoritos empurrava a coluna pra além da tela e
+        # aparecia uma barra de rolagem embaixo do cupom, com a borda
+        # direita dos cards cortada
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
 
         coluna_esquerda = QWidget()
@@ -483,7 +491,21 @@ class PDV(QWidget):
         self.bt_orcamento = self._botao_ghost_cabecalho("Orçamento", icone_nome="printer")
         self.bt_orcamento.clicked.connect(self.imprimir_orcamento)
 
-        self.bt_cancelar = BotaoPerigo("Cancelar Venda", icone_nome="x")
+        # contorno vermelho (e não botão vermelho cheio): é uma ação
+        # destrutiva e rara -- não pode ser a coisa mais chamativa da
+        # tela, competindo com o Finalizar Venda
+        self.bt_cancelar = QPushButton("  Cancelar venda")
+        self.bt_cancelar.setIcon(icone("x", cor=tokens.ERRO, tamanho=15))
+        self.bt_cancelar.setCursor(Qt.PointingHandCursor)
+        self.bt_cancelar.setMinimumHeight(38)
+        self.bt_cancelar.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; color:{tokens.ERRO};
+                border:1.5px solid {tokens.ERRO}; border-radius:{tokens.RADIUS_SM}px;
+                padding:0 14px; font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+            }}
+            QPushButton:hover {{ background:{tokens.ERRO_CLARO}; }}
+        """)
         self.bt_cancelar.clicked.connect(self.cancelar_venda)
 
         cabecalho.addWidget(self.bt_voltar)
@@ -491,6 +513,11 @@ class PDV(QWidget):
         cabecalho.addLayout(col_titulo)
         cabecalho.addSpacing(4)
         cabecalho.addWidget(self.badge_caixa, alignment=Qt.AlignVCenter)
+
+        self.badge_troca = Badge("Troca", "alerta")
+        self.badge_troca.setVisible(False)
+        cabecalho.addWidget(self.badge_troca, alignment=Qt.AlignVCenter)
+
         cabecalho.addStretch()
         cabecalho.addWidget(self.bt_retomar)
         cabecalho.addWidget(self.bt_suspender)
@@ -522,7 +549,7 @@ class PDV(QWidget):
             }}
             QPushButton:hover:enabled {{ background:{tokens.FUNDO}; }}
             QPushButton:disabled {{
-                background:{tokens.BORDA}; color:{tokens.TEXTO_TERCIARIO};
+                background:transparent; color:{tokens.TEXTO_TERCIARIO};
             }}
         """)
 
@@ -614,7 +641,7 @@ class PDV(QWidget):
     def _construir_campo_codigo(self):
 
         container = QFrame()
-        container.setFixedHeight(64)
+        container.setFixedHeight(58)
         container.setStyleSheet(f"""
             QFrame {{
                 background: {tokens.CARD};
@@ -629,13 +656,13 @@ class PDV(QWidget):
 
         self.campo_codigo = QLineEdit()
         self.campo_codigo.setPlaceholderText(
-            "Código de barras, código ou nome  ·  3* antes = 3 unidades"
+            "Leia o código de barras ou digite o nome  (3* = 3 unidades)"
         )
-        self.campo_codigo.setFont(QFont(tokens.FONTE_FAMILIA_PADRAO, 18))
+        self.campo_codigo.setFont(fonte(16))
         self.campo_codigo.setStyleSheet(f"""
             QLineEdit {{
                 border: none; outline: none; background: transparent;
-                color: {tokens.TEXTO}; font-size: 18px; font-weight: 600;
+                color: {tokens.TEXTO}; font-size: 16px; font-weight: 600;
             }}
         """)
         # ícone desenhado dentro do próprio campo (QLineEdit.addAction)
@@ -699,6 +726,9 @@ class PDV(QWidget):
             background:transparent; font-size:{tokens.TAMANHO_SM}px;
             font-weight:600; padding-left: 4px;
         """)
+        # vazio = escondido; senão o QLabel sem texto ainda ocupava uma
+        # linha + o espaçamento do layout entre a busca e o cupom
+        self.lbl_status_busca.setVisible(False)
 
         return container
 
@@ -710,7 +740,7 @@ class PDV(QWidget):
 
         self.cartao_ultimo = QFrame()
         self.cartao_ultimo.setObjectName("cartaoUltimoItem")
-        self.cartao_ultimo.setFixedHeight(112)
+        self.cartao_ultimo.setFixedHeight(96)
         self.cartao_ultimo.setStyleSheet(f"""
             QFrame#cartaoUltimoItem {{
                 background: {tokens.CARD};
@@ -724,7 +754,7 @@ class PDV(QWidget):
         layout.setSpacing(16)
 
         self.lbl_ultimo_foto = QLabel()
-        self.lbl_ultimo_foto.setFixedSize(86, 86)
+        self.lbl_ultimo_foto.setFixedSize(72, 72)
         self.lbl_ultimo_foto.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.lbl_ultimo_foto)
 
@@ -846,6 +876,7 @@ class PDV(QWidget):
         self.linha_mais_vendidos = QFrame()
         self.linha_mais_vendidos.setStyleSheet("background:transparent; border:none;")
         self.linha_mais_vendidos.setVisible(False)
+        self.linha_mais_vendidos.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
 
         layout = QHBoxLayout(self.linha_mais_vendidos)
         layout.setContentsMargins(2, 0, 0, 0)
@@ -856,12 +887,12 @@ class PDV(QWidget):
         lbl_icone.setPixmap(icone_pixmap("trending-up", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
         layout.addWidget(lbl_icone)
 
-        lbl_titulo = QLabel("Mais vendidos:")
-        lbl_titulo.setStyleSheet(f"""
+        self.lbl_titulo_rapidos = QLabel("Mais vendidos:")
+        self.lbl_titulo_rapidos.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_SM}px;
+            font-size:{tokens.TAMANHO_SM}px; font-weight:600;
         """)
-        layout.addWidget(lbl_titulo)
+        layout.addWidget(self.lbl_titulo_rapidos)
 
         self.layout_chips_mais_vendidos = QHBoxLayout()
         self.layout_chips_mais_vendidos.setSpacing(6)
@@ -899,17 +930,48 @@ class PDV(QWidget):
 
         produtos_por_nome = {p["nome"]: p for p in produtos}
         top = relatorio.get("top_produtos", [])[:5]
+        rapidos = [
+            produtos_por_nome.get(entrada.get("produto")) for entrada in top
+        ]
+        rapidos = [p for p in rapidos if p and p.get("ativo", True)]
+
+        # loja nova (ou 30 dias sem venda) ainda não tem "mais
+        # vendidos" -- usa os produtos marcados como favoritos no
+        # cadastro, pra linha de atalhos não nascer vazia
+        titulo = "Mais vendidos:"
+        if not rapidos:
+            rapidos = [
+                p for p in produtos if p.get("favorito") and p.get("ativo", True)
+            ][:5]
+            titulo = "Favoritos:"
+        self.lbl_titulo_rapidos.setText(titulo)
+
         exibidos = 0
 
-        for entrada in top:
+        for produto in rapidos:
 
-            produto = produtos_por_nome.get(entrada.get("produto"))
-
-            if not produto or not produto.get("ativo", True):
-                continue
-
-            chip = BotaoSecundario(produto["nome"][:18])
-            chip.setMinimumHeight(30)
+            nome_chip = produto["nome"]
+            if len(nome_chip) > 20:
+                nome_chip = nome_chip[:19].rstrip() + "…"
+            chip = QPushButton(nome_chip)
+            chip.setCursor(Qt.PointingHandCursor)
+            chip.setFocusPolicy(Qt.NoFocus)
+            chip.setMinimumHeight(32)
+            chip.setToolTip(
+                f"{produto['nome']} · "
+                f"{formatar_moeda(produto.get('preco_efetivo', produto['preco_venda']))}"
+            )
+            chip.setStyleSheet(f"""
+                QPushButton {{
+                    background:{tokens.CARD}; color:{tokens.TEXTO};
+                    border:1px solid {tokens.BORDA}; border-radius:16px;
+                    padding:0 14px; font-size:{tokens.TAMANHO_SM}px; font-weight:600;
+                }}
+                QPushButton:hover {{
+                    border-color:{tokens.PRIMARIA}; color:{tokens.PRIMARIA};
+                    background:{tokens.PRIMARIA_CLARA};
+                }}
+            """)
             chip.clicked.connect(
                 lambda _checked, p=produto: self.adicionar_produto_ao_carrinho(
                     {
@@ -925,6 +987,9 @@ class PDV(QWidget):
                     1,
                 )
             )
+            # nunca espremer o chip (cortava o texto pela metade): se a
+            # janela for estreita, os últimos ficam de fora da área
+            chip.setMinimumWidth(chip.sizeHint().width())
             self.layout_chips_mais_vendidos.addWidget(chip)
             exibidos += 1
 
@@ -995,10 +1060,10 @@ class PDV(QWidget):
 
         self.tabela = QTableWidget()
 
-        # formato de cupom: linhas simples, sem botao por linha --
-        # quantidade e remocao sao pelo teclado (+ / - / Del) no item
-        # selecionado (ver eventFilter), como nos PDVs de loja
-        self.tabela.setColumnCount(6)
+        # quantidade e remoção continuam pelo teclado (+ / - / Del no
+        # item selecionado, ver eventFilter), e agora também por botões
+        # na própria linha pra quem opera com o mouse
+        self.tabela.setColumnCount(7)
 
         self.tabela.setHorizontalHeaderLabels([
             "Nº",
@@ -1007,6 +1072,7 @@ class PDV(QWidget):
             "Qtd",
             "Unitário",
             "Total",
+            "",
         ])
 
         self.tabela.verticalHeader().setVisible(False)
@@ -1014,16 +1080,17 @@ class PDV(QWidget):
         self.tabela.setSelectionBehavior(QTableWidget.SelectRows)
         self.tabela.setEditTriggers(QTableWidget.NoEditTriggers)
         self.tabela.setShowGrid(False)
-        self.tabela.verticalHeader().setDefaultSectionSize(40)
+        self.tabela.verticalHeader().setDefaultSectionSize(48)
 
         cabecalho_horizontal = self.tabela.horizontalHeader()
         cabecalho_horizontal.setStretchLastSection(False)
         cabecalho_horizontal.setSectionResizeMode(2, QHeaderView.Stretch)
-        self.tabela.setColumnWidth(0, 56)
-        self.tabela.setColumnWidth(1, 140)
-        self.tabela.setColumnWidth(3, 70)
+        self.tabela.setColumnWidth(0, 52)
+        self.tabela.setColumnWidth(1, 110)
+        self.tabela.setColumnWidth(3, 120)
         self.tabela.setColumnWidth(4, 110)
         self.tabela.setColumnWidth(5, 120)
+        self.tabela.setColumnWidth(6, 52)
         self.tabela.setStyleSheet(f"""
             QTableWidget {{
                 border: none;
@@ -1070,7 +1137,7 @@ class PDV(QWidget):
         lbl_titulo.setAlignment(Qt.AlignCenter)
         lbl_titulo.setStyleSheet(f"""
             background:transparent; color:{tokens.SECUNDARIA};
-            font-size:56px; font-weight:900; letter-spacing: 4px;
+            font-size:40px; font-weight:900; letter-spacing: 3px;
         """)
         layout.addWidget(lbl_titulo)
 
@@ -1084,7 +1151,9 @@ class PDV(QWidget):
             background:transparent; color:{tokens.TEXTO_TERCIARIO};
             font-size:{tokens.TAMANHO_SM}px;
         """)
-        lbl_dica.setMaximumWidth(420)
+        # largura FIXA (não máxima): com quebra de linha e só largura
+        # máxima, o Qt calculava a altura de 1 linha e cortava o resto
+        lbl_dica.setFixedWidth(420)
         layout.addWidget(lbl_dica, alignment=Qt.AlignCenter)
 
         return estado
@@ -1249,7 +1318,7 @@ class PDV(QWidget):
         self.total = QLabel("R$ 0,00")
         self.total.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.total.setStyleSheet(f"""
-            background:transparent; font-size: 50px; font-weight: 900;
+            background:transparent; font-size: 40px; font-weight: 900;
             color: {tokens.SECUNDARIA};
         """)
         layout_caixa_total.addWidget(self.total)
@@ -1339,11 +1408,12 @@ class PDV(QWidget):
             font-size:{tokens.TAMANHO_SM}px; font-weight:600;
         """)
         self.lbl_status_busca.setText(texto)
+        self.lbl_status_busca.setVisible(True)
 
         QTimer.singleShot(
             2500,
             lambda: (
-                self.lbl_status_busca.setText("")
+                (self.lbl_status_busca.setText(""), self.lbl_status_busca.setVisible(False))
                 if self.lbl_status_busca.text() == texto else None
             ),
         )
@@ -1529,10 +1599,13 @@ class PDV(QWidget):
                 celula = QTableWidgetItem(texto)
                 celula.setTextAlignment(alinhamento)
                 if coluna in (2, 5):
-                    fonte = celula.font()
-                    fonte.setBold(True)
-                    celula.setFont(fonte)
+                    fonte_celula = celula.font()
+                    fonte_celula.setBold(True)
+                    celula.setFont(fonte_celula)
                 self.tabela.setItem(linha, coluna, celula)
+
+            self.tabela.setCellWidget(linha, 3, self._controle_quantidade(linha, item))
+            self.tabela.setCellWidget(linha, 6, self._botao_remover(linha))
 
             if item["id"] == self._id_ultimo_item:
                 linha_ultimo = linha
@@ -1554,6 +1627,59 @@ class PDV(QWidget):
         self._atualizar_ultimo_item()
         self._recalcular_totais()
         self.campo_codigo.setFocus()
+
+    def _botao_linha(self, icone_nome, dica, ao_clicar, cor=None, cor_hover=None):
+        """Botãozinho quadrado sem foco (não rouba o foco do campo de
+        código, onde o leitor de código de barras digita)."""
+
+        bt = QPushButton()
+        bt.setFixedSize(28, 28)
+        bt.setCursor(Qt.PointingHandCursor)
+        bt.setFocusPolicy(Qt.NoFocus)
+        bt.setToolTip(dica)
+        bt.setAccessibleName(dica)
+        bt.setIcon(icone(icone_nome, cor=cor or tokens.TEXTO_SECUNDARIO, tamanho=14))
+        bt.setStyleSheet(f"""
+            QPushButton {{ background:transparent; border:none; border-radius:6px; }}
+            QPushButton:hover {{ background:{cor_hover or tokens.BORDA}; }}
+        """)
+        bt.clicked.connect(ao_clicar)
+        return bt
+
+    def _celula_centralizada(self, *widgets):
+        caixa = QWidget()
+        caixa.setStyleSheet("background:transparent;")
+        lay = QHBoxLayout(caixa)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(2)
+        lay.setAlignment(Qt.AlignCenter)
+        for w in widgets:
+            lay.addWidget(w)
+        return caixa
+
+    def _controle_quantidade(self, linha, item):
+
+        lbl = QLabel(str(item["quantidade"]))
+        lbl.setMinimumWidth(28)
+        lbl.setAlignment(Qt.AlignCenter)
+        lbl.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_MD}px; font-weight:700;
+        """)
+        return self._celula_centralizada(
+            self._botao_linha("minus", "Diminuir quantidade",
+                              lambda: self.alterar_quantidade(linha, -1)),
+            lbl,
+            self._botao_linha("plus", "Aumentar quantidade",
+                              lambda: self.alterar_quantidade(linha, 1)),
+        )
+
+    def _botao_remover(self, linha):
+        return self._celula_centralizada(
+            self._botao_linha("trash-2", "Remover item",
+                              lambda: self.remover_item(linha),
+                              cor=tokens.ERRO, cor_hover=tokens.ERRO_CLARO)
+        )
 
     # ==================================================
     # DESTAQUE DO ÚLTIMO ITEM
@@ -1807,7 +1933,9 @@ class PDV(QWidget):
 
     def cancelar_venda(self):
 
-        if not self.itens:
+        # carrinho vazio mas com troca pendente: cancelar também precisa
+        # tirar o crédito, senão ele iria pra venda do próximo cliente
+        if not self.itens and not self.credito_troca:
             return
 
         resposta = QMessageBox.question(
@@ -1821,9 +1949,38 @@ class PDV(QWidget):
         if resposta == QMessageBox.No:
             return
 
+        if self.credito_troca > 0:
+            QMessageBox.information(
+                self,
+                "Troca",
+                "A devolução já foi registrada. Como a cliente não levou "
+                f"outra peça, devolva {formatar_moeda(self.credito_troca)} "
+                "em dinheiro para ela.",
+            )
+
         self.limpar_venda()
 
+    def iniciar_troca(self, credito, cliente=None):
+        """Chamado pela tela de Vendas depois de registrar a devolução
+        da troca: o valor devolvido vira crédito desta venda (entra
+        como dinheiro já recebido no pagamento)."""
+
+        if self.itens:
+            self.limpar_venda()
+
+        self.credito_troca = round(credito, 2)
+        self.badge_troca.setText(f"Troca: crédito de {formatar_moeda(credito)}")
+        self.badge_troca.setVisible(True)
+
+        if cliente and cliente.get("id"):
+            self.definir_cliente(cliente)
+
+        self.campo_codigo.setFocus()
+
     def limpar_venda(self):
+
+        self.credito_troca = 0.0
+        self.badge_troca.setVisible(False)
 
         self._chave_venda = None
         self.itens.clear()
@@ -2246,6 +2403,7 @@ class PDV(QWidget):
             cliente_nome=self.cliente_nome,
             desconto=self.desconto_valor,
             acrescimo=self.acrescimo_valor,
+            credito_troca=self.credito_troca,
         )
 
         if tela.exec() != QDialog.Accepted:
@@ -2311,6 +2469,16 @@ class PDV(QWidget):
                 parent=self,
             )
             concluida.exec()
+
+            sobra_troca = round(self.credito_troca - total, 2)
+            if sobra_troca > 0:
+                QMessageBox.information(
+                    self,
+                    "Troca",
+                    f"A peça nova saiu mais barata. Devolva R$ "
+                    f"{formatar_moeda(sobra_troca).replace('R$', '').strip()} "
+                    "em dinheiro para a cliente.",
+                )
 
             self.limpar_venda()
 

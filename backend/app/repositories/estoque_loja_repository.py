@@ -126,6 +126,11 @@ class EstoqueLojaRepository:
         registro.quantidade += delta
         db.add(registro)
 
+        # a sessao e' autoflush=False: sem o flush a soma abaixo le a
+        # quantidade ANTIGA desta loja e produto.estoque fica sempre uma
+        # operacao atrasado
+        db.flush()
+
         produto.estoque = (
             db.query(func.coalesce(func.sum(EstoqueLoja.quantidade), 0))
             .filter(EstoqueLoja.produto_id == produto.id)

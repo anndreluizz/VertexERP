@@ -9,6 +9,7 @@ usuario_id pra não embaralhar quando dois caixas usam o mesmo PC.
 
 import base64
 import json
+import time
 
 from PySide6.QtCore import QSettings
 
@@ -144,16 +145,45 @@ def salvar_sessao(refresh_token):
     guardado; o access_token novo é sempre pedido de novo na abertura
     seguinte, ver services/api.py: retomar_sessao())."""
     _settings().setValue("sessao/refresh_token", _proteger(refresh_token))
+    marcar_uso()
+
+
+# Sessão lembrada só vale se o sistema esteve aberto há pouco tempo --
+# fechou e ficou mais que isso sem abrir, pede login de novo (o
+# refresh_token em si vale 90 dias, ver backend).
+SESSAO_INATIVA_MAX_SEGUNDOS = 30 * 60
+
+
+def marcar_uso():
+    """Atualiza a hora do último uso da sessão lembrada. O app chama
+    isso a cada minuto enquanto está aberto e ao fechar (ver app.py)."""
+
+    settings = _settings()
+
+    if settings.value("sessao/refresh_token"):
+        settings.setValue("sessao/ultimo_uso", time.time())
 
 
 def carregar_sessao():
-    """Devolve o refresh_token guardado, ou None se não tinha nenhum
-    (ou se não deu pra descriptografar -- ex.: arquivo .ini copiado
-    de outra máquina/usuário, o que é esperado falhar de propósito)."""
+    """Devolve o refresh_token guardado, ou None se não tinha nenhum,
+    se o sistema ficou fechado mais que SESSAO_INATIVA_MAX_SEGUNDOS
+    (aí a sessão é apagada) ou se não deu pra descriptografar -- ex.:
+    arquivo .ini copiado de outra máquina/usuário, o que é esperado
+    falhar de propósito."""
 
-    protegido = _settings().value("sessao/refresh_token")
+    settings = _settings()
+    protegido = settings.value("sessao/refresh_token")
 
     if not protegido:
+        return None
+
+    try:
+        ultimo_uso = float(settings.value("sessao/ultimo_uso"))
+    except (TypeError, ValueError):
+        ultimo_uso = 0
+
+    if time.time() - ultimo_uso > SESSAO_INATIVA_MAX_SEGUNDOS:
+        limpar_sessao()
         return None
 
     try:
@@ -163,4 +193,6 @@ def carregar_sessao():
 
 
 def limpar_sessao():
-    _settings().remove("sessao/refresh_token")
+    settings = _settings()
+    settings.remove("sessao/refresh_token")
+    settings.remove("sessao/ultimo_uso")

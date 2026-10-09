@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from sqlalchemy.orm import Session
 
 from app.models.venda import Venda
@@ -6,7 +8,15 @@ from app.models.venda import Venda
 class VendaRepository:
 
     @staticmethod
-    def listar(db: Session, skip: int = 0, limit: int = 100, loja_id: int | None = None):
+    def listar(
+        db: Session,
+        skip: int = 0,
+        limit: int = 100,
+        loja_id: int | None = None,
+        data_inicio=None,
+        data_fim=None,
+        usuario_id: int | None = None,
+    ):
         # mais recente primeiro -- pra "carregar mais" na tela de
         # vendas mostrar o historico atual logo na primeira pagina,
         # em vez de comecar pelas vendas mais antigas
@@ -14,6 +24,16 @@ class VendaRepository:
 
         if loja_id is not None:
             query = query.filter(Venda.loja_id == loja_id)
+
+        # data_fim inclusiva (o dia inteiro)
+        if data_inicio is not None:
+            query = query.filter(Venda.data >= data_inicio)
+
+        if data_fim is not None:
+            query = query.filter(Venda.data < data_fim + timedelta(days=1))
+
+        if usuario_id is not None:
+            query = query.filter(Venda.usuario_id == usuario_id)
 
         return (
             query

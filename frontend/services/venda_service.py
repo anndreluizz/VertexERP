@@ -137,3 +137,71 @@ def finalizar_venda(
         )
 
     return post(endpoint_com_loja("/vendas/"), dados)
+
+def listar_vendas_periodo(data_inicio, data_fim, usuario_id=None):
+    """Todas as vendas entre as duas datas (date, inclusivas), mais
+    recentes primeiro -- tela de Vendas. Varre as páginas como
+    listar_vendas()."""
+
+    filtros = f"&data_inicio={data_inicio.isoformat()}&data_fim={data_fim.isoformat()}"
+    if usuario_id is not None:
+        filtros += f"&usuario_id={usuario_id}"
+
+    vendas = []
+    skip = 0
+
+    while True:
+
+        response = get(f"/vendas/?skip={skip}&limit={_TAMANHO_PAGINA}{filtros}")
+
+        if response.status_code != 200:
+            raise Exception("Não foi possível carregar as vendas.")
+
+        lote = response.json()
+        vendas.extend(lote)
+
+        if len(lote) < _TAMANHO_PAGINA:
+            break
+
+        skip += _TAMANHO_PAGINA
+
+    return vendas
+
+
+def resumo_vendedores(data_inicio, data_fim):
+    """Total vendido por vendedora no período, já descontando
+    devoluções (GET /vendas/resumo-vendedores)."""
+
+    response = get(
+        f"/vendas/resumo-vendedores?data_inicio={data_inicio.isoformat()}"
+        f"&data_fim={data_fim.isoformat()}"
+    )
+
+    if response.status_code != 200:
+        raise Exception("Não foi possível carregar o resumo por vendedora.")
+
+    return response.json()
+
+
+def listar_devolucoes(venda_id):
+
+    response = get(f"/vendas/{venda_id}/devolucoes")
+
+    if response.status_code != 200:
+        raise Exception("Não foi possível carregar as devoluções da venda.")
+
+    return response.json()
+
+
+def registrar_devolucao(venda_id, itens, forma_reembolso, motivo=None):
+    """itens = [{"item_venda_id", "quantidade"}]. Devolve a resposta
+    crua (quem chama mostra o "detail" do erro)."""
+
+    return post(
+        f"/vendas/{venda_id}/devolucoes",
+        {
+            "itens": itens,
+            "forma_reembolso": forma_reembolso,
+            "motivo": motivo,
+        },
+    )

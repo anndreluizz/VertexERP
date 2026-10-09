@@ -1,17 +1,27 @@
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, QVariantAnimation
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QFontMetrics, QKeySequence, QPainter, QPainterPath, QPen, QShortcut
 from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
+    QDialog,
     QFrame,
     QGraphicsDropShadowEffect,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLayout,
     QLineEdit,
     QPushButton,
+    QScrollArea,
+    QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 
 from design import tokens
+from design.fonts import fonte
 from design.animations import fade_in
 from design.icons import icone, icone_pixmap
 from utils.acessibilidade import movimento_reduzido
@@ -171,6 +181,20 @@ class CardKPI(Card):
         )
         self.lbl_variacao.show()
 
+    def definir_legenda(self, texto):
+        """Linha de contexto neutra abaixo do valor (ex.: "de 274
+        cadastros") -- mesmo lugar do selo de variação, pra quando não
+        existe percentual de comparação mas o número sozinho fica sem
+        referência. Texto vazio esconde."""
+
+        if not texto:
+            self.lbl_variacao.hide()
+            return
+
+        cor = "rgba(255, 255, 255, 0.75)" if self._destaque else tokens.TEXTO_TERCIARIO
+        self.lbl_variacao.setText(f'<span style="color:{cor};">{texto}</span>')
+        self.lbl_variacao.show()
+
     def definir_valor(self, texto):
         # o fade sutil da um "respiro" visual toda vez que o numero
         # muda (carregamento inicial ou um recarregar/filtro) -- sem
@@ -262,7 +286,7 @@ class _BotaoAnimado(QPushButton):
         cor_normal="#2563EB",
         cor_hover="#1D4ED8",
         cor_texto="#FFFFFF",
-        cor_desabilitado="#E5E7EB",
+        cor_desabilitado=None,
         contorno=False,
         altura=44,
     ):
@@ -273,13 +297,15 @@ class _BotaoAnimado(QPushButton):
         self._cor_hover = QColor(cor_hover)
         self._cor_atual = QColor(cor_normal)
         self._cor_texto = QColor(cor_texto)
-        self._cor_desabilitado = QColor(cor_desabilitado)
+        # padrão vem do tema (BORDA): o cinza fixo #E5E7EB ficava um bloco
+        # claro no tema escuro
+        self._cor_desabilitado = QColor(cor_desabilitado or tokens.BORDA)
         self._contorno = contorno
         self._icone_nome = icone_nome
 
         self.setCursor(Qt.PointingHandCursor)
         self.setMinimumHeight(altura)
-        self.setFont(QFont(tokens.FONTE_FAMILIA_PADRAO, tokens.TAMANHO_MD))
+        self.setFont(fonte(tokens.TAMANHO_BASE))
 
         self._anim = QVariantAnimation(self)
         self._anim.setDuration(150)
@@ -788,3 +814,513 @@ class FlowLayout(QLayout):
             altura_linha = max(altura_linha, tamanho_item.height())
 
         return y + altura_linha - rect.y() + baixo
+
+
+# ==========================================
+# DIÁLOGO PADRÃO — molde único das subtelas
+# ==========================================
+
+class DialogoPadrao(QDialog):
+    """Molde das subtelas (cadastros, pagamentos, confirmações): topo
+    com CabecalhoDialogo, corpo com rolagem só quando precisa e rodapé
+    com Cancelar + ação principal alinhados à direita. Três larguras
+    fixas pra todas as subtelas terem o mesmo tamanho de "família":
+    PEQUENO (confirmação de um valor), MEDIO (pagamento/lançamento) e
+    GRANDE (cadastro em duas colunas).
+
+    Uso: monta o conteúdo em self.corpo, chama definir_botoes() com o
+    botão principal e, no fim do __init__, ajustar_altura()."""
+
+    PEQUENO = 560
+    MEDIO = 760
+    GRANDE = 860
+
+    def __init__(
+        self, titulo, subtitulo, icone_nome,
+        cor=None, cor_fundo=None, largura=MEDIO, parent=None,
+    ):
+
+        super().__init__(parent)
+
+        self.setWindowTitle(titulo)
+        # fundo branco (CARD): os cartões de resumo das subtelas usam
+        # FUNDO pra se destacar -- num fundo FUNDO eles sumiriam
+        self.setStyleSheet(f"background:{tokens.CARD};")
+        self.setMinimumWidth(largura)
+        self.resize(largura, 600)
+
+        raiz = QVBoxLayout(self)
+        raiz.setContentsMargins(0, 0, 0, 0)
+        raiz.setSpacing(0)
+
+        self.cabecalho = CabecalhoDialogo(
+            icone_nome, cor or tokens.PRIMARIA, cor_fundo or tokens.PRIMARIA_CLARA,
+            titulo, subtitulo, fechavel=True, ao_fechar=self.reject,
+        )
+        raiz.addWidget(self.cabecalho)
+
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
+
+        self._corpo_widget = QWidget()
+        self._corpo_widget.setStyleSheet("background:transparent;")
+        self.corpo = QVBoxLayout(self._corpo_widget)
+        self.corpo.setContentsMargins(28, 18, 28, 18)
+        self.corpo.setSpacing(16)
+
+        self._scroll.setWidget(self._corpo_widget)
+        raiz.addWidget(self._scroll, stretch=1)
+
+        self._rodape_frame = QFrame()
+        self._rodape_frame.setObjectName("RodapeDialogo")
+        self._rodape_frame.setStyleSheet(f"""
+            #RodapeDialogo {{ background:{tokens.CARD}; border-top:1px solid {tokens.BORDA}; }}
+        """)
+        self.rodape = QHBoxLayout(self._rodape_frame)
+        self.rodape.setContentsMargins(28, 14, 28, 14)
+        self.rodape.setSpacing(10)
+        raiz.addWidget(self._rodape_frame)
+
+    def definir_botoes(self, principal, texto_cancelar="Cancelar"):
+        """Cancelar + botão principal à direita. Devolve o Cancelar
+        (quem precisa desabilitar durante o salvamento guarda ele)."""
+
+        self.bt_cancelar = BotaoSecundario(texto_cancelar)
+        self.bt_cancelar.setAutoDefault(False)
+        self.bt_cancelar.setMinimumWidth(140)
+        self.bt_cancelar.clicked.connect(self.reject)
+
+        principal.setMinimumWidth(200)
+
+        self.rodape.addStretch()
+        self.rodape.addWidget(self.bt_cancelar)
+        self.rodape.addWidget(principal)
+
+        return self.bt_cancelar
+
+    def ajustar_altura(self):
+        """Altura do conteúdo, limitada a 90% da área útil da tela --
+        passando disso o corpo rola e cabeçalho/rodapé ficam fixos."""
+
+        # conteúdo que chega depois (thread) ainda não foi medido: força
+        # o layout a recalcular antes de ler o sizeHint
+        self.corpo.invalidate()
+        self.corpo.activate()
+        self._corpo_widget.adjustSize()
+        altura = (
+            self.cabecalho.sizeHint().height()
+            + self._corpo_widget.sizeHint().height()
+            + self._rodape_frame.sizeHint().height()
+            + 2
+        )
+        tela = (self.screen() or QApplication.primaryScreen()).availableGeometry()
+        self.resize(self.width(), min(altura, int(tela.height() * 0.9)))
+
+
+def campo_rotulado(rotulo, widget, dica=None):
+    """Rótulo (em cima) + campo + dica opcional (embaixo), como um bloco
+    só -- é a peça que vai nas grades de formulário das subtelas."""
+
+    bloco = QWidget()
+    bloco.setStyleSheet("background:transparent;")
+    layout = QVBoxLayout(bloco)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(6)
+
+    lbl = QLabel(rotulo)
+    lbl.setStyleSheet(f"""
+        background:transparent; font-size:{tokens.TAMANHO_SM}px;
+        font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
+    """)
+    lbl.setBuddy(widget)
+    layout.addWidget(lbl)
+    layout.addWidget(widget)
+
+    if dica:
+        lbl_dica = QLabel(dica)
+        lbl_dica.setWordWrap(True)
+        lbl_dica.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            color:{tokens.TEXTO_TERCIARIO};
+        """)
+        layout.addWidget(lbl_dica)
+
+    return bloco
+
+
+def grade_formulario(*itens):
+    """Grade de formulário em 2 colunas iguais; cada item é
+    (widget, linha, coluna[, linhas, colunas] | [, alinhamento])."""
+
+    from PySide6.QtWidgets import QGridLayout
+
+    grade = QGridLayout()
+    grade.setHorizontalSpacing(16)
+    grade.setVerticalSpacing(14)
+    for widget, *posicao in itens:
+        grade.addWidget(widget, *posicao)
+    grade.setColumnStretch(0, 1)
+    grade.setColumnStretch(1, 1)
+    return grade
+
+
+def titulo_secao(texto):
+    """Título de grupo dentro de um formulário ("DADOS PESSOAIS",
+    "CONTATO"...) com a linha fina embaixo."""
+
+    bloco = QWidget()
+    bloco.setStyleSheet("background:transparent;")
+    layout = QVBoxLayout(bloco)
+    layout.setContentsMargins(0, 4, 0, 0)
+    layout.setSpacing(8)
+
+    lbl = QLabel(texto.upper())
+    lbl.setStyleSheet(f"""
+        background:transparent; font-size:{tokens.TAMANHO_XS}px;
+        font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.6px;
+    """)
+    linha = QFrame()
+    linha.setFixedHeight(1)
+    linha.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
+
+    layout.addWidget(lbl)
+    layout.addWidget(linha)
+
+    return bloco
+
+
+# ==========================================
+# FORMAS DE PAGAMENTO — uma cor por forma
+# ==========================================
+
+# (tema claro, tema escuro) -- mesma cor em toda tela que mostra formas
+# de pagamento (PDV, fiado, despesa), pra Dinheiro ser sempre verde,
+# PIX sempre verde-azulado etc.; o escuro usa o tom claro da mesma cor
+_CORES_FORMA = {
+    "DINHEIRO": ("#15803D", "#4ADE80"),
+    "PIX": ("#0F766E", "#2DD4BF"),
+    "DEBITO": ("#1D4ED8", "#60A5FA"),
+    "CARTAO": ("#1D4ED8", "#60A5FA"),
+    "CREDITO": ("#6D28D9", "#A78BFA"),
+    "PRAZO": ("#B45309", "#FBBF24"),
+    "CHEQUE": ("#B45309", "#FBBF24"),
+    "TRANSFERENCIA": ("#BE185D", "#F472B6"),
+}
+
+
+def cor_forma_pagamento(forma):
+    claro, escuro = _CORES_FORMA.get(forma, (tokens.PRIMARIA, tokens.PRIMARIA))
+    return escuro if tokens.ESCURO_ATIVO else claro
+
+
+def estilo_botao_forma(forma, selecionado, extra=""):
+    """(stylesheet, cor do ícone) do botão de uma forma de pagamento:
+    tingido com a cor da forma quando solto, cheio quando escolhido.
+    `extra` entra no bloco QPushButton (alinhamento, padding...)."""
+
+    cor = QColor(cor_forma_pagamento(forma))
+    rgb = f"{cor.red()}, {cor.green()}, {cor.blue()}"
+
+    if selecionado:
+        texto = tokens.FUNDO if tokens.ESCURO_ATIVO else "#FFFFFF"
+        fundo, borda, fundo_hover = cor.name(), cor.name(), cor.darker(110).name()
+    else:
+        texto = cor.name()
+        fundo, borda, fundo_hover = f"rgba({rgb}, 0.08)", f"rgba({rgb}, 0.35)", f"rgba({rgb}, 0.16)"
+
+    return f"""
+        QPushButton {{
+            background:{fundo}; color:{texto}; border:1.5px solid {borda};
+            border-radius:{tokens.RADIUS_SM}px; font-weight:700;
+            font-size:{tokens.TAMANHO_MD}px; {extra}
+        }}
+        QPushButton:hover {{ background:{fundo_hover}; border-color:{cor.name()}; }}
+        QPushButton:focus {{ border:2px solid {cor.name()}; }}
+    """, texto
+
+
+# ==========================================
+# LISTAS — tabelas/árvores das subtelas de "Gerenciar"
+# ==========================================
+
+def estilo_lista():
+    """Stylesheet das listas das subtelas (QTableWidget e QTreeWidget):
+    linhas altas, seleção suave na cor primária e cabeçalho discreto."""
+
+    return f"""
+        QTableWidget, QTreeWidget {{
+            border:1.5px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_MD}px;
+            background:{tokens.CARD}; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_MD}px; outline:none;
+            alternate-background-color:{tokens.FUNDO};
+        }}
+        QTableWidget::item, QTreeWidget::item {{
+            padding:0 12px; border:none; border-bottom:1px solid {tokens.BORDA};
+        }}
+        QTableWidget::item:hover, QTreeWidget::item:hover {{ background:{tokens.FUNDO}; }}
+        QTableWidget::item:selected, QTreeWidget::item:selected {{
+            background:{tokens.PRIMARIA_CLARA}; color:{tokens.PRIMARIA}; font-weight:700;
+        }}
+        QHeaderView::section {{
+            background:{tokens.FUNDO}; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:800; padding:8px 12px;
+            border:none; border-bottom:1px solid {tokens.BORDA};
+        }}
+    """
+
+
+def tabela_lista(colunas):
+    """QTableWidget no padrão das subtelas: seleção de linha única, sem
+    edição na célula e com o estilo de estilo_lista()."""
+
+    tabela = QTableWidget()
+    tabela.setColumnCount(len(colunas))
+    tabela.setHorizontalHeaderLabels([c.upper() for c in colunas])
+    tabela.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+    tabela.horizontalHeader().setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    tabela.horizontalHeader().setHighlightSections(False)
+    tabela.verticalHeader().setDefaultSectionSize(46)
+    tabela.verticalHeader().setVisible(False)
+    tabela.setShowGrid(False)
+    tabela.setSelectionBehavior(QAbstractItemView.SelectRows)
+    tabela.setSelectionMode(QAbstractItemView.SingleSelection)
+    tabela.setEditTriggers(QAbstractItemView.NoEditTriggers)
+    tabela.setFocusPolicy(Qt.StrongFocus)
+    tabela.setStyleSheet(estilo_lista())
+    return tabela
+
+
+def pedir_texto(
+    parent, titulo, rotulo, valor="", icone_nome="edit-2", maiusculas=False,
+    subtitulo="Altere o nome e salve", texto_botao="Salvar",
+):
+    """Substitui o QInputDialog (caixinha cinza do Windows) por uma
+    subtela no molde padrão. Devolve (texto, ok) como o QInputDialog."""
+
+    dialogo = DialogoPadrao(
+        titulo, subtitulo, icone_nome,
+        largura=DialogoPadrao.PEQUENO, parent=parent,
+    )
+
+    campo = CampoTexto()
+    campo.setText(valor)
+    if maiusculas:
+        from utils.maiusculas import forcar_maiusculas
+        forcar_maiusculas(campo)
+    campo.returnPressed.connect(dialogo.accept)
+    dialogo.corpo.addWidget(campo_rotulado(rotulo, campo))
+    dialogo.corpo.addStretch()
+
+    bt_salvar = BotaoSucesso(texto_botao, icone_nome="check")
+    bt_salvar.setAutoDefault(False)
+    bt_salvar.clicked.connect(dialogo.accept)
+    dialogo.definir_botoes(bt_salvar)
+    dialogo.ajustar_altura()
+
+    campo.setFocus()
+    campo.selectAll()
+
+    ok = dialogo.exec() == QDialog.Accepted
+    return campo.text(), ok
+
+
+class DialogoGerenciar(DialogoPadrao):
+    """Molde das listas simples de cadastro (categorias, marcas, centros
+    de custo...): campo + Adicionar no topo, lista com contador e rodapé
+    com Editar/Excluir à esquerda e Fechar à direita.
+
+    Cria self.novo_nome, self.bt_adicionar, self.tabela, self.bt_editar
+    e self.bt_excluir e liga cada um ao método de mesmo nome na
+    subclasse (adicionar/editar/excluir). A subclasse preenche a lista
+    com preencher_nomes()."""
+
+    def __init__(
+        self, titulo, subtitulo, icone_nome, placeholder,
+        item_singular, item_plural, maiusculas=True, parent=None,
+    ):
+
+        super().__init__(
+            titulo, subtitulo, icone_nome,
+            largura=DialogoPadrao.PEQUENO, parent=parent,
+        )
+        self.resize(DialogoPadrao.PEQUENO, 640)
+
+        self._item_singular = item_singular
+        self._item_plural = item_plural
+
+        # ---- adicionar ----
+        linha_nova = QHBoxLayout()
+        linha_nova.setSpacing(10)
+
+        self.novo_nome = CampoTexto(placeholder, cor_foco=tokens.SECUNDARIA)
+        if maiusculas:
+            from utils.maiusculas import forcar_maiusculas
+            forcar_maiusculas(self.novo_nome)
+        self.novo_nome.returnPressed.connect(self._adicionar_se_novo)
+        # o mesmo campo filtra a lista: quem vai cadastrar já vê se o
+        # nome existe (evita "COCA" e "COCA-COLA" duplicados)
+        self.novo_nome.textChanged.connect(self._filtrar)
+
+        self.bt_adicionar = BotaoSucesso("Adicionar", icone_nome="plus")
+        self.bt_adicionar.setAutoDefault(False)
+        self.bt_adicionar.setMinimumHeight(44)
+        self.bt_adicionar.clicked.connect(self._adicionar_se_novo)
+
+        linha_nova.addWidget(self.novo_nome, 1)
+        linha_nova.addWidget(self.bt_adicionar)
+        self.corpo.addLayout(linha_nova)
+
+        # ---- lista ----
+        self.lbl_contador = QLabel("Carregando...")
+        self.lbl_contador.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px;
+            font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.5px;
+        """)
+        self.corpo.addWidget(self.lbl_contador)
+
+        self.tabela = tabela_lista(["Nome"])
+        self.tabela.horizontalHeader().setVisible(False)
+        self.tabela.cellDoubleClicked.connect(lambda *_: self.editar())
+        self.corpo.addWidget(self.tabela, stretch=1)
+
+        # atalhos de PDV: F2 edita, Del exclui o item selecionado
+        for tecla, acao in ((Qt.Key_F2, self.editar), (Qt.Key_Delete, self._excluir_por_tecla)):
+            atalho = QShortcut(QKeySequence(tecla), self)
+            atalho.activated.connect(acao)
+
+        self.lbl_dica = QLabel()
+        self.corpo.addWidget(self.lbl_dica)
+
+        # ---- rodapé ----
+        self.bt_editar = BotaoSecundario("Editar", icone_nome="edit-2")
+        self.bt_editar.setAutoDefault(False)
+        self.bt_editar.clicked.connect(self.editar)
+
+        self.bt_excluir = BotaoPerigo("Excluir", icone_nome="trash-2")
+        self.bt_excluir.setAutoDefault(False)
+        self.bt_excluir.clicked.connect(self.excluir)
+
+        self.bt_fechar = BotaoPrimario("Fechar")
+        self.bt_fechar.setAutoDefault(False)
+        self.bt_fechar.setMinimumWidth(140)
+        self.bt_fechar.clicked.connect(self.accept)
+
+        self.rodape.addWidget(self.bt_editar)
+        self.rodape.addWidget(self.bt_excluir)
+        self.rodape.addStretch()
+        self.rodape.addWidget(self.bt_fechar)
+
+        self._mostrar_dica()
+
+    def preencher_nomes(self, nomes):
+
+        self.tabela.setRowCount(len(nomes))
+        for linha, nome in enumerate(nomes):
+            self.tabela.setItem(linha, 0, QTableWidgetItem(nome))
+
+        self._filtrar(self.novo_nome.text())
+
+    def _nomes(self):
+        return [
+            (self.tabela.item(linha, 0).text() if self.tabela.item(linha, 0) else "")
+            for linha in range(self.tabela.rowCount())
+        ]
+
+    def _filtrar(self, texto):
+
+        texto = (texto or "").strip().upper()
+        nomes = self._nomes()
+        visiveis = 0
+        for linha, nome in enumerate(nomes):
+            mostra = texto in nome.upper()
+            self.tabela.setRowHidden(linha, not mostra)
+            visiveis += mostra
+
+        total = len(nomes)
+        nome_item = self._item_singular if total == 1 else self._item_plural
+        if total == 0:
+            self.lbl_contador.setText("NADA CADASTRADO AINDA")
+        elif texto:
+            self.lbl_contador.setText(f"{visiveis} DE {total} {nome_item.upper()}")
+        else:
+            self.lbl_contador.setText(f"{total} {nome_item.upper()}")
+
+        repetido = bool(texto) and texto in (n.upper() for n in nomes)
+        self.bt_adicionar.setEnabled(not repetido)
+        self._mostrar_dica(repetido)
+
+    def _mostrar_dica(self, repetido=False):
+
+        if repetido:
+            self.lbl_dica.setText("Esse nome já está na lista.")
+            cor = tokens.ERRO
+        else:
+            # o botão Excluir some sem permissão -- aí o Del também não vale
+            del_exclui = "" if self.bt_excluir.isHidden() else "  ·  Del exclui"
+            self.lbl_dica.setText(
+                "Digite pra buscar ou cadastrar  ·  Enter adiciona  ·  "
+                f"F2 ou duplo clique edita{del_exclui}"
+            )
+            cor = tokens.TEXTO_TERCIARIO
+        self.lbl_dica.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_XS}px; color:{cor};
+        """)
+
+    def _adicionar_se_novo(self):
+        # confere de novo aqui: o carregar() da subclasse reabilita o
+        # botão no fim, mesmo com nome repetido digitado
+        texto = self.novo_nome.text().strip().upper()
+        if texto and texto in (n.upper() for n in self._nomes()):
+            self._mostrar_dica(True)
+            return
+        self.adicionar()
+
+    def _excluir_por_tecla(self):
+        # Del no campo de texto apaga letra, não o item da lista
+        if not self.novo_nome.hasFocus() and self.bt_excluir.isVisible() and self.bt_excluir.isEnabled():
+            self.excluir()
+
+
+# ==========================================
+# PILHA DE PÁGINAS — só a página aberta define o tamanho
+# ==========================================
+
+class PilhaPaginas(QStackedWidget):
+    """QStackedWidget mede o mínimo pela MAIOR página, mesmo escondida --
+    uma página alta deixava a janela/subtela inteira maior que a tela
+    (rodapé atrás da barra de tarefas, rolagem na etapa curta). Aqui só
+    a página aberta conta."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.layout().setSizeConstraint(QLayout.SetNoConstraint)
+        self.setStyleSheet("background:transparent;")
+        self.currentChanged.connect(lambda _i: self.updateGeometry())
+
+    def minimumSizeHint(self):
+        atual = self.currentWidget()
+        return atual.minimumSizeHint() if atual else super().minimumSizeHint()
+
+    def sizeHint(self):
+        atual = self.currentWidget()
+        return atual.sizeHint() if atual else super().sizeHint()
+
+
+def estilo_checkbox():
+    """Checkbox com o quadradinho visível nos dois temas (o padrão some
+    em fundo branco)."""
+    return f"""
+        QCheckBox {{
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_SM}px; spacing:8px;
+        }}
+        QCheckBox::indicator {{
+            width:16px; height:16px; border-radius:4px;
+            border:1.5px solid {tokens.BORDA_FORTE}; background:{tokens.CARD};
+        }}
+        QCheckBox::indicator:checked {{
+            border:1.5px solid {tokens.PRIMARIA}; background:{tokens.PRIMARIA};
+        }}
+    """

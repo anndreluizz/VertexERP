@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
+import '../../core/cliente_analise.dart';
 import '../../core/providers.dart';
 import '../../models/cliente.dart';
 import '../../models/movimento_fiado.dart';
@@ -8,9 +9,7 @@ import '../vendas/vendas_provider.dart';
 
 final buscaClientesProvider = StateProvider<String>((ref) => '');
 
-final clientesProvider = FutureProvider.autoDispose<List<Cliente>>((
-  ref,
-) async {
+final clientesProvider = FutureProvider.autoDispose<List<Cliente>>((ref) async {
   final api = ref.watch(apiClientProvider);
   final resposta = await api.dio.get('/clientes/');
 
@@ -22,6 +21,83 @@ final clientesProvider = FutureProvider.autoDispose<List<Cliente>>((
   clientes.sort((a, b) => a.nome.compareTo(b.nome));
   return clientes;
 });
+
+/// Todos os movimentos de fiado da loja (sem limite no backend) -- base
+/// da classificacao dos clientes e do resumo do fiado no Inicio.
+final movimentosFiadoProvider =
+    FutureProvider.autoDispose<List<MovimentoFiado>>((ref) async {
+      final api = ref.watch(apiClientProvider);
+      final resposta = await api.dio.get('/fiado/movimentos');
+      return (resposta.data as List<dynamic>)
+          .map((json) => MovimentoFiado.fromJson(json as Map<String, dynamic>))
+          .toList();
+    });
+
+/// Analise (saldo, atraso, selo) de cada cliente, por id.
+final analisesClientesProvider =
+    FutureProvider.autoDispose<Map<int, AnaliseCliente>>((ref) async {
+      final movimentos = await ref.watch(movimentosFiadoProvider.future);
+      return analisarTodos(movimentos);
+    });
+
+class ClienteComAnalise {
+  const ClienteComAnalise(this.cliente, this.analise);
+
+  final Cliente cliente;
+  final AnaliseCliente analise;
+
+  /// fracao do limite ja usada (0..1+), null sem limite definido
+  double? get usoLimite {
+    final limite = cliente.limiteCredito;
+    if (limite == null || limite <= 0) return null;
+    return analise.saldoDevedor / limite;
+  }
+}
+
+final clientesComAnaliseProvider =
+    FutureProvider.autoDispose<List<ClienteComAnalise>>((ref) async {
+      final clientes = await ref.watch(clientesProvider.future);
+      final analises = await ref.watch(analisesClientesProvider.future);
+      return [
+        for (final c in clientes)
+          ClienteComAnalise(c, analises[c.id] ?? AnaliseCliente.vazia),
+      ];
+    });
+
+enum FiltroClientes {
+  todos,
+  inadimplentes,
+  pagaComAtraso,
+  bonsPagadores,
+  emDia,
+}
+
+extension FiltroClientesInfo on FiltroClientes {
+  String get rotulo => switch (this) {
+    FiltroClientes.todos => 'Todos',
+    FiltroClientes.inadimplentes => 'Inadimplentes',
+    FiltroClientes.pagaComAtraso => 'Pagam com atraso',
+    FiltroClientes.bonsPagadores => 'Bons pagadores',
+    FiltroClientes.emDia => 'Em dia',
+  };
+
+  bool aplica(ClienteComAnalise c) => switch (this) {
+    FiltroClientes.todos => true,
+    FiltroClientes.inadimplentes =>
+      c.analise.status == StatusCliente.inadimplente,
+    FiltroClientes.pagaComAtraso =>
+      c.analise.status == StatusCliente.pagaComAtraso,
+    FiltroClientes.bonsPagadores =>
+      c.analise.status == StatusCliente.bomPagador,
+    FiltroClientes.emDia =>
+      c.analise.status == StatusCliente.emDia ||
+          c.analise.status == StatusCliente.quitado,
+  };
+}
+
+final filtroClientesProvider = StateProvider<FiltroClientes>(
+  (ref) => FiltroClientes.todos,
+);
 
 final clienteProvider = FutureProvider.autoDispose.family<Cliente, int>((
   ref,
@@ -49,9 +125,7 @@ final historicoFiadoProvider = FutureProvider.autoDispose
       );
 
       final movimentos = (resposta.data as List<dynamic>)
-          .map(
-            (json) => MovimentoFiado.fromJson(json as Map<String, dynamic>),
-          )
+          .map((json) => MovimentoFiado.fromJson(json as Map<String, dynamic>))
           .toList();
 
       movimentos.sort((a, b) => b.data.compareTo(a.data));
@@ -124,6 +198,7 @@ class ClientesActions {
       );
       _ref.invalidate(saldoFiadoProvider(clienteId));
       _ref.invalidate(historicoFiadoProvider(clienteId));
+      _ref.invalidate(movimentosFiadoProvider);
       return null;
     } catch (e) {
       return mensagemDeErro(

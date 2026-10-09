@@ -18,10 +18,10 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.animations import fade_in
-from design.icons import icone_pixmap
-from design.widgets import CardKPI, SecaoCard, Badge, BotaoSecundario, Card
+from design.icons import icone, icone_pixmap
+from design.widgets import CardKPI, SecaoCard, Badge, BotaoPrimario, BotaoSecundario, Card
 from design.charts import GraficoArea, LinhaProgresso
-from widgets.nav_card import NavCard
+from telas.dashboard_personalizar import KPIS_OCULTOS_PADRAO
 
 from services.api import dashboard, me
 from services.venda_service import listar_vendas
@@ -237,42 +237,13 @@ class Dashboard(QWidget):
         self.layout_principal.addLayout(linha_saudacao)
 
         # ======================
-        # ATALHOS
-        # ======================
-
-        nav_layout = QHBoxLayout()
-        nav_layout.setSpacing(16)
-
-        self.card_pdv = NavCard(
-            "Frente de Caixa", "Venda rápida",
-            tokens.PRIMARIA, tokens.PRIMARIA_ESCURA, icone_nome="shopping-cart",
-            atalho="F3", texto_botao="Abrir PDV",
-        )
-        self.card_estoque = NavCard(
-            "Estoque", "Gestão de itens",
-            tokens.SECUNDARIA, tokens.SECUNDARIA_ESCURA, icone_nome="package",
-            texto_botao="Ver estoque",
-        )
-        self.card_caixa = NavCard(
-            "Caixa", "Abertura e fechamento",
-            tokens.ALERTA, tokens.ALERTA_ESCURA, icone_nome="wallet",
-            texto_botao="Acessar caixa",
-        )
-
-        self.card_pdv.clicado.connect(self.navegar_pdv.emit)
-        self.card_estoque.clicado.connect(self.navegar_estoque.emit)
-        self.card_caixa.clicado.connect(self.navegar_caixa.emit)
-
-        nav_layout.addWidget(self.card_pdv)
-        nav_layout.addWidget(self.card_estoque)
-        nav_layout.addWidget(self.card_caixa)
-
-        self.layout_principal.addLayout(nav_layout)
-
-        # ======================
         # AÇÕES RÁPIDAS
         # ======================
 
+        # Uma barra só no lugar dos 3 cards coloridos (Frente de Caixa,
+        # Estoque, Caixa) + a linha de ações rápidas, que repetia parte
+        # deles ("Nova venda" = "Abrir PDV"). Juntos ocupavam ~280px
+        # antes do primeiro número da tela.
         self.layout_principal.addWidget(self._construir_acoes_rapidas())
 
         # ======================
@@ -395,8 +366,12 @@ class Dashboard(QWidget):
     def _construir_badge_info(self, icone_nome):
 
         badge = QFrame()
+        # seletor por objectName: "QFrame { border }" também pegava o
+        # QLabel de dentro (QLabel herda de QFrame) e desenhava uma
+        # segunda borda em volta do texto
+        badge.setObjectName("badgeInfo")
         badge.setStyleSheet(f"""
-            QFrame {{
+            #badgeInfo {{
                 background: {tokens.CARD};
                 border: 1px solid {tokens.BORDA};
                 border-radius: {tokens.RADIUS_SM}px;
@@ -431,18 +406,15 @@ class Dashboard(QWidget):
         card = Card()
 
         layout = QHBoxLayout(card)
-        layout.setContentsMargins(20, 14, 20, 14)
+        layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(10)
 
-        lbl_titulo = QLabel("Ações rápidas")
-        lbl_titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
-        """)
-        layout.addWidget(lbl_titulo)
+        bt_pdv = BotaoPrimario("Abrir PDV  (F3)", icone_nome="shopping-cart")
+        bt_pdv.setMinimumHeight(42)
+        bt_pdv.clicked.connect(self.navegar_pdv.emit)
+        layout.addWidget(bt_pdv)
 
         acoes = [
-            ("shopping-cart", "Nova venda", "F3", self.navegar_pdv.emit),
             ("package", "Novo produto", "F4", self._acao_novo_produto),
             ("users", "Novo cliente", "F7", self._acao_novo_cliente),
             ("file-text", "Registrar despesa", "F8", self._acao_registrar_despesa),
@@ -450,11 +422,39 @@ class Dashboard(QWidget):
 
         for icone_nome, texto, atalho, callback in acoes:
             botao = BotaoSecundario(texto, icone_nome=icone_nome)
+            botao.setMinimumHeight(42)
             botao.setToolTip(f"Atalho: {atalho}")
             botao.clicked.connect(callback)
             layout.addWidget(botao)
 
         layout.addStretch()
+
+        # Estoque e Caixa (antes cards grandes) viram links discretos --
+        # também estão no menu lateral
+        lbl_ir = QLabel("Ir para:")
+        lbl_ir.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
+        layout.addWidget(lbl_ir)
+
+        for texto, icone_nome, sinal in (
+            ("Estoque", "package", self.navegar_estoque),
+            ("Caixa", "wallet", self.navegar_caixa),
+        ):
+            link = QPushButton(f" {texto}")
+            link.setIcon(icone(icone_nome, cor=tokens.PRIMARIA, tamanho=14))
+            link.setCursor(Qt.PointingHandCursor)
+            link.setStyleSheet(f"""
+                QPushButton {{
+                    background:transparent; border:none; padding:6px 8px;
+                    color:{tokens.PRIMARIA}; font-size:{tokens.TAMANHO_SM}px;
+                    font-weight:700; border-radius:{tokens.RADIUS_SM}px;
+                }}
+                QPushButton:hover {{ background:{tokens.PRIMARIA_CLARA}; }}
+            """)
+            link.clicked.connect(sinal.emit)
+            layout.addWidget(link)
 
         # atalhos F4/F7/F8 -- F3 (nova venda) já é global, tratado em
         # telas/principal.py. Escopo por widget (nao global) pra nao
@@ -498,6 +498,10 @@ class Dashboard(QWidget):
 
     def _preferencia_kpis(self):
         salvo = preferencias_service.carregar(self._usuario_id, "dashboard_kpis", {})
+        if not salvo:
+            # nunca personalizou: só os números que mudam no dia (ver
+            # KPIS_OCULTOS_PADRAO) -- quem já personalizou mantém a escolha
+            return [], set(KPIS_OCULTOS_PADRAO)
         return salvo.get("ordem", []), set(salvo.get("ocultos", []))
 
     def _preferencia_paineis_ocultos(self):

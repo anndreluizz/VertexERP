@@ -1,5 +1,6 @@
 from telas.dashboard import Dashboard
 from telas.pdv import PDV
+from telas.vendas import Vendas
 from telas.caixa import Caixa
 from telas.produtos import Produtos
 from telas.ajuste_estoque import AjusteEstoque
@@ -27,7 +28,6 @@ from PySide6.QtWidgets import (
     QWidget,
     QHBoxLayout,
     QVBoxLayout,
-    QStackedWidget,
     QDialog,
     QMessageBox,
     QFrame,
@@ -39,11 +39,13 @@ from design import tokens
 from design.icons import icone
 from design.sidebar import Sidebar
 from design.header import Header
-from design.widgets import BotaoSecundario
+from design.janela import pintar_barra_titulo
+from design.widgets import BotaoSecundario, PilhaPaginas
 from services import api, backup_service
 from services.caixa_service import caixa_aberto, abrir_caixa
 from services.preferencias_service import salvar_tema_escuro
 from services.worker import rodar_em_thread
+from utils.formatacao import formatar_moeda
 
 # intervalo da checagem de "sem conexao com o servidor" em segundo
 # plano (ver Header.definir_online) -- nao precisa ser rapido, e so'
@@ -119,6 +121,7 @@ class FaixaAvisoBackup(QFrame):
 ITENS_MENU = [
     ("dashboard", "home", "Início"),
     ("pdv", "shopping-cart", "PDV"),
+    ("vendas", "file-text", "Vendas"),
     ("produtos", "package", "Produtos"),
     ("ajuste_estoque", "refresh-cw", "Ajuste de Estoque"),
     ("transferencia_estoque", "store", "Transferência entre Lojas"),
@@ -141,7 +144,13 @@ class PrincipalWindow(QMainWindow):
 
         self.setWindowTitle("Vertex ERP")
         self.resize(1400, 800)
+        # abre maximizada, igual a tela de login -- quem cria a janela
+        # so' chama show(), e esse estado ja vale pra ele
+        self.setWindowState(Qt.WindowMaximized)
         self.setStyleSheet(f"QMainWindow {{ background: {tokens.FUNDO}; }}")
+        # barra de título do Windows na cor do menu lateral (era a branca
+        # padrão, destoando do menu azul-escuro logo abaixo)
+        pintar_barra_titulo(self, tokens.SIDEBAR, tokens.TEXTO_CLARO)
 
         # info_usuario/config podem vir ja' prontos de quem chamou (ver
         # telas/login.py e telas/cadastro_inicial.py, que buscam isso
@@ -205,11 +214,12 @@ class PrincipalWindow(QMainWindow):
         self.faixa_backup.ver_backups.connect(self._abrir_aba_backup)
         layout_central.addWidget(self.faixa_backup)
 
-        self.paginas = QStackedWidget()
+        self.paginas = PilhaPaginas()
         layout_central.addWidget(self.paginas, stretch=1)
 
         self.dashboard = Dashboard(usuario_id=info_usuario.get("id"))
         self.pdv = PDV()
+        self.vendas = Vendas()
         self.produtos = Produtos()
         self.ajuste_estoque = AjusteEstoque()
         self.transferencia_estoque = TransferenciaEstoque()
@@ -233,6 +243,7 @@ class PrincipalWindow(QMainWindow):
 
         self.paginas.addWidget(self.dashboard)
         self.paginas.addWidget(self.pdv)
+        self.paginas.addWidget(self.vendas)
         self.paginas.addWidget(self.produtos)
         self.paginas.addWidget(self.ajuste_estoque)
         self.paginas.addWidget(self.transferencia_estoque)
@@ -271,6 +282,11 @@ class PrincipalWindow(QMainWindow):
         self.produtos.voltar.connect(
             lambda: self._exibir_pagina("dashboard", self.dashboard)
         )
+
+        self.vendas.voltar.connect(
+            lambda: self._exibir_pagina("dashboard", self.dashboard)
+        )
+        self.vendas.troca_iniciada.connect(self._iniciar_troca)
 
         self.clientes.voltar.connect(
             lambda: self._exibir_pagina("dashboard", self.dashboard)
@@ -362,6 +378,8 @@ class PrincipalWindow(QMainWindow):
             self.dashboard.carregar()
         elif chave == "clientes":
             self.clientes.carregar()
+        elif chave == "vendas":
+            self.vendas.carregar()
         elif chave == "fornecedores":
             self.fornecedores.carregar()
         elif chave == "ajuste_estoque":
@@ -393,6 +411,7 @@ class PrincipalWindow(QMainWindow):
         paginas = {
             "dashboard": self.dashboard,
             "produtos": self.produtos,
+            "vendas": self.vendas,
             "ajuste_estoque": self.ajuste_estoque,
             "transferencia_estoque": self.transferencia_estoque,
             "contagem_estoque": self.contagem_estoque,
@@ -474,6 +493,22 @@ class PrincipalWindow(QMainWindow):
             self.pdv.finalizar_venda()
         else:
             self.ir_para_pdv()
+
+    def _iniciar_troca(self, credito, cliente):
+        """Devolução da troca registrada na tela de Vendas -- abre o PDV
+        com o valor como crédito (ver PDV.iniciar_troca)."""
+
+        self.ir_para_pdv()
+
+        if self.paginas.currentWidget() is self.pdv:
+            self.pdv.iniciar_troca(credito, cliente)
+        else:
+            QMessageBox.information(
+                self,
+                "Troca",
+                "A devolução foi registrada, mas o PDV não abriu. Devolva "
+                f"{formatar_moeda(credito)} em dinheiro para a cliente.",
+            )
 
     def ir_para_pdv(self):
 

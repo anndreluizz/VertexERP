@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QInputDialog,
     QMenu,
+    QSpinBox,
     QWidget,
 )
 
@@ -320,10 +321,7 @@ class LancarFiadoDialog(DialogoPadrao):
         layout.addWidget(lbl_data_titulo)
         layout.addLayout(linha_data)
 
-        layout.addWidget(self._construir_banner_info(
-            "Este lançamento será registrado no histórico do cliente "
-            "e será considerado no controle de fiado."
-        ))
+        layout.addWidget(self._construir_banner_info(self._texto_banner()))
 
         layout.addStretch()
 
@@ -484,6 +482,14 @@ class LancarFiadoDialog(DialogoPadrao):
         else:
             self.itens.setPlaceholderText("Ex: mochila, caderno")
 
+        divida = tipo == "divida"
+        self.quantidade.setVisible(not divida)
+        self.lbl_quantidade.setVisible(not divida)
+        self.lbl_valor_titulo.setText("Valor da dívida (R$)" if divida else "Valor unitário (R$)")
+        if hasattr(self, "lbl_banner_info"):
+            self.lbl_banner_info.setText(self._texto_banner())
+        self._atualizar_preview_saldo()
+
     def _construir_linha_valor(self):
 
         linha = QHBoxLayout()
@@ -492,10 +498,47 @@ class LancarFiadoDialog(DialogoPadrao):
         col_valor = QVBoxLayout()
         col_valor.setSpacing(6)
 
-        lbl_valor_titulo = QLabel("Valor da compra (R$)")
-        lbl_valor_titulo.setStyleSheet(f"""
+        linha_titulos = QHBoxLayout()
+        linha_titulos.setSpacing(8)
+
+        self.lbl_valor_titulo = QLabel("Valor unitário (R$)")
+        self.lbl_valor_titulo.setStyleSheet(f"""
             background:transparent; font-size:{tokens.TAMANHO_SM}px;
             font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
+        """)
+
+        self.lbl_quantidade = QLabel("Qtd")
+        self.lbl_quantidade.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; color:{tokens.TEXTO_SECUNDARIO};
+        """)
+
+        # quantidade x valor unitario = total da compra
+        self.quantidade = QSpinBox()
+        self.quantidade.setRange(1, 999)
+        self.quantidade.setValue(1)
+        self.quantidade.setMinimumHeight(32)
+        self.quantidade.setMinimumWidth(70)
+        self.quantidade.setStyleSheet(f"""
+            QSpinBox {{
+                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                padding: 0 6px; font-size: {tokens.TAMANHO_MD}px; font-weight:700;
+                color: {tokens.TEXTO}; background: {tokens.CARD};
+            }}
+            QSpinBox:focus {{ border-color: {tokens.PRIMARIA}; }}
+        """)
+        self.quantidade.valueChanged.connect(self._atualizar_preview_saldo)
+
+        linha_titulos.addWidget(self.lbl_valor_titulo)
+        linha_titulos.addStretch()
+        linha_titulos.addWidget(self.lbl_quantidade)
+        linha_titulos.addWidget(self.quantidade)
+
+        self.lbl_total_compra = QLabel()
+        self.lbl_total_compra.setAlignment(Qt.AlignCenter)
+        self.lbl_total_compra.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:700; color:{tokens.TEXTO_SECUNDARIO};
         """)
 
         self.valor = QLineEdit()
@@ -510,8 +553,9 @@ class LancarFiadoDialog(DialogoPadrao):
         """)
         self.valor.textChanged.connect(self._atualizar_preview_saldo)
 
-        col_valor.addWidget(lbl_valor_titulo)
+        col_valor.addLayout(linha_titulos)
         col_valor.addWidget(self.valor)
+        col_valor.addWidget(self.lbl_total_compra)
 
         linha.addLayout(col_valor, 1)
         linha.addWidget(self._construir_preview_saldo(), 1)
@@ -586,15 +630,39 @@ class LancarFiadoDialog(DialogoPadrao):
 
         return caixa
 
+    def _quantidade_atual(self):
+        # divida anterior nao tem quantidade (e' um valor total do caderno)
+        return 1 if self._tipo_registro == "divida" else self.quantidade.value()
+
+    def _total_digitado(self):
+        try:
+            unitario = float((self.valor.text() or "0").replace(",", "."))
+        except ValueError:
+            return None
+        return round(unitario * self._quantidade_atual(), 2)
+
     def _atualizar_preview_saldo(self, _texto=None):
 
-        try:
-            valor = float((self.valor.text() or "0").replace(",", "."))
-        except ValueError:
-            valor = 0.0
+        total = self._total_digitado() or 0.0
 
-        novo_saldo = self._saldo_atual + max(0.0, valor)
+        if self._quantidade_atual() > 1:
+            self.lbl_total_compra.setText(f"Total da compra: {formatar_moeda(total)}")
+        else:
+            self.lbl_total_compra.setText("")
+
+        novo_saldo = self._saldo_atual + max(0.0, total)
         self.lbl_preview_novo_saldo.setText(formatar_moeda(novo_saldo))
+
+    def _texto_banner(self):
+        if self._tipo_registro == "divida":
+            return (
+                "Dívida anterior entra só no fiado da cliente (não conta "
+                "como venda de hoje)."
+            )
+        return (
+            "Compra fiada conta como venda: aparece em Vendas, no seu "
+            "total de vendedora e no faturamento, e entra no fiado da cliente."
+        )
 
     def _construir_banner_info(self, texto):
 
@@ -618,14 +686,15 @@ class LancarFiadoDialog(DialogoPadrao):
             background:transparent; font-size:{tokens.TAMANHO_XS}px; color:{tokens.PRIMARIA_HOVER};
         """)
         layout.addWidget(lbl, 1)
+        self.lbl_banner_info = lbl
 
         return banner
 
     def confirmar(self):
 
-        try:
-            valor = float(self.valor.text().replace(",", "."))
-        except ValueError:
+        valor = self._total_digitado()
+
+        if valor is None:
             QMessageBox.warning(
                 self, "Atenção", "Informe um valor válido."
             )
@@ -638,6 +707,10 @@ class LancarFiadoDialog(DialogoPadrao):
             return
 
         itens = self.itens.text().strip() or None
+
+        quantidade = self._quantidade_atual()
+        if quantidade > 1:
+            itens = f"{quantidade}x {itens or 'item'}"
 
         data_qt = self.data.date()
         data_iso = (
@@ -703,6 +776,7 @@ class LancarFiadoDialog(DialogoPadrao):
             valor,
             itens,
             data_iso,
+            registrar_venda=self._tipo_registro == "compra",
             ao_sucesso=self._ao_enviar_fiado_sucesso,
             ao_erro=self._ao_fiado_erro,
             ao_finalizar=self._ao_checar_limite_finalizado,

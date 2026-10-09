@@ -802,7 +802,12 @@ class VendaService:
         # o cancelamento sempre precisa de um caixa aberto pra
         # registrar o estorno, mesmo quando a venda foi 100% pix/
         # cartao/prazo e nenhum dinheiro fisico esta envolvido.
-        if not CaixaRepository.buscar_aberto(
+        # venda lancada pela ficha do cliente (compra fiada a mao, ver
+        # MovimentoFiadoService.criar): sem itens e sem movimento no
+        # caixa -- cancelar so' desfaz o fiado, nao estorna caixa
+        venda_manual = not venda.itens
+
+        if not venda_manual and not CaixaRepository.buscar_aberto(
             db, usuario_id, venda.loja_id, para_atualizar=True
         ):
             raise Exception(
@@ -856,8 +861,10 @@ class VendaService:
             # aberto. So dinheiro fisico mexe no saldo da gaveta
             # (pix/cartao/prazo nunca afetaram saldo_final na criacao,
             # entao tambem nao devem afetar no estorno).
-            caixa = CaixaRepository.buscar_aberto(
-                db, usuario_id, venda.loja_id, para_atualizar=True
+            caixa = (
+                None if venda_manual else CaixaRepository.buscar_aberto(
+                    db, usuario_id, venda.loja_id, para_atualizar=True
+                )
             )
 
             if caixa:

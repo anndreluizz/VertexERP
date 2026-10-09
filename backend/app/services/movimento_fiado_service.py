@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.cliente import Cliente
 from app.models.movimento_fiado import MovimentoFiado
 from app.models.movimento_caixa import MovimentoCaixa
+from app.models.venda import Venda
 from app.repositories.cliente_repository import ClienteRepository
 from app.repositories.caixa_repository import CaixaRepository
 from app.repositories.movimento_fiado_repository import (
@@ -104,6 +105,7 @@ class MovimentoFiadoService:
         db: Session,
         dados: MovimentoFiadoCreate,
         usuario_id: int,
+        loja_id: int | None = None,
     ):
 
         # FOR UPDATE no cliente: serializa lancamentos do mesmo cliente
@@ -184,15 +186,43 @@ class MovimentoFiadoService:
                 )
             )
 
+        data = dados.data or datetime.now()
+        venda_id = dados.venda_id
+
+        # compra fiada lancada a mao (ver MovimentoFiadoCreate) vira
+        # venda a prazo sem itens, na mesma transacao do fiado. Nao mexe
+        # no caixa nem exige caixa aberto (a prazo nunca entra na gaveta,
+        # e a data pode ser de outro dia) -- ver VendaService.excluir,
+        # que sabe cancelar esse tipo de venda.
+        if (
+            tipo == "COMPRA"
+            and getattr(dados, "registrar_venda", False)
+            and venda_id is None
+        ):
+            venda = Venda(
+                cliente_id=dados.cliente_id,
+                usuario_id=usuario_id,
+                loja_id=loja_id,
+                data=data,
+                valor_total=dados.valor,
+                desconto=0,
+                observacao=(dados.descricao or "Compra no fiado")[:255],
+                forma_pagamento="PRAZO",
+                status="FINALIZADA",
+            )
+            db.add(venda)
+            db.flush()
+            venda_id = venda.id
+
         movimento = MovimentoFiado(
             cliente_id=dados.cliente_id,
-            venda_id=dados.venda_id,
+            venda_id=venda_id,
             usuario_id=usuario_id,
             tipo=tipo,
             valor=dados.valor,
             descricao=dados.descricao,
             forma_pagamento=forma_pagamento,
-            data=dados.data or datetime.now(),
+            data=data,
         )
 
         movimento = MovimentoFiadoRepository.criar(db, movimento)

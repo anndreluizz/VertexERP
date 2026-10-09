@@ -1,4 +1,4 @@
-from services.api import get, post, put, delete
+from services.api import get, post, put, delete, endpoint_com_loja
 
 
 def saldo_cliente(cliente_id):
@@ -52,16 +52,20 @@ def registrar_pagamento(
     )
 
 
-def lancar_fiado_manual(cliente_id, valor, descricao, data=None):
+def lancar_fiado_manual(cliente_id, valor, descricao, data=None, registrar_venda=False):
+    """registrar_venda=True ("Compra fiada" na ficha): o backend também
+    cria uma venda a prazo, que conta na tela de Vendas, no total da
+    vendedora e no faturamento. False ("Dívida anterior"): só fiado."""
 
     return post(
-        "/fiado/movimentos",
+        endpoint_com_loja("/fiado/movimentos"),
         {
             "cliente_id": cliente_id,
             "tipo": "COMPRA",
             "valor": valor,
             "descricao": descricao,
             "data": data,
+            "registrar_venda": registrar_venda,
         },
     )
 

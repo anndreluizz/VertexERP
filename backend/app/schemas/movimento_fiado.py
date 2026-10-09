@@ -15,7 +15,11 @@ class MovimentoFiadoBase(BaseModel):
 
 
 class MovimentoFiadoCreate(MovimentoFiadoBase):
-    pass
+    # "Compra fiada" lancada pela ficha do cliente: alem do fiado, vira
+    # uma venda a prazo (sem itens de produto) pra contar na tela de
+    # Vendas, no total da vendedora e no faturamento. "Divida anterior"
+    # manda False -- e debito antigo do caderno, nao venda de hoje.
+    registrar_venda: bool = False
 
 
 class MovimentoFiadoUpdate(BaseModel):

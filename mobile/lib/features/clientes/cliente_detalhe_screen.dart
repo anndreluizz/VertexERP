@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/cliente_analise.dart';
+import '../../core/providers.dart';
 import '../../core/formatadores.dart';
 import '../../models/cliente.dart';
 import '../../models/movimento_fiado.dart';
@@ -189,6 +190,10 @@ class _Ficha extends ConsumerWidget {
         ),
         PopupMenuItem(value: _AcaoWhatsapp.haver, child: Text('Enviar haver')),
         PopupMenuItem(
+          value: _AcaoWhatsapp.agradecimento,
+          child: Text('Enviar agradecimento'),
+        ),
+        PopupMenuItem(
           value: _AcaoWhatsapp.cadastro,
           child: Text('Enviar cadastro do cliente'),
         ),
@@ -223,7 +228,7 @@ class _Ficha extends ConsumerWidget {
     final cronologico = [...historico]
       ..sort((a, b) => a.data.compareTo(b.data));
 
-    String? texto;
+    String texto;
 
     switch (acao) {
       case _AcaoWhatsapp.extrato:
@@ -253,8 +258,57 @@ class _Ficha extends ConsumerWidget {
       case _AcaoWhatsapp.cadastro:
         texto = _textoCadastro(saldo);
         break;
+      case _AcaoWhatsapp.agradecimento:
+        final ultimo = historico
+            .where((m) => m.tipo == 'PAGAMENTO' || m.tipo == 'COMPRA')
+            .firstOrNull;
+        if (ultimo == null) {
+          _mostrarSnack(
+            context,
+            'Este cliente ainda não tem compra nem pagamento.',
+          );
+          return;
+        }
+        texto = ultimo.tipo == 'COMPRA'
+            ? _textoAgradecimento(ref)
+            : _textoAgradecimento(ref, pagamento: ultimo.valor, saldo: saldo);
+        break;
     }
 
+    await _enviarTexto(context, ref, texto);
+  }
+
+  /// Mesmo texto do Desktop (ficha > WhatsApp > Enviar Agradecimento):
+  /// pagamento leva valor + saldo restante; compra so' agradece.
+  String _textoAgradecimento(
+    WidgetRef ref, {
+    double? pagamento,
+    double? saldo,
+  }) {
+    final loja = ref.read(sessaoControllerProvider).nomeLoja ?? 'Vertex ERP';
+    final partes = ['Olá, ${cliente.nome}! Tudo bem?'];
+    if (pagamento == null) {
+      partes.add('Muito obrigado pela sua compra!');
+    } else {
+      partes.add(
+        'Muito obrigado pelo seu pagamento de ${formatarMoeda(pagamento)}!',
+      );
+      partes.add(
+        (saldo ?? 0) > 0.009
+            ? 'Saldo restante da sua conta: ${formatarMoeda(saldo!)}'
+            : 'Sua conta está quitada!',
+      );
+    }
+    partes.add('Agradecemos a preferência!');
+    partes.add('Equipe $loja');
+    return partes.join('\n\n');
+  }
+
+  Future<void> _enviarTexto(
+    BuildContext context,
+    WidgetRef ref,
+    String texto,
+  ) async {
     if (!context.mounted) return;
 
     final enviado = await ref
@@ -516,7 +570,7 @@ class _Ficha extends ConsumerWidget {
   }
 }
 
-enum _AcaoWhatsapp { extrato, cobranca, saldo, haver, cadastro }
+enum _AcaoWhatsapp { extrato, cobranca, saldo, haver, cadastro, agradecimento }
 
 class _Cabecalho extends StatelessWidget {
   const _Cabecalho({

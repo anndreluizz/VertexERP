@@ -2,6 +2,7 @@ from datetime import datetime
 
 from PySide6.QtCore import QSize, QTimer, Qt, Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -24,7 +25,19 @@ from services import notificacao_service
 # (API bloqueia com 403 pra qualquer outro), notificacoes sao pra
 # todo mundo.
 _INTERVALO_POLL_APROVACOES_MS = 60_000
-_INTERVALO_POLL_NOTIFICACOES_MS = 60_000
+_INTERVALO_POLL_NOTIFICACOES_MS = 30_000
+
+# quanto tempo o alerta de notificacao nova fica no canto da tela
+_ALERTA_MS = 8_000
+
+
+def _tocar_som():
+    try:
+        import winsound
+
+        winsound.MessageBeep(winsound.MB_ICONASTERISK)
+    except Exception:
+        QApplication.beep()
 
 
 def _formatar_data_hora(texto_iso):
@@ -283,6 +296,69 @@ class _CartaoNotificacao(_BlocoClicavel):
         self._on_lida()
 
 
+class _AlertaNotificacao(QFrame):
+    """Caixinha no canto inferior direito da tela quando chega
+    notificação nova (o número no sino sozinho passava despercebido).
+    Janela própria, por cima das outras, pra aparecer mesmo com o Vertex
+    minimizado; some sozinha e clicar abre o sino."""
+
+    def __init__(self, titulo, corpo, ao_clicar):
+        super().__init__(
+            None,
+            Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint,
+        )
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setAttribute(Qt.WA_DeleteOnClose)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedWidth(340)
+        self._ao_clicar = ao_clicar
+        self.setStyleSheet(f"""
+            _AlertaNotificacao {{
+                background: {tokens.CARD};
+                border: 1px solid {tokens.BORDA};
+                border-left: 4px solid {tokens.PRIMARIA};
+                border-radius: 10px;
+            }}
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(4)
+
+        lbl_titulo = QLabel(titulo)
+        lbl_titulo.setWordWrap(True)
+        lbl_titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_MD}px; font-weight:700;
+        """)
+        layout.addWidget(lbl_titulo)
+
+        lbl_corpo = QLabel(corpo)
+        lbl_corpo.setWordWrap(True)
+        lbl_corpo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_BASE}px;
+        """)
+        layout.addWidget(lbl_corpo)
+
+        QTimer.singleShot(_ALERTA_MS, self.close)
+
+    def mostrar(self):
+        self.adjustSize()
+        tela = QApplication.primaryScreen()
+        if tela is not None:
+            area = tela.availableGeometry()
+            self.move(
+                area.right() - self.width() - 16,
+                area.bottom() - self.height() - 16,
+            )
+        self.show()
+
+    def mousePressEvent(self, event):
+        self.close()
+        self._ao_clicar()
+
+
 class Header(QFrame):
 
     busca_alterada = Signal(str)
@@ -438,6 +514,10 @@ class Header(QFrame):
 
         self._total_aprovacoes = 0
         self._total_nao_lidas = 0
+        # maior id de notificacao ja visto -- None ate a primeira
+        # consulta, pra nao alertar as antigas ao abrir o sistema
+        self._ultima_notificacao_id = None
+        self._alerta = None
 
         self._timer_aprovacoes = None
 
@@ -582,6 +662,51 @@ class Header(QFrame):
             return
 
         self._atualizar_badge()
+        self._alertar_novas()
+
+    def _alertar_novas(self):
+
+        try:
+            recentes = notificacao_service.listar(limit=10)
+        except Exception:
+            return
+
+        if not recentes:
+            if self._ultima_notificacao_id is None:
+                self._ultima_notificacao_id = 0
+            return
+
+        maior = max(n["id"] for n in recentes)
+
+        if self._ultima_notificacao_id is None:
+            self._ultima_notificacao_id = maior
+            return
+
+        novas = [
+            n for n in recentes
+            if n["id"] > self._ultima_notificacao_id and not n["lida"]
+        ]
+        self._ultima_notificacao_id = max(maior, self._ultima_notificacao_id)
+
+        if not novas:
+            return
+
+        mais_nova = max(novas, key=lambda n: n["id"])
+        titulo = mais_nova["titulo"]
+        if len(novas) > 1:
+            titulo = f"{titulo} (+{len(novas) - 1})"
+
+        if self._alerta is not None:
+            try:
+                self._alerta.close()
+            except RuntimeError:
+                pass
+
+        self._alerta = _AlertaNotificacao(
+            titulo, mais_nova["corpo"], self._abrir_notificacoes
+        )
+        self._alerta.mostrar()
+        _tocar_som()
 
     def _atualizar_badge(self):
 

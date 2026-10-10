@@ -217,3 +217,13 @@ def test_aviso_diario_cria_o_mes_e_avisa_valor_a_confirmar(client, auth_headers,
     aviso_vencimento_service.verificar_vencimentos_e_notificar(db)
 
     assert "Contas com valor a confirmar" in avisos
+
+
+def test_aviso_diario_sai_as_8h():
+    from datetime import datetime
+
+    from app.services.aviso_vencimento_service import segundos_ate_proximo_aviso
+
+    assert segundos_ate_proximo_aviso(datetime(2026, 10, 10, 7, 53)) == 7 * 60
+    assert segundos_ate_proximo_aviso(datetime(2026, 10, 10, 8, 0)) == 24 * 3600
+    assert segundos_ate_proximo_aviso(datetime(2026, 10, 10, 19, 0)) == 13 * 3600

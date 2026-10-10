@@ -74,6 +74,22 @@ class _Worker(QObject):
             self.finalizado.emit()
 
 
+class _Limpeza(QObject):
+    """Vive na thread da GUI (filha do parent), entao o Qt entrega
+    thread.finished pra ela em fila, fora da worker thread."""
+
+    def __init__(self, parent, thread):
+        super().__init__(parent)
+        self._thread = thread
+
+    def limpar(self):
+        ativas = getattr(self.parent(), "_threads_ativas", [])
+        if self._thread in ativas:
+            ativas.remove(self._thread)
+        self._thread = None
+        self.deleteLater()
+
+
 def rodar_em_thread(
     parent,
     func,
@@ -151,11 +167,11 @@ def rodar_em_thread(
         parent._threads_ativas = []
     parent._threads_ativas.append(thread)
 
-    def _limpar():
-        if thread in parent._threads_ativas:
-            parent._threads_ativas.remove(thread)
-
-    thread.finished.connect(_limpar)
+    # tira da lista quando termina -- pela thread da GUI. Antes era uma
+    # funcao solta ligada em thread.finished, que roda NA worker thread:
+    # soltar ali a ultima referencia da QThread/worker derrubava o
+    # sistema sem log (0xc0000409) logo depois de salvar uma despesa.
+    thread.finished.connect(_Limpeza(parent, thread).limpar)
 
     thread.start()
     return thread

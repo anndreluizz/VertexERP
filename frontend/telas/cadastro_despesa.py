@@ -4,7 +4,7 @@ import calendar
 import re
 from datetime import date, datetime, timedelta
 
-from PySide6.QtCore import Qt, QDate, QTimer
+from PySide6.QtCore import Qt, QDate, QEvent, QTimer
 from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
@@ -109,6 +109,9 @@ class CadastroDespesaDialog(DialogoPadrao):
 
         self.numero_boleto = CampoTexto("Bipe o código de barras ou cole a linha digitável")
         self.numero_boleto.textChanged.connect(self._codigo_mudou)
+        # o leitor manda Enter depois do código: aqui ele lê o boleto em
+        # vez de apertar o Salvar (ver eventFilter)
+        self.numero_boleto.installEventFilter(self)
 
         self._timer_codigo = QTimer(self)
         self._timer_codigo.setSingleShot(True)
@@ -407,17 +410,40 @@ class CadastroDespesaDialog(DialogoPadrao):
     # LEITURA DO BOLETO
     # ======================================
 
+    def eventFilter(self, obj, event):
+        if (
+            obj is self.numero_boleto
+            and event.type() == QEvent.KeyPress
+            and event.key() in (Qt.Key_Return, Qt.Key_Enter)
+        ):
+            self._timer_codigo.stop()
+            self._ler_codigo_digitado(avisar=True)
+            return True
+        return super().eventFilter(obj, event)
+
     def _codigo_mudou(self, texto):
         # leitor de código de barras "digita" rápido -- espera parar
         digitos = re.sub(r"\D", "", texto or "")
-        if len(digitos) in (44, 47, 48) and digitos != self._codigo_lido:
+        if len(digitos) >= 44 and digitos != self._codigo_lido:
             self._timer_codigo.start()
         elif not digitos:
             self._mostrar_faixa_boleto(None)
 
-    def _ler_codigo_digitado(self):
+    def _ler_codigo_digitado(self, avisar=False):
         digitos = re.sub(r"\D", "", self.numero_boleto.text())
-        if digitos == self._codigo_lido:
+        if not digitos or digitos == self._codigo_lido:
+            return
+        if len(digitos) not in (44, 47, 48):
+            # leitor que corta ou repete números: avisa em vez de ficar quieto
+            if avisar or len(digitos) > 48:
+                self._mostrar_faixa_boleto(
+                    f"O código tem {len(digitos)} números, mas o boleto tem 44 "
+                    "(código de barras) ou 47/48 (linha digitável). Bipe de novo "
+                    "ou digite a linha digitável.",
+                    "erro",
+                )
+                # a próxima bipada substitui o pedaço lido
+                self.numero_boleto.selectAll()
             return
         self._codigo_lido = digitos
         self._mostrar_faixa_boleto("Lendo o boleto...", "info")

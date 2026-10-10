@@ -4,7 +4,8 @@ de parcelamento."""
 from unittest import mock
 
 import pytest
-from PySide6.QtCore import QDate, QEvent
+from PySide6.QtCore import QDate, QEvent, Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from telas import cadastro_despesa
@@ -205,3 +206,24 @@ def test_janela_de_parcelamento(_qapp, esperar_threads):
 
     cancelar.assert_called_once_with("abc")
     assert dialogo.alterou
+
+
+def test_enter_do_leitor_le_o_boleto_e_nao_salva(_qapp):
+    with mock.patch.object(cadastro_despesa, "rodar_em_thread") as rodar:
+        dialogo = CadastroDespesaDialog()
+        dialogo.show()
+        dialogo.numero_boleto.setText(_LIDO["codigo_barras"])
+        QTest.keyClick(dialogo.numero_boleto, Qt.Key_Return)
+
+    assert rodar.call_args.kwargs["codigo"] == _LIDO["codigo_barras"]
+    assert dialogo.isVisible()
+
+
+def test_codigo_com_numeros_a_mais_ou_a_menos_avisa(_qapp):
+    with mock.patch.object(cadastro_despesa, "rodar_em_thread") as rodar:
+        dialogo = CadastroDespesaDialog()
+        dialogo.numero_boleto.setText("2" * 43)
+        QTest.keyClick(dialogo.numero_boleto, Qt.Key_Return)
+
+    assert not any(c.kwargs.get("codigo") for c in rodar.call_args_list)
+    assert "43 números" in dialogo.lbl_boleto.text()

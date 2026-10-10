@@ -709,6 +709,59 @@ def gerar_comandos_fechamento_caixa(
     return b"".join(partes)
 
 
+def gerar_comandos_vendas(relatorio, config_loja, largura_papel_mm=80):
+    """Vendas do periodo (tela Vendas > Imprimir): cada venda com os
+    itens e, no fim, o total por forma de pagamento. 'relatorio' vem
+    pronto de Vendas._dados_relatorio."""
+
+    largura = _colunas(largura_papel_mm)
+
+    partes = [_INICIALIZAR, _SELECIONAR_PAGINA_CODIGO]
+
+    partes.append(_alinhar(1))
+    partes.append(_negrito(True))
+    partes.append(_linha(config_loja.get("nome_loja") or "Vertex ERP"))
+    partes.append(_tamanho_fonte(1, 2))
+    partes.append(_linha(f"Vendas {relatorio['periodo']}"))
+    partes.append(_tamanho_fonte(1, 1))
+    partes.append(_negrito(False))
+    partes.append(_linha(relatorio["vendedora"]))
+    partes.append(_divisoria(largura))
+    partes.append(_alinhar(0))
+
+    for venda in relatorio["vendas"]:
+        situacao = " CANCELADA" if venda["cancelada"] else ""
+        partes.append(_negrito(True))
+        partes.append(_linha_dupla_coluna(
+            f"{venda['titulo']} {venda['forma']}{situacao}", _moeda(venda["total"]), largura,
+        ))
+        partes.append(_negrito(False))
+        partes.append(_linhas_quebradas(f"{venda['cliente']} - {venda['vendedora']}", largura))
+        for texto, valor in venda["itens"]:
+            partes.append(_linha_dupla_coluna(f"  {texto}"[:largura - 14], _moeda(valor), largura))
+        partes.append(_linha())
+
+    partes.append(_divisoria(largura))
+    partes.append(_negrito(True))
+    partes.append(_linha("Total por forma de pagamento"))
+    partes.append(_negrito(False))
+    for forma, total in relatorio["por_forma"]:
+        partes.append(_linha_dupla_coluna(forma, _moeda(total), largura))
+
+    partes.append(_divisoria(largura))
+    partes.append(_negrito(True))
+    partes.append(_tamanho_fonte(1, 2))
+    partes.append(_linha_dupla_coluna(
+        f"TOTAL ({relatorio['quantidade']} vendas)", _moeda(relatorio["total"]), largura,
+    ))
+    partes.append(_tamanho_fonte(1, 1))
+    partes.append(_negrito(False))
+
+    partes.append(_cortar_papel())
+
+    return b"".join(partes)
+
+
 # ==================================================
 # TESTE
 # ==================================================
@@ -883,6 +936,12 @@ def imprimir_fechamento_caixa(
         caixa, resumo, movimentos, valor_contado, observacoes, responsavel,
         fechado_em, config_loja, largura_papel_mm,
     )
+    return enviar(comandos, config_impressora)
+
+
+def imprimir_relatorio_vendas(relatorio, config_loja, config_impressora):
+    largura_papel_mm = (config_impressora or {}).get("largura_papel") or 80
+    comandos = gerar_comandos_vendas(relatorio, config_loja, largura_papel_mm)
     return enviar(comandos, config_impressora)
 
 

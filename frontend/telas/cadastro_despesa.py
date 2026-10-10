@@ -1,8 +1,10 @@
 import base64
 import mimetypes
-from datetime import date, datetime
+import calendar
+import re
+from datetime import date, datetime, timedelta
 
-from PySide6.QtCore import Qt, QDate
+from PySide6.QtCore import Qt, QDate, QEvent, QTimer
 from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
@@ -14,10 +16,16 @@ from PySide6.QtWidgets import (
     QFrame,
     QWidget,
     QMessageBox,
+    QSpinBox,
+    QCheckBox,
+    QGridLayout,
 )
 
 from services.conta_pagar_service import (
     cadastrar_conta_pagar,
+    cadastrar_conta_fixa,
+    cadastrar_conta_parcelada,
+    ler_boleto,
     atualizar_conta_pagar,
     remover_documento_conta_pagar,
 )
@@ -37,6 +45,24 @@ from design.widgets import (
     grade_formulario, titulo_secao,
 )
 from utils.formatacao import formatar_moeda
+
+
+_ESTILO_DATA = f"""
+    QDateEdit {{
+        border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+        padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
+        background: {tokens.CARD};
+    }}
+    QDateEdit:focus {{ border-color: {tokens.PRIMARIA}; }}
+"""
+
+
+def _somar_meses(data, meses):
+    """Mesmo dia `meses` depois (no último dia do mês quando ele é
+    mais curto) -- mesma regra do backend pras parcelas."""
+    total = data.year * 12 + data.month - 1 + meses
+    ano, mes = total // 12, total % 12 + 1
+    return date(ano, mes, min(data.day, calendar.monthrange(ano, mes)[1]))
 
 
 def _parse_valor(texto):
@@ -77,61 +103,22 @@ class CadastroDespesaDialog(DialogoPadrao):
         self.documento_tipo_arquivo = None
 
         # ======================
-        # DESPESA
+        # BOLETO -- começa por ele: bipar o código ou anexar o PDF já
+        # preenche valor, vencimento e fornecedor (ver _ler_boleto)
         # ======================
 
-        self.descricao = CampoTexto("Ex: aluguel, funcionária, luz...")
-        self.valor = CampoTexto("0,00")
-        self.valor.textChanged.connect(self._atualizar_valor_final)
+        self.numero_boleto = CampoTexto("Bipe o código de barras ou cole a linha digitável")
+        self.numero_boleto.textChanged.connect(self._codigo_mudou)
+        # o leitor manda Enter depois do código: aqui ele lê o boleto em
+        # vez de apertar o Salvar (ver eventFilter)
+        self.numero_boleto.installEventFilter(self)
 
-        self.vencimento = QDateEdit()
-        self.vencimento.setCalendarPopup(True)
-        self.vencimento.setDisplayFormat("dd/MM/yyyy")
-        self.vencimento.setDate(QDate.currentDate())
-        self.vencimento.setMinimumHeight(44)
-        self.vencimento.setStyleSheet(f"""
-            QDateEdit {{
-                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
-                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
-                background: {tokens.CARD};
-            }}
-            QDateEdit:focus {{ border-color: {tokens.PRIMARIA}; }}
-        """)
-
-        self.corpo.addWidget(titulo_secao("Despesa"))
-        self.corpo.addLayout(grade_formulario(
-            (campo_rotulado("Descrição *", self.descricao), 0, 0, 1, 2),
-            (campo_rotulado("Valor (R$) *", self.valor), 1, 0),
-            (campo_rotulado("Vencimento", self.vencimento), 1, 1),
-        ))
-
-        # ======================
-        # CLASSIFICAÇÃO
-        # ======================
-
-        self.categoria = self._combo()
-        self._carregar_categorias()
-        self.centro_custo = self._combo()
-        self._carregar_centros_custo()
-        self.plano_conta = self._combo()
-        self._carregar_planos_conta()
-
-        grade_classificacao = grade_formulario(
-            (self._combo_com_gerenciar("Categoria", self.categoria, self.gerenciar_categorias), 0, 0),
-            (self._combo_com_gerenciar("Centro de custo", self.centro_custo, self.gerenciar_centros_custo), 0, 1),
-            (self._combo_com_gerenciar("Plano de contas", self.plano_conta, self.gerenciar_plano_contas), 0, 2),
-        )
-        grade_classificacao.setColumnStretch(2, 1)
-
-        self.corpo.addWidget(titulo_secao("Classificação"))
-        self.corpo.addLayout(grade_classificacao)
-
-        # ======================
-        # PAGAMENTO E DOCUMENTO
-        # ======================
-
-        self.numero_boleto = CampoTexto("Bipe o boleto ou digite a linha digitável")
-        self.observacoes = CampoTexto("Anotações internas sobre essa despesa")
+        self._timer_codigo = QTimer(self)
+        self._timer_codigo.setSingleShot(True)
+        self._timer_codigo.setInterval(350)
+        self._timer_codigo.timeout.connect(self._ler_codigo_digitado)
+        self._codigo_lido = None
+        self._beneficiario_cnpj = None
 
         linha_anexo_widget = QWidget()
         linha_anexo_widget.setStyleSheet("background:transparent;")
@@ -139,8 +126,9 @@ class CadastroDespesaDialog(DialogoPadrao):
         linha_anexo.setContentsMargins(0, 0, 0, 0)
         linha_anexo.setSpacing(8)
 
-        self.bt_anexar = BotaoSecundario("Anexar boleto", icone_nome="file-text")
+        self.bt_anexar = BotaoSecundario("Anexar PDF ou foto", icone_nome="file-text")
         self.bt_anexar.setAutoDefault(False)
+        self.bt_anexar.setToolTip("PDF do boleto: o sistema lê fornecedor, valor e vencimento")
         self.bt_anexar.clicked.connect(self.escolher_documento)
 
         self.lbl_arquivo_anexado = QLabel("Nenhum arquivo anexado")
@@ -166,11 +154,161 @@ class CadastroDespesaDialog(DialogoPadrao):
         linha_anexo.addWidget(self.lbl_arquivo_anexado, stretch=1)
         linha_anexo.addWidget(self.bt_remover_anexo)
 
-        self.corpo.addWidget(titulo_secao("Pagamento e documento"))
+        # faixa com o resultado da leitura (ok / aviso / erro)
+        self.lbl_boleto = QLabel()
+        self.lbl_boleto.setWordWrap(True)
+        self.lbl_boleto.setVisible(False)
+
+        self.corpo.addWidget(titulo_secao("Boleto"))
         self.corpo.addLayout(grade_formulario(
-            (campo_rotulado("Código de barras (boleto)", self.numero_boleto), 0, 0),
+            (campo_rotulado("Código de barras", self.numero_boleto), 0, 0),
             (campo_rotulado("Documento (PDF ou foto)", linha_anexo_widget), 0, 1),
-            (campo_rotulado("Observações", self.observacoes), 1, 0, 1, 2),
+        ))
+        self.corpo.addWidget(self.lbl_boleto)
+
+        # ======================
+        # DESPESA
+        # ======================
+
+        self.descricao = CampoTexto("Fornecedor ou o que é a conta (ex.: ADRIANA, luz, funcionária)")
+        self.valor = CampoTexto("0,00")
+        self.valor.textChanged.connect(self._atualizar_valor_final)
+
+        self.vencimento = QDateEdit()
+        self.vencimento.setCalendarPopup(True)
+        self.vencimento.setDisplayFormat("dd/MM/yyyy")
+        self.vencimento.setDate(QDate.currentDate())
+        self.vencimento.setMinimumHeight(44)
+        self.vencimento.setStyleSheet(_ESTILO_DATA)
+
+        self.corpo.addWidget(titulo_secao("Despesa"))
+        self.corpo.addLayout(grade_formulario(
+            (campo_rotulado("Fornecedor / descrição *", self.descricao), 0, 0, 1, 2),
+            (campo_rotulado("Valor (R$) *", self.valor), 1, 0),
+            (campo_rotulado("Vencimento", self.vencimento), 1, 1),
+        ))
+
+        # ======================
+        # REPETIÇÃO (só na despesa nova)
+        # ======================
+
+        self.repeticao = self._combo()
+        self.repeticao.addItem("Só esta vez", "UNICA")
+        self.repeticao.addItem("Parcelado (boletos)", "PARCELADO")
+        self.repeticao.addItem("Todo mês (conta fixa)", "MENSAL")
+        self.repeticao.currentIndexChanged.connect(self._atualizar_repeticao)
+
+        self.parcelas = self._spin(2, 60, 3, " parcelas")
+        self.parcelas.valueChanged.connect(self._repeticao_mudou)
+
+        self.intervalo = self._combo()
+        self.intervalo.addItem("Mesmo dia todo mês", "MENSAL")
+        self.intervalo.addItem("A cada 30 dias", "30_DIAS")
+        self.intervalo.currentIndexChanged.connect(self._repeticao_mudou)
+
+        self.valor_variavel = QCheckBox("O valor muda todo mês (ex.: luz)")
+        self.valor_variavel.setStyleSheet(f"""
+            QCheckBox {{ background:transparent; color:{tokens.TEXTO};
+                         font-size:{tokens.TAMANHO_SM}px; }}
+        """)
+        self.valor_variavel.toggled.connect(self._atualizar_repeticao)
+
+        self.prazo = self._combo()
+        self.prazo.addItem("Repete sempre", None)
+        self.prazo.addItem("Por um número de meses", "MESES")
+        self.prazo.currentIndexChanged.connect(self._atualizar_repeticao)
+        self.meses = self._spin(1, 360, 12, " meses")
+        self.meses.valueChanged.connect(self._atualizar_repeticao)
+
+        self.lbl_repeticao = QLabel()
+        self.lbl_repeticao.setWordWrap(True)
+        self.lbl_repeticao.setStyleSheet(f"""
+            background:{tokens.PRIMARIA_CLARA}; color:{tokens.PRIMARIA_HOVER};
+            border-radius:{tokens.RADIUS_SM}px; padding:8px 12px;
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
+
+        # datas de cada parcela, editáveis (abre com "Ajustar datas")
+        self.bt_ajustar_datas = QPushButton("Ajustar datas das parcelas")
+        self.bt_ajustar_datas.setCursor(Qt.PointingHandCursor)
+        self.bt_ajustar_datas.setAutoDefault(False)
+        self.bt_ajustar_datas.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; border:none; text-align:left;
+                color:{tokens.PRIMARIA}; font-size:{tokens.TAMANHO_SM}px;
+                font-weight:600; padding: 2px 0;
+            }}
+        """)
+        self.bt_ajustar_datas.clicked.connect(self._alternar_datas_parcelas)
+        self.grade_datas = QGridLayout()
+        self.grade_datas.setSpacing(8)
+        self.bloco_datas = QWidget()
+        self.bloco_datas.setStyleSheet("background:transparent;")
+        self.bloco_datas.setLayout(self.grade_datas)
+        self.bloco_datas.setVisible(False)
+        self.datas_parcelas = []
+        self._datas_editadas = False
+
+        self.bloco_repeticao = QWidget()
+        self.bloco_repeticao.setStyleSheet("background:transparent;")
+        lay_rep = QVBoxLayout(self.bloco_repeticao)
+        lay_rep.setContentsMargins(0, 0, 0, 0)
+        lay_rep.setSpacing(8)
+        linha_rep = QHBoxLayout()
+        linha_rep.setSpacing(12)
+        linha_rep.addWidget(self.repeticao, 2)
+        linha_rep.addWidget(self.parcelas, 1)
+        linha_rep.addWidget(self.intervalo, 2)
+        linha_rep.addWidget(self.prazo, 2)
+        linha_rep.addWidget(self.meses, 1)
+        lay_rep.addLayout(linha_rep)
+        lay_rep.addWidget(self.valor_variavel)
+        lay_rep.addWidget(self.lbl_repeticao)
+        lay_rep.addWidget(self.bt_ajustar_datas)
+        lay_rep.addWidget(self.bloco_datas)
+
+        self.titulo_repeticao = titulo_secao("Repetição")
+        self.corpo.addWidget(self.titulo_repeticao)
+        self.corpo.addWidget(self.bloco_repeticao)
+
+        # editar uma conta mexe só nela -- repetir é só na despesa nova
+        self.titulo_repeticao.setVisible(not editando)
+        self.bloco_repeticao.setVisible(not editando)
+
+        self.valor.textChanged.connect(self._atualizar_repeticao)
+        self.vencimento.dateChanged.connect(self._repeticao_mudou)
+        self._atualizar_repeticao()
+
+        # ======================
+        # CLASSIFICAÇÃO
+        # ======================
+
+        self.categoria = self._combo()
+        self._carregar_categorias()
+        self.centro_custo = self._combo()
+        self._carregar_centros_custo()
+        self.plano_conta = self._combo()
+        self._carregar_planos_conta()
+
+        grade_classificacao = grade_formulario(
+            (self._combo_com_gerenciar("Categoria", self.categoria, self.gerenciar_categorias), 0, 0),
+            (self._combo_com_gerenciar("Centro de custo", self.centro_custo, self.gerenciar_centros_custo), 0, 1),
+            (self._combo_com_gerenciar("Plano de contas", self.plano_conta, self.gerenciar_plano_contas), 0, 2),
+        )
+        grade_classificacao.setColumnStretch(2, 1)
+
+        self.corpo.addWidget(titulo_secao("Classificação"))
+        self.corpo.addLayout(grade_classificacao)
+
+        # ======================
+        # OBSERVAÇÕES
+        # ======================
+
+        self.observacoes = CampoTexto("Anotações internas sobre essa despesa")
+
+        self.corpo.addWidget(titulo_secao("Observações"))
+        self.corpo.addLayout(grade_formulario(
+            (campo_rotulado("Observações", self.observacoes), 0, 0, 1, 2),
         ))
 
         # ---- desconto / juros / multa (colapsável) ----
@@ -251,6 +389,289 @@ class CadastroDespesaDialog(DialogoPadrao):
 
         self.ajustar_altura()
         self.descricao.setFocus()
+
+    def _spin(self, minimo, maximo, valor, sufixo):
+        spin = QSpinBox()
+        spin.setRange(minimo, maximo)
+        spin.setValue(valor)
+        spin.setSuffix(sufixo)
+        spin.setMinimumHeight(44)
+        spin.setStyleSheet(f"""
+            QSpinBox {{
+                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+                padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
+                background: {tokens.CARD};
+            }}
+            QSpinBox:focus {{ border-color: {tokens.PRIMARIA}; }}
+        """)
+        return spin
+
+    # ======================================
+    # LEITURA DO BOLETO
+    # ======================================
+
+    def eventFilter(self, obj, event):
+        if (
+            obj is self.numero_boleto
+            and event.type() == QEvent.KeyPress
+            and event.key() in (Qt.Key_Return, Qt.Key_Enter)
+        ):
+            self._timer_codigo.stop()
+            self._ler_codigo_digitado(avisar=True)
+            return True
+        return super().eventFilter(obj, event)
+
+    def _codigo_mudou(self, texto):
+        # leitor de código de barras "digita" rápido -- espera parar
+        digitos = re.sub(r"\D", "", texto or "")
+        if len(digitos) >= 44 and digitos != self._codigo_lido:
+            self._timer_codigo.start()
+        elif not digitos:
+            self._mostrar_faixa_boleto(None)
+
+    def _ler_codigo_digitado(self, avisar=False):
+        digitos = re.sub(r"\D", "", self.numero_boleto.text())
+        if not digitos or digitos == self._codigo_lido:
+            return
+        if len(digitos) not in (44, 47, 48):
+            # leitor que corta ou repete números: avisa em vez de ficar quieto
+            if avisar or len(digitos) > 48:
+                self._mostrar_faixa_boleto(
+                    f"O código tem {len(digitos)} números, mas o boleto tem 44 "
+                    "(código de barras) ou 47/48 (linha digitável). Bipe de novo "
+                    "ou digite a linha digitável.",
+                    "erro",
+                )
+                # a próxima bipada substitui o pedaço lido
+                self.numero_boleto.selectAll()
+            return
+        self._codigo_lido = digitos
+        self._mostrar_faixa_boleto("Lendo o boleto...", "info")
+        rodar_em_thread(
+            self,
+            ler_boleto,
+            codigo=digitos,
+            ao_sucesso=self._ao_ler_boleto,
+            ao_erro=self._ao_ler_boleto_erro,
+        )
+
+    def _ler_pdf(self, conteudo):
+        self._mostrar_faixa_boleto("Lendo o PDF do boleto...", "info")
+        rodar_em_thread(
+            self,
+            ler_boleto,
+            pdf_base64=base64.b64encode(conteudo).decode("ascii"),
+            ao_sucesso=self._ao_ler_boleto,
+            ao_erro=self._ao_ler_boleto_erro,
+        )
+
+    def _ao_ler_boleto(self, response):
+
+        if response.status_code != 200:
+            try:
+                erro = response.json().get("detail") or response.text
+            except Exception:
+                erro = response.text
+            self._mostrar_faixa_boleto(erro, "erro")
+            return
+
+        self._aplicar_boleto(response.json())
+
+    def _ao_ler_boleto_erro(self, erro):
+        self._mostrar_faixa_boleto(f"Não foi possível ler o boleto: {erro}", "erro")
+
+    def _aplicar_boleto(self, dados):
+        """Preenche a despesa com o que veio do boleto. Editando uma conta
+        só mostra o resultado -- não troca nada do que já estava salvo."""
+
+        novo = self.conta is None
+
+        if dados.get("linha_digitavel"):
+            self._codigo_lido = re.sub(r"\D", "", dados["linha_digitavel"])
+            if re.sub(r"\D", "", self.numero_boleto.text()) != self._codigo_lido:
+                self.numero_boleto.blockSignals(True)
+                self.numero_boleto.setText(dados["linha_digitavel"])
+                self.numero_boleto.blockSignals(False)
+            self.numero_boleto.setCursorPosition(0)
+
+        self._beneficiario_cnpj = dados.get("beneficiario_cnpj")
+
+        if novo:
+            if dados.get("valor") is not None:
+                self.valor.setText(f"{float(dados['valor']):.2f}".replace(".", ","))
+            if dados.get("vencimento"):
+                venc = date.fromisoformat(dados["vencimento"])
+                self.vencimento.setDate(QDate(venc.year, venc.month, venc.day))
+            if dados.get("fornecedor_sugerido") and not self.descricao.text().strip():
+                self.descricao.setText(dados["fornecedor_sugerido"])
+            categoria = dados.get("categoria_sugerida")
+            if categoria:
+                self._categoria_selecionada_pendente = categoria
+                if self.categoria.findText(categoria) >= 0:
+                    self.categoria.setCurrentText(categoria)
+
+        partes = []
+        if dados.get("banco_nome"):
+            partes.append(dados["banco_nome"])
+        elif dados.get("segmento"):
+            partes.append(dados["segmento"])
+        if dados.get("fornecedor_sugerido"):
+            partes.append(dados["fornecedor_sugerido"])
+        if dados.get("valor") is not None:
+            partes.append(formatar_moeda(float(dados["valor"])))
+        if dados.get("vencimento"):
+            partes.append("vence " + date.fromisoformat(dados["vencimento"]).strftime("%d/%m/%Y"))
+
+        repetido = dados.get("ja_lancado")
+        if repetido:
+            situacao = {"PAGO": "já paga", "PENDENTE": "em aberto"}.get(
+                repetido["status"], repetido["status"].lower()
+            )
+            self._mostrar_faixa_boleto(
+                f"⚠ Esse boleto já foi lançado: {repetido.get('descricao') or 'Despesa'} "
+                f"— {formatar_moeda(float(repetido['valor']))} ({situacao}). "
+                "Confira antes de salvar para não pagar duas vezes.",
+                "erro",
+            )
+        else:
+            self._mostrar_faixa_boleto("✓ Boleto lido: " + " · ".join(partes), "sucesso")
+
+        self._atualizar_valor_final()
+        self._atualizar_repeticao()
+
+    def _mostrar_faixa_boleto(self, texto, variante="info"):
+
+        if not texto:
+            self.lbl_boleto.setVisible(False)
+            return
+
+        fundo, cor = {
+            "sucesso": (tokens.SUCESSO_CLARO, tokens.SECUNDARIA_HOVER),
+            "erro": (tokens.ERRO_CLARO, tokens.ERRO_HOVER),
+            "info": (tokens.PRIMARIA_CLARA, tokens.PRIMARIA_HOVER),
+        }[variante]
+        self.lbl_boleto.setStyleSheet(f"""
+            background:{fundo}; color:{cor};
+            border-radius:{tokens.RADIUS_SM}px; padding:8px 12px;
+            font-size:{tokens.TAMANHO_SM}px; font-weight:600;
+        """)
+        self.lbl_boleto.setText(texto)
+        self.lbl_boleto.setVisible(True)
+        self.ajustar_altura()
+
+    # ======================================
+    # REPETIÇÃO
+    # ======================================
+
+    def _repeticao_mudou(self, *_):
+        # quantidade/intervalo/1º vencimento mudou: as datas sugeridas
+        # valem de novo (as que a pessoa tinha ajustado ficam pra trás)
+        self._datas_editadas = False
+        self._atualizar_repeticao()
+
+    def _datas_sugeridas(self):
+        data_qt = self.vencimento.date()
+        primeiro = date(data_qt.year(), data_qt.month(), data_qt.day())
+        n = self.parcelas.value()
+        if self.intervalo.currentData() == "30_DIAS":
+            return [primeiro + timedelta(days=30 * i) for i in range(n)]
+        return [_somar_meses(primeiro, i) for i in range(n)]
+
+    def _datas_das_parcelas(self):
+        if self._datas_editadas and len(self.datas_parcelas) == self.parcelas.value():
+            return [campo.date().toPython() for campo in self.datas_parcelas]
+        return self._datas_sugeridas()
+
+    def _alternar_datas_parcelas(self):
+        self.bloco_datas.setVisible(not self.bloco_datas.isVisible())
+        self._montar_datas_parcelas()
+        self.ajustar_altura()
+
+    def _montar_datas_parcelas(self):
+
+        datas = self._datas_das_parcelas()
+
+        while self.grade_datas.count():
+            item = self.grade_datas.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self.datas_parcelas = []
+
+        for i, data in enumerate(datas):
+            campo = QDateEdit()
+            campo.setCalendarPopup(True)
+            campo.setDisplayFormat("dd/MM/yyyy")
+            campo.setDate(QDate(data.year, data.month, data.day))
+            campo.setMinimumHeight(38)
+            campo.setStyleSheet(_ESTILO_DATA)
+            campo.dateChanged.connect(self._data_parcela_editada)
+            rotulo = QLabel(f"{i + 1}ª")
+            rotulo.setStyleSheet(f"""
+                background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+                font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+            """)
+            linha, coluna = divmod(i, 4)
+            self.grade_datas.addWidget(rotulo, linha, coluna * 2)
+            self.grade_datas.addWidget(campo, linha, coluna * 2 + 1)
+            self.datas_parcelas.append(campo)
+
+    def _data_parcela_editada(self, *_):
+        self._datas_editadas = True
+        self._atualizar_repeticao(montar_datas=False)
+
+    def _tipo_repeticao(self):
+        if self.conta is not None:
+            return "UNICA"
+        return self.repeticao.currentData()
+
+    def _atualizar_repeticao(self, *_, montar_datas=True):
+
+        tipo = self.repeticao.currentData()
+        parcelado = tipo == "PARCELADO"
+        mensal = tipo == "MENSAL"
+
+        self.parcelas.setVisible(parcelado)
+        self.intervalo.setVisible(parcelado)
+        self.bt_ajustar_datas.setVisible(parcelado)
+        self.bloco_datas.setVisible(parcelado and self.bloco_datas.isVisible())
+        self.valor_variavel.setVisible(mensal)
+        self.prazo.setVisible(mensal)
+        self.meses.setVisible(mensal and self.prazo.currentData() == "MESES")
+        self.lbl_repeticao.setVisible(tipo != "UNICA")
+
+        data_qt = self.vencimento.date()
+        primeiro = date(data_qt.year(), data_qt.month(), data_qt.day())
+        valor = _parse_valor(self.valor.text())
+
+        if parcelado:
+            n = self.parcelas.value()
+            datas = [d.strftime("%d/%m") for d in self._datas_das_parcelas()]
+            if n > 4:
+                datas = datas[:3] + ["...", datas[-1]]
+            self.lbl_repeticao.setText(
+                f"Digite o valor de UMA parcela. Serão {n} contas de "
+                f"{formatar_moeda(valor)} (total {formatar_moeda(valor * n)}), "
+                f"vencendo {', '.join(datas)}."
+            )
+            if montar_datas and self.bloco_datas.isVisible():
+                self._montar_datas_parcelas()
+        elif mensal:
+            if self.valor_variavel.isChecked():
+                detalhe = (
+                    "Todo mês a conta nasce com o valor do mês anterior marcada "
+                    "\"Confirmar valor\"; quando a fatura chegar, você corrige."
+                )
+            else:
+                detalhe = f"Todo mês a conta nasce com {formatar_moeda(valor)}."
+            if self.prazo.currentData() == "MESES":
+                ultimo = _somar_meses(primeiro, self.meses.value() - 1)
+                fim = f" A última vence em {ultimo.strftime('%d/%m/%Y')} e depois para sozinha."
+            else:
+                fim = " Para parar, use Contas fixas na tela de Contas a Pagar."
+            self.lbl_repeticao.setText(f"Vence todo dia {primeiro.day}. {detalhe}{fim}")
+
+        if hasattr(self, "_corpo_widget"):
+            self.ajustar_altura()
 
     def _combo(self):
         combo = QComboBox()
@@ -490,6 +911,9 @@ class CadastroDespesaDialog(DialogoPadrao):
         """)
         self.bt_remover_anexo.setVisible(True)
 
+        if caminho.lower().endswith(".pdf"):
+            self._ler_pdf(conteudo)
+
     def remover_documento(self):
 
         # arquivo so escolhido agora, ainda nao salvo -- so limpa local,
@@ -644,8 +1068,30 @@ class CadastroDespesaDialog(DialogoPadrao):
             dados["documento_nome"] = self.documento_nome_arquivo
             dados["documento_tipo"] = self.documento_tipo_arquivo
 
+        if self._beneficiario_cnpj and not self.conta:
+            dados["beneficiario_cnpj"] = self._beneficiario_cnpj
+
+        tipo = self._tipo_repeticao()
+
         if self.conta:
             func, args = atualizar_conta_pagar, (self.conta["id"], dados)
+        elif tipo == "PARCELADO":
+            dados["intervalo"] = self.intervalo.currentData()
+            if self._datas_editadas:
+                dados["vencimentos"] = [d.isoformat() for d in self._datas_das_parcelas()]
+            func, args = cadastrar_conta_parcelada, (dados, self.parcelas.value())
+        elif tipo == "MENSAL":
+            func, args = cadastrar_conta_fixa, ({
+                "descricao": descricao,
+                "valor": valor,
+                "primeiro_vencimento": data_vencimento[:10],
+                "valor_variavel": self.valor_variavel.isChecked(),
+                "categoria": dados["categoria"],
+                "centro_custo": dados["centro_custo"],
+                "plano_conta_id": dados["plano_conta_id"],
+                "observacao": dados["observacao"],
+                "meses": self.meses.value() if self.prazo.currentData() == "MESES" else None,
+            },)
         else:
             func, args = cadastrar_conta_pagar, (dados,)
 

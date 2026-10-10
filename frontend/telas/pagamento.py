@@ -926,7 +926,8 @@ class PagamentoWindow(QDialog):
         self.lbl_sem_pagamentos.setVisible(not self.pagamentos)
 
         # ---- finalizar ----
-        self.bt_confirmar.setEnabled(self.quitado())
+        # com valor sendo digitado, o Finalizar lanca e fecha de uma vez
+        self.bt_confirmar.setEnabled(self.quitado() or forma is not None)
 
     def _pintar_forma(self, botao, valor, icone_nome):
 
@@ -1094,6 +1095,18 @@ class PagamentoWindow(QDialog):
     # ======================================
 
     def confirmar(self):
+
+        # valor digitado sem Enter: lanca antes de fechar (esquecer o
+        # Enter travava o Finalizar). Se gerou troco, para pro operador ver.
+        if not self.quitado() and self.forma_atual is not None:
+            self.lancar_pagamento()
+            if self.quitado() and self.troco() > EPSILON:
+                self._avisar(
+                    f"Troco de R$ {_fmt(self.troco())}. Enter ou F3 finaliza."
+                )
+                return
+            if self.forma_atual is not None:
+                return  # valor invalido: lancar_pagamento ja' avisou
 
         if not self.quitado():
             self._avisar(f"Ainda falta R$ {_fmt(self.falta())} pra fechar a venda.")

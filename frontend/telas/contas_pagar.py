@@ -33,7 +33,7 @@ from telas.pagamento_despesa import PagamentoDespesaDialog
 
 from design import tokens
 from design.icons import icone, icone_pixmap
-from design.widgets import BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
+from design.widgets import Badge, BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
 from utils.formatacao import formatar_moeda
 
 
@@ -141,6 +141,7 @@ class DespesaLinha(QFrame):
     duplicar_solicitado = Signal(dict)
     ver_documento_solicitado = Signal(dict)
     ver_comprovante_solicitado = Signal(dict)
+    ver_parcelamento_solicitado = Signal(dict)
 
     COR_STATUS = {
         "PAGO": "SECUNDARIA",
@@ -185,6 +186,17 @@ class DespesaLinha(QFrame):
             color:{tokens.TEXTO_SECUNDARIO if apagada else tokens.TEXTO};
         """)
         linha_titulo.addWidget(descricao)
+        if conta.get("recorrente_id"):
+            mensal = Badge("Mensal", "info")
+            mensal.setToolTip("Conta fixa: o sistema cria a deste mês sozinho")
+            linha_titulo.addWidget(mensal)
+        if conta.get("valor_a_confirmar") and not apagada:
+            confirmar = Badge("Confirmar valor", "alerta")
+            confirmar.setToolTip(
+                "Valor copiado do mês passado. Quando a fatura chegar, "
+                "edite a conta e coloque o valor certo."
+            )
+            linha_titulo.addWidget(confirmar)
         if conta.get("tem_documento"):
             clipe = QLabel()
             clipe.setToolTip("Tem documento anexado (boleto/nota)")
@@ -273,6 +285,12 @@ class DespesaLinha(QFrame):
             menu.addAction(
                 "Ver comprovante de pagamento",
                 lambda: self.ver_comprovante_solicitado.emit(self.conta),
+            )
+
+        if self.conta.get("parcelamento_id"):
+            menu.addAction(
+                "Ver parcelamento",
+                lambda: self.ver_parcelamento_solicitado.emit(self.conta),
             )
 
         menu.addAction(
@@ -379,6 +397,11 @@ class ContasPagar(QWidget):
         cabecalho.addWidget(icone_titulo)
         cabecalho.addLayout(col_titulo)
         cabecalho.addStretch()
+
+        self.bt_contas_fixas = BotaoSecundario("Contas fixas", icone_nome="refresh-cw")
+        self.bt_contas_fixas.setToolTip("Contas que se repetem todo mês (luz, funcionária...)")
+        self.bt_contas_fixas.clicked.connect(self.abrir_contas_fixas)
+        cabecalho.addWidget(self.bt_contas_fixas)
 
         self.bt_nova_despesa = BotaoPrimario("Nova despesa", icone_nome="plus")
         self.bt_nova_despesa.clicked.connect(self.nova_despesa)
@@ -856,6 +879,7 @@ class ContasPagar(QWidget):
                 linha.pagar_solicitado.connect(self.pagar_despesa)
                 linha.duplicar_solicitado.connect(self.duplicar_despesa)
                 linha.ver_documento_solicitado.connect(self.ver_documento)
+                linha.ver_parcelamento_solicitado.connect(self.ver_parcelamento)
                 linha.ver_comprovante_solicitado.connect(self.ver_comprovante)
 
                 self.lista_layout.addWidget(linha)
@@ -894,6 +918,22 @@ class ContasPagar(QWidget):
     # ==========================================
     # AÇÕES
     # ==========================================
+
+    def ver_parcelamento(self, conta):
+
+        from telas.parcelamento import ParcelamentoDialog
+
+        dialogo = ParcelamentoDialog(conta, parent=self)
+        dialogo.exec()
+        if dialogo.alterou:
+            self.carregar()
+
+    def abrir_contas_fixas(self):
+
+        from telas.contas_fixas import ContasFixasDialog
+
+        ContasFixasDialog(parent=self).exec()
+        self.carregar()
 
     def nova_despesa(self):
 

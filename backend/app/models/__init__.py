@@ -37,3 +37,5 @@ from app.models.refresh_token import RefreshToken
 from app.models.solicitacao_aprovacao import SolicitacaoAprovacao
 from app.models.notificacao import Notificacao
 from app.models.devolucao import Devolucao, ItemDevolucao
+from app.models.conta_recorrente import ContaRecorrente
+from app.models.beneficiario_boleto import BeneficiarioBoleto

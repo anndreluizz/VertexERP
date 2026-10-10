@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.v1.pdv import router as pdv_router
 from app.api.v1.contas_pagar import router as contas_pagar_router
+from app.api.v1.contas_recorrentes import router as contas_recorrentes_router
 from app.api.v1.contas_receber import router as contas_receber_router
 from app.api.v1.categorias_despesa import (
     router as categorias_despesa_router,
@@ -98,6 +99,7 @@ app.include_router(vendas_router)
 app.include_router(caixa_router)
 app.include_router(movimento_caixa_router)
 app.include_router(contas_pagar_router)
+app.include_router(contas_recorrentes_router)
 app.include_router(contas_receber_router)
 app.include_router(categorias_despesa_router)
 app.include_router(centros_custo_router)

@@ -11,9 +11,11 @@ _RAIZ_FRONTEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _RAIZ_FRONTEND not in sys.path:
     sys.path.insert(0, _RAIZ_FRONTEND)
 
+import gc
 import time
 
 import pytest
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QApplication
 
 
@@ -23,6 +25,18 @@ def _qapp():
     widgets do Qt não podem ser criados sem uma."""
     app = QApplication.instance() or QApplication([])
     yield app
+
+    # Fecha e destrói as janelas que sobraram ANTES do Python encerrar --
+    # sem isso o coletor de lixo destrói widgets do Qt numa ordem
+    # qualquer no fim do processo e o pytest pode cair com "fatal
+    # exception"/segfault depois de todos os testes já terem passado
+    # (aparece conforme quais telas a suíte importa, ex.: contas_pagar).
+    for janela in QApplication.topLevelWidgets():
+        janela.close()
+        janela.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    app.processEvents()
+    gc.collect()
 
 
 @pytest.fixture()

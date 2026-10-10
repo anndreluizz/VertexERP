@@ -47,7 +47,8 @@ class ContaPagarRepository:
         return (
             query
             .order_by(
-                ContaPagar.data_vencimento
+                ContaPagar.data_vencimento,
+                ContaPagar.id,
             )
             .offset(skip)
             .limit(limit)

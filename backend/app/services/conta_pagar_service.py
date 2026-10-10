@@ -14,6 +14,7 @@ from app.services.conta_recorrente_service import (
 )
 
 from app.models.conta_pagar import ContaPagar
+from app.models.conta_recorrente import ContaRecorrente
 
 from app.repositories.conta_pagar_repository import (
     ContaPagarRepository,
@@ -302,7 +303,9 @@ class ContaPagarService:
 
     @staticmethod
     def listar(db: Session, skip: int = 0, limit: int = 100, loja_id: int | None = None):
-        ContaRecorrenteService.gerar_pendentes(db)
+        # so na 1a pagina: criar contas no meio da varredura desloca o offset
+        if skip == 0:
+            ContaRecorrenteService.gerar_pendentes(db)
         return ContaPagarRepository.listar(db, skip, limit, loja_id)
 
     @staticmethod
@@ -350,12 +353,25 @@ class ContaPagarService:
             },
         )
 
+        # a tela de edicao sempre manda o valor: so conta como correcao
+        # (e confirma a luz) se ele mudou de fato
+        valor_mudou = (
+            dados_dict.get("valor") is not None
+            and dados_dict["valor"] != conta.valor
+        )
+
         for campo, valor in dados_dict.items():
             setattr(conta, campo, valor)
 
-        # conta fixa de valor variavel (luz): corrigir o valor confirma
-        if "valor" in dados_dict:
+        if valor_mudou:
             conta.valor_a_confirmar = False
+            # o valor corrigido vira a estimativa dos proximos meses
+            recorrente = (
+                db.get(ContaRecorrente, conta.recorrente_id)
+                if conta.recorrente_id else None
+            )
+            if recorrente is not None and recorrente.valor_variavel:
+                recorrente.valor = conta.valor
 
         dados_dict.pop("beneficiario_cnpj", None)
 

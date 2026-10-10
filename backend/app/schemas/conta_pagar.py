@@ -123,6 +123,12 @@ class ContaRecorrenteCreate(BaseModel):
     observacao: str | None = None
     # emprestimo/financiamento: quantos meses no total (None = sempre)
     meses: conint(ge=1, le=360) | None = None
+    # boleto/PDF do 1o mes (vao so' na conta desse mes)
+    numero_boleto: str | None = None
+    beneficiario_cnpj: str | None = None
+    documento_base64: str | None = None
+    documento_nome: str | None = None
+    documento_tipo: str | None = None
 
 
 class ContaRecorrenteUpdate(BaseModel):

@@ -1135,6 +1135,15 @@ class CadastroDespesaDialog(DialogoPadrao):
                 "plano_conta_id": dados["plano_conta_id"],
                 "observacao": dados["observacao"],
                 "meses": self.meses.value() if self.prazo.currentData() == "MESES" else None,
+                # boleto/PDF ficam na conta do 1o mes
+                **{
+                    campo: dados[campo]
+                    for campo in (
+                        "numero_boleto", "beneficiario_cnpj", "documento_base64",
+                        "documento_nome", "documento_tipo",
+                    )
+                    if campo in dados
+                },
             },)
         else:
             func, args = cadastrar_conta_pagar, (dados,)

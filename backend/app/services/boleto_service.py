@@ -327,19 +327,25 @@ def beneficiario_do_texto(texto: str) -> tuple[str | None, str | None]:
     return None, None
 
 
+def _codigo_dentro(digitos: str, hoje: date | None):
+    """O código pode vir colado em outros números da mesma linha (ex.:
+    "237-2 23790.12345..." -- o código do banco antes): tenta cada
+    posição; os dígitos verificadores barram o que não é código."""
+    for tamanho in (47, 48, 44):
+        for inicio in range(len(digitos) - tamanho + 1):
+            try:
+                return ler_codigo(digitos[inicio:inicio + tamanho], hoje)
+            except BoletoInvalidoError:
+                continue
+    return None
+
+
 def ler_pdf(conteudo: bytes, hoje: date | None = None) -> dict:
     texto = texto_do_pdf(conteudo)
 
     resultado = None
     for trecho in _SEQUENCIA_CODIGO.findall(texto):
-        digitos = _so_digitos(trecho)
-        for tamanho in (47, 48, 44):
-            if len(digitos) >= tamanho:
-                try:
-                    resultado = ler_codigo(digitos[:tamanho], hoje)
-                    break
-                except BoletoInvalidoError:
-                    continue
+        resultado = _codigo_dentro(_so_digitos(trecho), hoje)
         if resultado:
             break
 

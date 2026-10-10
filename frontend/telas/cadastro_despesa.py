@@ -539,6 +539,50 @@ class CadastroDespesaDialog(DialogoPadrao):
         self._atualizar_valor_final()
         self._atualizar_repeticao()
 
+        if novo and not repetido and dados.get("parcela_sugerida"):
+            self._oferecer_parcela(dados)
+
+    def _oferecer_parcela(self, dados):
+        """Boleto de uma parcela já lançada (cada parcela tem o seu
+        código): guarda o código nela em vez de criar outra despesa."""
+
+        parcela = dados["parcela_sugerida"]
+        venc_parcela = datetime.fromisoformat(parcela["data_vencimento"]).date()
+        venc_boleto = date.fromisoformat(dados["vencimento"]) if dados.get("vencimento") else None
+
+        texto = (
+            f"Esse boleto é a parcela {parcela.get('parcela_numero')} de "
+            f"{parcela.get('parcela_total')} de "
+            f"{parcela.get('descricao') or 'Despesa'} "
+            f"({formatar_moeda(float(parcela['valor']))}, vence "
+            f"{venc_parcela.strftime('%d/%m/%Y')}).\n\n"
+            "Guardar o código nessa parcela, em vez de lançar uma despesa nova?"
+        )
+        if venc_boleto and venc_boleto != venc_parcela:
+            texto += f"\n\nO vencimento da parcela passa para {venc_boleto.strftime('%d/%m/%Y')}, como está no boleto."
+
+        resposta = QMessageBox.question(
+            self, "Parcela encontrada", texto,
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes,
+        )
+        if resposta != QMessageBox.Yes:
+            return
+
+        payload = {"numero_boleto": dados.get("linha_digitavel") or self.numero_boleto.text().strip()}
+        if venc_boleto:
+            payload["data_vencimento"] = f"{venc_boleto.isoformat()}T00:00:00"
+
+        self.bt_salvar.setEnabled(False)
+        rodar_em_thread(
+            self,
+            atualizar_conta_pagar,
+            parcela["id"],
+            payload,
+            ao_sucesso=self._ao_salvar_sucesso,
+            ao_erro=self._ao_salvar_erro,
+            ao_finalizar=self._ao_salvar_finalizado,
+        )
+
     def _mostrar_faixa_boleto(self, texto, variante="info"):
 
         if not texto:

@@ -203,6 +203,15 @@ class BoletoJaLancado(BaseModel):
     valor: Decimal
 
 
+class ParcelaSugerida(BaseModel):
+    id: int
+    descricao: str | None = None
+    parcela_numero: int | None = None
+    parcela_total: int | None = None
+    valor: Decimal
+    data_vencimento: datetime
+
+
 class LerBoletoResponse(BaseModel):
     tipo: str | None = None
     linha_digitavel: str | None = None
@@ -218,3 +227,6 @@ class LerBoletoResponse(BaseModel):
     fornecedor_sugerido: str | None = None
     categoria_sugerida: str | None = None
     ja_lancado: BoletoJaLancado | None = None
+    # parcela em aberto sem codigo que esse boleto paga (mesmo valor,
+    # vencimento perto): guardar o codigo nela em vez de lancar outra
+    parcela_sugerida: ParcelaSugerida | None = None

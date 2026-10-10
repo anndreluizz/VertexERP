@@ -6,7 +6,7 @@ from unittest import mock
 import pytest
 from PySide6.QtCore import QDate, QEvent, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from telas import cadastro_despesa
 from telas.cadastro_despesa import CadastroDespesaDialog
@@ -227,3 +227,97 @@ def test_codigo_com_numeros_a_mais_ou_a_menos_avisa(_qapp):
 
     assert not any(c.kwargs.get("codigo") for c in rodar.call_args_list)
     assert "43 números" in dialogo.lbl_boleto.text()
+
+
+_PARCELA_2 = {
+    "id": 22, "descricao": "AFEAM 2/18", "parcela_numero": 2, "parcela_total": 18,
+    "valor": "1320.70", "data_vencimento": "2026-11-26T00:00:00",
+}
+
+
+def test_boleto_de_parcela_guarda_o_codigo_nela(_qapp, esperar_threads):
+    dialogo = _dialogo()
+    lido = dict(_LIDO, parcela_sugerida=dict(_PARCELA_2))
+
+    with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.Yes) as pergunta, \
+         mock.patch.object(cadastro_despesa, "atualizar_conta_pagar", return_value=_Resposta()) as atualizar, \
+         mock.patch.object(cadastro_despesa, "cadastrar_conta_pagar") as cadastrar:
+        dialogo._aplicar_boleto(lido)
+        esperar_threads(dialogo)
+
+    assert "parcela 2 de 18" in pergunta.call_args.args[2]
+    assert "20/11/2026" in pergunta.call_args.args[2]  # vencimento muda pro do boleto
+    atualizar.assert_called_once_with(22, {
+        "numero_boleto": _LIDO["linha_digitavel"],
+        "data_vencimento": "2026-11-20T00:00:00",
+    })
+    cadastrar.assert_not_called()
+    assert dialogo.result() == QDialog.Accepted
+
+
+def test_boleto_de_parcela_recusado_vira_despesa_normal(_qapp):
+    dialogo = _dialogo()
+    lido = dict(_LIDO, parcela_sugerida=dict(_PARCELA_2))
+
+    with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.No), \
+         mock.patch.object(cadastro_despesa, "atualizar_conta_pagar") as atualizar:
+        dialogo._aplicar_boleto(lido)
+
+    atualizar.assert_not_called()
+    assert dialogo.valor.text() == "1320,70"
+    assert dialogo.result() != QDialog.Accepted
+
+
+def _parcelas_sem_codigo():
+    return [
+        {"id": 1, "parcela_numero": 1, "parcela_total": 2, "valor": "1320.70", "status": "PAGO",
+         "data_vencimento": "2026-10-20T00:00:00", "numero_boleto": "2379 1234"},
+        {"id": 2, "parcela_numero": 2, "parcela_total": 2, "valor": "1320.70", "status": "PENDENTE",
+         "data_vencimento": "2026-11-26T00:00:00", "numero_boleto": None},
+    ]
+
+
+def test_parcelamento_mostra_copiar_e_bipar(_qapp, esperar_threads):
+    from PySide6.QtWidgets import QPushButton
+
+    with mock.patch("telas.parcelamento.listar_parcelamento", return_value=_parcelas_sem_codigo()):
+        dialogo = ParcelamentoDialog({"descricao": "AFEAM 1/2", "parcelamento_id": "abc"})
+        esperar_threads(dialogo)
+
+    textos = [
+        dialogo.tabela.cellWidget(linha, 4).findChild(QPushButton).text().strip()
+        for linha in range(2)
+    ]
+    assert textos == ["Copiar", "Bipar código"]
+
+
+def test_bipar_codigo_na_parcela(_qapp, esperar_threads):
+    with mock.patch("telas.parcelamento.listar_parcelamento", return_value=_parcelas_sem_codigo()):
+        dialogo = ParcelamentoDialog({"descricao": "AFEAM 1/2", "parcelamento_id": "abc"})
+        esperar_threads(dialogo)
+
+        with mock.patch("telas.parcelamento.pedir_texto", return_value=(_LIDO["codigo_barras"], True)), \
+             mock.patch("telas.parcelamento.ler_boleto", return_value=_Resposta(200, dict(_LIDO))), \
+             mock.patch("telas.parcelamento.atualizar_conta_pagar", return_value=_Resposta()) as atualizar:
+            dialogo.bipar_codigo(dialogo.parcelas[1])
+            esperar_threads(dialogo)
+
+    atualizar.assert_called_once_with(2, {
+        "numero_boleto": _LIDO["linha_digitavel"],
+        "data_vencimento": "2026-11-20T00:00:00",
+    })
+    assert dialogo.alterou
+
+
+def test_bipar_boleto_de_outro_valor_pergunta_antes(_qapp, esperar_threads):
+    with mock.patch("telas.parcelamento.listar_parcelamento", return_value=_parcelas_sem_codigo()):
+        dialogo = ParcelamentoDialog({"descricao": "AFEAM 1/2", "parcelamento_id": "abc"})
+        esperar_threads(dialogo)
+
+    with mock.patch("telas.parcelamento.pedir_texto", return_value=(_LIDO["codigo_barras"], True)), \
+         mock.patch("telas.parcelamento.ler_boleto", return_value=_Resposta(200, dict(_LIDO, valor="999.00"))), \
+         mock.patch.object(QMessageBox, "question", return_value=QMessageBox.No), \
+         mock.patch("telas.parcelamento.atualizar_conta_pagar") as atualizar:
+        dialogo.bipar_codigo(dialogo.parcelas[1])
+
+    atualizar.assert_not_called()

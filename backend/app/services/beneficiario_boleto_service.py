@@ -117,4 +117,52 @@ class BeneficiarioBoletoService:
                 except boleto_service.BoletoInvalidoError:
                     continue
 
+        resultado["parcela_sugerida"] = None
+        if resultado["ja_lancado"] is None:
+            parcela = BeneficiarioBoletoService.achar_parcela(db, resultado)
+            if parcela is not None:
+                resultado["parcela_sugerida"] = {
+                    "id": parcela.id,
+                    "descricao": parcela.descricao,
+                    "parcela_numero": parcela.parcela_numero,
+                    "parcela_total": parcela.parcela_total,
+                    "valor": parcela.valor,
+                    "data_vencimento": parcela.data_vencimento,
+                }
+
         return resultado
+
+    @staticmethod
+    def achar_parcela(db: Session, lido, folga_dias=10):
+        """Parcela em aberto, ainda sem codigo, que esse boleto paga:
+        mesmo valor e vencimento perto (o dia muda de mes pra mes, ex.
+        AFEAM 24/26). Empate: o nome do fornecedor decide, depois a data
+        mais perto."""
+
+        valor, vencimento = lido.get("valor"), lido.get("vencimento")
+        if not valor or not vencimento:
+            return None
+
+        candidatas = [
+            conta for conta in db.query(ContaPagar).filter(
+                ContaPagar.parcelamento_id.isnot(None),
+                ContaPagar.status == "PENDENTE",
+                ContaPagar.valor == valor,
+            ).all()
+            if not _so_digitos(conta.numero_boleto)
+            and abs((conta.data_vencimento.date() - vencimento).days) <= folga_dias
+        ]
+        if not candidatas:
+            return None
+
+        nome = (lido.get("fornecedor_sugerido") or "").strip().upper()
+
+        def ordem(conta):
+            fornecedor = _SUFIXO_PARCELA.sub("", (conta.descricao or "").strip()).upper()
+            return (
+                not nome or fornecedor != nome,
+                abs((conta.data_vencimento.date() - vencimento).days),
+                conta.parcela_numero or 0,
+            )
+
+        return min(candidatas, key=ordem)

@@ -30,6 +30,7 @@ from services import api
 from services.worker import rodar_em_thread
 from telas.cadastro_despesa import CadastroDespesaDialog
 from telas.pagamento_despesa import PagamentoDespesaDialog
+from telas.parcelamento import copiar_codigo_boleto
 
 from design import tokens
 from design.icons import icone, icone_pixmap
@@ -230,6 +231,28 @@ class DespesaLinha(QFrame):
 
         layout.addLayout(col, stretch=1)
 
+        # copiar o codigo do boleto pra colar no app do banco; espaco
+        # fixo pra os valores ficarem alinhados nas linhas sem boleto
+        area_copiar = QWidget()
+        area_copiar.setFixedWidth(30)
+        area_copiar.setStyleSheet("background:transparent;")
+        if conta.get("numero_boleto"):
+            lay_copiar = QHBoxLayout(area_copiar)
+            lay_copiar.setContentsMargins(0, 0, 0, 0)
+            self.bt_copiar = QPushButton()
+            self.bt_copiar.setFixedSize(30, 30)
+            self.bt_copiar.setCursor(Qt.PointingHandCursor)
+            self.bt_copiar.setIcon(icone("copy", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+            self.bt_copiar.setToolTip(f"Copiar código do boleto\n{conta['numero_boleto']}")
+            self.bt_copiar.setAccessibleName("Copiar código do boleto")
+            self.bt_copiar.setStyleSheet(f"""
+                QPushButton {{ background:transparent; border:none; border-radius:6px; }}
+                QPushButton:hover {{ background:{tokens.BORDA}; }}
+            """)
+            self.bt_copiar.clicked.connect(self.copiar_codigo)
+            lay_copiar.addWidget(self.bt_copiar)
+        layout.addWidget(area_copiar)
+
         valor = QLabel(formatar_moeda(conta.get("valor", 0)))
         valor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         valor.setStyleSheet(f"""
@@ -267,6 +290,9 @@ class DespesaLinha(QFrame):
         bt_menu.setMenu(self._construir_menu())
         layout.addWidget(bt_menu)
 
+    def copiar_codigo(self):
+        copiar_codigo_boleto(self.conta.get("numero_boleto"))
+
     def mouseDoubleClickEvent(self, event):
         self.editar_solicitado.emit(self.conta)
         super().mouseDoubleClickEvent(event)
@@ -280,6 +306,9 @@ class DespesaLinha(QFrame):
                 "Ver documento",
                 lambda: self.ver_documento_solicitado.emit(self.conta),
             )
+
+        if self.conta.get("numero_boleto"):
+            menu.addAction("Copiar código do boleto", self.copiar_codigo)
 
         if self.conta.get("tem_comprovante_pagamento"):
             menu.addAction(

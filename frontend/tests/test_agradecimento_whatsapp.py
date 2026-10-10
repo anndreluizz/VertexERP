@@ -56,3 +56,15 @@ def test_menu_agradece_o_ultimo_pagamento_sem_perguntar():
         ficha.enviar_agradecimento_whatsapp()
     pergunta.assert_not_called()
     assert "pagamento de R$ 150,00" in ficha._enviar_texto_whatsapp.call_args[0][0]
+
+
+def test_compra_so_agradece_sem_valor_nem_saldo():
+    ficha = _ficha()
+    ficha._movimentos = [({"tipo": "COMPRA", "valor": 58.99}, 154.98)]
+    with mock.patch("telas.ficha_cliente.saldo_cliente") as saldo, \
+         mock.patch("telas.ficha_cliente.api.configuracoes", return_value={}):
+        ficha.enviar_agradecimento_whatsapp()
+    texto = ficha._enviar_texto_whatsapp.call_args[0][0]
+    assert "Muito obrigado pela sua compra!" in texto
+    assert "R$" not in texto
+    saldo.assert_not_called()

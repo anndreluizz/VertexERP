@@ -1115,14 +1115,24 @@ class RegistrarPagamentoDialog(DialogoPadrao):
         # o recibo NAO sai mais sozinho -- só imprime se o usuário
         # pedir aqui, na hora (pedido direto: tava saindo automático
         # demais, sem perguntar nada).
-        resposta = QMessageBox.question(
-            self,
-            "Pagamento Registrado",
-            "Pagamento registrado com sucesso!\n\n"
-            "Deseja imprimir o recibo de pagamento?",
+        caixa = QMessageBox(
+            QMessageBox.Question, "Pagamento Registrado",
+            "Pagamento registrado com sucesso!\n\nO que deseja fazer?", parent=self,
         )
+        bt_whatsapp = bt_ambos = None
+        if self.cliente.get("telefone"):
+            bt_whatsapp = caixa.addButton("Agradecer no WhatsApp", QMessageBox.AcceptRole)
+        bt_recibo = caixa.addButton("Imprimir recibo", QMessageBox.AcceptRole)
+        if bt_whatsapp:
+            bt_ambos = caixa.addButton("Os dois", QMessageBox.AcceptRole)
+        caixa.addButton("Fechar", QMessageBox.RejectRole)
+        caixa.exec()
+        escolha = caixa.clickedButton()
 
-        if resposta == QMessageBox.Yes:
+        # a ficha manda o agradecimento depois que este dialogo fecha
+        self.agradecer_whatsapp = escolha is not None and escolha in (bt_whatsapp, bt_ambos)
+
+        if escolha is not None and escolha in (bt_recibo, bt_ambos):
             self._imprimir_recibo_pagamento(self._pagamento_valor_pendente)
 
         self.accept()
@@ -3091,10 +3101,13 @@ class FichaClienteDialog(QDialog):
             return
 
         self.carregar()
-        self._oferecer_agradecimento(
-            f"Muito obrigado pelo seu pagamento de "
-            f"{formatar_moeda(dialogo._pagamento_valor_pendente)}!"
-        )
+        # botao "Agradecer no WhatsApp" do aviso de pagamento registrado
+        if getattr(dialogo, "agradecer_whatsapp", False):
+            self._oferecer_agradecimento(
+                f"Muito obrigado pelo seu pagamento de "
+                f"{formatar_moeda(dialogo._pagamento_valor_pendente)}!",
+                perguntar=False,
+            )
 
     def lancar_fiado(self):
 
@@ -3119,10 +3132,8 @@ class FichaClienteDialog(QDialog):
             return
 
         self.carregar()
-        self._oferecer_agradecimento(
-            f"Muito obrigado pela sua compra de "
-            f"{formatar_moeda(dialogo._total_digitado() or 0)}!"
-        )
+        # compra: so' o obrigado, sem valor nem saldo (pedido do usuario)
+        self._oferecer_agradecimento("Muito obrigado pela sua compra!", com_saldo=False)
 
     def enviar_agradecimento_whatsapp(self):
         """Menu WhatsApp: obrigado pelo último pagamento ou compra no
@@ -3139,17 +3150,20 @@ class FichaClienteDialog(QDialog):
             )
             return
 
+        if ultimo["tipo"] == "COMPRA":
+            self._oferecer_agradecimento(
+                "Muito obrigado pela sua compra!", perguntar=False, com_saldo=False
+            )
+            return
+
         valor = formatar_moeda(float(ultimo.get("valor", 0) or 0))
         self._oferecer_agradecimento(
-            f"Muito obrigado pelo seu pagamento de {valor}!"
-            if ultimo["tipo"] == "PAGAMENTO"
-            else f"Muito obrigado pela sua compra de {valor}!",
-            perguntar=False,
+            f"Muito obrigado pelo seu pagamento de {valor}!", perguntar=False
         )
 
-    def _oferecer_agradecimento(self, agradecimento, perguntar=True):
-        """Depois de um pagamento ou compra no fiado: pergunta se manda
-        um obrigado no WhatsApp do cliente, já com o saldo que ficou."""
+    def _oferecer_agradecimento(self, agradecimento, perguntar=True, com_saldo=True):
+        """Manda um obrigado no WhatsApp do cliente (pagamento: com o
+        saldo que ficou; compra: só o obrigado)."""
 
         if not self.cliente.get("telefone"):
             if not perguntar:
@@ -3165,17 +3179,19 @@ class FichaClienteDialog(QDialog):
             if resposta != QMessageBox.Yes:
                 return
 
-        saldo = saldo_cliente(self.cliente["id"])
         nome_loja = api.configuracoes().get("nome_loja") or "Vertex ERP"
-        restante = (
-            f"Saldo restante da sua conta: {formatar_moeda(saldo)}"
-            if saldo > 0.009 else "Sua conta está quitada!"
-        )
+        restante = ""
+        if com_saldo:
+            saldo = saldo_cliente(self.cliente["id"])
+            restante = (
+                f"Saldo restante da sua conta: {formatar_moeda(saldo)}"
+                if saldo > 0.009 else "Sua conta está quitada!"
+            ) + "\n\n"
 
         texto = (
             f"Olá, {self.cliente.get('nome', '')}! Tudo bem?\n\n"
             f"{agradecimento}\n\n"
-            f"{restante}\n\n"
+            f"{restante}"
             f"Agradecemos a preferência!\n\n"
             f"Equipe {nome_loja}"
         )

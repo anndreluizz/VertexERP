@@ -1115,24 +1115,14 @@ class RegistrarPagamentoDialog(DialogoPadrao):
         # o recibo NAO sai mais sozinho -- só imprime se o usuário
         # pedir aqui, na hora (pedido direto: tava saindo automático
         # demais, sem perguntar nada).
-        caixa = QMessageBox(
-            QMessageBox.Question, "Pagamento Registrado",
-            "Pagamento registrado com sucesso!\n\nO que deseja fazer?", parent=self,
+        resposta = QMessageBox.question(
+            self,
+            "Pagamento Registrado",
+            "Pagamento registrado com sucesso!\n\n"
+            "Deseja imprimir o recibo de pagamento?",
         )
-        bt_whatsapp = bt_ambos = None
-        if self.cliente.get("telefone"):
-            bt_whatsapp = caixa.addButton("Agradecer no WhatsApp", QMessageBox.AcceptRole)
-        bt_recibo = caixa.addButton("Imprimir recibo", QMessageBox.AcceptRole)
-        if bt_whatsapp:
-            bt_ambos = caixa.addButton("Os dois", QMessageBox.AcceptRole)
-        caixa.addButton("Fechar", QMessageBox.RejectRole)
-        caixa.exec()
-        escolha = caixa.clickedButton()
 
-        # a ficha manda o agradecimento depois que este dialogo fecha
-        self.agradecer_whatsapp = escolha is not None and escolha in (bt_whatsapp, bt_ambos)
-
-        if escolha is not None and escolha in (bt_recibo, bt_ambos):
+        if resposta == QMessageBox.Yes:
             self._imprimir_recibo_pagamento(self._pagamento_valor_pendente)
 
         self.accept()
@@ -3101,13 +3091,6 @@ class FichaClienteDialog(QDialog):
             return
 
         self.carregar()
-        # botao "Agradecer no WhatsApp" do aviso de pagamento registrado
-        if getattr(dialogo, "agradecer_whatsapp", False):
-            self._oferecer_agradecimento(
-                f"Muito obrigado pelo seu pagamento de "
-                f"{formatar_moeda(dialogo._pagamento_valor_pendente)}!",
-                perguntar=False,
-            )
 
     def lancar_fiado(self):
 
@@ -3132,8 +3115,6 @@ class FichaClienteDialog(QDialog):
             return
 
         self.carregar()
-        # compra: so' o obrigado, sem valor nem saldo (pedido do usuario)
-        self._oferecer_agradecimento("Muito obrigado pela sua compra!", com_saldo=False)
 
     def enviar_agradecimento_whatsapp(self):
         """Menu WhatsApp: obrigado pelo último pagamento ou compra no
@@ -3150,34 +3131,21 @@ class FichaClienteDialog(QDialog):
             )
             return
 
+        # compra: so' o obrigado, sem valor nem saldo (pedido do usuario)
         if ultimo["tipo"] == "COMPRA":
-            self._oferecer_agradecimento(
-                "Muito obrigado pela sua compra!", perguntar=False, com_saldo=False
-            )
+            self._enviar_agradecimento("Muito obrigado pela sua compra!", com_saldo=False)
             return
 
         valor = formatar_moeda(float(ultimo.get("valor", 0) or 0))
-        self._oferecer_agradecimento(
-            f"Muito obrigado pelo seu pagamento de {valor}!", perguntar=False
-        )
+        self._enviar_agradecimento(f"Muito obrigado pelo seu pagamento de {valor}!")
 
-    def _oferecer_agradecimento(self, agradecimento, perguntar=True, com_saldo=True):
-        """Manda um obrigado no WhatsApp do cliente (pagamento: com o
-        saldo que ficou; compra: só o obrigado)."""
+    def _enviar_agradecimento(self, agradecimento, com_saldo=True):
+        """Pagamento: com o saldo que ficou; compra: só o obrigado.
+        Sem telefone, _enviar_texto_whatsapp já avisa."""
 
         if not self.cliente.get("telefone"):
-            if not perguntar:
-                # _enviar_texto_whatsapp avisa "Sem telefone"
-                self._enviar_texto_whatsapp("", "Agradecimento")
+            self._enviar_texto_whatsapp("", "Agradecimento")
             return
-
-        if perguntar:
-            resposta = QMessageBox.question(
-                self, "WhatsApp",
-                "Enviar mensagem de agradecimento pro cliente no WhatsApp?",
-            )
-            if resposta != QMessageBox.Yes:
-                return
 
         nome_loja = api.configuracoes().get("nome_loja") or "Vertex ERP"
         restante = ""

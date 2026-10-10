@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+import base64
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import exigir_permissao, get_current_user, loja_para_leitura, resolver_loja_id
@@ -6,6 +7,9 @@ from app.database.session import SessionLocal
 
 from app.schemas.conta_pagar import (
     ContaPagarCreate,
+    ContaPagarParceladaCreate,
+    LerBoletoRequest,
+    LerBoletoResponse,
     ContaPagarUpdate,
     ContaPagarResponse,
     ContaPagarEventoResponse,
@@ -15,6 +19,8 @@ from app.schemas.conta_pagar import (
 
 from app.services.aprovacao_service import AprovacaoService
 from app.services.conta_pagar_evento_service import ContaPagarEventoService
+from app.services.beneficiario_boleto_service import BeneficiarioBoletoService
+from app.services.boleto_service import BoletoInvalidoError
 from app.services.conta_pagar_service import (
     ContaPagarService,
 )
@@ -60,15 +66,84 @@ def criar(
         )
 
 
+@router.post("/ler-boleto", response_model=LerBoletoResponse)
+def ler_boleto(
+    dados: LerBoletoRequest,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    """Le o codigo (bipado/digitado) ou o PDF do boleto e devolve
+    valor, vencimento, banco, fornecedor (do PDF ou aprendido) e se esse
+    boleto ja foi lancado. Nao grava nada."""
+
+    try:
+        pdf = base64.b64decode(dados.pdf_base64) if dados.pdf_base64 else None
+        return BeneficiarioBoletoService.ler(db, codigo=dados.codigo, pdf=pdf)
+    except BoletoInvalidoError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/parcelamento/{parcelamento_id}", response_model=list[ContaPagarResponse])
+def listar_parcelamento(
+    parcelamento_id: str,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return [
+        ContaPagarResponse.from_orm(c)
+        for c in ContaPagarService.listar_parcelamento(db, parcelamento_id)
+    ]
+
+
+@router.post("/parcelamento/{parcelamento_id}/cancelar-restantes")
+def cancelar_parcelas_restantes(
+    parcelamento_id: str,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        quantidade = ContaPagarService.cancelar_parcelas_restantes(
+            db, parcelamento_id, usuario_id=usuario.id
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {"success": True, "canceladas": quantidade}
+
+
+@router.post("/parcelado", response_model=list[ContaPagarResponse])
+def criar_parcelado(
+    dados: ContaPagarParceladaCreate,
+    loja_id: int | None = None,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    try:
+        contas = ContaPagarService.criar_parcelado(
+            db,
+            dados,
+            usuario_id=usuario.id,
+            loja_id=resolver_loja_id(db, usuario, loja_id),
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return [ContaPagarResponse.from_orm(c) for c in contas]
+
+
 @router.get("/", response_model=list[ContaPagarResponse])
 def listar(
     loja_id: int | None = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
     loja_id = loja_para_leitura(usuario, loja_id)
 
-    contas = ContaPagarService.listar(db, loja_id=loja_id)
+    contas = ContaPagarService.listar(db, skip, limit, loja_id=loja_id)
 
     return [
         ContaPagarResponse.from_orm(c)

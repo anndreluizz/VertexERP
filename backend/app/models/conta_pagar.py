@@ -1,12 +1,16 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
+    Date,
     DateTime,
     ForeignKey,
+    Integer,
     LargeBinary,
     Numeric,
     String,
+    UniqueConstraint,
 )
 
 from sqlalchemy.orm import (
@@ -21,6 +25,12 @@ from app.database.base import Base
 class ContaPagar(Base):
 
     __tablename__ = "contas_pagar"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "recorrente_id", "competencia", name="uq_conta_recorrente_competencia"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(
         primary_key=True,
@@ -168,6 +178,38 @@ class ContaPagar(Base):
     numero_transacao: Mapped[str | None] = mapped_column(
         String(80),
         nullable=True,
+    )
+
+    # conta gerada por uma conta fixa mensal (ver ContaRecorrente) --
+    # competencia = primeiro dia do mes a que ela se refere; o par
+    # (recorrente_id, competencia) e unico, entao gerar duas vezes o
+    # mesmo mes nao duplica a conta
+    recorrente_id: Mapped[int | None] = mapped_column(
+        ForeignKey("contas_recorrentes.id"),
+        index=True,
+        nullable=True,
+    )
+
+    competencia: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    # parcelas criadas juntas (boleto parcelado) compartilham o mesmo
+    # parcelamento_id -- da' pra ver "paguei 1 de 3, faltam R$ X" e
+    # cancelar as que faltam de uma vez (ver ContaPagarService)
+    parcelamento_id: Mapped[str | None] = mapped_column(
+        String(32), index=True, nullable=True
+    )
+
+    parcela_numero: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    parcela_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # luz e parecidas: a conta do mes nasce com o valor do mes anterior
+    # so' como estimativa -- fica True ate alguem corrigir o valor (ou
+    # pagar)
+    valor_a_confirmar: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
     )
 
     fornecedor = relationship(

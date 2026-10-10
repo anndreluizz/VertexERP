@@ -25,6 +25,12 @@ def verificar_vencimentos_e_notificar(db) -> None:
     gerente) quando ha contas vencidas ou vencendo amanha. Pensada pra
     rodar uma vez por dia (ver iniciar_verificacao_diaria)."""
 
+    # contas fixas do mes: cria aqui tambem, pra elas entrarem no aviso
+    # mesmo que ninguem tenha aberto Contas a Pagar ainda
+    from app.services.conta_recorrente_service import ContaRecorrenteService
+
+    ContaRecorrenteService.gerar_pendentes(db)
+
     hoje = date.today()
     amanha = hoje + timedelta(days=1)
 
@@ -66,6 +72,24 @@ def verificar_vencimentos_e_notificar(db) -> None:
             "Contas vencendo amanhã",
             f"{vencendo_qtd} conta(s) vencendo amanhã — "
             f"{_moeda(float(vencendo_valor))}",
+        )
+
+    # luz e parecidas: valor copiado do mes anterior que ninguem confirmou
+    a_confirmar = (
+        db.query(func.count(ContaPagar.id))
+        .filter(
+            ContaPagar.status == StatusContaPagar.PENDENTE.value,
+            ContaPagar.valor_a_confirmar.is_(True),
+        )
+        .scalar()
+    )
+
+    if a_confirmar:
+        NotificacaoService.enviar_para_admins(
+            db,
+            "Contas com valor a confirmar",
+            f"{a_confirmar} conta(s) fixa(s) com o valor do mês passado. "
+            "Quando a fatura chegar, corrija o valor em Contas a Pagar.",
         )
 
 

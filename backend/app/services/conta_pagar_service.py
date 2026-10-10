@@ -1,9 +1,17 @@
 import base64
+import uuid
 from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
 from app.enums.status_conta_pagar import StatusContaPagar
+from app.services.beneficiario_boleto_service import BeneficiarioBoletoService
+from app.services.conta_recorrente_service import (
+    ContaRecorrenteService,
+    primeiro_dia,
+    somar_meses,
+    vencimento_no_mes,
+)
 
 from app.models.conta_pagar import ContaPagar
 
@@ -78,6 +86,11 @@ class ContaPagarService:
             usuario_id=usuario_id, dispositivo=dispositivo,
         )
 
+        BeneficiarioBoletoService.aprender(
+            db, conta.numero_boleto, conta.descricao, conta.categoria,
+            getattr(dados, "beneficiario_cnpj", None),
+        )
+
         if dados.documento_base64:
             ContaPagarEventoService.registrar(
                 db, conta.id, "DOCUMENTO_ANEXADO",
@@ -91,6 +104,122 @@ class ContaPagarService:
             )
 
         return conta
+
+    @staticmethod
+    def criar_parcelado(
+        db: Session,
+        dados,
+        usuario_id: int | None = None,
+        loja_id: int | None = None,
+    ):
+        """Boleto parcelado: cria N contas de dados.valor cada (valor da
+        parcela), a primeira no vencimento informado e as outras no
+        mesmo dia dos meses seguintes. Descricao ganha " 1/N", " 2/N"...
+        O documento anexado (se houver) fica so' na primeira."""
+
+        descricao = (dados.descricao or "Despesa").strip()
+        n = dados.numero_parcelas
+
+        if len(descricao) + len(f" {n}/{n}") > 120:
+            raise Exception("Descrição muito longa para parcelar.")
+
+        primeiro = dados.data_vencimento.date()
+        competencia = primeiro_dia(primeiro)
+
+        if dados.vencimentos:
+            if len(dados.vencimentos) != n:
+                raise Exception("Informe uma data para cada parcela.")
+            vencimentos = list(dados.vencimentos)
+        elif dados.intervalo == "30_DIAS":
+            vencimentos = [primeiro + timedelta(days=30 * i) for i in range(n)]
+        else:
+            vencimentos = [
+                vencimento_no_mes(somar_meses(competencia, i), primeiro.day)
+                for i in range(n)
+            ]
+
+        parcelamento_id = uuid.uuid4().hex
+        contas = []
+
+        for indice in range(n):
+
+            vencimento = vencimentos[indice]
+
+            conta = ContaPagar(
+                data_emissao=datetime.now(),
+                data_vencimento=datetime(vencimento.year, vencimento.month, vencimento.day),
+                valor=dados.valor,
+                descricao=f"{descricao} {indice + 1}/{n}",
+                categoria=dados.categoria,
+                centro_custo=dados.centro_custo,
+                plano_conta_id=dados.plano_conta_id,
+                observacao=dados.observacao,
+                numero_boleto=dados.numero_boleto if indice == 0 else None,
+                status=StatusContaPagar.PENDENTE.value,
+                loja_id=loja_id,
+                parcelamento_id=parcelamento_id,
+                parcela_numero=indice + 1,
+                parcela_total=n,
+            )
+
+            if indice == 0 and dados.documento_base64:
+                conta.documento = base64.b64decode(dados.documento_base64)
+                conta.documento_nome = dados.documento_nome
+                conta.documento_tipo = dados.documento_tipo
+
+            db.add(conta)
+            contas.append(conta)
+
+        db.commit()
+
+        for conta in contas:
+            db.refresh(conta)
+            ContaPagarEventoService.registrar(
+                db, conta.id, "CRIADA", usuario_id=usuario_id,
+            )
+
+        BeneficiarioBoletoService.aprender(
+            db, dados.numero_boleto, descricao, dados.categoria,
+            getattr(dados, "beneficiario_cnpj", None),
+        )
+
+        return contas
+
+    @staticmethod
+    def listar_parcelamento(db: Session, parcelamento_id: str):
+        return (
+            db.query(ContaPagar)
+            .filter(ContaPagar.parcelamento_id == parcelamento_id)
+            .order_by(ContaPagar.parcela_numero, ContaPagar.data_vencimento)
+            .all()
+        )
+
+    @staticmethod
+    def cancelar_parcelas_restantes(
+        db: Session, parcelamento_id: str, usuario_id: int | None = None
+    ):
+        """Cancela as parcelas ainda pendentes (acordo com o fornecedor,
+        compra devolvida...). As pagas ficam como estao."""
+
+        pendentes = [
+            c for c in ContaPagarService.listar_parcelamento(db, parcelamento_id)
+            if c.status == StatusContaPagar.PENDENTE.value
+        ]
+
+        if not pendentes:
+            raise Exception("Não há parcelas pendentes nesse parcelamento.")
+
+        for conta in pendentes:
+            conta.status = StatusContaPagar.CANCELADO.value
+        db.commit()
+
+        for conta in pendentes:
+            ContaPagarEventoService.registrar(
+                db, conta.id, "CANCELADA", usuario_id=usuario_id,
+                detalhes="Parcelas restantes canceladas",
+            )
+
+        return len(pendentes)
 
     @staticmethod
     def criar_compra_prazo(
@@ -173,10 +302,12 @@ class ContaPagarService:
 
     @staticmethod
     def listar(db: Session, skip: int = 0, limit: int = 100, loja_id: int | None = None):
+        ContaRecorrenteService.gerar_pendentes(db)
         return ContaPagarRepository.listar(db, skip, limit, loja_id)
 
     @staticmethod
     def listar_pendentes(db: Session, loja_id: int | None = None):
+        ContaRecorrenteService.gerar_pendentes(db)
         return ContaPagarRepository.listar_pendentes(db, loja_id)
 
     @staticmethod
@@ -222,6 +353,12 @@ class ContaPagarService:
         for campo, valor in dados_dict.items():
             setattr(conta, campo, valor)
 
+        # conta fixa de valor variavel (luz): corrigir o valor confirma
+        if "valor" in dados_dict:
+            conta.valor_a_confirmar = False
+
+        dados_dict.pop("beneficiario_cnpj", None)
+
         # so troca o documento se vier um novo -- editar outros campos
         # da despesa nao pode apagar o boleto ja anexado sem querer.
         if dados.documento_base64:
@@ -233,6 +370,11 @@ class ContaPagarService:
             db,
             conta,
         )
+
+        if "numero_boleto" in dados_dict or "descricao" in dados_dict:
+            BeneficiarioBoletoService.aprender(
+                db, conta.numero_boleto, conta.descricao, conta.categoria,
+            )
 
         if dados.documento_base64:
             ContaPagarEventoService.registrar(
@@ -319,6 +461,7 @@ class ContaPagarService:
 
         conta.status = StatusContaPagar.PAGO.value
         conta.data_pagamento = datetime.now()
+        conta.valor_a_confirmar = False
         conta.forma_pagamento = forma_pagamento
         conta.banco_pagamento = banco_pagamento
         conta.numero_transacao = numero_transacao

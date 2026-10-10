@@ -15,3 +15,18 @@ def formatar_moeda(valor, com_simbolo=True):
     texto = texto.replace(",", "_").replace(".", ",").replace("_", ".")
 
     return f"R$ {texto}" if com_simbolo else texto
+
+
+# nome legivel das formas de pagamento (enum do backend) -- telas e recibos
+NOMES_FORMA = {
+    "DINHEIRO": "Dinheiro",
+    "PIX": "Pix",
+    "DEBITO": "Débito",
+    "CREDITO": "Crédito",
+    "BOLETO": "Boleto",
+    "PRAZO": "Fiado",
+}
+
+
+def nome_forma(codigo):
+    return NOMES_FORMA.get(codigo, codigo)

@@ -51,7 +51,7 @@ def test_cupom_80mm_tem_itens_e_total(_qapp):
     assert "CANCELADA" in texto
     assert "TOTAL (2 vendas)" in texto
     assert "DEVOLV/TROCA 2x CARTUCHO" in texto
-    assert "TOTAL LIQUIDO" in texto
+    assert "TOTAL LÍQUIDO" in texto
 
 
 def test_botao_imprimir_manda_pra_termica(_qapp, esperar_threads, monkeypatch):

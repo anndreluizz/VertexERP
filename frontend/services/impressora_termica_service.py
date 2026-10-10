@@ -27,7 +27,7 @@ from datetime import datetime
 from io import BytesIO
 from urllib.parse import quote
 
-from utils.formatacao import formatar_moeda
+from utils.formatacao import formatar_moeda, nome_forma
 
 # ==================================================
 # COMANDOS ESC/POS
@@ -98,6 +98,9 @@ def _codificar_texto(texto):
 
     partes = []
 
+    # travessão não existe no PC860 e saía "?" no papel
+    texto = texto.replace("—", "-").replace("–", "-")
+
     for caractere in texto:
         try:
             partes.append(caractere.encode("cp860"))
@@ -122,7 +125,14 @@ def _linha_dupla_coluna(esquerda, direita, largura):
     espaco = largura - len(esquerda) - len(direita)
 
     if espaco < 1:
-        return _linha(esquerda) + _linha(direita.rjust(largura))
+        # nome comprido: quebra em palavras (a impressora cortaria no
+        # meio da palavra) e poe o valor alinhado na ultima linha
+        linhas = textwrap.wrap(esquerda, largura, subsequent_indent="    ") or [""]
+        ultima = linhas.pop()
+        resto = b"".join(_linha(linha) for linha in linhas)
+        if len(ultima) + len(direita) < largura:
+            return resto + _linha(f"{ultima}{' ' * (largura - len(ultima) - len(direita))}{direita}")
+        return resto + _linha(ultima) + _linha(direita.rjust(largura))
 
     return _linha(f"{esquerda}{' ' * espaco}{direita}")
 
@@ -141,10 +151,16 @@ def _moeda(valor):
 
 
 def _data(data_iso):
+    """"2026-10-10T08:01" -> "10/10/2026 08:01" (só a data quando a hora
+    é 00:00 -- lançamento feito com o dia, sem horário)."""
     if not data_iso:
         return "-"
-    texto = str(data_iso).replace("T", " ")
-    return texto[:16]
+    texto = str(data_iso).replace("T", " ")[:16]
+    try:
+        dt = datetime.strptime(texto, "%Y-%m-%d %H:%M")
+    except ValueError:
+        return texto
+    return dt.strftime("%d/%m/%Y" if (dt.hour, dt.minute) == (0, 0) else "%d/%m/%Y %H:%M")
 
 
 def _data_com_hora(data_iso):
@@ -356,13 +372,13 @@ def gerar_comandos_comprovante(dados, config_loja, logo_bytes=None, largura_pape
             dados.get("valor_forma_2") or 0
         )
         partes.append(
-            _linha(f"Forma de pagamento: {_moeda(valor_principal)} ({dados['forma_pagamento']})")
+            _linha(f"Forma de pagamento: {_moeda(valor_principal)} ({nome_forma(dados['forma_pagamento'])})")
         )
         partes.append(
-            _linha(f"          + {_moeda(dados['valor_forma_2'])} ({dados['forma_pagamento_2']})")
+            _linha(f"                  + {_moeda(dados['valor_forma_2'])} ({nome_forma(dados['forma_pagamento_2'])})")
         )
     else:
-        partes.append(_linha(f"Forma de pagamento: {dados['forma_pagamento']}"))
+        partes.append(_linha(f"Forma de pagamento: {nome_forma(dados['forma_pagamento'])}"))
 
     situacao = dados.get("situacao") or "PAGO"
     partes.append(_linha(f"Situação: {'EM ABERTO' if situacao == 'FIADO' else 'PAGO'}"))
@@ -449,7 +465,7 @@ def gerar_comandos_recibo_pagamento(
     partes.append(_negrito(False))
     partes.append(_linha())
 
-    partes.append(_linha(f"Forma de pagamento: {forma_pagamento}"))
+    partes.append(_linha(f"Forma de pagamento: {nome_forma(forma_pagamento)}"))
     partes.append(_linha_dupla_coluna("Valor recebido:", _moeda(valor), largura))
 
     partes.append(_divisoria(largura))
@@ -528,7 +544,7 @@ def gerar_comandos_extrato(
     partes.append(_negrito(False))
 
     if config_loja.get("telefone"):
-        partes.append(_linha(config_loja["telefone"]))
+        partes.append(_linha(f"WhatsApp: {config_loja['telefone']}"))
 
     partes.append(_divisoria(largura))
     partes.append(_alinhar(0))
@@ -545,7 +561,7 @@ def gerar_comandos_extrato(
     partes.append(_divisoria(largura))
 
     if not movimentos:
-        partes.append(_linha("Nenhuma movimentacao registrada."))
+        partes.append(_linha("Nenhuma movimentação registrada."))
 
     for mov in movimentos:
         tipo = mov.get("tipo")
@@ -555,7 +571,7 @@ def gerar_comandos_extrato(
         descricao = mov.get("descricao") or ("Compra" if tipo == "COMPRA" else "Pagamento")
         partes.append(_linhas_quebradas(f"  {descricao}", largura))
 
-        rotulo_valor = f"  {'Debito' if tipo == 'COMPRA' else 'Credito'}: {_moeda(valor)}"
+        rotulo_valor = f"  {'Débito' if tipo == 'COMPRA' else 'Crédito'}: {_moeda(valor)}"
         partes.append(
             _linha_dupla_coluna(rotulo_valor, f"Saldo {_moeda(mov.get('saldo_apos'))}", largura)
         )
@@ -563,7 +579,7 @@ def gerar_comandos_extrato(
     if observacoes:
         partes.append(_divisoria(largura))
         partes.append(_negrito(True))
-        partes.append(_linha("Observacoes"))
+        partes.append(_linha("Observações"))
         partes.append(_negrito(False))
         for obs in observacoes:
             data_obs = str(obs.get("criado_em") or "")[:10]
@@ -575,7 +591,10 @@ def gerar_comandos_extrato(
     partes.append(_linha_dupla_coluna("TOTAL DEVEDOR", _moeda(saldo), largura))
     partes.append(_tamanho_fonte(1, 1))
     partes.append(_negrito(False))
-    partes.append(_linha(f"Responsavel: {responsavel}"))
+    partes.append(_linha(f"Responsável: {responsavel}"))
+    partes.append(_divisoria(largura))
+    partes.append(_alinhar(1))
+    partes.append(_linha("Este extrato não possui valor fiscal."))
 
     partes.append(_cortar_papel())
 
@@ -607,7 +626,7 @@ def gerar_comandos_fechamento_caixa(
     partes.append(_negrito(False))
 
     if config_loja.get("telefone"):
-        partes.append(_linha(config_loja["telefone"]))
+        partes.append(_linha(f"WhatsApp: {config_loja['telefone']}"))
 
     partes.append(_divisoria(largura))
     partes.append(_alinhar(0))
@@ -617,7 +636,7 @@ def gerar_comandos_fechamento_caixa(
     partes.append(_negrito(False))
     partes.append(_linha(f"Aberto em: {_data(caixa.get('data_abertura'))}"))
     partes.append(_linha(f"Fechado em: {_data(fechado_em)}"))
-    partes.append(_linha(f"Responsavel: {responsavel}"))
+    partes.append(_linha(f"Responsável: {responsavel}"))
 
     partes.append(_divisoria(largura))
     partes.append(_negrito(True))
@@ -628,11 +647,11 @@ def gerar_comandos_fechamento_caixa(
         ("Troco inicial", resumo.get("saldo_inicial", 0)),
         ("Vendas em dinheiro", resumo.get("vendas_dinheiro", 0)),
         ("Vendas PIX", resumo.get("vendas_pix", 0)),
-        ("Vendas cartao", resumo.get("vendas_cartao", 0)),
+        ("Vendas cartão", resumo.get("vendas_cartao", 0)),
         ("Vendas a prazo", resumo.get("vendas_prazo", 0)),
         ("Suprimentos", resumo.get("suprimentos", 0)),
         ("Sangrias", resumo.get("sangrias", 0)),
-        ("Recebimentos fiado", resumo.get("recebimentos_fiado", 0)),
+        ("Recebimentos de fiado", resumo.get("recebimentos_fiado", 0)),
     )
 
     for rotulo, valor in resumo_linhas:
@@ -658,51 +677,52 @@ def gerar_comandos_fechamento_caixa(
         texto_diferenca = f"- {_moeda(abs(diferenca))} (falta)"
 
     partes.append(_negrito(True))
-    partes.append(_linha_dupla_coluna("Diferenca", texto_diferenca, largura))
+    partes.append(_linha_dupla_coluna("Diferença", texto_diferenca, largura))
     partes.append(_negrito(False))
 
     partes.append(_tamanho_fonte(1, 2))
     partes.append(
         _linha_dupla_coluna(
-            "TOTAL GERAL", _moeda(resumo.get("total_geral", 0)), largura
+            "TOTAL GERAL DO TURNO", _moeda(resumo.get("total_geral", 0)), largura
         )
     )
     partes.append(_tamanho_fonte(1, 1))
 
     partes.append(_divisoria(largura))
     partes.append(_negrito(True))
-    partes.append(_linha(f"Movimentacoes do Dia ({len(movimentos)})"))
+    partes.append(_linha(f"Movimentações do Dia ({len(movimentos)})"))
     partes.append(_negrito(False))
 
     if not movimentos:
-        partes.append(_linha("Nenhuma movimentacao registrada."))
+        partes.append(_linha("Nenhuma movimentação registrada."))
 
     for mov in movimentos:
 
         tipo = mov.get("tipo")
         rotulo_tipo = _ROTULOS_TIPO_MOVIMENTO.get(tipo, tipo or "-")
+        # dinheiro que saiu da gaveta sai com sinal de menos
+        sinal = "-" if tipo in ("SANGRIA", "ESTORNO") else ""
 
-        partes.append(_linha(f"{_data(mov.get('data'))}  {rotulo_tipo}"))
+        # hora, tipo e valor na mesma linha; a descricao embaixo
+        partes.append(_linha_dupla_coluna(
+            f"{_data(mov.get('data'))}  {rotulo_tipo}",
+            sinal + _moeda(abs(float(mov.get("valor", 0) or 0))), largura,
+        ))
 
         descricao = mov.get("descricao")
         if descricao:
             partes.append(_linhas_quebradas(f"  {descricao}", largura))
 
-        partes.append(
-            _linha_dupla_coluna("", _moeda(mov.get("valor", 0)), largura)
-        )
-
     if observacoes:
         partes.append(_divisoria(largura))
         partes.append(_negrito(True))
-        partes.append(_linha("Observacoes do Fechamento"))
+        partes.append(_linha("Observações do Fechamento"))
         partes.append(_negrito(False))
         partes.append(_linhas_quebradas(observacoes, largura))
 
     partes.append(_divisoria(largura))
     partes.append(_alinhar(1))
-    partes.append(_linha("Este extrato nao tem valor fiscal."))
-    partes.append(_linha("Documento gerado pelo Vertex ERP."))
+    partes.append(_linha("Este extrato não possui valor fiscal."))
 
     partes.append(_cortar_papel())
 
@@ -736,7 +756,10 @@ def gerar_comandos_vendas(relatorio, config_loja, largura_papel_mm=80):
             f"{venda['titulo']} {venda['forma']}{situacao}", _moeda(venda["total"]), largura,
         ))
         partes.append(_negrito(False))
-        partes.append(_linhas_quebradas(f"{venda['cliente']} - {venda['vendedora']}", largura))
+        quem = f"Vendedora: {venda['vendedora']}"
+        if venda["cliente"] not in ("", "-", "—"):
+            quem = f"Cliente: {venda['cliente']} | {quem}"
+        partes.append(_linhas_quebradas(quem, largura))
         for texto, valor in venda["itens"]:
             partes.append(_linha_dupla_coluna(f"  {texto}"[:largura - 14], _moeda(valor), largura))
         for texto, valor in venda.get("devolvidos", []):
@@ -763,10 +786,10 @@ def gerar_comandos_vendas(relatorio, config_loja, largura_papel_mm=80):
 
     devolvido = relatorio.get("devolvido") or 0
     if devolvido:
-        partes.append(_linha_dupla_coluna("Devolucoes / trocas", "-" + _moeda(devolvido), largura))
+        partes.append(_linha_dupla_coluna("Devoluções / trocas", "-" + _moeda(devolvido), largura))
         partes.append(_negrito(True))
         partes.append(_linha_dupla_coluna(
-            "TOTAL LIQUIDO", _moeda(relatorio["total"] - devolvido), largura,
+            "TOTAL LÍQUIDO", _moeda(relatorio["total"] - devolvido), largura,
         ))
         partes.append(_negrito(False))
 

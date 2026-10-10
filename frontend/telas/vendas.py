@@ -30,23 +30,22 @@ from services.venda_service import (
 )
 from services.worker import em_paralelo, rodar_em_thread
 from telas.devolucao_dialog import DevolucaoDialog
-from utils.formatacao import formatar_moeda
+from utils.formatacao import NOMES_FORMA, formatar_moeda
 from widgets.tables.standard_table import StandardTable
 
-_NOMES_FORMA = {
-    "DINHEIRO": "Dinheiro",
-    "PIX": "Pix",
-    "DEBITO": "Débito",
-    "CREDITO": "Crédito",
-    "BOLETO": "Boleto",
-    "PRAZO": "Fiado",
-}
+_NOMES_FORMA = NOMES_FORMA
 
 _NOMES_STATUS = {
     "FINALIZADA": "Finalizada",
     "CANCELADA": "Cancelada",
     "ABERTA": "Suspensa",
 }
+
+
+def _data_curta(data_iso):
+    # fiado lancado pela ficha fica sem hora (00:00): mostra so o dia
+    dt = datetime.fromisoformat(data_iso)
+    return dt.strftime("%d/%m" if (dt.hour, dt.minute) == (0, 0) else "%d/%m %H:%M")
 
 
 def _devolucoes_das_vendas(vendas):
@@ -631,8 +630,7 @@ class Vendas(QWidget):
 
             blocos.append({
                 "devolvidos": devolvidos,
-                "titulo": f"#{venda['id']} "
-                + datetime.fromisoformat(venda["data"]).strftime("%d/%m %H:%M"),
+                "titulo": f"#{venda['id']} " + _data_curta(venda["data"]),
                 "cliente": venda.get("cliente_nome") or "—",
                 "vendedora": venda.get("usuario_nome") or "—",
                 "forma": forma,

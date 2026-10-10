@@ -34,11 +34,14 @@ def test_linha_dupla_coluna_cabendo_vira_uma_linha():
     assert len(linha.rstrip(b"\n")) == 20
 
 
-def test_linha_dupla_coluna_estourando_quebra_em_duas():
+def test_linha_dupla_coluna_estourando_quebra_nas_palavras():
     linha = svc._linha_dupla_coluna(
         "Produto com nome bem comprido demais", "R$ 5,00", 20
-    )
-    assert linha.count(b"\n") == 2
+    ).decode()
+    linhas = linha.splitlines()
+    assert all(len(texto) <= 20 for texto in linhas)
+    assert linhas[-1].endswith("R$ 5,00")
+    assert "comprido" in linha  # palavra inteira, sem cortar no meio
 
 
 def test_divisoria_tem_o_tamanho_certo():
@@ -121,7 +124,7 @@ def test_cupom_de_venda_completo():
     assert svc._codificar_texto("Loja Teste") in comandos
     assert svc._codificar_texto("Pedido nº: 42") in comandos
     assert svc._codificar_texto("R$ 23,00") in comandos
-    assert b"PIX" in comandos
+    assert b"Pix" in comandos  # nome legivel, nao o codigo
     assert svc._codificar_texto("Maria Souza") in comandos
     assert svc._codificar_texto("Entregar embrulhado") in comandos
 
@@ -170,7 +173,7 @@ def test_extrato_sem_movimentacao_nao_trava():
     comandos = svc.gerar_comandos_extrato(
         CLIENTE, [], [], saldo=0.0, responsavel="Ana", config_loja=CONFIG_LOJA,
     )
-    assert svc._codificar_texto("Nenhuma movimentacao registrada.") in comandos
+    assert svc._codificar_texto("Nenhuma movimentação registrada.") in comandos
 
 
 def test_recibo_pagamento_quitado():

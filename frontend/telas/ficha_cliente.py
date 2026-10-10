@@ -1413,7 +1413,8 @@ class FichaClienteDialog(QDialog):
         menu.addAction("Enviar Último Comprovante", self.enviar_ultimo_comprovante)
         menu.addAction("Enviar Extrato Completo", self.enviar_extrato_whatsapp)
         menu.addAction("Enviar Cobrança", self.enviar_cobranca_whatsapp)
-        menu.addAction("Enviar Agradecimento", self.enviar_agradecimento_whatsapp)
+        menu.addAction("Agradecer Pagamento", self.agradecer_pagamento_whatsapp)
+        menu.addAction("Agradecer Compra", self.agradecer_compra_whatsapp)
 
         return menu
 
@@ -3116,24 +3117,21 @@ class FichaClienteDialog(QDialog):
 
         self.carregar()
 
-    def enviar_agradecimento_whatsapp(self):
-        """Menu WhatsApp: obrigado pelo último pagamento ou compra no
-        fiado (o mais recente dos dois)."""
+    def agradecer_compra_whatsapp(self):
+        # compra: so' o obrigado, sem valor nem saldo (pedido do usuario)
+        self._enviar_agradecimento("Muito obrigado pela sua compra!", com_saldo=False)
+
+    def agradecer_pagamento_whatsapp(self):
+        """Obrigado pelo último pagamento, com o saldo que ficou."""
 
         ultimo = next(
-            (mov for mov, _ in self._movimentos
-             if mov.get("tipo") in ("PAGAMENTO", "COMPRA")),
+            (mov for mov, _ in self._movimentos if mov.get("tipo") == "PAGAMENTO"),
             None,
         )
         if not ultimo:
             QMessageBox.information(
-                self, "Agradecimento", "Este cliente ainda não tem compra nem pagamento."
+                self, "Agradecimento", "Este cliente ainda não tem pagamento registrado."
             )
-            return
-
-        # compra: so' o obrigado, sem valor nem saldo (pedido do usuario)
-        if ultimo["tipo"] == "COMPRA":
-            self._enviar_agradecimento("Muito obrigado pela sua compra!", com_saldo=False)
             return
 
         valor = formatar_moeda(float(ultimo.get("valor", 0) or 0))

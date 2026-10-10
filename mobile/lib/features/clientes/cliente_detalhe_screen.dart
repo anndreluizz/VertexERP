@@ -190,8 +190,12 @@ class _Ficha extends ConsumerWidget {
         ),
         PopupMenuItem(value: _AcaoWhatsapp.haver, child: Text('Enviar haver')),
         PopupMenuItem(
-          value: _AcaoWhatsapp.agradecimento,
-          child: Text('Enviar agradecimento'),
+          value: _AcaoWhatsapp.agradecerPagamento,
+          child: Text('Agradecer pagamento'),
+        ),
+        PopupMenuItem(
+          value: _AcaoWhatsapp.agradecerCompra,
+          child: Text('Agradecer compra'),
         ),
         PopupMenuItem(
           value: _AcaoWhatsapp.cadastro,
@@ -258,20 +262,25 @@ class _Ficha extends ConsumerWidget {
       case _AcaoWhatsapp.cadastro:
         texto = _textoCadastro(saldo);
         break;
-      case _AcaoWhatsapp.agradecimento:
+      case _AcaoWhatsapp.agradecerCompra:
+        texto = _textoAgradecimento(ref);
+        break;
+      case _AcaoWhatsapp.agradecerPagamento:
         final ultimo = historico
-            .where((m) => m.tipo == 'PAGAMENTO' || m.tipo == 'COMPRA')
+            .where((m) => m.tipo == 'PAGAMENTO')
             .firstOrNull;
         if (ultimo == null) {
           _mostrarSnack(
             context,
-            'Este cliente ainda não tem compra nem pagamento.',
+            'Este cliente ainda não tem pagamento registrado.',
           );
           return;
         }
-        texto = ultimo.tipo == 'COMPRA'
-            ? _textoAgradecimento(ref)
-            : _textoAgradecimento(ref, pagamento: ultimo.valor, saldo: saldo);
+        texto = _textoAgradecimento(
+          ref,
+          pagamento: ultimo.valor,
+          saldo: saldo,
+        );
         break;
     }
 
@@ -570,7 +579,15 @@ class _Ficha extends ConsumerWidget {
   }
 }
 
-enum _AcaoWhatsapp { extrato, cobranca, saldo, haver, cadastro, agradecimento }
+enum _AcaoWhatsapp {
+  extrato,
+  cobranca,
+  saldo,
+  haver,
+  cadastro,
+  agradecerPagamento,
+  agradecerCompra,
+}
 
 class _Cabecalho extends StatelessWidget {
   const _Cabecalho({

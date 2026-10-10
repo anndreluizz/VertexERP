@@ -338,3 +338,16 @@ def test_boleto_de_outro_valor_nao_sugere_parcela(client, auth_headers):
     lido = client.post("/contas-pagar/ler-boleto", json={"codigo": barras}, headers=auth_headers).json()
 
     assert lido["parcela_sugerida"] is None
+
+
+def test_le_pdf_com_codigo_do_banco_antes_da_linha_digitavel():
+    linha = b.ler_codigo(_boleto_bancario(), HOJE)["linha_digitavel"]
+    pdf = _pdf_com_texto([
+        "Beneficiario: ADRIANA CALCADOS LTDA",
+        f"237-2 {linha}",
+    ])
+
+    lido = b.ler_pdf(pdf, HOJE)
+
+    assert lido["valor"] == Decimal("1320.70")
+    assert lido["vencimento"] == date(2026, 11, 20)

@@ -1,4 +1,5 @@
 """Contas fixas mensais (luz, funcionária) e boleto parcelado."""
+import base64
 from datetime import date
 from decimal import Decimal
 
@@ -227,3 +228,69 @@ def test_aviso_diario_sai_as_8h():
     assert segundos_ate_proximo_aviso(datetime(2026, 10, 10, 7, 53)) == 7 * 60
     assert segundos_ate_proximo_aviso(datetime(2026, 10, 10, 8, 0)) == 24 * 3600
     assert segundos_ate_proximo_aviso(datetime(2026, 10, 10, 19, 0)) == 13 * 3600
+
+
+def test_editar_so_a_categoria_nao_confirma_a_luz(client, auth_headers, db):
+    _fixa(client, auth_headers, descricao="Luz", valor="100.00", valor_variavel=True)
+    ContaRecorrenteService.gerar_pendentes(
+        db, hoje=somar_meses(date.today().replace(day=1), 1)
+    )
+    conta = [c for c in _contas(client, auth_headers) if c["valor_a_confirmar"]][0]
+
+    # a tela de edição manda o valor junto, mesmo sem mudar
+    editada = client.put(
+        f"/contas-pagar/{conta['id']}",
+        json={"valor": "100.00", "categoria": "Energia"},
+        headers=auth_headers,
+    ).json()
+
+    assert editada["categoria"] == "Energia"
+    assert editada["valor_a_confirmar"] is True
+
+
+def test_mudar_valor_da_luz_vale_pros_proximos_meses(client, auth_headers, db):
+    fixa = _fixa(client, auth_headers, descricao="Luz", valor="100.00", valor_variavel=True)
+
+    client.put(
+        f"/contas-recorrentes/{fixa['id']}", json={"valor": "180.00"}, headers=auth_headers
+    )
+    ContaRecorrenteService.gerar_pendentes(
+        db, hoje=somar_meses(date.today().replace(day=1), 1)
+    )
+
+    valores = sorted(Decimal(str(c["valor"])) for c in _contas(client, auth_headers))
+    assert valores == [Decimal("100.00"), Decimal("180.00")]
+
+
+def test_conta_fixa_guarda_boleto_e_documento_no_primeiro_mes(client, auth_headers):
+    _fixa(
+        client, auth_headers,
+        numero_boleto="23790123450000000001234500987650",
+        documento_base64=base64.b64encode(b"%PDF-1.4 fatura").decode(),
+        documento_nome="fatura.pdf",
+        documento_tipo="application/pdf",
+    )
+
+    [conta] = _contas(client, auth_headers)
+
+    assert conta["numero_boleto"] == "23790123450000000001234500987650"
+    assert conta["documento_nome"] == "fatura.pdf"
+
+
+def test_lista_paginada_ordena_pelo_id_no_mesmo_vencimento(client, auth_headers):
+    vencimento = date.today().replace(day=15).isoformat() + "T00:00:00"
+    ids = [
+        client.post(
+            "/contas-pagar/",
+            json={"descricao": f"Parcela {i}", "valor": "10.00", "data_vencimento": vencimento},
+            headers=auth_headers,
+        ).json()["id"]
+        for i in range(6)
+    ]
+
+    paginas = [
+        client.get(f"/contas-pagar/?skip={skip}&limit=2", headers=auth_headers).json()
+        for skip in (0, 2, 4)
+    ]
+
+    assert [c["id"] for pagina in paginas for c in pagina] == sorted(ids)

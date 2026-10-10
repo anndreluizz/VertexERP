@@ -1,3 +1,4 @@
+import base64
 import calendar
 import traceback
 from datetime import date, datetime
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.enums.status_conta_pagar import StatusContaPagar
 from app.models.conta_pagar import ContaPagar
 from app.models.conta_recorrente import ContaRecorrente
+from app.services.beneficiario_boleto_service import BeneficiarioBoletoService
 
 
 def primeiro_dia(data: date) -> date:
@@ -59,13 +61,23 @@ class ContaRecorrenteService:
         competencia = primeiro_dia(dados.primeiro_vencimento)
         if getattr(dados, "meses", None):
             recorrente.fim_competencia = somar_meses(competencia, dados.meses - 1)
-        ContaRecorrenteService._criar_conta_do_mes(
+        conta = ContaRecorrenteService._criar_conta_do_mes(
             db, recorrente, competencia, dados.valor, a_confirmar=False
         )
+        conta.numero_boleto = getattr(dados, "numero_boleto", None)
+        if getattr(dados, "documento_base64", None):
+            conta.documento = base64.b64decode(dados.documento_base64)
+            conta.documento_nome = dados.documento_nome
+            conta.documento_tipo = dados.documento_tipo
         recorrente.ultima_competencia = competencia
 
         db.commit()
         db.refresh(recorrente)
+
+        BeneficiarioBoletoService.aprender(
+            db, conta.numero_boleto, conta.descricao, conta.categoria,
+            getattr(dados, "beneficiario_cnpj", None),
+        )
 
         # o primeiro vencimento pode ser de um mês que já passou
         ContaRecorrenteService.gerar_pendentes(db)
@@ -110,23 +122,23 @@ class ContaRecorrenteService:
     @staticmethod
     def _criar_conta_do_mes(db, recorrente, competencia, valor, a_confirmar):
         vencimento = vencimento_no_mes(competencia, recorrente.dia_vencimento)
-        db.add(
-            ContaPagar(
-                data_emissao=datetime.now(),
-                data_vencimento=datetime(vencimento.year, vencimento.month, vencimento.day),
-                valor=valor,
-                descricao=recorrente.descricao,
-                categoria=recorrente.categoria,
-                centro_custo=recorrente.centro_custo,
-                plano_conta_id=recorrente.plano_conta_id,
-                observacao=recorrente.observacao,
-                status=StatusContaPagar.PENDENTE.value,
-                loja_id=recorrente.loja_id,
-                recorrente_id=recorrente.id,
-                competencia=competencia,
-                valor_a_confirmar=a_confirmar,
-            )
+        conta = ContaPagar(
+            data_emissao=datetime.now(),
+            data_vencimento=datetime(vencimento.year, vencimento.month, vencimento.day),
+            valor=valor,
+            descricao=recorrente.descricao,
+            categoria=recorrente.categoria,
+            centro_custo=recorrente.centro_custo,
+            plano_conta_id=recorrente.plano_conta_id,
+            observacao=recorrente.observacao,
+            status=StatusContaPagar.PENDENTE.value,
+            loja_id=recorrente.loja_id,
+            recorrente_id=recorrente.id,
+            competencia=competencia,
+            valor_a_confirmar=a_confirmar,
         )
+        db.add(conta)
+        return conta
 
     @staticmethod
     def gerar_pendentes(db: Session, hoje: date | None = None) -> int:
@@ -156,22 +168,12 @@ class ContaRecorrenteService:
 
                 while proxima <= limite:
 
-                    if recorrente.valor_variavel:
-                        # luz: estimativa = valor da última conta dela
-                        anterior = (
-                            db.query(ContaPagar.valor)
-                            .filter(ContaPagar.recorrente_id == recorrente.id)
-                            .order_by(ContaPagar.competencia.desc())
-                            .first()
-                        )
-                        valor = anterior[0] if anterior else recorrente.valor
-                        a_confirmar = True
-                    else:
-                        valor = recorrente.valor
-                        a_confirmar = False
-
+                    # luz: recorrente.valor e a estimativa -- acompanha o
+                    # ultimo valor corrigido (ContaPagarService.atualizar)
+                    # e o "Mudar valor" das Contas fixas
                     ContaRecorrenteService._criar_conta_do_mes(
-                        db, recorrente, proxima, valor, a_confirmar
+                        db, recorrente, proxima, recorrente.valor,
+                        a_confirmar=recorrente.valor_variavel,
                     )
                     recorrente.ultima_competencia = proxima
                     db.flush()

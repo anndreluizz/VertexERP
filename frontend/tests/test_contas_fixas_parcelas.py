@@ -101,6 +101,24 @@ def test_todo_mes_cria_conta_fixa_com_valor_variavel(_qapp, esperar_threads):
     assert dados["valor"] == 605.24
 
 
+def test_todo_mes_leva_boleto_e_documento(_qapp, esperar_threads):
+    dialogo = _dialogo()
+    dialogo.descricao.setText("Conta de luz")
+    dialogo.valor.setText("605,24")
+    dialogo.numero_boleto.setText("83620000006052400481202611200000000000000000")
+    dialogo.documento_bytes = b"%PDF-1.4 fatura"
+    dialogo.documento_nome_arquivo = "fatura.pdf"
+    dialogo.documento_tipo_arquivo = "application/pdf"
+    dialogo.repeticao.setCurrentIndex(dialogo.repeticao.findData("MENSAL"))
+
+    chamadas = _salvar(dialogo, esperar_threads)
+
+    [dados] = chamadas["cadastrar_conta_fixa"].call_args.args
+    assert dados["numero_boleto"].startswith("8362")
+    assert dados["documento_nome"] == "fatura.pdf"
+    assert dados["documento_base64"]
+
+
 def test_so_esta_vez_continua_igual(_qapp, esperar_threads):
     dialogo = _dialogo()
     dialogo.descricao.setText("Conserto")

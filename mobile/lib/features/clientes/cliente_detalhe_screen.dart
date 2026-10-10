@@ -30,7 +30,20 @@ class ClienteDetalheScreen extends ConsumerWidget {
       ),
       error: (erro, _) => Scaffold(
         appBar: AppBar(),
-        body: const Center(child: Text('Não foi possível carregar o cliente.')),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Não foi possível carregar o cliente.'),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () => ref.invalidate(clienteProvider(clienteId)),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Tentar de novo'),
+              ),
+            ],
+          ),
+        ),
       ),
       data: (cliente) => _Ficha(cliente: cliente),
     );

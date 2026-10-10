@@ -28,7 +28,7 @@ from app.services.movimento_fiado_service import (
     MovimentoFiadoService,
     _verificar_limite_credito,
 )
-from app.services.notificacao_service import NotificacaoService
+from app.services.notificacao_service import NotificacaoService, nome_do_usuario
 from app.services.configuracao_service import ConfiguracaoService
 from app.services.whatsapp_service import WhatsappService
 
@@ -928,5 +928,13 @@ class VendaService:
         db.add(venda)
 
         db.commit()
+
+        NotificacaoService.enviar_para_admins(
+            db,
+            "Venda cancelada",
+            f"Venda #{venda.id} — {_moeda(venda.valor_total)}, cancelada por "
+            f"{nome_do_usuario(db, usuario_id)}"
+            + (f": {motivo}" if motivo else "."),
+        )
 
         return True

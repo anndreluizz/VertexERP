@@ -6,6 +6,11 @@ from app.repositories.movimento_caixa_repository import (
     MovimentoCaixaRepository,
 )
 from app.schemas.movimento_caixa import MovimentoCaixaCreate
+from app.services.notificacao_service import (
+    NotificacaoService,
+    moeda,
+    nome_do_usuario,
+)
 
 
 class MovimentoCaixaService:
@@ -65,10 +70,22 @@ class MovimentoCaixaService:
         # nenhum -- fechamento nao batia e ninguem sabia por que
         db.add(caixa)
 
-        return MovimentoCaixaRepository.criar(
+        movimento = MovimentoCaixaRepository.criar(
             db,
             movimento
         )
+
+        sangria = tipo == "SANGRIA"
+        NotificacaoService.enviar_para_admins(
+            db,
+            "Sangria no caixa" if sangria else "Suprimento no caixa",
+            f"{nome_do_usuario(db, usuario_id)} "
+            f"{'tirou' if sangria else 'colocou'} {moeda(movimento.valor)} "
+            f"{'do' if sangria else 'no'} caixa"
+            + (f": {movimento.descricao}" if movimento.descricao else "."),
+        )
+
+        return movimento
 
     @staticmethod
     def listar(

@@ -103,6 +103,13 @@ class ContaPagarService:
                 f"{conta.descricao or 'Despesa'} — {_moeda(conta.valor)}",
                 excluir_usuario_id=usuario_id,
             )
+        else:
+            NotificacaoService.enviar_para_admins(
+                db,
+                "Nova despesa",
+                f"{conta.descricao or 'Despesa'} — {_moeda(conta.valor)}",
+                excluir_usuario_id=usuario_id,
+            )
 
         return conta
 
@@ -182,6 +189,13 @@ class ContaPagarService:
         BeneficiarioBoletoService.aprender(
             db, dados.numero_boleto, descricao, dados.categoria,
             getattr(dados, "beneficiario_cnpj", None),
+        )
+
+        NotificacaoService.enviar_para_admins(
+            db,
+            "Nova despesa parcelada",
+            f"{descricao} — {n}x de {_moeda(dados.valor)}",
+            excluir_usuario_id=usuario_id,
         )
 
         return contas

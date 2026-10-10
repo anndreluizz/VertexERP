@@ -663,13 +663,18 @@ def gerar_comandos_fechamento_caixa(
     partes.append(_negrito(True))
     partes.append(_linha_dupla_coluna("Total previsto", _moeda(total_previsto), largura))
     partes.append(_negrito(False))
-    partes.append(
-        _linha_dupla_coluna("Valor contado", _moeda(valor_contado), largura)
-    )
+    partes.append(_linha_dupla_coluna(
+        "Valor contado",
+        _moeda(valor_contado) if valor_contado is not None else "não contado",
+        largura,
+    ))
 
     diferenca = float(valor_contado or 0) - total_previsto
 
-    if abs(diferenca) < 0.01:
+    # caixa fechado sem contagem (reimpressao de caixa antigo)
+    if valor_contado is None:
+        texto_diferenca = "-"
+    elif abs(diferenca) < 0.01:
         texto_diferenca = "R$ 0,00 (confere)"
     elif diferenca > 0:
         texto_diferenca = f"+ {_moeda(diferenca)} (sobra)"
@@ -762,10 +767,6 @@ def gerar_comandos_vendas(relatorio, config_loja, largura_papel_mm=80):
         partes.append(_linhas_quebradas(quem, largura))
         for texto, valor in venda["itens"]:
             partes.append(_linha_dupla_coluna(f"  {texto}"[:largura - 14], _moeda(valor), largura))
-        for texto, valor in venda.get("devolvidos", []):
-            partes.append(_linha_dupla_coluna(
-                f"  DEVOLV/TROCA {texto}"[:largura - 14], "-" + _moeda(valor), largura,
-            ))
         partes.append(_linha())
 
     partes.append(_divisoria(largura))
@@ -783,15 +784,6 @@ def gerar_comandos_vendas(relatorio, config_loja, largura_papel_mm=80):
     ))
     partes.append(_tamanho_fonte(1, 1))
     partes.append(_negrito(False))
-
-    devolvido = relatorio.get("devolvido") or 0
-    if devolvido:
-        partes.append(_linha_dupla_coluna("Devoluções / trocas", "-" + _moeda(devolvido), largura))
-        partes.append(_negrito(True))
-        partes.append(_linha_dupla_coluna(
-            "TOTAL LÍQUIDO", _moeda(relatorio["total"] - devolvido), largura,
-        ))
-        partes.append(_negrito(False))
 
     partes.append(_cortar_papel())
 

@@ -38,10 +38,11 @@ _ROTULOS_TIPO_MOVIMENTO = {
 
 
 def _formatar_data_curta(texto):
-    texto = str(texto or "")
-    if "T" in texto:
-        texto = texto.replace("T", " ")
-    return texto[:16]
+    texto = str(texto or "").replace("T", " ")[:16]
+    try:
+        return datetime.strptime(texto, "%Y-%m-%d %H:%M").strftime("%d/%m/%Y %H:%M")
+    except ValueError:
+        return texto
 
 
 def _buscar_dados_fechamento():
@@ -650,130 +651,142 @@ class FecharCaixaWindow(DialogoPadrao):
     # ficha_cliente.py)
     # ======================================
 
-    def _montar_html_extrato_dia(self, movimentos, config, responsavel):
-
-        nome_loja = config.get("nome_loja") or "Vertex ERP"
-        telefone_loja = config.get("telefone") or ""
-
-        agora = datetime.now().strftime("%d/%m/%Y %H:%M")
-
-        total_previsto = float(self.resumo.get("total_previsto", 0) or 0)
-        diferenca = self.valor_contado - total_previsto
-
-        if abs(diferenca) < 0.01:
-            cor_diferenca, texto_diferenca = "#16A34A", "R$ 0,00 (confere)"
-        elif diferenca > 0:
-            cor_diferenca = "#2563EB"
-            texto_diferenca = f"+ {formatar_moeda(diferenca)} (sobra)"
-        else:
-            cor_diferenca = "#DC2626"
-            texto_diferenca = f"- {formatar_moeda(abs(diferenca))} (falta)"
-
-        linhas_resumo = "".join(
-            f"<tr><td>{rotulo}</td>"
-            f"<td align='right'>{formatar_moeda(valor)}</td></tr>"
-            for rotulo, valor in (
-                ("Troco inicial", self.resumo.get("saldo_inicial", 0)),
-                ("Vendas em dinheiro", self.resumo.get("vendas_dinheiro", 0)),
-                ("Vendas PIX", self.resumo.get("vendas_pix", 0)),
-                ("Vendas cartão", self.resumo.get("vendas_cartao", 0)),
-                ("Vendas a prazo", self.resumo.get("vendas_prazo", 0)),
-                ("Suprimentos", self.resumo.get("suprimentos", 0)),
-                ("Sangrias", self.resumo.get("sangrias", 0)),
-                ("Recebimentos fiado", self.resumo.get("recebimentos_fiado", 0)),
-            )
-        )
-
-        linhas_movimentos = "".join(
-            f"<tr>"
-            f"<td>{_formatar_data_curta(mov.get('data'))}</td>"
-            f"<td>{_ROTULOS_TIPO_MOVIMENTO.get(mov.get('tipo'), mov.get('tipo') or '—')}</td>"
-            f"<td>{mov.get('descricao') or ''}</td>"
-            f"<td align='right'>{formatar_moeda(mov.get('valor', 0))}</td>"
-            f"</tr>"
-            for mov in movimentos
-        ) or (
-            "<tr><td colspan='4' align='center'>"
-            "Nenhuma movimentação registrada.</td></tr>"
-        )
-
-        texto_obs = self.observacoes_input.text().strip()
-        bloco_observacoes = (
-            f"<h3>Observações</h3><p>{texto_obs}</p>" if texto_obs else ""
-        )
-
-        return f"""
-        <div style="text-align:center;">
-            <h2 style="margin-bottom:0;">{nome_loja}</h2>
-            <div style="color:#666;">{telefone_loja}</div>
-        </div>
-        <hr>
-        <h3 style="text-align:center; margin-bottom:4px;">
-            Extrato de Fechamento de Caixa
-        </h3>
-        <table width="100%" cellspacing="4">
-            <tr><td><b>Aberto em:</b></td>
-                <td>{_formatar_data_curta(self.caixa.get('data_abertura'))}</td></tr>
-            <tr><td><b>Fechado em:</b></td><td>{agora}</td></tr>
-            <tr><td><b>Responsável:</b></td><td>{responsavel}</td></tr>
-        </table>
-        <h3>Resumo do Turno</h3>
-        <table width="100%" cellspacing="4">
-            {linhas_resumo}
-            <tr><td><b>Total previsto</b></td>
-                <td align="right"><b>{formatar_moeda(total_previsto)}</b></td></tr>
-            <tr><td>Valor contado</td>
-                <td align="right">{formatar_moeda(self.valor_contado)}</td></tr>
-            <tr><td>Diferença</td>
-                <td align="right" style="color:{cor_diferenca};">
-                    <b>{texto_diferenca}</b></td></tr>
-        </table>
-        <h3 style="text-align:right;">
-            Total geral: {formatar_moeda(self.resumo.get('total_geral', 0))}
-        </h3>
-        <h3>Movimentações do Dia</h3>
-        <table width="100%" border="1" cellspacing="0" cellpadding="6">
-            <tr style="background:#f0f0f0;">
-                <th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th>
-            </tr>
-            {linhas_movimentos}
-        </table>
-        {bloco_observacoes}
-        """
-
     def imprimir_extrato_dia(self, movimentos, responsavel, config):
-
-        # impressao em si fica sincrona -- e' I/O de dispositivo local
-        # (porta serial/USB da impressora termica, ou o dialogo de
-        # impressao do Windows), nao rede; fora do escopo deste audit
-        config_impressora = preferencias_service.carregar_impressora_termica()
-
-        if config_impressora and config_impressora.get("ativa"):
-
-            ok, erro = impressora_termica_service.imprimir_fechamento_caixa(
-                self.caixa,
-                self.resumo,
-                movimentos,
-                self.valor_contado,
-                self.observacoes_input.text().strip(),
-                responsavel,
-                datetime.now().isoformat(),
-                config,
-                config_impressora,
-            )
-
-            if ok:
-                return
-
-            resposta = QMessageBox.question(
-                self,
-                "Falha na impressora térmica",
-                f"{erro}\n\nQuer tentar imprimir pela janela normal do Windows?",
-            )
-
-            if resposta != QMessageBox.Yes:
-                return
-
-        comprovante_service.imprimir(
-            self._montar_html_extrato_dia(movimentos, config, responsavel), self
+        imprimir_fechamento(
+            self, self.caixa, self.resumo, movimentos, self.valor_contado,
+            self.observacoes_input.text().strip(), responsavel,
+            datetime.now().isoformat(), config,
         )
+
+
+def montar_html_fechamento(caixa, resumo, movimentos, valor_contado, observacoes,
+                           responsavel, fechado_em, config):
+    """HTML do extrato de fechamento -- usado ao fechar o caixa e ao
+    reimprimir um caixa antigo (telas/caixas_anteriores.py).
+    valor_contado None = caixa fechado sem contagem."""
+
+    nome_loja = config.get("nome_loja") or "Vertex ERP"
+    telefone_loja = config.get("telefone") or ""
+
+    agora = _formatar_data_curta(fechado_em)
+
+    total_previsto = float(resumo.get("total_previsto", 0) or 0)
+    diferenca = (valor_contado or 0) - total_previsto
+
+    if valor_contado is None:
+        cor_diferenca, texto_diferenca = "#666", "não contado"
+    elif abs(diferenca) < 0.01:
+        cor_diferenca, texto_diferenca = "#16A34A", "R$ 0,00 (confere)"
+    elif diferenca > 0:
+        cor_diferenca = "#2563EB"
+        texto_diferenca = f"+ {formatar_moeda(diferenca)} (sobra)"
+    else:
+        cor_diferenca = "#DC2626"
+        texto_diferenca = f"- {formatar_moeda(abs(diferenca))} (falta)"
+
+    linhas_resumo = "".join(
+        f"<tr><td>{rotulo}</td>"
+        f"<td align='right'>{formatar_moeda(valor)}</td></tr>"
+        for rotulo, valor in (
+            ("Troco inicial", resumo.get("saldo_inicial", 0)),
+            ("Vendas em dinheiro", resumo.get("vendas_dinheiro", 0)),
+            ("Vendas PIX", resumo.get("vendas_pix", 0)),
+            ("Vendas cartão", resumo.get("vendas_cartao", 0)),
+            ("Vendas a prazo", resumo.get("vendas_prazo", 0)),
+            ("Suprimentos", resumo.get("suprimentos", 0)),
+            ("Sangrias", resumo.get("sangrias", 0)),
+            ("Recebimentos de fiado", resumo.get("recebimentos_fiado", 0)),
+        )
+    )
+
+    linhas_movimentos = "".join(
+        f"<tr>"
+        f"<td>{_formatar_data_curta(mov.get('data'))}</td>"
+        f"<td>{_ROTULOS_TIPO_MOVIMENTO.get(mov.get('tipo'), mov.get('tipo') or '—')}</td>"
+        f"<td>{mov.get('descricao') or ''}</td>"
+        f"<td align='right'>{formatar_moeda(mov.get('valor', 0))}</td>"
+        f"</tr>"
+        for mov in movimentos
+    ) or (
+        "<tr><td colspan='4' align='center'>"
+        "Nenhuma movimentação registrada.</td></tr>"
+    )
+
+    texto_obs = (observacoes or "").strip()
+    bloco_observacoes = (
+        f"<h3>Observações</h3><p>{texto_obs}</p>" if texto_obs else ""
+    )
+
+    return f"""
+    <div style="text-align:center;">
+        <h2 style="margin-bottom:0;">{nome_loja}</h2>
+        <div style="color:#666;">{f"WhatsApp: {telefone_loja}" if telefone_loja else ""}</div>
+    </div>
+    <hr>
+    <h3 style="text-align:center; margin-bottom:4px;">
+        Extrato de Fechamento de Caixa
+    </h3>
+    <table width="100%" cellspacing="4">
+        <tr><td><b>Aberto em:</b></td>
+            <td>{_formatar_data_curta(caixa.get('data_abertura'))}</td></tr>
+        <tr><td><b>Fechado em:</b></td><td>{agora}</td></tr>
+        <tr><td><b>Responsável:</b></td><td>{responsavel}</td></tr>
+    </table>
+    <h3>Resumo do Turno</h3>
+    <table width="100%" cellspacing="4">
+        {linhas_resumo}
+        <tr><td><b>Total previsto</b></td>
+            <td align="right"><b>{formatar_moeda(total_previsto)}</b></td></tr>
+        <tr><td>Valor contado</td>
+            <td align="right">{formatar_moeda(valor_contado) if valor_contado is not None else '—'}</td></tr>
+        <tr><td>Diferença</td>
+            <td align="right" style="color:{cor_diferenca};">
+                <b>{texto_diferenca}</b></td></tr>
+    </table>
+    <h3 style="text-align:right;">
+        Total geral do turno: {formatar_moeda(resumo.get('total_geral', 0))}
+    </h3>
+    <h3>Movimentações do Dia</h3>
+    <table width="100%" border="1" cellspacing="0" cellpadding="6">
+        <tr style="background:#f0f0f0;">
+            <th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th>
+        </tr>
+        {linhas_movimentos}
+    </table>
+    {bloco_observacoes}
+    """
+
+
+def imprimir_fechamento(parent, caixa, resumo, movimentos, valor_contado, observacoes,
+                        responsavel, fechado_em, config):
+    """Termica de 80mm se estiver ativa; senao (ou se falhar e a pessoa
+    quiser) a janela normal do Windows."""
+
+    config_impressora = preferencias_service.carregar_impressora_termica()
+
+    if config_impressora and config_impressora.get("ativa"):
+
+        ok, erro = impressora_termica_service.imprimir_fechamento_caixa(
+            caixa, resumo, movimentos, valor_contado, observacoes or "",
+            responsavel, fechado_em, config, config_impressora,
+        )
+
+        if ok:
+            return
+
+        resposta = QMessageBox.question(
+            parent,
+            "Falha na impressora térmica",
+            f"{erro}\n\nQuer tentar imprimir pela janela normal do Windows?",
+        )
+
+        if resposta != QMessageBox.Yes:
+            return
+
+    comprovante_service.imprimir(
+        montar_html_fechamento(
+            caixa, resumo, movimentos, valor_contado, observacoes,
+            responsavel, fechado_em, config,
+        ),
+        parent,
+    )

@@ -27,6 +27,7 @@ class CaixaResponse(BaseModel):
     valor_contado: Decimal | None = None
     observacoes: str | None = None
     usuario_id: int | None = None
+    usuario_nome: str | None = None  # so' no /historico
 
     class Config:
         orm_mode = True

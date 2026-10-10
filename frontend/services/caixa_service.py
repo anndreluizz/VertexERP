@@ -46,18 +46,29 @@ def resumo_caixa():
     return response.json()
 
 
-def historico_caixa(loja_id=None):
+def historico_caixa(loja_id=None, limite=20):
 
     # loja_id aqui e' o filtro escolhido na tela de Relatorios, nao a
     # config fixa do terminal -- por isso nao usa endpoint_com_loja()
-    endpoint = "/caixa/historico"
+    endpoint = f"/caixa/historico?limite={limite}"
     if loja_id is not None:
-        endpoint += f"?loja_id={loja_id}"
+        endpoint += f"&loja_id={loja_id}"
 
     response = get(endpoint)
 
     if response.status_code != 200:
         return []
+
+    return response.json()
+
+
+def resumo_caixa_por_id(caixa_id):
+    """Resumo de um caixa qualquer, inclusive já fechado."""
+
+    response = get(f"/caixa/{caixa_id}/resumo")
+
+    if response.status_code != 200:
+        raise Exception("Não foi possível carregar o resumo do caixa.")
 
     return response.json()
 

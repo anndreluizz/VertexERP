@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user, exigir_permissao, loja_para_leitura, resolver_loja_id
 from app.database.session import SessionLocal
+from app.models.caixa import Caixa
+from app.models.user import User
 from app.schemas.caixa import (
     CaixaCreate,
     CaixaResponse,
@@ -114,10 +116,38 @@ def resumo_caixa(
 @router.get("/historico", response_model=list[CaixaResponse])
 def historico_caixa(
     loja_id: int | None = None,
+    limite: int = Query(20, ge=1, le=500),
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
     loja_id = loja_para_leitura(usuario, loja_id)
-    caixas = CaixaService.historico(db, loja_id=loja_id)
+    caixas = CaixaService.historico(db, limite=limite, loja_id=loja_id)
 
-    return [caixa_to_response(c) for c in caixas]
+    nomes = dict(db.query(User.id, User.nome).filter(
+        User.id.in_({c.usuario_id for c in caixas if c.usuario_id})
+    ).all())
+
+    respostas = []
+    for c in caixas:
+        resposta = caixa_to_response(c)
+        resposta.usuario_nome = nomes.get(c.usuario_id)
+        respostas.append(resposta)
+    return respostas
+
+
+@router.get("/{caixa_id}/resumo", response_model=ResumoCaixaResponse)
+def resumo_caixa_por_id(
+    caixa_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    """Resumo de qualquer caixa (inclusive já fechado) -- tela Caixas
+    anteriores / reimprimir fechamento."""
+
+    caixa = db.get(Caixa, caixa_id)
+    loja_permitida = loja_para_leitura(usuario)
+
+    if caixa is None or (loja_permitida is not None and caixa.loja_id != loja_permitida):
+        raise HTTPException(status_code=404, detail="Caixa não encontrado.")
+
+    return CaixaService.resumo(db, caixa)

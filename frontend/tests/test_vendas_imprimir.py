@@ -1,5 +1,5 @@
-"""Imprimir da tela Vendas: lista as vendas com os itens e soma por forma,
-na janela do Windows (HTML) e na termica de 80mm."""
+"""Imprimir da tela Vendas: lista só as vendas (sem devolução/troca) com
+os itens e soma por forma, na janela do Windows (HTML) e na termica de 80mm."""
 from services.impressora_termica_service import gerar_comandos_vendas
 from telas.vendas import Vendas
 
@@ -12,11 +12,6 @@ def _venda(id_, forma, total, itens, status="FINALIZADA", observacao=None):
     }
 
 
-DEVOLUCOES = {30: [{"venda_id": 30, "valor_total": "20.00", "itens": [
-    {"item_venda_id": 1, "produto_id": 7, "produto_nome": "CARTUCHO", "quantidade": 2, "valor": "20.00"},
-]}]}
-
-
 def _relatorio():
     return Vendas()._dados_relatorio([
         _venda(30, "DINHEIRO", "50.00", [
@@ -24,7 +19,7 @@ def _relatorio():
         ]),
         _venda(33, "PRAZO", "68.99", [], observacao="1x KIT BEBE"),
         _venda(34, "PIX", "100.00", [], status="CANCELADA"),
-    ], DEVOLUCOES)
+    ])
 
 
 def test_relatorio_tem_itens_e_total_sem_canceladas(_qapp):
@@ -37,9 +32,7 @@ def test_relatorio_tem_itens_e_total_sem_canceladas(_qapp):
     assert "1x KIT BEBE" in html
     assert "(CANCELADA)" in html
     assert "R$ 118,99" in html
-    assert "DEVOLVIDO/TROCADO: 2x CARTUCHO" in html
-    assert relatorio["devolvido"] == 20.0
-    assert "R$ 98,99" in html  # total liquido
+    assert "DEVOLV" not in html
 
 
 def test_cupom_80mm_tem_itens_e_total(_qapp):
@@ -50,8 +43,7 @@ def test_cupom_80mm_tem_itens_e_total(_qapp):
     assert "1x KIT BEBE" in texto
     assert "CANCELADA" in texto
     assert "TOTAL (2 vendas)" in texto
-    assert "DEVOLV/TROCA 2x CARTUCHO" in texto
-    assert "TOTAL LÍQUIDO" in texto
+    assert "DEVOLV" not in texto
 
 
 def test_botao_imprimir_manda_pra_termica(_qapp, esperar_threads, monkeypatch):
@@ -62,7 +54,6 @@ def test_botao_imprimir_manda_pra_termica(_qapp, esperar_threads, monkeypatch):
     config = {"ativa": True, "tipo": "usb", "nome_impressora_windows": "Generic / Text Only", "largura_papel": 80}
     monkeypatch.setattr(preferencias_service, "carregar_impressora_termica", lambda: config)
     monkeypatch.setattr(api, "configuracoes", lambda: {"nome_loja": "3.L.A VARIEDADES"})
-    monkeypatch.setattr("telas.vendas.listar_devolucoes", lambda venda_id: DEVOLUCOES.get(venda_id, []))
     enviados = []
     monkeypatch.setattr(
         impressora_termica_service, "enviar",
@@ -75,4 +66,3 @@ def test_botao_imprimir_manda_pra_termica(_qapp, esperar_threads, monkeypatch):
     [(dados, cfg)] = enviados
     assert cfg is config
     assert b"3.L.A VARIEDADES" in dados
-    assert b"DEVOLV/TROCA 2x CARTUCHO" in dados

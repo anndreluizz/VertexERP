@@ -59,3 +59,23 @@ def test_caixa_aberto_com_caixa_existente(client, auth_headers, caixa_aberto):
 
     assert response.status_code == 200
     assert response.json()["id"] == caixa_aberto.id
+
+
+def test_historico_e_resumo_de_caixa_ja_fechado(client, auth_headers, caixa_aberto, usuario):
+    client.post(
+        "/movimentos-caixa/",
+        json={"tipo": "SUPRIMENTO", "descricao": "Suprimento", "valor": 50.0},
+        headers=auth_headers,
+    )
+    client.post("/caixa/fechar", json={"valor_contado": 150}, headers=auth_headers)
+
+    historico = client.get("/caixa/historico?limite=60", headers=auth_headers).json()
+    assert historico[0]["id"] == caixa_aberto.id
+    assert historico[0]["usuario_nome"] == usuario.nome
+
+    resumo = client.get(f"/caixa/{caixa_aberto.id}/resumo", headers=auth_headers)
+    assert resumo.status_code == 200
+    assert float(resumo.json()["suprimentos"]) == 50.0
+    assert float(resumo.json()["total_previsto"]) == 150.0
+
+    assert client.get("/caixa/999999/resumo", headers=auth_headers).status_code == 404

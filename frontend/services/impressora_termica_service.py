@@ -739,6 +739,10 @@ def gerar_comandos_vendas(relatorio, config_loja, largura_papel_mm=80):
         partes.append(_linhas_quebradas(f"{venda['cliente']} - {venda['vendedora']}", largura))
         for texto, valor in venda["itens"]:
             partes.append(_linha_dupla_coluna(f"  {texto}"[:largura - 14], _moeda(valor), largura))
+        for texto, valor in venda.get("devolvidos", []):
+            partes.append(_linha_dupla_coluna(
+                f"  DEVOLV/TROCA {texto}"[:largura - 14], "-" + _moeda(valor), largura,
+            ))
         partes.append(_linha())
 
     partes.append(_divisoria(largura))
@@ -756,6 +760,15 @@ def gerar_comandos_vendas(relatorio, config_loja, largura_papel_mm=80):
     ))
     partes.append(_tamanho_fonte(1, 1))
     partes.append(_negrito(False))
+
+    devolvido = relatorio.get("devolvido") or 0
+    if devolvido:
+        partes.append(_linha_dupla_coluna("Devolucoes / trocas", "-" + _moeda(devolvido), largura))
+        partes.append(_negrito(True))
+        partes.append(_linha_dupla_coluna(
+            "TOTAL LIQUIDO", _moeda(relatorio["total"] - devolvido), largura,
+        ))
+        partes.append(_negrito(False))
 
     partes.append(_cortar_papel())
 

@@ -41,10 +41,12 @@ void main() {
     expect(a.status, StatusCliente.pagaComAtraso);
   });
 
-  test('pagamento simbolico nao esconde divida velha', () {
-    final a = _agr([_mov('COMPRA', 1000, 150), _mov('PAGAMENTO', 5, 2)]);
-    expect(a.diasEmAtraso, 150);
-    expect(a.status, StatusCliente.inadimplente);
+  test('quem pagou dentro do prazo nao e inadimplente', () {
+    final a = _agr([_mov('COMPRA', 450.96, 93), _mov('PAGAMENTO', 150, 0)]);
+    expect(a.diasEmAtraso, 93);
+    expect(a.status, StatusCliente.pagaComAtraso);
+    final velho = _agr([_mov('COMPRA', 1000, 200), _mov('PAGAMENTO', 5, 120)]);
+    expect(velho.status, StatusCliente.inadimplente);
   });
 
   test('bom pagador', () {

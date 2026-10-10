@@ -1413,6 +1413,8 @@ class FichaClienteDialog(QDialog):
         menu.addAction("Enviar Último Comprovante", self.enviar_ultimo_comprovante)
         menu.addAction("Enviar Extrato Completo", self.enviar_extrato_whatsapp)
         menu.addAction("Enviar Cobrança", self.enviar_cobranca_whatsapp)
+        menu.addAction("Agradecer Pagamento", self.agradecer_pagamento_whatsapp)
+        menu.addAction("Agradecer Compra", self.agradecer_compra_whatsapp)
 
         return menu
 
@@ -3114,6 +3116,53 @@ class FichaClienteDialog(QDialog):
             return
 
         self.carregar()
+
+    def agradecer_compra_whatsapp(self):
+        # compra: so' o obrigado, sem valor nem saldo (pedido do usuario)
+        self._enviar_agradecimento("Muito obrigado pela sua compra!", com_saldo=False)
+
+    def agradecer_pagamento_whatsapp(self):
+        """Obrigado pelo último pagamento, com o saldo que ficou."""
+
+        ultimo = next(
+            (mov for mov, _ in self._movimentos if mov.get("tipo") == "PAGAMENTO"),
+            None,
+        )
+        if not ultimo:
+            QMessageBox.information(
+                self, "Agradecimento", "Este cliente ainda não tem pagamento registrado."
+            )
+            return
+
+        valor = formatar_moeda(float(ultimo.get("valor", 0) or 0))
+        self._enviar_agradecimento(f"Muito obrigado pelo seu pagamento de {valor}!")
+
+    def _enviar_agradecimento(self, agradecimento, com_saldo=True):
+        """Pagamento: com o saldo que ficou; compra: só o obrigado.
+        Sem telefone, _enviar_texto_whatsapp já avisa."""
+
+        if not self.cliente.get("telefone"):
+            self._enviar_texto_whatsapp("", "Agradecimento")
+            return
+
+        nome_loja = api.configuracoes().get("nome_loja") or "Vertex ERP"
+        restante = ""
+        if com_saldo:
+            saldo = saldo_cliente(self.cliente["id"])
+            restante = (
+                f"Saldo restante da sua conta: {formatar_moeda(saldo)}"
+                if saldo > 0.009 else "Sua conta está quitada!"
+            ) + "\n\n"
+
+        texto = (
+            f"Olá, {self.cliente.get('nome', '')}! Tudo bem?\n\n"
+            f"{agradecimento}\n\n"
+            f"{restante}"
+            f"Agradecemos a preferência!\n\n"
+            f"Equipe {nome_loja}"
+        )
+
+        self._enviar_texto_whatsapp(texto, "Agradecimento")
 
     # ======================================
     # EXTRATO (PDF) / EXPORTAR CSV

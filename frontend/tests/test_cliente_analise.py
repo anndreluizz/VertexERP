@@ -34,10 +34,14 @@ def test_pagamento_parcial_quita_a_compra_mais_antiga_primeiro():
     assert ca.paga_com_atraso(agr)
 
 
-def test_pagamento_simbolico_nao_esconde_divida_velha():
-    agr = _agr(_mov("COMPRA", 1000, 150), _mov("PAGAMENTO", 5, 2))
-    assert agr["dias_em_atraso"] == 150
-    assert ca.eh_inadimplente(agr)
+def test_quem_pagou_dentro_do_prazo_nao_e_inadimplente():
+    # caso JOSE AZEVEDO: saldo anterior de 93 dias, pagou parte hoje
+    agr = _agr(_mov("COMPRA", 450.96, 93), _mov("PAGAMENTO", 150, 0))
+    assert agr["dias_em_atraso"] == 93
+    assert not ca.eh_inadimplente(agr)
+    assert ca.status_financeiro(agr) == "Paga com Atraso"
+    # ultimo pagamento tambem velho: volta a ser inadimplente
+    assert ca.eh_inadimplente(_agr(_mov("COMPRA", 1000, 200), _mov("PAGAMENTO", 5, 120)))
 
 
 def test_bom_pagador_vira_excelente():

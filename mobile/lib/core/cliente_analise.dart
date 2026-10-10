@@ -33,6 +33,7 @@ class AnaliseCliente {
     required this.ultimaMovimentacao,
     required this.diasEmAtraso,
     required this.prazoMedioPagamento,
+    this.diasDesdeUltimoPagamento,
   });
 
   final double saldoDevedor;
@@ -47,10 +48,18 @@ class AnaliseCliente {
   /// quitar uma compra; null se nunca quitou nada
   final int? prazoMedioPagamento;
 
+  /// null se nunca pagou
+  final int? diasDesdeUltimoPagamento;
+
   bool get devendo => saldoDevedor > _epsilon;
 
+  /// compra velha em aberto e nada pago dentro do prazo -- quem esta
+  /// pagando (mesmo em parcelas) nao e' inadimplente
   bool get inadimplente =>
-      diasEmAtraso != null && diasEmAtraso! > prazoInadimplenciaDias;
+      diasEmAtraso != null &&
+      diasEmAtraso! > prazoInadimplenciaDias &&
+      (diasDesdeUltimoPagamento == null ||
+          diasDesdeUltimoPagamento! > prazoInadimplenciaDias);
 
   bool get bomPagador =>
       prazoMedioPagamento != null &&
@@ -152,6 +161,9 @@ AnaliseCliente analisarCliente(
     prazoMedioPagamento: somaValor > 0
         ? (somaValorDias / somaValor).round()
         : null,
+    diasDesdeUltimoPagamento: abatimentos.isEmpty
+        ? null
+        : _diasAte(abatimentos.last.data, hoje),
   );
 }
 

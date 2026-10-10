@@ -1413,6 +1413,7 @@ class FichaClienteDialog(QDialog):
         menu.addAction("Enviar Último Comprovante", self.enviar_ultimo_comprovante)
         menu.addAction("Enviar Extrato Completo", self.enviar_extrato_whatsapp)
         menu.addAction("Enviar Cobrança", self.enviar_cobranca_whatsapp)
+        menu.addAction("Enviar Agradecimento", self.enviar_agradecimento_whatsapp)
 
         return menu
 
@@ -3123,19 +3124,46 @@ class FichaClienteDialog(QDialog):
             f"{formatar_moeda(dialogo._total_digitado() or 0)}!"
         )
 
-    def _oferecer_agradecimento(self, agradecimento):
+    def enviar_agradecimento_whatsapp(self):
+        """Menu WhatsApp: obrigado pelo último pagamento ou compra no
+        fiado (o mais recente dos dois)."""
+
+        ultimo = next(
+            (mov for mov, _ in self._movimentos
+             if mov.get("tipo") in ("PAGAMENTO", "COMPRA")),
+            None,
+        )
+        if not ultimo:
+            QMessageBox.information(
+                self, "Agradecimento", "Este cliente ainda não tem compra nem pagamento."
+            )
+            return
+
+        valor = formatar_moeda(float(ultimo.get("valor", 0) or 0))
+        self._oferecer_agradecimento(
+            f"Muito obrigado pelo seu pagamento de {valor}!"
+            if ultimo["tipo"] == "PAGAMENTO"
+            else f"Muito obrigado pela sua compra de {valor}!",
+            perguntar=False,
+        )
+
+    def _oferecer_agradecimento(self, agradecimento, perguntar=True):
         """Depois de um pagamento ou compra no fiado: pergunta se manda
         um obrigado no WhatsApp do cliente, já com o saldo que ficou."""
 
         if not self.cliente.get("telefone"):
+            if not perguntar:
+                # _enviar_texto_whatsapp avisa "Sem telefone"
+                self._enviar_texto_whatsapp("", "Agradecimento")
             return
 
-        resposta = QMessageBox.question(
-            self, "WhatsApp",
-            "Enviar mensagem de agradecimento pro cliente no WhatsApp?",
-        )
-        if resposta != QMessageBox.Yes:
-            return
+        if perguntar:
+            resposta = QMessageBox.question(
+                self, "WhatsApp",
+                "Enviar mensagem de agradecimento pro cliente no WhatsApp?",
+            )
+            if resposta != QMessageBox.Yes:
+                return
 
         saldo = saldo_cliente(self.cliente["id"])
         nome_loja = api.configuracoes().get("nome_loja") or "Vertex ERP"

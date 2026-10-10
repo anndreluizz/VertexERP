@@ -42,3 +42,17 @@ def test_quitado_e_sem_telefone_e_nao():
     recusou = _ficha()
     _oferecer(recusou, 10, QMessageBox.No)
     recusou._enviar_texto_whatsapp.assert_not_called()
+
+
+def test_menu_agradece_o_ultimo_pagamento_sem_perguntar():
+    ficha = _ficha()
+    ficha._movimentos = [
+        ({"tipo": "PAGAMENTO", "valor": 150.0}, 300.96),
+        ({"tipo": "COMPRA", "valor": 450.96}, 450.96),
+    ]
+    with mock.patch("telas.ficha_cliente.QMessageBox.question") as pergunta, \
+         mock.patch("telas.ficha_cliente.saldo_cliente", return_value=300.96), \
+         mock.patch("telas.ficha_cliente.api.configuracoes", return_value={}):
+        ficha.enviar_agradecimento_whatsapp()
+    pergunta.assert_not_called()
+    assert "pagamento de R$ 150,00" in ficha._enviar_texto_whatsapp.call_args[0][0]

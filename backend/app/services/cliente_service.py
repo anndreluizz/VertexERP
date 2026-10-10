@@ -7,6 +7,7 @@ from app.models.cliente import Cliente
 from app.schemas.cliente import ClienteCreate
 from app.repositories.cliente_repository import ClienteRepository
 from app.repositories.movimento_fiado_repository import MovimentoFiadoRepository
+from app.services.notificacao_service import NotificacaoService
 
 
 class ClienteService:
@@ -42,7 +43,13 @@ class ClienteService:
         if dados.foto_base64:
             novo_cliente.foto = base64.b64decode(dados.foto_base64)
 
-        return ClienteRepository.criar(db, novo_cliente)
+        cliente = ClienteRepository.criar(db, novo_cliente)
+
+        NotificacaoService.enviar_para_admins(
+            db, "Novo cliente", f"{cliente.nome} foi cadastrado."
+        )
+
+        return cliente
 
     @staticmethod
     def listar(db: Session, skip: int = 0, limit: int = 100, loja_id: int | None = None):

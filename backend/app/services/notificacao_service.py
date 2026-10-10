@@ -16,6 +16,13 @@ def moeda(valor) -> str:
     return f"R$ {float(valor):,.2f}".replace(",", "_").replace(
         ".", ","
     ).replace("_", ".")
+def nome_do_usuario(db: Session, usuario_id) -> str:
+    """Primeiro nome de quem fez a acao, pro texto da notificacao."""
+    usuario = db.query(User).filter(User.id == usuario_id).first() if usuario_id else None
+    nome = (usuario.nome or "").strip() if usuario else ""
+    return nome.split()[0].title() if nome else "Alguém"
+
+
 _inicializado = False
 _disponivel = False
 

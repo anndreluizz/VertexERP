@@ -13,6 +13,11 @@ from app.models.venda import Venda
 from app.repositories.caixa_repository import CaixaRepository
 from app.repositories.estoque_loja_repository import EstoqueLojaRepository
 from app.repositories.movimento_fiado_repository import MovimentoFiadoRepository
+from app.services.notificacao_service import (
+    NotificacaoService,
+    moeda,
+    nome_do_usuario,
+)
 from app.services.venda_service import _itens_para_baixa_estoque
 
 _FORMAS_REEMBOLSO = {"DINHEIRO", "PIX", "DEBITO", "CREDITO", "PRAZO"}
@@ -229,5 +234,13 @@ class DevolucaoService:
             raise
 
         db.refresh(devolucao)
+
+        NotificacaoService.enviar_para_admins(
+            db,
+            "Devolução na venda",
+            f"Venda #{venda_id} — {moeda(devolucao.valor_total)} devolvido "
+            f"({nome_do_usuario(db, usuario_id)})"
+            + (f": {devolucao.motivo}" if devolucao.motivo else "."),
+        )
 
         return devolucao

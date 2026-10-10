@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatadores.dart';
 import '../../models/conta_pagar.dart';
-import '../../models/conta_receber.dart';
 import '../../theme/componentes.dart';
 import '../../theme/lista_agrupada.dart';
 import '../../theme/skeleton.dart';
@@ -36,7 +35,6 @@ class _FinanceiroScreenState extends ConsumerState<FinanceiroScreen> {
     super.initState();
     _timer = Timer.periodic(_intervaloAutoAtualizacao, (_) {
       ref.invalidate(contasPagarProvider);
-      ref.invalidate(contasReceberProvider);
     });
   }
 
@@ -48,22 +46,9 @@ class _FinanceiroScreenState extends ConsumerState<FinanceiroScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Financeiro'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'A Pagar'),
-              Tab(text: 'A Receber'),
-            ],
-          ),
-        ),
-        body: const TabBarView(
-          children: [_AbaContasPagar(), _AbaContasReceber()],
-        ),
-      ),
+    return Scaffold(
+      appBar: AppBar(title: const Text('Contas a pagar')),
+      body: const _AbaContasPagar(),
     );
   }
 }
@@ -960,124 +945,5 @@ class _LinhaDetalhe extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _AbaContasReceber extends ConsumerWidget {
-  const _AbaContasReceber();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final contasAsync = ref.watch(contasReceberProvider);
-
-    return RefreshIndicator(
-      onRefresh: () => ref.refresh(contasReceberProvider.future),
-      child: contasAsync.when(
-        loading: () => const SkeletonList(),
-        error: (erro, _) => ListView(
-          children: const [
-            SizedBox(height: 80),
-            Center(child: Text('Não foi possível carregar as contas.')),
-          ],
-        ),
-        data: (contas) {
-          if (contas.isEmpty) {
-            return ListView(
-              children: const [
-                SizedBox(height: 80),
-                Center(child: Text('Nenhuma conta a receber.')),
-              ],
-            );
-          }
-
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-            children: [
-              for (final (status, doGrupo) in _agruparPorStatus(
-                contas,
-                statusVisualReceber,
-              )) ...[
-                CabecalhoGrupo(
-                  status == StatusVisualConta.paga
-                      ? 'Recebidas'
-                      : status.rotuloGrupo,
-                  resumo: formatarMoeda(
-                    doGrupo.fold<double>(0, (t, c) => t + c.valor),
-                  ),
-                ),
-                ListaAgrupada(
-                  recuo: 72,
-                  linhas: [
-                    for (final conta in doGrupo)
-                      _LinhaContaReceber(conta: conta),
-                  ],
-                ),
-              ],
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _LinhaContaReceber extends ConsumerWidget {
-  const _LinhaContaReceber({required this.conta});
-
-  final ContaReceber conta;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final status = statusVisualReceber(conta);
-    final recebida = status == StatusVisualConta.paga;
-
-    return _LinhaConta(
-      status: status,
-      vencimento: conta.dataVencimento,
-      titulo: 'Cliente #${conta.clienteId}',
-      detalhe: [
-        _prazo(status, conta.dataVencimento, conta.dataRecebimento),
-        if (conta.vendaId != null) 'Venda #${conta.vendaId}',
-      ].join(' · '),
-      valor: conta.valor,
-      aoTocar: recebida ? () {} : () => _confirmarRecebimento(context, ref),
-    );
-  }
-
-  Future<void> _confirmarRecebimento(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Marcar como recebida?'),
-        content: Text(
-          'Confirma o recebimento de ${formatarMoeda(conta.valor)} do '
-          'Cliente #${conta.clienteId}? Essa ação não pode ser desfeita '
-          'pelo app.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Voltar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Marcar como recebida'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar != true || !context.mounted) return;
-
-    final erro = await ref
-        .read(financeiroActionsProvider)
-        .receberConta(conta.id);
-
-    if (erro != null && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(erro)));
-    }
   }
 }

@@ -168,8 +168,10 @@ class ApiClient {
     await _tls.prepararConfianca(uri.host, uri.port);
 
     _dio.options.baseUrl = endereco;
-    _dio.options.connectTimeout = const Duration(seconds: 6);
-    _dio.options.receiveTimeout = const Duration(seconds: 10);
+    // VPN (Tailscale) pelo 4G as vezes leva 10s+ pra responder -- com
+    // prazo curto a tela desistia antes e mostrava erro em vez de carregar
+    _dio.options.connectTimeout = const Duration(seconds: 15);
+    _dio.options.receiveTimeout = const Duration(seconds: 30);
   }
 
   void definirToken(String token) {

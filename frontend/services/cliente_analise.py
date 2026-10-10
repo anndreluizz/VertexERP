@@ -173,9 +173,14 @@ def eh_sem_movimento(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
 
 def eh_inadimplente(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
     """Tem compra em aberto mais velha que o prazo configurado
-    (30/60/90 dias)."""
+    (30/60/90 dias) e não pagou nada dentro desse prazo -- quem está
+    pagando (mesmo em parcelas) não é inadimplente."""
     dias = agr.get("dias_em_atraso")
-    return dias is not None and dias > prazo_dias
+    pagou = agr.get("dias_desde_ultimo_pagamento")
+    return (
+        dias is not None and dias > prazo_dias
+        and (pagou is None or pagou > prazo_dias)
+    )
 
 
 def eh_bom_pagador(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):

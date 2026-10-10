@@ -3090,6 +3090,10 @@ class FichaClienteDialog(QDialog):
             return
 
         self.carregar()
+        self._oferecer_agradecimento(
+            f"Muito obrigado pelo seu pagamento de "
+            f"{formatar_moeda(dialogo._pagamento_valor_pendente)}!"
+        )
 
     def lancar_fiado(self):
 
@@ -3114,6 +3118,41 @@ class FichaClienteDialog(QDialog):
             return
 
         self.carregar()
+        self._oferecer_agradecimento(
+            f"Muito obrigado pela sua compra de "
+            f"{formatar_moeda(dialogo._total_digitado() or 0)}!"
+        )
+
+    def _oferecer_agradecimento(self, agradecimento):
+        """Depois de um pagamento ou compra no fiado: pergunta se manda
+        um obrigado no WhatsApp do cliente, já com o saldo que ficou."""
+
+        if not self.cliente.get("telefone"):
+            return
+
+        resposta = QMessageBox.question(
+            self, "WhatsApp",
+            "Enviar mensagem de agradecimento pro cliente no WhatsApp?",
+        )
+        if resposta != QMessageBox.Yes:
+            return
+
+        saldo = saldo_cliente(self.cliente["id"])
+        nome_loja = api.configuracoes().get("nome_loja") or "Vertex ERP"
+        restante = (
+            f"Saldo restante da sua conta: {formatar_moeda(saldo)}"
+            if saldo > 0.009 else "Sua conta está quitada!"
+        )
+
+        texto = (
+            f"Olá, {self.cliente.get('nome', '')}! Tudo bem?\n\n"
+            f"{agradecimento}\n\n"
+            f"{restante}\n\n"
+            f"Agradecemos a preferência!\n\n"
+            f"Equipe {nome_loja}"
+        )
+
+        self._enviar_texto_whatsapp(texto, "Agradecimento")
 
     # ======================================
     # EXTRATO (PDF) / EXPORTAR CSV

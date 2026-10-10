@@ -304,3 +304,37 @@ def test_conta_fixa_com_prazo_para_sozinha(client, auth_headers, db):
     assert len(contas) == 3
     # acabou o prazo: sai da lista de contas fixas
     assert client.get("/contas-recorrentes/", headers=auth_headers).json() == []
+
+
+def test_boleto_de_parcela_acha_a_parcela_sem_codigo(client, auth_headers):
+    contas = _parcelar(
+        client, auth_headers, descricao="AFEAM",
+        vencimentos=["2026-10-26", "2026-11-26", "2026-12-26"],
+    )
+    # o banco mandou o boleto da 2a com vencimento dia 24, nao 26
+    barras = _boleto_bancario(vencimento=date(2026, 11, 24))
+
+    lido = client.post("/contas-pagar/ler-boleto", json={"codigo": barras}, headers=auth_headers).json()
+
+    sugerida = lido["parcela_sugerida"]
+    assert sugerida["id"] == contas[1]["id"]
+    assert (sugerida["parcela_numero"], sugerida["parcela_total"]) == (2, 3)
+
+    # guardou o codigo nela: o mesmo boleto agora e' "ja lancado", nao sugestao
+    client.put(
+        f"/contas-pagar/{contas[1]['id']}",
+        json={"numero_boleto": lido["linha_digitavel"], "data_vencimento": "2026-11-24T00:00:00"},
+        headers=auth_headers,
+    )
+    de_novo = client.post("/contas-pagar/ler-boleto", json={"codigo": barras}, headers=auth_headers).json()
+    assert de_novo["parcela_sugerida"] is None
+    assert de_novo["ja_lancado"]["id"] == contas[1]["id"]
+
+
+def test_boleto_de_outro_valor_nao_sugere_parcela(client, auth_headers):
+    _parcelar(client, auth_headers, vencimentos=["2026-10-26", "2026-11-26", "2026-12-26"])
+    barras = _boleto_bancario(valor_centavos=99900, vencimento=date(2026, 11, 26))
+
+    lido = client.post("/contas-pagar/ler-boleto", json={"codigo": barras}, headers=auth_headers).json()
+
+    assert lido["parcela_sugerida"] is None

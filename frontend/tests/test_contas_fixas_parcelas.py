@@ -178,3 +178,29 @@ def test_contas_fixas_mudar_valor_e_parar(_qapp, esperar_threads):
             dialogo.parar()
             esperar_threads(dialogo)
         parar.assert_called_once_with(4)
+
+
+def test_linha_copia_so_os_numeros_do_boleto(_qapp):
+    from PySide6.QtGui import QGuiApplication
+    from telas.contas_pagar import DespesaLinha
+
+    conta = {
+        "id": 1, "descricao": "LANJERIE", "valor": 933, "status": "PENDENTE",
+        "data_vencimento": "2099-11-20T00:00:00",
+        "numero_boleto": "23793.38128 60000.000003 00000.000400 1 84340000093300",
+    }
+    linha = DespesaLinha(conta)
+    linha.bt_copiar.click()
+
+    assert QGuiApplication.clipboard().text() == (
+        "23793381286000000000300000000400184340000093300"
+    )
+
+
+def test_linha_sem_boleto_nao_tem_botao_copiar(_qapp):
+    from telas.contas_pagar import DespesaLinha
+
+    linha = DespesaLinha({"id": 2, "descricao": "Luz", "valor": 10, "status": "PENDENTE",
+                          "data_vencimento": "2099-11-20T00:00:00"})
+
+    assert not hasattr(linha, "bt_copiar")

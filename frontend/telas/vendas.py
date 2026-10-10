@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from html import escape
 
 from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtWidgets import (
@@ -18,7 +19,9 @@ from PySide6.QtWidgets import (
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, Card, CardKPI
-from services import api
+from services import (
+    api, comprovante_service, impressora_termica_service, preferencias_service,
+)
 from services.venda_service import (
     cancelar_venda,
     listar_devolucoes,
@@ -118,8 +121,10 @@ class Vendas(QWidget):
 
         lateral = QVBoxLayout()
         lateral.setSpacing(16)
-        lateral.addWidget(self._construir_card_vendedoras(), stretch=2)
-        lateral.addWidget(self._construir_card_detalhe(), stretch=3)
+        # vendedoras sao poucas (2-3 linhas): tamanho fixo, o resto vai pros
+        # itens da venda -- antes os dois dividiam e a lista de itens sumia
+        lateral.addWidget(self._construir_card_vendedoras())
+        lateral.addWidget(self._construir_card_detalhe(), stretch=1)
         corpo.addLayout(lateral, stretch=2)
 
         layout.addLayout(corpo, stretch=1)
@@ -219,6 +224,11 @@ class Vendas(QWidget):
         bt_buscar.clicked.connect(self.carregar)
         filtros.addWidget(bt_buscar)
 
+        bt_imprimir = BotaoSecundario("Imprimir", icone_nome="printer")
+        bt_imprimir.setToolTip("Imprime as vendas da lista, com os itens de cada uma")
+        bt_imprimir.clicked.connect(self.imprimir)
+        filtros.addWidget(bt_imprimir)
+
         filtros.addStretch()
 
         return filtros
@@ -243,8 +253,8 @@ class Vendas(QWidget):
         self.tabela_vendedoras = StandardTable(
             ["Vendedora", "Vendas", "Vendido", "Devolvido", "Líquido"]
         )
-        self.tabela_vendedoras.setMinimumHeight(150)
-        layout.addWidget(self.tabela_vendedoras, stretch=1)
+        self.tabela_vendedoras.setFixedHeight(100)
+        layout.addWidget(self.tabela_vendedoras)
 
         return card
 
@@ -267,6 +277,7 @@ class Vendas(QWidget):
         layout.addWidget(self.lbl_detalhe_info)
 
         self.tabela_itens = StandardTable(["Produto", "Qtd", "Valor", "Devolvido"])
+        self.tabela_itens.setMinimumHeight(90)
         layout.addWidget(self.tabela_itens, stretch=1)
 
         botoes = QHBoxLayout()
@@ -516,6 +527,135 @@ class Vendas(QWidget):
     # ======================================
     # AÇÕES
     # ======================================
+
+    def imprimir(self):
+        vendas = self._vendas_filtradas()
+        if not vendas:
+            QMessageBox.information(self, "Imprimir", "Nenhuma venda nesse período.")
+            return
+
+        relatorio = self._dados_relatorio(vendas)
+        config_impressora = preferencias_service.carregar_impressora_termica()
+
+        if not (config_impressora and config_impressora.get("ativa")):
+            comprovante_service.imprimir(self._html_relatorio(relatorio), self)
+            return
+
+        # mesma termica de 80mm do cupom/fechamento; o nome da loja vem do
+        # servidor (callbacks precisam ser metodos -- ver rodar_em_thread)
+        self._impressao = (relatorio, config_impressora)
+        rodar_em_thread(
+            self, api.configuracoes,
+            ao_sucesso=self._imprimir_na_termica, ao_erro=self._imprimir_na_termica_sem_loja,
+        )
+
+    def _imprimir_na_termica_sem_loja(self, _erro):
+        self._imprimir_na_termica({})
+
+    def _imprimir_na_termica(self, config_loja):
+        relatorio, config_impressora = self._impressao
+        ok, erro = impressora_termica_service.imprimir_relatorio_vendas(
+            relatorio, config_loja or {}, config_impressora
+        )
+        if ok:
+            return
+        # se falhar, oferece a janela normal do Windows (igual fechar_caixa.py)
+        resposta = QMessageBox.question(
+            self, "Falha na impressora térmica",
+            f"{erro}\n\nQuer tentar imprimir pela janela normal do Windows?",
+        )
+        if resposta == QMessageBox.Yes:
+            comprovante_service.imprimir(self._html_relatorio(relatorio), self)
+
+    def _dados_relatorio(self, vendas):
+        """Vendas da lista (periodo + vendedora escolhidos) com os itens
+        de cada uma e o total por forma de pagamento -- base do HTML e do
+        cupom da termica."""
+
+        inicio, fim = self._periodo()
+        periodo = inicio.strftime("%d/%m/%Y")
+        if fim != inicio:
+            periodo += " a " + fim.strftime("%d/%m/%Y")
+
+        por_forma = {}
+        blocos = []
+        for venda in vendas:
+            cancelada = venda["status"] == "CANCELADA"
+            forma = _forma_da_venda(venda)
+            total = float(venda["valor_total"])
+            if not cancelada:
+                por_forma[forma] = por_forma.get(forma, 0) + total
+
+            itens = [
+                (
+                    f"{item['quantidade']}x "
+                    + (item.get("produto_nome") or f"#{item.get('produto_id')}"),
+                    float(item["subtotal"]),
+                )
+                for item in venda["itens"]
+            ] or [(venda.get("observacao") or "Compra no fiado", total)]
+
+            blocos.append({
+                "titulo": f"#{venda['id']} "
+                + datetime.fromisoformat(venda["data"]).strftime("%d/%m %H:%M"),
+                "cliente": venda.get("cliente_nome") or "—",
+                "vendedora": venda.get("usuario_nome") or "—",
+                "forma": forma,
+                "total": total,
+                "itens": itens,
+                "cancelada": cancelada,
+            })
+
+        return {
+            "periodo": periodo,
+            "vendedora": self.filtro_vendedora.currentText(),
+            "vendas": blocos,
+            "por_forma": sorted(por_forma.items()),
+            "quantidade": sum(1 for b in blocos if not b["cancelada"]),
+            "total": sum(por_forma.values()),
+        }
+
+    def _html_relatorio(self, relatorio):
+
+        linhas = []
+        for venda in relatorio["vendas"]:
+            riscado = "color:#999; text-decoration:line-through;" if venda["cancelada"] else ""
+            linhas.append(
+                f"<tr style='background:#f0f0f0; {riscado}'>"
+                f"<td><b>{venda['titulo']}</b></td>"
+                f"<td>{escape(venda['cliente'])}</td>"
+                f"<td>{escape(venda['vendedora'])}</td>"
+                f"<td>{venda['forma']}{' (CANCELADA)' if venda['cancelada'] else ''}</td>"
+                f"<td align='right'><b>{formatar_moeda(venda['total'])}</b></td></tr>"
+            )
+            for texto, valor in venda["itens"]:
+                linhas.append(
+                    f"<tr style='{riscado}'><td colspan='4'>&nbsp;&nbsp;{escape(texto)}</td>"
+                    f"<td align='right'>{formatar_moeda(valor)}</td></tr>"
+                )
+
+        resumo = "".join(
+            f"<tr><td>{forma}</td><td align='right'>{formatar_moeda(total)}</td></tr>"
+            for forma, total in relatorio["por_forma"]
+        )
+
+        return f"""
+        <h2 style="text-align:center; margin-bottom:0;">Vendas — {relatorio['periodo']}</h2>
+        <div style="text-align:center; color:#666;">{escape(relatorio['vendedora'])}</div>
+        <hr>
+        <table width="100%" border="1" cellspacing="0" cellpadding="4">
+            <tr style="background:#ddd;">
+                <th>Venda</th><th>Cliente</th><th>Vendedora</th><th>Pagamento</th><th>Total</th>
+            </tr>
+            {''.join(linhas)}
+        </table>
+        <h3>Total por forma de pagamento</h3>
+        <table width="60%" cellspacing="4">
+            {resumo}
+            <tr><td><b>Total ({relatorio['quantidade']} vendas)</b></td>
+                <td align="right"><b>{formatar_moeda(relatorio['total'])}</b></td></tr>
+        </table>
+        """
 
     def abrir_devolucao(self):
 

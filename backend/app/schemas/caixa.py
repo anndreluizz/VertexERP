@@ -56,3 +56,5 @@ class EntradasCaixaResponse(BaseModel):
     total: Decimal
     sangrias: Decimal
     vendas_prazo: Decimal
+    contas_pagas: Decimal
+    sobrou: Decimal  # total - contas_pagas - sangrias

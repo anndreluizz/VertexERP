@@ -4,7 +4,9 @@ from decimal import Decimal
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.enums.status_conta_pagar import StatusContaPagar
 from app.models.caixa import Caixa
+from app.models.conta_pagar import ContaPagar
 from app.models.movimento_caixa import MovimentoCaixa
 from app.models.user import User
 from app.repositories.caixa_repository import CaixaRepository
@@ -105,7 +107,8 @@ class CaixaService:
         caixas: vendas (menos estornos) e fiado recebido, por forma de
         pagamento. Troco inicial, suprimento e sangria ficam de fora --
         so mudam dinheiro de lugar (somar o total de cada turno contaria
-        o mesmo troco varias vezes). Venda a prazo tambem: nao entrou."""
+        o mesmo troco varias vezes). Venda a prazo tambem: nao entrou.
+        sobrou = entrou - contas a pagar pagas - sangrias."""
 
         query = (
             db.query(
@@ -142,12 +145,30 @@ class CaixaService:
             if tipo == "RECEBIMENTO_FIADO":
                 fiado_recebido += valor
 
+        # contas a pagar pagas no periodo (qualquer forma). A paga em
+        # dinheiro tambem vira movimento PAGAMENTO no caixa, mas esse
+        # tipo nao entra na soma acima -- entao nao conta duas vezes
+        contas = (
+            db.query(func.coalesce(func.sum(ContaPagar.valor), 0))
+            .filter(ContaPagar.status == StatusContaPagar.PAGO.value)
+        )
+        if inicio:
+            contas = contas.filter(ContaPagar.data_pagamento >= inicio)
+        if fim:
+            contas = contas.filter(ContaPagar.data_pagamento < fim + timedelta(days=1))
+        if loja_id is not None:
+            contas = contas.filter(ContaPagar.loja_id == loja_id)
+        contas_pagas = contas.scalar() or zero
+
+        total = sum(por_forma.values(), zero)
         return {
             **por_forma,
             "fiado_recebido": fiado_recebido,
-            "total": sum(por_forma.values(), zero),
+            "total": total,
             "sangrias": sangrias,
             "vendas_prazo": vendas_prazo,
+            "contas_pagas": contas_pagas,
+            "sobrou": total - contas_pagas - sangrias,
         }
 
     @staticmethod

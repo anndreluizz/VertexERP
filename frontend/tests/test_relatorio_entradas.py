@@ -7,6 +7,7 @@ from services import caixa_service
 DADOS = {
     "dinheiro": "140.00", "pix": "100.00", "cartao": "50.00", "outros": "0",
     "fiado_recebido": "100.00", "total": "290.00", "sangrias": "25.00", "vendas_prazo": "80.00",
+    "contas_pagas": "70.00", "sobrou": "195.00",
 }
 
 
@@ -18,8 +19,17 @@ def test_cards_mostram_o_que_entrou(_qapp, monkeypatch):
     assert tela.card_entrou_total.lbl_valor.text() == "R$ 290,00"
     assert tela.card_entrou_dinheiro.lbl_valor.text() == "R$ 140,00"
     assert tela.card_entrou_fiado.lbl_valor.text() == "R$ 100,00"
-    nota = tela.lbl_entradas_nota.text()
-    assert "R$ 25,00" in nota and "R$ 80,00" in nota
+    assert tela.card_contas_pagas.lbl_valor.text() == "R$ 70,00"
+    assert tela.card_sangrias.lbl_valor.text() == "R$ 25,00"
+    assert tela.card_sobrou.lbl_valor.text() == "R$ 195,00"
+    assert "R$ 80,00" in tela.lbl_entradas_nota.text()
+
+
+def test_sobrou_negativo_mostra_sinal(_qapp, monkeypatch):
+    monkeypatch.setattr(relatorios, "rodar_em_thread", lambda *a, **k: None)
+    tela = relatorios.Relatorios()
+    tela._ao_atualizar_entradas({**DADOS, "sobrou": "-40.00"})
+    assert tela.card_sobrou.lbl_valor.text() == "− R$ 40,00"
 
 
 def test_service_monta_a_url_com_periodo_e_loja():

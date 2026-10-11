@@ -103,6 +103,14 @@ def test_entradas_soma_o_que_entrou_de_verdade(client, auth_headers, db, caixa_a
             caixa_id=caixa_aberto.id, usuario_id=usuario.id, tipo=tipo,
             forma_pagamento=forma, valor=valor, data=data,
         ))
+    from app.models.conta_pagar import ContaPagar
+    for status, valor, pago_em in [
+        ("PAGO", 70, hoje), ("PAGO", 500, hoje - timedelta(days=40)), ("PENDENTE", 300, None),
+    ]:
+        db.add(ContaPagar(
+            descricao="Luz", valor=valor, status=status, data_pagamento=pago_em,
+            data_vencimento=hoje,
+        ))
     db.commit()
 
     dia = hoje.date().isoformat()
@@ -110,6 +118,7 @@ def test_entradas_soma_o_que_entrou_de_verdade(client, auth_headers, db, caixa_a
     assert {k: float(v) for k, v in dados.items()} == {
         "dinheiro": 140.0, "pix": 100.0, "cartao": 50.0, "outros": 0.0,
         "fiado_recebido": 100.0, "total": 290.0, "sangrias": 25.0, "vendas_prazo": 80.0,
+        "contas_pagas": 70.0, "sobrou": 195.0,
     }
 
     tudo = client.get("/caixa/entradas", headers=auth_headers).json()

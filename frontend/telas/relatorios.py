@@ -1177,15 +1177,27 @@ class Relatorios(QWidget):
 
         # tudo que entrou de verdade no periodo, somando todos os caixas
         # (ver CaixaService.entradas no backend)
+        # linha 1: entrou - saiu = sobrou; linha 2: de onde veio o que entrou
+        cards_saldo = QHBoxLayout()
+        cards_saldo.setSpacing(14)
+        self.card_entrou_total = CardKPI("Total que entrou", "dollar-sign", tokens.PRIMARIA, destaque=True)
+        self.card_contas_pagas = CardKPI("Contas pagas", "file-text", tokens.ERRO)
+        self.card_sangrias = CardKPI("Sangrias", "arrow-down", tokens.ERRO)
+        self.card_sobrou = CardKPI("Sobrou", "wallet", tokens.SECUNDARIA, destaque=True)
+        for card in (
+            self.card_entrou_total, self.card_contas_pagas, self.card_sangrias, self.card_sobrou,
+        ):
+            cards_saldo.addWidget(card, 1)
+        layout.addLayout(cards_saldo)
+
         cards_entradas = QHBoxLayout()
         cards_entradas.setSpacing(14)
-        self.card_entrou_total = CardKPI("Total que entrou", "dollar-sign", tokens.PRIMARIA, destaque=True)
         self.card_entrou_dinheiro = CardKPI("Dinheiro", "wallet", tokens.SECUNDARIA_HOVER)
         self.card_entrou_pix = CardKPI("PIX", "trending-up", tokens.PRIMARIA)
         self.card_entrou_cartao = CardKPI("Cartão", "credit-card", tokens.PRIMARIA)
         self.card_entrou_fiado = CardKPI("Fiado recebido", "users", tokens.ALERTA)
         for card in (
-            self.card_entrou_total, self.card_entrou_dinheiro, self.card_entrou_pix,
+            self.card_entrou_dinheiro, self.card_entrou_pix,
             self.card_entrou_cartao, self.card_entrou_fiado,
         ):
             cards_entradas.addWidget(card, 1)
@@ -1268,6 +1280,13 @@ class Relatorios(QWidget):
         ):
             card.definir_valor(formatar_moeda(valor(chave)))
             card.definir_legenda(f"{valor(chave) / total * 100:.0f}% do total" if total else "—")
+        self.card_contas_pagas.definir_valor(formatar_moeda(valor("contas_pagas")))
+        self.card_contas_pagas.definir_legenda("contas a pagar quitadas")
+        self.card_sangrias.definir_valor(formatar_moeda(valor("sangrias")))
+        self.card_sangrias.definir_legenda("retiradas do caixa")
+        sobrou = valor("sobrou")
+        self.card_sobrou.definir_valor(("− " if sobrou < 0 else "") + formatar_moeda(abs(sobrou)))
+        self.card_sobrou.definir_legenda("entrou − contas − sangrias")
         self.card_entrou_fiado.definir_valor(formatar_moeda(valor("fiado_recebido")))
         self.card_entrou_fiado.definir_legenda("já somado no dinheiro, PIX e cartão")
 
@@ -1277,8 +1296,6 @@ class Relatorios(QWidget):
         )
         if valor("outros") >= 0.01:
             nota += f" Outras formas: {formatar_moeda(valor('outros'))}."
-        if valor("sangrias") >= 0.01:
-            nota += f" Sangrias no período: {formatar_moeda(valor('sangrias'))}."
         if valor("vendas_prazo") >= 0.01:
             nota += f" Vendido a prazo (ainda não entrou): {formatar_moeda(valor('vendas_prazo'))}."
         self.lbl_entradas_nota.setText(nota)

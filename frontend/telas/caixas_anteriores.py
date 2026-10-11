@@ -61,9 +61,10 @@ def _titulo(texto):
 
 class CaixasAnterioresDialog(QDialog):
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, caixa_id=None):
         super().__init__(parent)
         self.setWindowTitle("Caixas anteriores")
+        self.caixa_id_inicial = caixa_id  # ja abre com esse caixa escolhido
         self.setStyleSheet(f"background:{tokens.FUNDO};")
         self.resize(1200, 720)
 
@@ -141,6 +142,10 @@ class CaixasAnterioresDialog(QDialog):
                 self.tabela_caixas.setItem(linha, coluna, QTableWidgetItem(texto))
         if not self.caixas:
             self.lbl_caixa.setText("Nenhum caixa fechado ainda")
+        for linha, caixa in enumerate(self.caixas):
+            if caixa["id"] == self.caixa_id_inicial:
+                self.tabela_caixas.selectRow(linha)
+                break
 
     def _ao_escolher_caixa(self):
         linha = self.tabela_caixas.currentRow()

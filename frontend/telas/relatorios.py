@@ -1153,7 +1153,17 @@ class Relatorios(QWidget):
         )
         cabecalho_caixa.addWidget(self.combo_loja_caixa)
 
+        self.bt_caixas_anteriores = BotaoSecundario("Caixas anteriores", icone_nome="calendar")
+        self.bt_caixas_anteriores.setMinimumHeight(34)
+        self.bt_caixas_anteriores.setToolTip("Ver vendas e recebimentos de cada caixa e reimprimir o fechamento")
+        self.bt_caixas_anteriores.clicked.connect(lambda: self.abrir_caixas_anteriores())
+        cabecalho_caixa.addWidget(self.bt_caixas_anteriores)
+
         layout.addLayout(cabecalho_caixa)
+
+        dica = QLabel("Dê dois cliques em um caixa fechado para ver o detalhe e reimprimir o fechamento.")
+        dica.setStyleSheet(f"background:transparent; color:{tokens.TEXTO_SECUNDARIO}; font-size:{tokens.TAMANHO_SM}px;")
+        layout.addWidget(dica)
 
         cards_caixa = QHBoxLayout()
         cards_caixa.setSpacing(14)
@@ -1178,10 +1188,19 @@ class Relatorios(QWidget):
         self._estilizar_tabela(self.tabela_caixa)
 
         self.tabela_caixa.setMinimumHeight(360)
+        self.tabela_caixa.cellDoubleClicked.connect(self._ao_duplo_clique_caixa)
         layout.addWidget(self.tabela_caixa)
         layout.addStretch()
 
         return pagina
+
+    def _ao_duplo_clique_caixa(self, linha, _coluna):
+        if 0 <= linha < len(self.caixas) and self.caixas[linha].get("status") == "FECHADO":
+            self.abrir_caixas_anteriores(self.caixas[linha].get("id"))
+
+    def abrir_caixas_anteriores(self, caixa_id=None):
+        from telas.caixas_anteriores import CaixasAnterioresDialog
+        CaixasAnterioresDialog(parent=self, caixa_id=caixa_id).exec()
 
     @staticmethod
     def _data_hora(texto):

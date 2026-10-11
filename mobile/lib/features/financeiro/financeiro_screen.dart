@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatadores.dart';
@@ -737,6 +738,28 @@ class _DetalhesContaPagarSheet extends ConsumerWidget {
             if (conta.dataPagamento != null)
               _LinhaDetalhe('Pagamento', formatarData(conta.dataPagamento!)),
             _LinhaDetalhe('Nº do boleto', conta.numeroBoleto ?? '—'),
+            if (codigoBoleto(conta.numeroBoleto) case final codigo?)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final mensageiro = ScaffoldMessenger.of(context);
+                      await Clipboard.setData(ClipboardData(text: codigo));
+                      mensageiro.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Código do boleto copiado. É só colar no app do banco.',
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    label: const Text('Copiar código do boleto'),
+                  ),
+                ),
+              ),
             if ((conta.observacao ?? '').isNotEmpty)
               _LinhaDetalhe('Observação', conta.observacao!),
             const SizedBox(height: 16),
@@ -911,6 +934,13 @@ class _DetalhesContaPagarSheet extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// So os digitos do codigo do boleto (o app do banco aceita colado
+/// assim); null quando nao tem codigo pra copiar.
+String? codigoBoleto(String? numero) {
+  final digitos = (numero ?? '').replaceAll(RegExp(r'\D'), '');
+  return digitos.isEmpty ? null : digitos;
 }
 
 class _LinhaDetalhe extends StatelessWidget {

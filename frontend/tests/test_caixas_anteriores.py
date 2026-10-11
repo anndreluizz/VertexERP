@@ -35,3 +35,26 @@ def test_mostra_caixa_escolhido(_qapp, monkeypatch):
     assert "R$ 150,00" in dialogo.lbl_recebimentos.text()
     assert "não contado" in dialogo.lbl_resumo.text()
     assert dialogo.bt_imprimir.isEnabled()
+
+
+def test_abre_ja_com_o_caixa_escolhido(_qapp, monkeypatch):
+    dialogo = tela.CaixasAnterioresDialog.__new__(tela.CaixasAnterioresDialog)
+    monkeypatch.setattr(tela, "rodar_em_thread", lambda *a, **k: None)
+    tela.CaixasAnterioresDialog.__init__(dialogo, caixa_id=8)
+
+    dialogo._ao_carregar_caixas([CAIXA, {**CAIXA, "id": 8}])
+    assert dialogo.tabela_caixas.currentRow() == 1
+    assert dialogo.caixa_atual["id"] == 8
+
+
+def test_relatorios_duplo_clique_abre_caixa_fechado():
+    from unittest import mock
+    from telas.relatorios import Relatorios
+
+    rel = Relatorios.__new__(Relatorios)
+    rel.caixas = [{**CAIXA, "id": 9, "status": "ABERTO"}, CAIXA]
+    with mock.patch.object(Relatorios, "abrir_caixas_anteriores") as abrir:
+        rel._ao_duplo_clique_caixa(0, 0)  # aberto: nao tem fechamento
+        abrir.assert_not_called()
+        rel._ao_duplo_clique_caixa(1, 3)
+        abrir.assert_called_once_with(7)

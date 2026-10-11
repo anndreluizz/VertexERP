@@ -1264,8 +1264,11 @@ class Relatorios(QWidget):
         rodar_em_thread(
             self, entradas_caixa, inicio, fim, self.combo_loja_caixa.currentData(),
             ao_sucesso=self._ao_atualizar_entradas,
-            ao_erro=lambda erro: self.lbl_entradas_nota.setText(str(erro)),
+            ao_erro=self._ao_atualizar_entradas_erro,
         )
+
+    def _ao_atualizar_entradas_erro(self, erro):
+        self.lbl_entradas_nota.setText(str(erro))
 
     def _ao_atualizar_entradas(self, dados):
         def valor(chave):

@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -8,6 +10,7 @@ from app.models.user import User
 from app.schemas.caixa import (
     CaixaCreate,
     CaixaResponse,
+    EntradasCaixaResponse,
     FecharCaixaRequest,
     ResumoCaixaResponse,
 )
@@ -133,6 +136,20 @@ def historico_caixa(
         resposta.usuario_nome = nomes.get(c.usuario_id)
         respostas.append(resposta)
     return respostas
+
+
+@router.get("/entradas", response_model=EntradasCaixaResponse)
+def entradas_caixa(
+    inicio: date | None = None,
+    fim: date | None = None,
+    loja_id: int | None = None,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    """Quanto entrou de verdade no periodo, somando todos os caixas
+    (Relatorios > Caixa)."""
+    loja_id = loja_para_leitura(usuario, loja_id)
+    return CaixaService.entradas(db, inicio, fim, loja_id)
 
 
 @router.get("/{caixa_id}/resumo", response_model=ResumoCaixaResponse)

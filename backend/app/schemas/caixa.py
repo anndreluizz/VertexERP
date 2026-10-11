@@ -44,3 +44,15 @@ class ResumoCaixaResponse(BaseModel):
     recebimentos_fiado: Decimal
     total_previsto: Decimal
     total_geral: Decimal
+
+
+class EntradasCaixaResponse(BaseModel):
+    """Dinheiro que entrou no periodo (ver CaixaService.entradas)."""
+    dinheiro: Decimal
+    pix: Decimal
+    cartao: Decimal
+    outros: Decimal
+    fiado_recebido: Decimal  # ja incluido nas formas acima
+    total: Decimal
+    sangrias: Decimal
+    vendas_prazo: Decimal

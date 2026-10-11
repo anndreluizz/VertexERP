@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func
@@ -93,6 +93,62 @@ class CaixaService:
     @staticmethod
     def historico(db: Session, limite: int = 20, loja_id: int | None = None):
         return CaixaRepository.listar(db, limite, loja_id)
+
+    @staticmethod
+    def entradas(
+        db: Session,
+        inicio: date | None,
+        fim: date | None,
+        loja_id: int | None = None,
+    ) -> dict:
+        """Dinheiro que entrou de verdade no periodo, somando todos os
+        caixas: vendas (menos estornos) e fiado recebido, por forma de
+        pagamento. Troco inicial, suprimento e sangria ficam de fora --
+        so mudam dinheiro de lugar (somar o total de cada turno contaria
+        o mesmo troco varias vezes). Venda a prazo tambem: nao entrou."""
+
+        query = (
+            db.query(
+                MovimentoCaixa.tipo,
+                MovimentoCaixa.forma_pagamento,
+                func.coalesce(func.sum(MovimentoCaixa.valor), 0),
+            )
+            .join(Caixa, Caixa.id == MovimentoCaixa.caixa_id)
+            .filter(MovimentoCaixa.tipo.in_(
+                ("VENDA", "ESTORNO", "RECEBIMENTO_FIADO", "SANGRIA")
+            ))
+            .group_by(MovimentoCaixa.tipo, MovimentoCaixa.forma_pagamento)
+        )
+        if inicio:
+            query = query.filter(MovimentoCaixa.data >= inicio)
+        if fim:
+            query = query.filter(MovimentoCaixa.data < fim + timedelta(days=1))
+        if loja_id is not None:
+            query = query.filter(Caixa.loja_id == loja_id)
+
+        zero = Decimal("0")
+        por_forma = {"dinheiro": zero, "pix": zero, "cartao": zero, "outros": zero}
+        fiado_recebido = sangrias = vendas_prazo = zero
+        chave = {"DINHEIRO": "dinheiro", "PIX": "pix", "DEBITO": "cartao", "CREDITO": "cartao"}
+
+        for tipo, forma, valor in query.all():
+            if tipo == "SANGRIA":
+                sangrias += valor
+                continue
+            if forma == "PRAZO":
+                vendas_prazo += valor
+                continue
+            por_forma[chave.get(forma, "outros")] += valor
+            if tipo == "RECEBIMENTO_FIADO":
+                fiado_recebido += valor
+
+        return {
+            **por_forma,
+            "fiado_recebido": fiado_recebido,
+            "total": sum(por_forma.values(), zero),
+            "sangrias": sangrias,
+            "vendas_prazo": vendas_prazo,
+        }
 
     @staticmethod
     def resumo(db: Session, caixa: Caixa) -> dict:

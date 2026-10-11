@@ -79,3 +79,38 @@ def test_historico_e_resumo_de_caixa_ja_fechado(client, auth_headers, caixa_aber
     assert float(resumo.json()["total_previsto"]) == 150.0
 
     assert client.get("/caixa/999999/resumo", headers=auth_headers).status_code == 404
+
+
+def test_entradas_soma_o_que_entrou_de_verdade(client, auth_headers, db, caixa_aberto, usuario):
+    from datetime import datetime, timedelta
+    from app.models.movimento_caixa import MovimentoCaixa
+
+    hoje = datetime.now()
+    for tipo, forma, valor, data in [
+        ("VENDA", "DINHEIRO", 100, hoje),
+        ("VENDA", "PIX", 50, hoje),
+        ("VENDA", "DEBITO", 30, hoje),
+        ("VENDA", "CREDITO", 20, hoje),
+        ("ESTORNO", "PIX", -10, hoje),
+        ("VENDA", "PRAZO", 80, hoje),
+        ("RECEBIMENTO_FIADO", "DINHEIRO", 40, hoje),
+        ("RECEBIMENTO_FIADO", "PIX", 60, hoje),
+        ("SUPRIMENTO", None, 500, hoje),
+        ("SANGRIA", None, 25, hoje),
+        ("VENDA", "DINHEIRO", 999, hoje - timedelta(days=40)),
+    ]:
+        db.add(MovimentoCaixa(
+            caixa_id=caixa_aberto.id, usuario_id=usuario.id, tipo=tipo,
+            forma_pagamento=forma, valor=valor, data=data,
+        ))
+    db.commit()
+
+    dia = hoje.date().isoformat()
+    dados = client.get(f"/caixa/entradas?inicio={dia}&fim={dia}", headers=auth_headers).json()
+    assert {k: float(v) for k, v in dados.items()} == {
+        "dinheiro": 140.0, "pix": 100.0, "cartao": 50.0, "outros": 0.0,
+        "fiado_recebido": 100.0, "total": 290.0, "sangrias": 25.0, "vendas_prazo": 80.0,
+    }
+
+    tudo = client.get("/caixa/entradas", headers=auth_headers).json()
+    assert float(tudo["total"]) == 290.0 + 999

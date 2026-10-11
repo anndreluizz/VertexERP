@@ -37,7 +37,7 @@ from services.relatorio_service import (
     sugestao_reposicao,
 )
 from services.produto_service import listar_produtos
-from services.caixa_service import historico_caixa
+from services.caixa_service import entradas_caixa, historico_caixa
 from services.loja_service import listar_lojas
 from services.cliente_service import listar_clientes
 from services.movimento_fiado_service import listar_movimentos
@@ -1130,13 +1130,27 @@ class Relatorios(QWidget):
 
         cabecalho_caixa = QHBoxLayout()
 
-        titulo = QLabel("Histórico de caixas")
+        titulo = QLabel("Dinheiro que entrou")
         titulo.setStyleSheet(f"""
             font-size:{tokens.TAMANHO_LG}px; font-weight:700; color:{tokens.TEXTO};
             background:transparent;
         """)
         cabecalho_caixa.addWidget(titulo)
         cabecalho_caixa.addStretch()
+
+        self.combo_periodo_caixa = QComboBox()
+        self.combo_periodo_caixa.addItems(self.PERIODOS)
+        self.combo_periodo_caixa.setCurrentText("Este mês")
+        self.combo_periodo_caixa.setMinimumHeight(34)
+        self.combo_periodo_caixa.setCursor(Qt.PointingHandCursor)
+        self.combo_periodo_caixa.setStyleSheet(f"""
+            QComboBox {{
+                border:1px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_SM}px;
+                padding:0 12px; background:{tokens.CARD}; color:{tokens.TEXTO};
+            }}
+        """)
+        self.combo_periodo_caixa.currentIndexChanged.connect(self._atualizar_entradas)
+        cabecalho_caixa.addWidget(self.combo_periodo_caixa)
 
         self.combo_loja_caixa = QComboBox()
         self.combo_loja_caixa.setMinimumHeight(34)
@@ -1160,6 +1174,37 @@ class Relatorios(QWidget):
         cabecalho_caixa.addWidget(self.bt_caixas_anteriores)
 
         layout.addLayout(cabecalho_caixa)
+
+        # tudo que entrou de verdade no periodo, somando todos os caixas
+        # (ver CaixaService.entradas no backend)
+        cards_entradas = QHBoxLayout()
+        cards_entradas.setSpacing(14)
+        self.card_entrou_total = CardKPI("Total que entrou", "dollar-sign", tokens.PRIMARIA, destaque=True)
+        self.card_entrou_dinheiro = CardKPI("Dinheiro", "wallet", tokens.SECUNDARIA_HOVER)
+        self.card_entrou_pix = CardKPI("PIX", "trending-up", tokens.PRIMARIA)
+        self.card_entrou_cartao = CardKPI("Cartão", "credit-card", tokens.PRIMARIA)
+        self.card_entrou_fiado = CardKPI("Fiado recebido", "users", tokens.ALERTA)
+        for card in (
+            self.card_entrou_total, self.card_entrou_dinheiro, self.card_entrou_pix,
+            self.card_entrou_cartao, self.card_entrou_fiado,
+        ):
+            cards_entradas.addWidget(card, 1)
+        layout.addLayout(cards_entradas)
+
+        self.lbl_entradas_nota = QLabel("")
+        self.lbl_entradas_nota.setWordWrap(True)
+        self.lbl_entradas_nota.setStyleSheet(
+            f"background:transparent; color:{tokens.TEXTO_SECUNDARIO}; font-size:{tokens.TAMANHO_SM}px;"
+        )
+        layout.addWidget(self.lbl_entradas_nota)
+        layout.addSpacing(10)
+
+        titulo_historico = QLabel("Histórico de caixas")
+        titulo_historico.setStyleSheet(f"""
+            font-size:{tokens.TAMANHO_LG}px; font-weight:700; color:{tokens.TEXTO};
+            background:transparent;
+        """)
+        layout.addWidget(titulo_historico)
 
         dica = QLabel("Dê dois cliques em um caixa fechado para ver o detalhe e reimprimir o fechamento.")
         dica.setStyleSheet(f"background:transparent; color:{tokens.TEXTO_SECUNDARIO}; font-size:{tokens.TAMANHO_SM}px;")
@@ -1201,6 +1246,42 @@ class Relatorios(QWidget):
     def abrir_caixas_anteriores(self, caixa_id=None):
         from telas.caixas_anteriores import CaixasAnterioresDialog
         CaixasAnterioresDialog(parent=self, caixa_id=caixa_id).exec()
+
+    def _atualizar_entradas(self):
+        inicio, fim = self._calcular_periodo(self.combo_periodo_caixa)
+        rodar_em_thread(
+            self, entradas_caixa, inicio, fim, self.combo_loja_caixa.currentData(),
+            ao_sucesso=self._ao_atualizar_entradas,
+            ao_erro=lambda erro: self.lbl_entradas_nota.setText(str(erro)),
+        )
+
+    def _ao_atualizar_entradas(self, dados):
+        def valor(chave):
+            return float(dados.get(chave) or 0)
+
+        total = valor("total")
+        self.card_entrou_total.definir_valor(formatar_moeda(total))
+        self.card_entrou_total.definir_legenda(self.combo_periodo_caixa.currentText().lower())
+        for card, chave in (
+            (self.card_entrou_dinheiro, "dinheiro"), (self.card_entrou_pix, "pix"),
+            (self.card_entrou_cartao, "cartao"),
+        ):
+            card.definir_valor(formatar_moeda(valor(chave)))
+            card.definir_legenda(f"{valor(chave) / total * 100:.0f}% do total" if total else "—")
+        self.card_entrou_fiado.definir_valor(formatar_moeda(valor("fiado_recebido")))
+        self.card_entrou_fiado.definir_legenda("já somado no dinheiro, PIX e cartão")
+
+        nota = (
+            "Soma as vendas (menos estornos) e o fiado que os clientes pagaram, de todos os caixas. "
+            "Troco inicial e suprimentos não entram."
+        )
+        if valor("outros") >= 0.01:
+            nota += f" Outras formas: {formatar_moeda(valor('outros'))}."
+        if valor("sangrias") >= 0.01:
+            nota += f" Sangrias no período: {formatar_moeda(valor('sangrias'))}."
+        if valor("vendas_prazo") >= 0.01:
+            nota += f" Vendido a prazo (ainda não entrou): {formatar_moeda(valor('vendas_prazo'))}."
+        self.lbl_entradas_nota.setText(nota)
 
     @staticmethod
     def _data_hora(texto):
@@ -2174,6 +2255,7 @@ class Relatorios(QWidget):
         self.produtos, self.caixas = resultado
         self._atualizar_financeiro()
         self._atualizar_caixa()
+        self._atualizar_entradas()
         self._atualizar_estoque()
         self._atualizar_curva_abc()
         self._atualizar_comparativo_estoque()
@@ -2205,6 +2287,7 @@ class Relatorios(QWidget):
     def _ao_recarregar_caixa_sucesso(self, caixas):
         self.caixas = caixas
         self._atualizar_caixa()
+        self._atualizar_entradas()
 
     def _ao_recarregar_caixa_erro(self, erro):
         Mensagem.erro(

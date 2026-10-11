@@ -11,7 +11,7 @@ from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from services.api import get, post, configuracoes
-from utils.formatacao import formatar_moeda
+from utils.formatacao import formatar_moeda, nome_forma
 from utils.documento_html import (
     ESTILO_BODY,
     bloco_total,
@@ -247,13 +247,13 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
         )
         linha_pagamento = (
             f"<p style='margin:4px 0;'>Forma de pagamento: "
-            f"{_formatar_moeda(valor_principal)} ({dados['forma_pagamento']}) + "
-            f"{_formatar_moeda(dados['valor_forma_2'])} ({dados['forma_pagamento_2']})</p>"
+            f"{_formatar_moeda(valor_principal)} ({nome_forma(dados['forma_pagamento'])}) + "
+            f"{_formatar_moeda(dados['valor_forma_2'])} ({nome_forma(dados['forma_pagamento_2'])})</p>"
         )
     else:
         linha_pagamento = (
             f"<p style='margin:4px 0;'>Forma de pagamento: "
-            f"{dados['forma_pagamento']}</p>"
+            f"{nome_forma(dados['forma_pagamento'])}</p>"
         )
 
     situacao = dados.get("situacao") or "PAGO"

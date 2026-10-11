@@ -30,17 +30,10 @@ from services.venda_service import (
 )
 from services.worker import em_paralelo, rodar_em_thread
 from telas.devolucao_dialog import DevolucaoDialog
-from utils.formatacao import formatar_moeda
+from utils.formatacao import NOMES_FORMA, formatar_moeda
 from widgets.tables.standard_table import StandardTable
 
-_NOMES_FORMA = {
-    "DINHEIRO": "Dinheiro",
-    "PIX": "Pix",
-    "DEBITO": "Débito",
-    "CREDITO": "Crédito",
-    "BOLETO": "Boleto",
-    "PRAZO": "Fiado",
-}
+_NOMES_FORMA = NOMES_FORMA
 
 _NOMES_STATUS = {
     "FINALIZADA": "Finalizada",
@@ -49,12 +42,10 @@ _NOMES_STATUS = {
 }
 
 
-def _devolucoes_das_vendas(vendas):
-    # ponytail: uma chamada por venda; um endpoint por periodo se o dia passar de centenas de vendas
-    return {
-        v["id"]: listar_devolucoes(v["id"])
-        for v in vendas if v["status"] != "CANCELADA"
-    }
+def _data_curta(data_iso):
+    # fiado lancado pela ficha fica sem hora (00:00): mostra so o dia
+    dt = datetime.fromisoformat(data_iso)
+    return dt.strftime("%d/%m" if (dt.hour, dt.minute) == (0, 0) else "%d/%m %H:%M")
 
 
 def _forma_da_venda(venda):
@@ -542,18 +533,8 @@ class Vendas(QWidget):
             QMessageBox.information(self, "Imprimir", "Nenhuma venda nesse período.")
             return
 
-        # busca as devoluções/trocas antes de montar o relatório
-        self._vendas_impressao = vendas
-        rodar_em_thread(
-            self, _devolucoes_das_vendas, vendas,
-            ao_sucesso=self._imprimir_relatorio, ao_erro=self._imprimir_sem_devolucoes,
-        )
-
-    def _imprimir_sem_devolucoes(self, _erro):
-        self._imprimir_relatorio({})
-
-    def _imprimir_relatorio(self, devolucoes):
-        relatorio = self._dados_relatorio(self._vendas_impressao, devolucoes)
+        # só as vendas -- devolução/troca fica fora da impressão (pedido do usuário)
+        relatorio = self._dados_relatorio(vendas)
         config_impressora = preferencias_service.carregar_impressora_termica()
 
         if not (config_impressora and config_impressora.get("ativa")):
@@ -586,13 +567,10 @@ class Vendas(QWidget):
         if resposta == QMessageBox.Yes:
             comprovante_service.imprimir(self._html_relatorio(relatorio), self)
 
-    def _dados_relatorio(self, vendas, devolucoes=None):
+    def _dados_relatorio(self, vendas):
         """Vendas da lista (periodo + vendedora escolhidos) com os itens
-        de cada uma, o que foi devolvido/trocado e o total por forma de
-        pagamento -- base do HTML e do cupom da termica. 'devolucoes' =
-        {venda_id: [devolucao, ...]}."""
-
-        devolucoes = devolucoes or {}
+        de cada uma e o total por forma de pagamento -- base do HTML e do
+        cupom da termica."""
 
         inicio, fim = self._periodo()
         periodo = inicio.strftime("%d/%m/%Y")
@@ -617,22 +595,8 @@ class Vendas(QWidget):
                 for item in venda["itens"]
             ] or [(venda.get("observacao") or "Compra no fiado", total)]
 
-            # a devolução e a troca ficam iguais no banco (a troca devolve
-            # em dinheiro e o crédito vai pra venda nova)
-            devolvidos = [
-                (
-                    f"{item['quantidade']}x "
-                    + (item.get("produto_nome") or f"#{item.get('produto_id')}"),
-                    float(item["valor"]),
-                )
-                for devolucao in devolucoes.get(venda["id"], [])
-                for item in devolucao["itens"]
-            ]
-
             blocos.append({
-                "devolvidos": devolvidos,
-                "titulo": f"#{venda['id']} "
-                + datetime.fromisoformat(venda["data"]).strftime("%d/%m %H:%M"),
+                "titulo": f"#{venda['id']} " + _data_curta(venda["data"]),
                 "cliente": venda.get("cliente_nome") or "—",
                 "vendedora": venda.get("usuario_nome") or "—",
                 "forma": forma,
@@ -648,7 +612,6 @@ class Vendas(QWidget):
             "por_forma": sorted(por_forma.items()),
             "quantidade": sum(1 for b in blocos if not b["cancelada"]),
             "total": sum(por_forma.values()),
-            "devolvido": sum(v for b in blocos for _, v in b["devolvidos"]),
         }
 
     def _html_relatorio(self, relatorio):
@@ -669,25 +632,11 @@ class Vendas(QWidget):
                     f"<tr style='{riscado}'><td colspan='4'>&nbsp;&nbsp;{escape(texto)}</td>"
                     f"<td align='right'>{formatar_moeda(valor)}</td></tr>"
                 )
-            for texto, valor in venda["devolvidos"]:
-                linhas.append(
-                    f"<tr style='color:#B91C1C;'><td colspan='4'>&nbsp;&nbsp;"
-                    f"DEVOLVIDO/TROCADO: {escape(texto)}</td>"
-                    f"<td align='right'>- {formatar_moeda(valor)}</td></tr>"
-                )
 
         resumo = "".join(
             f"<tr><td>{forma}</td><td align='right'>{formatar_moeda(total)}</td></tr>"
             for forma, total in relatorio["por_forma"]
         )
-        liquido = ""
-        if relatorio["devolvido"]:
-            liquido = (
-                f"<tr style='color:#B91C1C;'><td>Devoluções / trocas</td>"
-                f"<td align='right'>- {formatar_moeda(relatorio['devolvido'])}</td></tr>"
-                f"<tr><td><b>Total líquido</b></td><td align='right'><b>"
-                f"{formatar_moeda(relatorio['total'] - relatorio['devolvido'])}</b></td></tr>"
-            )
 
         return f"""
         <h2 style="text-align:center; margin-bottom:0;">Vendas — {relatorio['periodo']}</h2>
@@ -704,7 +653,6 @@ class Vendas(QWidget):
             {resumo}
             <tr><td><b>Total ({relatorio['quantidade']} vendas)</b></td>
                 <td align="right"><b>{formatar_moeda(relatorio['total'])}</b></td></tr>
-            {liquido}
         </table>
         """
 

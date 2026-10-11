@@ -404,8 +404,13 @@ class Caixa(QWidget):
         self.bt_atualizar_historico.setMinimumHeight(32)
         self.bt_atualizar_historico.clicked.connect(self.carregar)
 
+        self.bt_caixas_anteriores = BotaoSecundario("Caixas anteriores", icone_nome="calendar")
+        self.bt_caixas_anteriores.setMinimumHeight(32)
+        self.bt_caixas_anteriores.clicked.connect(self.abrir_caixas_anteriores)
+
         historico_cabecalho.addWidget(lbl_historico_titulo)
         historico_cabecalho.addStretch()
+        historico_cabecalho.addWidget(self.bt_caixas_anteriores)
         historico_cabecalho.addWidget(self.bt_atualizar_historico)
 
         col_historico.addLayout(historico_cabecalho)
@@ -723,6 +728,10 @@ class Caixa(QWidget):
     # ======================================
     # AÇÕES
     # ======================================
+
+    def abrir_caixas_anteriores(self):
+        from telas.caixas_anteriores import CaixasAnterioresDialog
+        CaixasAnterioresDialog(parent=self).exec()
 
     def abrir_caixa(self):
 

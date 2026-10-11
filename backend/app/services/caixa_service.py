@@ -1,10 +1,12 @@
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.enums.status_conta_pagar import StatusContaPagar
 from app.models.caixa import Caixa
+from app.models.conta_pagar import ContaPagar
 from app.models.movimento_caixa import MovimentoCaixa
 from app.models.user import User
 from app.repositories.caixa_repository import CaixaRepository
@@ -93,6 +95,85 @@ class CaixaService:
     @staticmethod
     def historico(db: Session, limite: int = 20, loja_id: int | None = None):
         return CaixaRepository.listar(db, limite, loja_id)
+
+    @staticmethod
+    def entradas(
+        db: Session,
+        inicio: date | None,
+        fim: date | None,
+        loja_id: int | None = None,
+    ) -> dict:
+        """Dinheiro que entrou de verdade no periodo, somando todos os
+        caixas: vendas (menos estornos) e fiado recebido, por forma de
+        pagamento. Troco inicial, suprimento e sangria ficam de fora --
+        so mudam dinheiro de lugar (somar o total de cada turno contaria
+        o mesmo troco varias vezes). Venda a prazo tambem: nao entrou.
+        sobrou = entrou - contas a pagar pagas - sangrias."""
+
+        query = (
+            db.query(
+                MovimentoCaixa.tipo,
+                MovimentoCaixa.forma_pagamento,
+                func.coalesce(func.sum(MovimentoCaixa.valor), 0),
+            )
+            .join(Caixa, Caixa.id == MovimentoCaixa.caixa_id)
+            .filter(MovimentoCaixa.tipo.in_(
+                ("VENDA", "ESTORNO", "RECEBIMENTO_FIADO", "SANGRIA")
+            ))
+            .group_by(MovimentoCaixa.tipo, MovimentoCaixa.forma_pagamento)
+        )
+        if inicio:
+            query = query.filter(MovimentoCaixa.data >= inicio)
+        if fim:
+            query = query.filter(MovimentoCaixa.data < fim + timedelta(days=1))
+        if loja_id is not None:
+            query = query.filter(Caixa.loja_id == loja_id)
+
+        zero = Decimal("0")
+        por_forma = {"dinheiro": zero, "pix": zero, "cartao": zero, "outros": zero}
+        fiado_recebido = sangrias = vendas_prazo = zero
+        # venda grava DEBITO/CREDITO; recebimento de fiado no cartao grava CARTAO
+        chave = {
+            "DINHEIRO": "dinheiro", "PIX": "pix",
+            "DEBITO": "cartao", "CREDITO": "cartao", "CARTAO": "cartao",
+        }
+
+        for tipo, forma, valor in query.all():
+            if tipo == "SANGRIA":
+                sangrias += valor
+                continue
+            if forma == "PRAZO":
+                vendas_prazo += valor
+                continue
+            por_forma[chave.get(forma, "outros")] += valor
+            if tipo == "RECEBIMENTO_FIADO":
+                fiado_recebido += valor
+
+        # contas a pagar pagas no periodo (qualquer forma). A paga em
+        # dinheiro tambem vira movimento PAGAMENTO no caixa, mas esse
+        # tipo nao entra na soma acima -- entao nao conta duas vezes
+        contas = (
+            db.query(func.coalesce(func.sum(ContaPagar.valor), 0))
+            .filter(ContaPagar.status == StatusContaPagar.PAGO.value)
+        )
+        if inicio:
+            contas = contas.filter(ContaPagar.data_pagamento >= inicio)
+        if fim:
+            contas = contas.filter(ContaPagar.data_pagamento < fim + timedelta(days=1))
+        if loja_id is not None:
+            contas = contas.filter(ContaPagar.loja_id == loja_id)
+        contas_pagas = contas.scalar() or zero
+
+        total = sum(por_forma.values(), zero)
+        return {
+            **por_forma,
+            "fiado_recebido": fiado_recebido,
+            "total": total,
+            "sangrias": sangrias,
+            "vendas_prazo": vendas_prazo,
+            "contas_pagas": contas_pagas,
+            "sobrou": total - contas_pagas - sangrias,
+        }
 
     @staticmethod
     def resumo(db: Session, caixa: Caixa) -> dict:

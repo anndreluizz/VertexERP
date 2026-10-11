@@ -95,6 +95,7 @@ def test_entradas_soma_o_que_entrou_de_verdade(client, auth_headers, db, caixa_a
         ("VENDA", "PRAZO", 80, hoje),
         ("RECEBIMENTO_FIADO", "DINHEIRO", 40, hoje),
         ("RECEBIMENTO_FIADO", "PIX", 60, hoje),
+        ("RECEBIMENTO_FIADO", "CARTAO", 300, hoje),
         ("SUPRIMENTO", None, 500, hoje),
         ("SANGRIA", None, 25, hoje),
         ("VENDA", "DINHEIRO", 999, hoje - timedelta(days=40)),
@@ -116,10 +117,10 @@ def test_entradas_soma_o_que_entrou_de_verdade(client, auth_headers, db, caixa_a
     dia = hoje.date().isoformat()
     dados = client.get(f"/caixa/entradas?inicio={dia}&fim={dia}", headers=auth_headers).json()
     assert {k: float(v) for k, v in dados.items()} == {
-        "dinheiro": 140.0, "pix": 100.0, "cartao": 50.0, "outros": 0.0,
-        "fiado_recebido": 100.0, "total": 290.0, "sangrias": 25.0, "vendas_prazo": 80.0,
-        "contas_pagas": 70.0, "sobrou": 195.0,
+        "dinheiro": 140.0, "pix": 100.0, "cartao": 350.0, "outros": 0.0,
+        "fiado_recebido": 400.0, "total": 590.0, "sangrias": 25.0, "vendas_prazo": 80.0,
+        "contas_pagas": 70.0, "sobrou": 495.0,
     }
 
     tudo = client.get("/caixa/entradas", headers=auth_headers).json()
-    assert float(tudo["total"]) == 290.0 + 999
+    assert float(tudo["total"]) == 590.0 + 999

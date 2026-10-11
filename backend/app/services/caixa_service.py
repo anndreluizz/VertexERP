@@ -132,7 +132,11 @@ class CaixaService:
         zero = Decimal("0")
         por_forma = {"dinheiro": zero, "pix": zero, "cartao": zero, "outros": zero}
         fiado_recebido = sangrias = vendas_prazo = zero
-        chave = {"DINHEIRO": "dinheiro", "PIX": "pix", "DEBITO": "cartao", "CREDITO": "cartao"}
+        # venda grava DEBITO/CREDITO; recebimento de fiado no cartao grava CARTAO
+        chave = {
+            "DINHEIRO": "dinheiro", "PIX": "pix",
+            "DEBITO": "cartao", "CREDITO": "cartao", "CARTAO": "cartao",
+        }
 
         for tipo, forma, valor in query.all():
             if tipo == "SANGRIA":

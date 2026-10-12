@@ -18,6 +18,7 @@ class ContaPagar {
     required this.formaPagamento,
     required this.bancoPagamento,
     required this.numeroTransacao,
+    this.pix,
   });
 
   factory ContaPagar.fromJson(Map<String, dynamic> json) {
@@ -38,11 +39,11 @@ class ContaPagar {
       documentoNome: json['documento_nome'] as String?,
       temComprovantePagamento:
           json['tem_comprovante_pagamento'] as bool? ?? false,
-      comprovantePagamentoNome:
-          json['comprovante_pagamento_nome'] as String?,
+      comprovantePagamentoNome: json['comprovante_pagamento_nome'] as String?,
       formaPagamento: json['forma_pagamento'] as String?,
       bancoPagamento: json['banco_pagamento'] as String?,
       numeroTransacao: json['numero_transacao'] as String?,
+      pix: json['pix'] as String?,
     );
   }
 
@@ -55,6 +56,9 @@ class ContaPagar {
   final String? categoria;
   final String? observacao;
   final String? numeroBoleto;
+
+  /// Chave Pix do fornecedor ou Pix copia e cola (ver textoPixParaCopiar).
+  final String? pix;
   final String status;
   final bool temDocumento;
   final String? documentoNome;

@@ -696,6 +696,28 @@ class _DetalhesContaPagarSheet extends ConsumerWidget {
                   ),
                 ),
               ),
+            if (textoPixParaCopiar(conta.pix) case final pix?)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final mensageiro = ScaffoldMessenger.of(context);
+                      await Clipboard.setData(ClipboardData(text: pix));
+                      mensageiro.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Pix copiado. É só colar no app do banco.',
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    label: const Text('Copiar Pix'),
+                  ),
+                ),
+              ),
             if ((conta.observacao ?? '').isNotEmpty)
               _LinhaDetalhe('Observação', conta.observacao!),
             const SizedBox(height: 16),
@@ -877,6 +899,43 @@ class _DetalhesContaPagarSheet extends ConsumerWidget {
 String? codigoBoleto(String? numero) {
   final digitos = (numero ?? '').replaceAll(RegExp(r'\D'), '');
   return digitos.isEmpty ? null : digitos;
+}
+
+/// O Pix da conta no formato que o app do banco aceita colar: copia e
+/// cola, e-mail e chave aleatoria como estao; CPF/CNPJ so' os digitos;
+/// telefone com +55. Mesma regra do desktop (frontend/utils/pix.py).
+String? textoPixParaCopiar(String? pix) {
+  final texto = (pix ?? '').trim();
+  if (texto.isEmpty) return null;
+  if (texto.startsWith('000201') || texto.contains('@')) return texto;
+
+  final digitos = texto.replaceAll(RegExp(r'\D'), '');
+  final telefone = texto.startsWith('+') || texto.contains('(');
+  final soNumero = RegExp(r'^[\d.\-/]+$').hasMatch(texto);
+
+  if (soNumero && digitos.length == 14) return digitos;
+  if (soNumero && !telefone && _cpfValido(digitos)) return digitos;
+  if (RegExp(r'^[\d\s()+\-]+$').hasMatch(texto) &&
+      digitos.length >= 10 &&
+      digitos.length <= 13) {
+    final comPais = digitos.startsWith('55') && digitos.length > 11
+        ? digitos
+        : '55$digitos';
+    return '+$comPais';
+  }
+  return texto;
+}
+
+bool _cpfValido(String d) {
+  if (d.length != 11 || d == d[0] * 11) return false;
+  for (final n in [9, 10]) {
+    var soma = 0;
+    for (var i = 0; i < n; i++) {
+      soma += int.parse(d[i]) * (n + 1 - i);
+    }
+    if ((soma * 10 % 11) % 10 != int.parse(d[n])) return false;
+  }
+  return true;
 }
 
 class _LinhaDetalhe extends StatelessWidget {

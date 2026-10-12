@@ -121,7 +121,12 @@ class SessaoController extends StateNotifier<SessaoState> {
       }
 
       return novoToken;
-    } catch (_) {
+    } on DioException catch (e) {
+      // sem resposta (sem internet, timeout) ou servidor com erro: a
+      // sessao continua valida, so nao deu pra renovar agora -- lanca
+      // em vez de devolver null, pra quem chamou NAO deslogar.
+      final status = e.response?.statusCode;
+      if (status == null || status >= 500) rethrow;
       return null;
     }
   }
@@ -138,51 +143,47 @@ class SessaoController extends StateNotifier<SessaoState> {
 
   Future<bool> _carregarUsuarioLogado() async {
     try {
-      final respostaUsuario = await _api.dio.get('/auth/me');
-      final respostaConfig = await _api.dio.get('/configuracoes');
-
-      state = state.copyWith(
-        status: StatusSessao.logado,
-        usuario: Usuario.fromJson(respostaUsuario.data as Map<String, dynamic>),
-        nomeLoja:
-            (respostaConfig.data as Map<String, dynamic>)['nome_loja']
-                as String? ??
-            'Vertex ERP',
-      );
+      await _buscarUsuarioLogado();
       return true;
     } catch (_) {
       return false;
     }
   }
 
+  Future<void> _buscarUsuarioLogado() async {
+    final respostaUsuario = await _api.dio.get('/auth/me');
+    final respostaConfig = await _api.dio.get('/configuracoes');
+
+    state = state.copyWith(
+      status: StatusSessao.logado,
+      usuario: Usuario.fromJson(respostaUsuario.data as Map<String, dynamic>),
+      nomeLoja:
+          (respostaConfig.data as Map<String, dynamic>)['nome_loja']
+              as String? ??
+          'Vertex ERP',
+    );
+  }
+
   /// Chamado depois que o LocalAuthentication confirmou a biometria —
   /// so entao os dados de verdade sao buscados e mostrados.
+  ///
+  /// Devolve false quando nao deu pra entrar. Token vencido o
+  /// interceptor do ApiClient ja renova sozinho; se o servidor recusar
+  /// a sessao de vez (401 mesmo assim), ele chama logout(). Sem conexao
+  /// (4G fraco, servidor desligado) a sessao lembrada NAO e apagada:
+  /// fica travado aqui pra tentar de novo, sem pedir e-mail e senha.
   Future<bool> desbloquearComBiometria() async {
-    var ok = await _carregarUsuarioLogado();
-
-    if (!ok) {
-      // access_token guardado pode so estar vencido (comum se o app
-      // ficou dias fechado) -- tenta renovar antes de desistir, assim
-      // o usuario so precisa da biometria, nao de logar nas 3 caixas
-      // de novo toda vez que o token de 24h expira.
-      final novoToken = await renovarToken();
-
-      if (novoToken != null) {
-        _api.definirToken(novoToken);
-        ok = await _carregarUsuarioLogado();
-      }
+    try {
+      await _buscarUsuarioLogado();
+      return true;
+    } on DioException catch (e) {
+      // o interceptor ja chamou logout() sem esperar -- espera aqui,
+      // pra quem chamou ja ver o estado "deslogado"
+      if (e.response?.statusCode == 401) await logout();
+      return false;
+    } catch (_) {
+      return false;
     }
-
-    if (!ok) {
-      // nem a renovacao resolveu (refresh_token tambem expirou ou foi
-      // revogado em outro aparelho) — descarta e manda pro login normal.
-      await _storage.removerToken();
-      _api.removerToken();
-      _refreshToken = null;
-      state = state.copyWith(status: StatusSessao.deslogado);
-    }
-
-    return ok;
   }
 
   /// Usuario preferiu nao usar biometria agora — cai pro login manual
@@ -214,9 +215,7 @@ class SessaoController extends StateNotifier<SessaoState> {
   /// codigo (mandado por e-mail) e chamar verificarCodigo2fa() com
   /// esse verificacaoId pra completar o login (ver
   /// features/auth/login_screen.dart).
-  Future<
-    ({bool sucesso, String? erro, String? verificacaoId})
-  > login(
+  Future<({bool sucesso, String? erro, String? verificacaoId})> login(
     String email,
     String senha, {
     required bool lembrar,
@@ -226,6 +225,9 @@ class SessaoController extends StateNotifier<SessaoState> {
         '/auth/login',
         data: {'email': email, 'senha': senha},
       );
+
+      // senha aceita: na proxima vez a tela de login ja vem com o e-mail
+      if (lembrar) await _storage.salvarUltimoEmail(email);
 
       if (resposta.data['requer_2fa'] == true) {
         return (
@@ -303,6 +305,8 @@ class SessaoController extends StateNotifier<SessaoState> {
 
     return 'Não foi possível conectar ao servidor. Verifique o endereço configurado e a rede.';
   }
+
+  Future<String?> ultimoEmail() => _storage.lerUltimoEmail();
 
   Future<void> trocarServidor() async {
     await _storage.removerToken();

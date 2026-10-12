@@ -54,7 +54,15 @@ class ApiClient {
               erro.requestOptions.extra['renovacaoTentada'] == true;
 
           if (foiNaoAutorizado && !jaTentouRenovar && aoRenovarToken != null) {
-            final novoToken = await aoRenovarToken!.call();
+            final String? novoToken;
+            try {
+              novoToken = await aoRenovarToken!.call();
+            } catch (_) {
+              // sem conexao pra renovar: a sessao continua valida, so
+              // repassa o erro (sem deslogar)
+              handler.next(erro);
+              return;
+            }
 
             if (novoToken != null) {
               definirToken(novoToken);

@@ -673,7 +673,16 @@ class _DetalhesContaPagarSheet extends ConsumerWidget {
             _LinhaDetalhe('Vencimento', formatarData(conta.dataVencimento)),
             if (conta.dataPagamento != null)
               _LinhaDetalhe('Pagamento', formatarData(conta.dataPagamento!)),
-            _LinhaDetalhe('Nº do boleto', conta.numeroBoleto ?? '—'),
+            // conta paga no Pix nao tem boleto: mostra a chave no lugar
+            if (conta.numeroBoleto != null || (conta.pix ?? '').trim().isEmpty)
+              _LinhaDetalhe('Nº do boleto', conta.numeroBoleto ?? '—'),
+            if ((conta.pix ?? '').trim().isNotEmpty)
+              _LinhaDetalhe(
+                'Pix',
+                conta.pix!.trim().startsWith('000201')
+                    ? 'Copia e cola'
+                    : conta.pix!.trim(),
+              ),
             if (codigoBoleto(conta.numeroBoleto) case final codigo?)
               Padding(
                 padding: const EdgeInsets.only(top: 6),

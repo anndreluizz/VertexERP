@@ -10,6 +10,7 @@ from app.enums.status_conta_pagar import StatusContaPagar
 from app.models.conta_pagar import ContaPagar
 from app.models.conta_recorrente import ContaRecorrente
 from app.services.beneficiario_boleto_service import BeneficiarioBoletoService
+from app.services.pix_service import PixService
 
 
 def primeiro_dia(data: date) -> date:
@@ -65,6 +66,9 @@ class ContaRecorrenteService:
             db, recorrente, competencia, dados.valor, a_confirmar=False
         )
         conta.numero_boleto = getattr(dados, "numero_boleto", None)
+        conta.pix = PixService.para_conta_nova(
+            db, getattr(dados, "pix", None), recorrente.descricao
+        )
         if getattr(dados, "documento_base64", None):
             conta.documento = base64.b64decode(dados.documento_base64)
             conta.documento_nome = dados.documento_nome
@@ -136,6 +140,9 @@ class ContaRecorrenteService:
             recorrente_id=recorrente.id,
             competencia=competencia,
             valor_a_confirmar=a_confirmar,
+            # mes novo: a chave Pix do fornecedor (copia e cola nao, ver
+            # PixService.chave_conhecida)
+            pix=PixService.chave_conhecida(db, recorrente.descricao),
         )
         db.add(conta)
         return conta

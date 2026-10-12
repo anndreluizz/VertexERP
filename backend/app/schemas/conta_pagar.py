@@ -13,6 +13,7 @@ class ContaPagarBase(BaseModel):
     plano_conta_id: int | None = None
     observacao: str | None = None
     numero_boleto: str | None = None
+    pix: str | None = None
 
 
 class ContaPagarCreate(ContaPagarBase):
@@ -37,6 +38,7 @@ class ContaPagarUpdate(BaseModel):
     plano_conta_id: int | None = None
     observacao: str | None = None
     numero_boleto: str | None = None
+    pix: str | None = None
     status: str | None = None
     # None/ausente mantem o documento atual -- so troca quando vier
     # preenchido (ver ContaPagarService.atualizar)
@@ -69,6 +71,8 @@ class ContaPagarResponse(BaseModel):
     observacao: str | None
 
     numero_boleto: str | None
+
+    pix: str | None = None
 
     status: str
 
@@ -125,6 +129,8 @@ class ContaRecorrenteCreate(BaseModel):
     meses: conint(ge=1, le=360) | None = None
     # boleto/PDF do 1o mes (vao so' na conta desse mes)
     numero_boleto: str | None = None
+    # chave Pix vai em todo mes; copia e cola so' no 1o
+    pix: str | None = None
     beneficiario_cnpj: str | None = None
     documento_base64: str | None = None
     documento_nome: str | None = None

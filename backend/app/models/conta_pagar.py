@@ -113,6 +113,13 @@ class ContaPagar(Base):
         default="PENDENTE",
     )
 
+    # chave Pix do fornecedor ou o Pix copia e cola da cobranca (ver
+    # app/services/pix_service.py) -- pra copiar na hora de pagar
+    pix: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+    )
+
     numero_boleto: Mapped[str | None] = mapped_column(
         String(60),
         nullable=True,

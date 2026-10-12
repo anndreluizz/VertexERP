@@ -28,6 +28,7 @@ from app.schemas.conta_pagar import (
 from app.services.caixa_operacao_service import CaixaOperacaoService
 from app.services.conta_pagar_evento_service import ContaPagarEventoService
 from app.services.notificacao_service import NotificacaoService
+from app.services.pix_service import PixService, eh_copia_e_cola
 
 # rotulos legiveis pra montar o "detalhes" dos eventos de auditoria --
 # mesmos valores usados em Venda.forma_pagamento.
@@ -68,6 +69,7 @@ class ContaPagarService:
             plano_conta_id=dados.plano_conta_id,
             observacao=dados.observacao,
             numero_boleto=dados.numero_boleto,
+            pix=PixService.para_conta_nova(db, dados.pix, dados.descricao),
             status=StatusContaPagar.PENDENTE.value,
             loja_id=loja_id,
         )
@@ -149,6 +151,13 @@ class ContaPagarService:
         parcelamento_id = uuid.uuid4().hex
         contas = []
 
+        # copia e cola e de uma cobranca so' (fica na 1a parcela, como o
+        # boleto); chave Pix vale pra todas
+        pix = PixService.para_conta_nova(db, dados.pix, descricao)
+        pix_demais = None if eh_copia_e_cola(pix) else pix
+        if pix_demais is None:
+            pix_demais = PixService.chave_conhecida(db, descricao)
+
         for indice in range(n):
 
             vencimento = vencimentos[indice]
@@ -163,6 +172,7 @@ class ContaPagarService:
                 plano_conta_id=dados.plano_conta_id,
                 observacao=dados.observacao,
                 numero_boleto=dados.numero_boleto if indice == 0 else None,
+                pix=pix if indice == 0 else pix_demais,
                 status=StatusContaPagar.PENDENTE.value,
                 loja_id=loja_id,
                 parcelamento_id=parcelamento_id,

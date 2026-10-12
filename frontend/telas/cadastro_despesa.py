@@ -45,6 +45,7 @@ from design.widgets import (
     grade_formulario, titulo_secao,
 )
 from utils.formatacao import formatar_moeda
+from utils.pix import ler_pix
 
 
 _ESTILO_DATA = f"""
@@ -165,6 +166,24 @@ class CadastroDespesaDialog(DialogoPadrao):
             (campo_rotulado("Documento (PDF ou foto)", linha_anexo_widget), 0, 1),
         ))
         self.corpo.addWidget(self.lbl_boleto)
+
+        # ======================
+        # PIX -- conta paga no Pix: a chave do fornecedor ou o copia e
+        # cola que ele mandou (ver utils/pix.py)
+        # ======================
+
+        self.pix = CampoTexto("Cole a chave Pix (CPF/CNPJ, telefone, e-mail) ou o Pix copia e cola")
+        self.pix.textChanged.connect(self._pix_mudou)
+
+        self.lbl_pix = QLabel()
+        self.lbl_pix.setWordWrap(True)
+        self.lbl_pix.setVisible(False)
+
+        self.corpo.addWidget(titulo_secao("Pix"))
+        self.corpo.addLayout(grade_formulario(
+            (campo_rotulado("Chave Pix ou copia e cola", self.pix), 0, 0, 1, 2),
+        ))
+        self.corpo.addWidget(self.lbl_pix)
 
         # ======================
         # DESPESA
@@ -583,10 +602,45 @@ class CadastroDespesaDialog(DialogoPadrao):
             ao_finalizar=self._ao_salvar_finalizado,
         )
 
+    def _pix_mudou(self, texto):
+        """Mostra o que foi reconhecido. Copia e cola de uma despesa nova
+        já preenche valor e fornecedor, se estiverem vazios."""
+
+        lido = ler_pix(texto)
+
+        if lido is None:
+            self._mostrar_faixa(self.lbl_pix, None)
+            return
+
+        if lido["tipo"] == "chave":
+            self._mostrar_faixa(self.lbl_pix, f"✓ {lido['tipo_chave']}: {lido['copiar']}", "sucesso")
+            return
+
+        self.pix.setCursorPosition(0)
+
+        if self.conta is None:
+            if lido["valor"] and _parse_valor(self.valor.text()) <= 0:
+                self.valor.setText(f"{lido['valor']:.2f}".replace(".", ","))
+            if lido["nome"] and not self.descricao.text().strip():
+                self.descricao.setText(lido["nome"])
+
+        partes = [p for p in (lido["nome"], lido["cidade"]) if p]
+        if lido["valor"]:
+            partes.append(formatar_moeda(lido["valor"]))
+        self._mostrar_faixa(
+            self.lbl_pix,
+            "✓ Pix copia e cola" + (": " + " · ".join(partes) if partes else ""),
+            "sucesso",
+        )
+
     def _mostrar_faixa_boleto(self, texto, variante="info"):
+        self._mostrar_faixa(self.lbl_boleto, texto, variante)
+
+    def _mostrar_faixa(self, label, texto, variante="info"):
 
         if not texto:
-            self.lbl_boleto.setVisible(False)
+            label.setVisible(False)
+            self.ajustar_altura()
             return
 
         fundo, cor = {
@@ -594,13 +648,13 @@ class CadastroDespesaDialog(DialogoPadrao):
             "erro": (tokens.ERRO_CLARO, tokens.ERRO_HOVER),
             "info": (tokens.PRIMARIA_CLARA, tokens.PRIMARIA_HOVER),
         }[variante]
-        self.lbl_boleto.setStyleSheet(f"""
+        label.setStyleSheet(f"""
             background:{fundo}; color:{cor};
             border-radius:{tokens.RADIUS_SM}px; padding:8px 12px;
             font-size:{tokens.TAMANHO_SM}px; font-weight:600;
         """)
-        self.lbl_boleto.setText(texto)
-        self.lbl_boleto.setVisible(True)
+        label.setText(texto)
+        label.setVisible(True)
         self.ajustar_altura()
 
     # ======================================
@@ -1027,6 +1081,12 @@ class CadastroDespesaDialog(DialogoPadrao):
             if indice >= 0:
                 self.plano_conta.setCurrentIndex(indice)
 
+        # duplicar leva a chave Pix, mas nao o copia e cola (e de uma
+        # cobranca so', como o boleto)
+        pix = conta.get("pix")
+        if pix and (not duplicando or (ler_pix(pix) or {}).get("tipo") == "chave"):
+            self.pix.setText(pix)
+
         if not duplicando:
             self.numero_boleto.setText(conta.get("numero_boleto") or "")
             self.observacoes.setText(conta.get("observacao") or "")
@@ -1097,6 +1157,7 @@ class CadastroDespesaDialog(DialogoPadrao):
             "valor": valor,
             "data_vencimento": data_vencimento,
             "numero_boleto": self.numero_boleto.text().strip() or None,
+            "pix": self.pix.text().strip() or None,
             "observacao": self.observacoes.text().strip() or None,
         }
 
@@ -1139,7 +1200,7 @@ class CadastroDespesaDialog(DialogoPadrao):
                 **{
                     campo: dados[campo]
                     for campo in (
-                        "numero_boleto", "beneficiario_cnpj", "documento_base64",
+                        "numero_boleto", "pix", "beneficiario_cnpj", "documento_base64",
                         "documento_nome", "documento_tipo",
                     )
                     if campo in dados

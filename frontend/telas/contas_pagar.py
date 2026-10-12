@@ -3,7 +3,7 @@ import tempfile
 from datetime import date, datetime, timedelta
 
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QCursor, QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QMenu,
     QMessageBox,
+    QToolTip,
 )
 
 from services.categoria_despesa_service import listar_categorias_despesa
@@ -36,6 +37,7 @@ from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import Badge, BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
 from utils.formatacao import formatar_moeda
+from utils.pix import texto_pra_copiar
 
 
 def _status_real(conta):
@@ -236,15 +238,19 @@ class DespesaLinha(QFrame):
         area_copiar = QWidget()
         area_copiar.setFixedWidth(30)
         area_copiar.setStyleSheet("background:transparent;")
-        if conta.get("numero_boleto"):
+        if conta.get("numero_boleto") or conta.get("pix"):
             lay_copiar = QHBoxLayout(area_copiar)
             lay_copiar.setContentsMargins(0, 0, 0, 0)
             self.bt_copiar = QPushButton()
             self.bt_copiar.setFixedSize(30, 30)
             self.bt_copiar.setCursor(Qt.PointingHandCursor)
             self.bt_copiar.setIcon(icone("copy", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
-            self.bt_copiar.setToolTip(f"Copiar código do boleto\n{conta['numero_boleto']}")
-            self.bt_copiar.setAccessibleName("Copiar código do boleto")
+            if conta.get("numero_boleto"):
+                self.bt_copiar.setToolTip(f"Copiar código do boleto\n{conta['numero_boleto']}")
+                self.bt_copiar.setAccessibleName("Copiar código do boleto")
+            else:
+                self.bt_copiar.setToolTip(f"Copiar Pix\n{texto_pra_copiar(conta['pix'])[:60]}")
+                self.bt_copiar.setAccessibleName("Copiar Pix")
             self.bt_copiar.setStyleSheet(f"""
                 QPushButton {{ background:transparent; border:none; border-radius:6px; }}
                 QPushButton:hover {{ background:{tokens.BORDA}; }}
@@ -291,7 +297,16 @@ class DespesaLinha(QFrame):
         layout.addWidget(bt_menu)
 
     def copiar_codigo(self):
-        copiar_codigo_boleto(self.conta.get("numero_boleto"))
+        if self.conta.get("numero_boleto"):
+            copiar_codigo_boleto(self.conta["numero_boleto"])
+        else:
+            self.copiar_pix()
+
+    def copiar_pix(self):
+        texto = texto_pra_copiar(self.conta.get("pix"))
+        if texto:
+            QGuiApplication.clipboard().setText(texto)
+            QToolTip.showText(QCursor.pos(), "Pix copiado! Cole no app do banco.")
 
     def mouseDoubleClickEvent(self, event):
         self.editar_solicitado.emit(self.conta)
@@ -309,6 +324,9 @@ class DespesaLinha(QFrame):
 
         if self.conta.get("numero_boleto"):
             menu.addAction("Copiar código do boleto", self.copiar_codigo)
+
+        if self.conta.get("pix"):
+            menu.addAction("Copiar Pix", self.copiar_pix)
 
         if self.conta.get("tem_comprovante_pagamento"):
             menu.addAction(

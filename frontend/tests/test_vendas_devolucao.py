@@ -155,16 +155,23 @@ def test_tela_vendas_mostra_resumo_e_filtra_por_vendedora(_qapp, monkeypatch):
          "total_vendido": 30, "total_devolvido": 15, "total_liquido": 15},
     ]
 
-    tela._ao_carregar((vendas, resumo))
+    lojas = [{"id": 1, "nome": "Matriz", "ativa": True},
+             {"id": 2, "nome": "Filial", "ativa": True}]
+    vendas[1]["loja_id"] = 2
+
+    tela._ao_carregar((vendas, resumo, lojas))
 
     assert tela.tabela.rowCount() == 2
+    assert tela.filtro_loja.count() == 3
+    assert not tela.tabela.isColumnHidden(2)
     assert tela.tabela_vendedoras.rowCount() == 2
     assert tela.card_total.lbl_valor.text() == "R$ 65,00"
     assert tela.card_devolvido.lbl_valor.text() == "R$ 15,00"
 
     tela.filtro_vendedora.setCurrentIndex(tela.filtro_vendedora.findData(2))
     assert tela.tabela.rowCount() == 1
-    assert tela.tabela.item(0, 3).text() == "Bia"
+    assert tela.tabela.item(0, 4).text() == "Bia"
+    assert tela.tabela.item(0, 2).text() == "Filial"
 
 
 def test_venda_com_devolucao_nao_pode_ser_cancelada(_qapp, monkeypatch):

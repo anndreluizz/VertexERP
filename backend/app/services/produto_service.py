@@ -114,17 +114,12 @@ class ProdutoService:
         if dados.codigo_barras:
             condicoes.append(Produto.codigo_barras == dados.codigo_barras)
 
-        # duplicidade so' conta dentro do mesmo "espaco" do produto novo
-        # -- global (loja_id None) so bate com outro produto global, e
-        # exclusivo de uma loja so bate com outro da MESMA loja (mesmo
-        # escopo dos indices parciais uq_produto_codigo_(barras_)*, ver
-        # Produto.__table_args__) -- filial e matriz podem usar o mesmo
-        # codigo pra produtos diferentes.
-        existente = (
-            db.query(Produto)
-            .filter(Produto.loja_id == loja_id, or_(*condicoes))
-            .first()
-        )
+        # catalogo unico: produto novo nasce global (visivel em todas as
+        # lojas, estoque separado por loja em EstoqueLoja) -- exclusivo
+        # quebrava a transferencia (a loja destino nao enxergava o
+        # produto). Duplicidade conta contra QUALQUER produto, inclusive
+        # exclusivos antigos, pra nao ter dois "01" na mesma loja.
+        existente = db.query(Produto).filter(or_(*condicoes)).first()
 
         if existente:
             if existente.codigo == dados.codigo:
@@ -151,7 +146,6 @@ class ProdutoService:
 
         campos = dados.dict(exclude={"foto_base64"})
         produto = Produto(**campos)
-        produto.loja_id = loja_id
 
         if dados.foto_base64:
             produto.foto = base64.b64decode(dados.foto_base64)

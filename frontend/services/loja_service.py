@@ -1,7 +1,7 @@
-from services.api import get, post
+from services.api import get, post, put
 
 
-def listar_lojas():
+def listar_lojas(incluir_inativas=False):
 
     # a tela de Configuracoes monta essa aba (e chama isso) assim que
     # o widget e criado -- se ainda nao tiver token (tela construida
@@ -17,8 +17,17 @@ def listar_lojas():
     if response.status_code != 200:
         return []
 
-    return response.json()
+    lojas = response.json()
+
+    if incluir_inativas:
+        return lojas
+
+    return [l for l in lojas if l.get("ativa", True)]
 
 
 def criar_loja(nome):
     return post("/lojas/", {"nome": nome})
+
+
+def atualizar_loja(loja_id, **campos):
+    return put(f"/lojas/{loja_id}", campos)

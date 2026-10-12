@@ -7,7 +7,7 @@ final produtosProvider = FutureProvider.autoDispose<List<Produto>>((
   ref,
 ) async {
   final api = ref.watch(apiClientProvider);
-  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final lojaId = ref.watch(lojaFiltroProvider);
   final resposta = await api.dio.get(
     '/produtos/',
     queryParameters: lojaId != null ? {'loja_id': lojaId} : null,

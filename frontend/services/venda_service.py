@@ -138,7 +138,7 @@ def finalizar_venda(
 
     return post(endpoint_com_loja("/vendas/"), dados)
 
-def listar_vendas_periodo(data_inicio, data_fim, usuario_id=None):
+def listar_vendas_periodo(data_inicio, data_fim, usuario_id=None, loja_id=None):
     """Todas as vendas entre as duas datas (date, inclusivas), mais
     recentes primeiro -- tela de Vendas. Varre as páginas como
     listar_vendas()."""
@@ -146,6 +146,8 @@ def listar_vendas_periodo(data_inicio, data_fim, usuario_id=None):
     filtros = f"&data_inicio={data_inicio.isoformat()}&data_fim={data_fim.isoformat()}"
     if usuario_id is not None:
         filtros += f"&usuario_id={usuario_id}"
+    if loja_id is not None:
+        filtros += f"&loja_id={loja_id}"
 
     vendas = []
     skip = 0
@@ -168,13 +170,14 @@ def listar_vendas_periodo(data_inicio, data_fim, usuario_id=None):
     return vendas
 
 
-def resumo_vendedores(data_inicio, data_fim):
+def resumo_vendedores(data_inicio, data_fim, loja_id=None):
     """Total vendido por vendedora no período, já descontando
     devoluções (GET /vendas/resumo-vendedores)."""
 
     response = get(
         f"/vendas/resumo-vendedores?data_inicio={data_inicio.isoformat()}"
         f"&data_fim={data_fim.isoformat()}"
+        + (f"&loja_id={loja_id}" if loja_id is not None else "")
     )
 
     if response.status_code != 200:

@@ -7,8 +7,6 @@ import '../../core/cache_local.dart';
 import '../../core/providers.dart';
 import '../../models/dashboard_resumo.dart';
 
-const _chaveCache = 'dashboard';
-
 /// Envelope em volta do DashboardResumo pra tela saber se o que esta
 /// mostrando veio da rede agora ou e o ultimo dado bom salvo (ver
 /// CacheLocal) — a rede caiu, mas o app nao fica de tela vazia por isso.
@@ -28,7 +26,9 @@ final dashboardProvider = FutureProvider.autoDispose<DashboardCarregado>((
   ref,
 ) async {
   final api = ref.watch(apiClientProvider);
-  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final lojaId = ref.watch(lojaFiltroProvider);
+  // um cache por loja, senao sem rede mostraria o resumo da outra
+  final chaveCache = lojaId == null ? 'dashboard' : 'dashboard_loja_$lojaId';
 
   try {
     final resposta = await api.dio.get(
@@ -42,7 +42,7 @@ final dashboardProvider = FutureProvider.autoDispose<DashboardCarregado>((
     final agora = DateTime.now();
     // nao espera terminar de escrever pra devolver o resultado -- so
     // guarda pra proxima vez que a rede falhar.
-    unawaited(CacheLocal.salvar(_chaveCache, jsonEncode(resumo.toJson())));
+    unawaited(CacheLocal.salvar(chaveCache, jsonEncode(resumo.toJson())));
 
     return DashboardCarregado(
       resumo: resumo,
@@ -50,7 +50,7 @@ final dashboardProvider = FutureProvider.autoDispose<DashboardCarregado>((
       atualizadoEm: agora,
     );
   } catch (erro) {
-    final guardado = await CacheLocal.ler(_chaveCache);
+    final guardado = await CacheLocal.ler(chaveCache);
 
     // sem cache nenhum ainda (primeira vez que abre o app sem rede) --
     // nao tem o que mostrar, propaga o erro original pra tela de "tentar

@@ -34,6 +34,14 @@ class TransferenciaEstoqueService:
         if not produto:
             raise Exception(f"Produto {dados.produto_id} não encontrado.")
 
+        # exclusivo de uma loja: a destino nao enxerga o produto e o
+        # estoque transferido sumiria
+        if produto.loja_id is not None:
+            raise Exception(
+                f'O produto "{produto.nome}" é exclusivo de uma loja e não '
+                "pode ser transferido. Troque o código dele para liberar."
+            )
+
         transferencia = TransferenciaEstoque(
             produto_id=dados.produto_id,
             loja_origem_id=loja_origem_id,

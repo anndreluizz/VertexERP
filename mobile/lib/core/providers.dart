@@ -33,3 +33,31 @@ final sessaoControllerProvider =
 
       return controller;
     });
+
+/// Lojas ativas (id, nome) pro seletor do inicio -- falhou, lista vazia
+/// e o seletor some.
+final lojasProvider = FutureProvider<List<({int id, String nome})>>((
+  ref,
+) async {
+  try {
+    final resposta = await ref.watch(apiClientProvider).dio.get('/lojas/');
+    return [
+      for (final json in resposta.data as List<dynamic>)
+        if (json['ativa'] != false)
+          (id: json['id'] as int, nome: json['nome'] as String),
+    ];
+  } catch (_) {
+    return const [];
+  }
+});
+
+/// Loja escolhida no seletor do inicio (null = todas).
+final lojaEscolhidaProvider = StateProvider<int?>((ref) => null);
+
+/// Loja que filtra vendas, caixas, contas, estoque e relatorios: a do
+/// usuario, se ele for preso a uma loja; senao a escolhida no seletor.
+final lojaFiltroProvider = Provider<int?>(
+  (ref) =>
+      ref.watch(sessaoControllerProvider).usuario?.lojaId ??
+      ref.watch(lojaEscolhidaProvider),
+);

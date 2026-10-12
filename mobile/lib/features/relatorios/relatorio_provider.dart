@@ -17,7 +17,7 @@ final relatorioProvider = FutureProvider.autoDispose<RelatorioDados>((
 ) async {
   final periodo = ref.watch(relatorioPeriodoProvider);
   final api = ref.watch(apiClientProvider);
-  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final lojaId = ref.watch(lojaFiltroProvider);
   final filtroLoja = lojaId != null ? {'loja_id': lojaId} : null;
 
   final vendasResp = await api.dio.get(

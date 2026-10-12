@@ -88,6 +88,8 @@ class VendaSuspensaResponse(BaseModel):
 class VendaResponse(BaseModel):
     id: int
 
+    loja_id: int | None = None
+
     cliente_id: int | None
     cliente_nome: str | None = None
 

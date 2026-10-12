@@ -47,7 +47,7 @@ final periodoVendasProvider = StateProvider<PeriodoVendas>(
 
 final vendasProvider = FutureProvider.autoDispose<List<Venda>>((ref) async {
   final api = ref.watch(apiClientProvider);
-  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final lojaId = ref.watch(lojaFiltroProvider);
   final resposta = await api.dio.get(
     '/vendas/',
     queryParameters: {'limit': _limiteVendas, 'loja_id': ?lojaId},
@@ -67,7 +67,7 @@ final produtosLookupProvider = FutureProvider.autoDispose<Map<int, String>>((
   ref,
 ) async {
   final api = ref.watch(apiClientProvider);
-  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final lojaId = ref.watch(lojaFiltroProvider);
   final resposta = await api.dio.get(
     '/produtos/',
     queryParameters: lojaId != null ? {'loja_id': lojaId} : null,
@@ -113,7 +113,7 @@ class AtividadeRecebimento extends ItemAtividadeVendas {
 final atividadeVendasProvider =
     FutureProvider.autoDispose<List<ItemAtividadeVendas>>((ref) async {
       final api = ref.watch(apiClientProvider);
-      final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+      final lojaId = ref.watch(lojaFiltroProvider);
       final filtroLoja = lojaId != null ? {'loja_id': lojaId} : null;
 
       final respostaVendas = await api.dio.get(

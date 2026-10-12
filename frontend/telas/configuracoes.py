@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -1282,6 +1283,7 @@ class Configuracoes(QWidget):
         rodar_em_thread(
             self,
             loja_service.listar_lojas,
+            True,
             ao_sucesso=self._ao_carregar_lojas_sucesso,
             ao_erro=self._ao_carregar_lojas_erro,
         )
@@ -1304,19 +1306,19 @@ class Configuracoes(QWidget):
 
         for loja in lojas:
 
-            self.combo_loja_terminal.addItem(loja["nome"], loja["id"])
-
-            if loja_atual == loja["id"]:
-                self.combo_loja_terminal.setCurrentIndex(
-                    self.combo_loja_terminal.count() - 1
+            # desativada so' aparece se ja for a deste terminal
+            if loja["ativa"] or loja_atual == loja["id"]:
+                self.combo_loja_terminal.addItem(
+                    loja["nome"] + ("" if loja["ativa"] else " (desativada)"),
+                    loja["id"],
                 )
 
-            lbl_loja = QLabel(f"•  {loja['nome']}")
-            lbl_loja.setStyleSheet(f"""
-                background:transparent; font-size:{tokens.TAMANHO_SM}px;
-                color:{tokens.TEXTO};
-            """)
-            self.lista_lojas.addWidget(lbl_loja)
+                if loja_atual == loja["id"]:
+                    self.combo_loja_terminal.setCurrentIndex(
+                        self.combo_loja_terminal.count() - 1
+                    )
+
+            self.lista_lojas.addWidget(self._linha_loja(loja))
 
         self.combo_loja_terminal.blockSignals(False)
 
@@ -1327,6 +1329,66 @@ class Configuracoes(QWidget):
                 color:{tokens.TEXTO_TERCIARIO};
             """)
             self.lista_lojas.addWidget(lbl_vazio)
+
+    def _linha_loja(self, loja):
+
+        linha = QWidget()
+        linha.setStyleSheet("background:transparent;")
+        layout = QHBoxLayout(linha)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        lbl_loja = QLabel(
+            f"•  {loja['nome']}" + ("" if loja["ativa"] else "  (desativada)")
+        )
+        lbl_loja.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO if loja["ativa"] else tokens.TEXTO_TERCIARIO};
+        """)
+        layout.addWidget(lbl_loja, stretch=1)
+
+        bt_renomear = BotaoSecundario("Renomear")
+        bt_renomear.clicked.connect(lambda: self._renomear_loja(loja))
+        layout.addWidget(bt_renomear)
+
+        bt_ativa = BotaoSecundario("Desativar" if loja["ativa"] else "Ativar")
+        bt_ativa.clicked.connect(lambda: self._alternar_loja_ativa(loja))
+        layout.addWidget(bt_ativa)
+
+        return linha
+
+    def _renomear_loja(self, loja):
+
+        nome, ok = QInputDialog.getText(
+            self, "Renomear loja", "Novo nome:", text=loja["nome"]
+        )
+
+        if ok and nome.strip() and nome.strip() != loja["nome"]:
+            self._atualizar_loja(loja["id"], nome=nome.strip())
+
+    def _alternar_loja_ativa(self, loja):
+
+        if loja["ativa"]:
+            resposta = QMessageBox.question(
+                self,
+                "Desativar loja",
+                f"Desativar \"{loja['nome']}\"? Ela some das listas de "
+                "escolha, mas as vendas e contas dela continuam guardadas.",
+            )
+            if resposta != QMessageBox.Yes:
+                return
+
+        self._atualizar_loja(loja["id"], ativa=not loja["ativa"])
+
+    def _atualizar_loja(self, loja_id, **campos):
+
+        rodar_em_thread(
+            self,
+            loja_service.atualizar_loja,
+            loja_id,
+            **campos,
+            ao_sucesso=self._ao_criar_loja_sucesso,
+            ao_erro=self._ao_criar_loja_erro,
+        )
 
     def _salvar_loja_do_terminal(self):
 

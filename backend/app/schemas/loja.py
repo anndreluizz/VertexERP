@@ -7,6 +7,11 @@ class LojaCreate(BaseModel):
     nome: str
 
 
+class LojaUpdate(BaseModel):
+    nome: str | None = None
+    ativa: bool | None = None
+
+
 class LojaResponse(BaseModel):
     id: int
     nome: str

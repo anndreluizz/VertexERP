@@ -38,7 +38,7 @@ final contasPagarProvider = FutureProvider.autoDispose<List<ContaPagar>>((
   ref,
 ) async {
   final api = ref.watch(apiClientProvider);
-  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final lojaId = ref.watch(lojaFiltroProvider);
   final resposta = await api.dio.get(
     '/contas-pagar/',
     queryParameters: lojaId != null ? {'loja_id': lojaId} : null,
@@ -71,7 +71,7 @@ final contasReceberProvider = FutureProvider.autoDispose<List<ContaReceber>>((
   ref,
 ) async {
   final api = ref.watch(apiClientProvider);
-  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final lojaId = ref.watch(lojaFiltroProvider);
   final resposta = await api.dio.get(
     '/contas-receber/',
     queryParameters: lojaId != null ? {'loja_id': lojaId} : null,

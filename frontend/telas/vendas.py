@@ -28,6 +28,7 @@ from services.venda_service import (
     listar_vendas_periodo,
     resumo_vendedores,
 )
+from services.loja_service import listar_lojas
 from services.worker import em_paralelo, rodar_em_thread
 from telas.devolucao_dialog import DevolucaoDialog
 from utils.formatacao import NOMES_FORMA, formatar_moeda
@@ -86,6 +87,7 @@ class Vendas(QWidget):
         super().__init__()
 
         self.vendas = []
+        self.nomes_loja = {}
         self.venda_atual = None
         self.devolucoes_atual = []
         self._carregando = False
@@ -113,7 +115,7 @@ class Vendas(QWidget):
         corpo.setSpacing(16)
 
         self.tabela = StandardTable(
-            ["Nº", "Data", "Cliente", "Vendedora", "Pagamento", "Total", "Situação"]
+            ["Nº", "Data", "Loja", "Cliente", "Vendedora", "Pagamento", "Total", "Situação"]
         )
         self.tabela.itemSelectionChanged.connect(self._ao_selecionar)
         corpo.addWidget(self.tabela, stretch=3)
@@ -218,6 +220,14 @@ class Vendas(QWidget):
         self.filtro_vendedora.addItem("Todas as vendedoras", None)
         self.filtro_vendedora.currentIndexChanged.connect(self._aplicar_filtro_vendedora)
         filtros.addWidget(self.filtro_vendedora)
+
+        # so' aparece com mais de uma loja (ver _ao_carregar)
+        self.filtro_loja = QComboBox()
+        self.filtro_loja.setMinimumHeight(38)
+        self.filtro_loja.addItem("Todas as lojas", None)
+        self.filtro_loja.setVisible(False)
+        self.filtro_loja.currentIndexChanged.connect(self.carregar)
+        filtros.addWidget(self.filtro_loja)
 
         bt_buscar = BotaoPrimario("Buscar", icone_nome="search")
         bt_buscar.clicked.connect(self.carregar)
@@ -324,12 +334,14 @@ class Vendas(QWidget):
 
         self._carregando = True
         inicio, fim = self._periodo()
+        loja_id = self.filtro_loja.currentData()
 
         rodar_em_thread(
             self,
             em_paralelo,
-            (listar_vendas_periodo, inicio, fim),
-            (resumo_vendedores, inicio, fim),
+            (listar_vendas_periodo, inicio, fim, None, loja_id),
+            (resumo_vendedores, inicio, fim, loja_id),
+            (listar_lojas, True),
             ao_sucesso=self._ao_carregar,
             ao_erro=self._ao_carregar_erro,
             ao_finalizar=self._ao_carregar_finalizado,
@@ -337,7 +349,17 @@ class Vendas(QWidget):
 
     def _ao_carregar(self, resultado):
 
-        vendas, resumo = resultado
+        vendas, resumo, lojas = resultado
+
+        self.nomes_loja = {l["id"]: l["nome"] for l in lojas}
+        if self.filtro_loja.count() == 1 and len(lojas) > 1:
+            self.filtro_loja.blockSignals(True)
+            for loja in lojas:
+                if loja["ativa"]:
+                    self.filtro_loja.addItem(loja["nome"], loja["id"])
+            self.filtro_loja.blockSignals(False)
+        self.filtro_loja.setVisible(len(lojas) > 1)
+        self.tabela.setColumnHidden(2, len(lojas) <= 1)
 
         # suspensas não são venda ainda (sem pagamento, sem baixa)
         self.vendas = [v for v in vendas if v["status"] != "ABERTA"]
@@ -405,6 +427,7 @@ class Vendas(QWidget):
             valores = [
                 str(venda["id"]),
                 data,
+                self.nomes_loja.get(venda.get("loja_id"), "—"),
                 venda.get("cliente_nome") or "—",
                 venda.get("usuario_nome") or "—",
                 _forma_da_venda(venda),

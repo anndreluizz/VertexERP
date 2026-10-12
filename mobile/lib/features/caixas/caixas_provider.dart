@@ -6,7 +6,7 @@ import '../../models/usuario.dart';
 
 final caixasProvider = FutureProvider.autoDispose<List<Caixa>>((ref) async {
   final api = ref.watch(apiClientProvider);
-  final lojaId = ref.watch(sessaoControllerProvider).usuario?.lojaId;
+  final lojaId = ref.watch(lojaFiltroProvider);
   final resposta = await api.dio.get(
     '/caixa/historico',
     queryParameters: lojaId != null ? {'loja_id': lojaId} : null,

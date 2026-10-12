@@ -106,3 +106,30 @@ def test_buscar_logo_sem_logo_cadastrada(client, auth_headers):
     response = client.get("/configuracoes/logo", headers=auth_headers)
 
     assert response.status_code == 404
+
+
+def test_renomear_e_desativar_loja(client, auth_headers, db):
+    from app.models.caixa import Caixa
+    from app.models.loja import Loja
+
+    a, b = Loja(nome="Matriz T"), Loja(nome="filial t")
+    db.add_all([a, b])
+    db.commit()
+
+    r = client.put(f"/lojas/{b.id}", json={"nome": " Filial T "}, headers=auth_headers)
+    assert r.status_code == 200 and r.json()["nome"] == "Filial T"
+
+    r = client.put(f"/lojas/{b.id}", json={"nome": "Matriz T"}, headers=auth_headers)
+    assert r.status_code == 400
+
+    db.add(Caixa(loja_id=b.id, saldo_inicial=0, status="ABERTO"))
+    db.commit()
+    r = client.put(f"/lojas/{b.id}", json={"ativa": False}, headers=auth_headers)
+    assert r.status_code == 400 and "caixa aberto" in r.json()["detail"]
+
+    db.query(Caixa).filter(Caixa.loja_id == b.id).update({"status": "FECHADO"})
+    db.commit()
+    r = client.put(f"/lojas/{b.id}", json={"ativa": False}, headers=auth_headers)
+    assert r.status_code == 200 and r.json()["ativa"] is False
+
+    assert client.put("/lojas/99999", json={"nome": "X"}, headers=auth_headers).status_code == 404

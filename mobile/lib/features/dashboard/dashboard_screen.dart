@@ -312,9 +312,86 @@ class _Topo extends ConsumerWidget {
                   ),
                 ),
               ),
+              const _SeletorLoja(),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// "Todas as lojas / Matriz / Filial" -- so' pra quem nao e' preso a
+/// uma loja e com mais de uma loja cadastrada. Filtra o app inteiro
+/// (ver lojaFiltroProvider).
+class _SeletorLoja extends ConsumerWidget {
+  const _SeletorLoja();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final presoALoja =
+        ref.watch(sessaoControllerProvider).usuario?.lojaId != null;
+    final lojas = ref.watch(lojasProvider).valueOrNull ?? const [];
+    if (presoALoja || lojas.length < 2) return const SizedBox.shrink();
+
+    final escolhida = ref.watch(lojaEscolhidaProvider);
+    final nome =
+        lojas.where((l) => l.id == escolhida).firstOrNull?.nome ??
+        'Todas as lojas';
+
+    Future<void> escolher() async {
+      final opcoes = [(id: null as int?, nome: 'Todas as lojas'), ...lojas];
+      final id = await showModalBottomSheet<int>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final loja in opcoes)
+                ListTile(
+                  title: Text(loja.nome),
+                  trailing: loja.id == escolhida
+                      ? Icon(Icons.check_rounded, color: VertexColors.primaria)
+                      : null,
+                  // -1 = todas (pop(null) e' o mesmo que fechar sem escolher)
+                  onTap: () => Navigator.of(context).pop(loja.id ?? -1),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      );
+      if (id != null) {
+        ref.read(lojaEscolhidaProvider.notifier).state = id == -1 ? null : id;
+      }
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: escolher,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C3357),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFF24406B)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.storefront_rounded, size: 16, color: Colors.white),
+            const SizedBox(width: 6),
+            Text(
+              nome,
+              style: const TextStyle(fontSize: 12.5, color: Colors.white),
+            ),
+            const Icon(
+              Icons.expand_more_rounded,
+              size: 18,
+              color: Colors.white,
+            ),
+          ],
+        ),
       ),
     );
   }

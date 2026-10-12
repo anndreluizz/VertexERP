@@ -1,6 +1,6 @@
 import csv
 import json
-from datetime import date, datetime
+from datetime import datetime
 from urllib.parse import quote
 
 from PySide6.QtCore import Qt, QDate, QUrl, Signal
@@ -150,6 +150,16 @@ _ICONES_FORMA_PAGAMENTO = {
     "TRANSFERENCIA": "arrow-up",
     "CHEQUE": "file-text",
 }
+
+
+def _dia_com_hora_atual(data_qt):
+    """O dialogo so escolhe o dia (Hoje/Ontem); a hora vem do relogio,
+    senao o lancamento fica "as 00:00" no recibo e nas listas do Inicio."""
+    agora = datetime.now()
+    return datetime(
+        data_qt.year(), data_qt.month(), data_qt.day(),
+        agora.hour, agora.minute, agora.second,
+    ).isoformat()
 
 
 def _parse_data(texto):
@@ -712,12 +722,7 @@ class LancarFiadoDialog(DialogoPadrao):
         if quantidade > 1:
             itens = f"{quantidade}x {itens or 'item'}"
 
-        data_qt = self.data.date()
-        data_iso = (
-            date(data_qt.year(), data_qt.month(), data_qt.day())
-            .isoformat()
-            + "T00:00:00"
-        )
+        data_iso = _dia_com_hora_atual(self.data.date())
 
         self._fiado_pendente = (valor, itens, data_iso)
 
@@ -1072,12 +1077,7 @@ class RegistrarPagamentoDialog(DialogoPadrao):
             )
             return
 
-        data_qt = self.data.date()
-        data_iso = (
-            date(data_qt.year(), data_qt.month(), data_qt.day())
-            .isoformat()
-            + "T00:00:00"
-        )
+        data_iso = _dia_com_hora_atual(self.data.date())
 
         self._pagamento_valor_pendente = valor
         self.bt_confirmar.setEnabled(False)
@@ -1137,15 +1137,7 @@ class RegistrarPagamentoDialog(DialogoPadrao):
 
     def _imprimir_recibo_pagamento(self, valor):
 
-        # a data escolhida no dialogo (Hoje/Ontem) nao tem hora -- usa
-        # o horario atual (momento em que o recibo esta sendo gerado)
-        # junto com o dia selecionado, pra nao imprimir "as 00:00"
-        data_qt = self.data.date()
-        agora = datetime.now()
-        momento = datetime(
-            data_qt.year(), data_qt.month(), data_qt.day(),
-            agora.hour, agora.minute,
-        ).isoformat()
+        momento = _dia_com_hora_atual(self.data.date())
 
         rodar_em_thread(
             self,

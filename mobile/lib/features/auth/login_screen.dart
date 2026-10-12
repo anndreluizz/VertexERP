@@ -27,6 +27,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _erro;
 
   @override
+  void initState() {
+    super.initState();
+    ref.read(sessaoControllerProvider.notifier).ultimoEmail().then((email) {
+      if (mounted && email != null && _emailControlador.text.isEmpty) {
+        _emailControlador.text = email;
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _emailControlador.dispose();
     _senhaControlador.dispose();

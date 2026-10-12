@@ -146,4 +146,38 @@ void main() {
     expect(erro, isNotNull);
     expect(controller.state.status, isNot(StatusSessao.logado));
   });
+
+  test('sem conexao ao desbloquear, a sessao lembrada NAO e apagada', () async {
+    _ArmazenamentoFalso().instalar();
+
+    final storage = VertexStorage();
+    // porta 1: ninguem escutando, igual servidor fora do ar / sem internet
+    await storage.salvarServidor('https://127.0.0.1:1');
+    await storage.salvarToken('token-lembrado');
+    await storage.salvarRefreshToken('refresh-lembrado');
+
+    final controller = SessaoController(ApiClient(), storage);
+    while (controller.state.status == StatusSessao.carregando) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(controller.state.status, StatusSessao.bloqueado);
+
+    final ok = await controller.desbloquearComBiometria();
+
+    expect(ok, isFalse);
+    expect(controller.state.status, StatusSessao.bloqueado);
+    expect(await storage.lerToken(), 'token-lembrado');
+    expect(await storage.lerRefreshToken(), 'refresh-lembrado');
+  });
+
+  test('login com lembrar guarda o e-mail pra proxima vez', () async {
+    _ArmazenamentoFalso().instalar();
+
+    final controller = SessaoController(ApiClient(), VertexStorage());
+    await controller.configurarServidor('https://127.0.0.1:$_porta');
+    await controller.login('teste@vertex.com', 'sem2fa', lembrar: true);
+    await controller.logout();
+
+    expect(await controller.ultimoEmail(), 'teste@vertex.com');
+  });
 }

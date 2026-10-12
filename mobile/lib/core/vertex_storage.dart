@@ -11,6 +11,7 @@ class VertexStorage {
   static const _chaveServidor = 'endereco_servidor';
   static const _chaveToken = 'access_token';
   static const _chaveRefreshToken = 'refresh_token';
+  static const _chaveUltimoEmail = 'ultimo_email';
 
   Future<String?> lerServidor() => _storage.read(key: _chaveServidor);
 
@@ -26,6 +27,13 @@ class VertexStorage {
 
   Future<void> salvarRefreshToken(String token) =>
       _storage.write(key: _chaveRefreshToken, value: token);
+
+  /// Fica guardado mesmo depois do logout, pra tela de login ja vir
+  /// com o e-mail preenchido.
+  Future<String?> lerUltimoEmail() => _storage.read(key: _chaveUltimoEmail);
+
+  Future<void> salvarUltimoEmail(String email) =>
+      _storage.write(key: _chaveUltimoEmail, value: email);
 
   /// Remove os dois juntos -- em todo lugar que a sessao acaba
   /// (logout, token invalido, troca de servidor) as duas pontas da

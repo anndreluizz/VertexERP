@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 
 import '../../core/providers.dart';
+import '../../core/sessao_controller.dart';
 import '../../theme/vertex_colors.dart';
 
 /// Mostrado quando existe uma sessao lembrada ("Manter conectado") —
@@ -26,6 +27,24 @@ class _LockScreenState extends ConsumerState<LockScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _desbloquear());
   }
 
+  /// Busca os dados da conta. Se ainda estiver nesta tela depois
+  /// (sessao recusada leva pro login), foi falta de conexao: a sessao
+  /// continua guardada e o botao Desbloquear tenta de novo.
+  Future<void> _entrar() async {
+    final ok = await ref
+        .read(sessaoControllerProvider.notifier)
+        .desbloquearComBiometria();
+    final aindaTravado =
+        ref.read(sessaoControllerProvider).status == StatusSessao.bloqueado;
+    if (!ok && mounted && aindaTravado) {
+      setState(
+        () => _aviso =
+            'Sem conexão com o servidor. Verifique a internet e toque em '
+            'Desbloquear para tentar de novo.',
+      );
+    }
+  }
+
   Future<void> _desbloquear() async {
     if (_autenticando) return;
     setState(() {
@@ -40,9 +59,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
         // Aparelho sem nenhuma trava configurada (raro) — nao faz
         // sentido bloquear o acesso por uma seguranca que nem existe
         // no proprio aparelho.
-        await ref
-            .read(sessaoControllerProvider.notifier)
-            .desbloquearComBiometria();
+        await _entrar();
         return;
       }
 
@@ -55,9 +72,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
       if (!mounted) return;
 
       if (autenticado) {
-        await ref
-            .read(sessaoControllerProvider.notifier)
-            .desbloquearComBiometria();
+        await _entrar();
       } else {
         // usuario recusou/cancelou o prompt de proposito -- continua
         // exigindo (ou biometria de novo, ou email/senha manual)
@@ -84,9 +99,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
 
       if (codigosSemTravaNoAparelho.contains(e.code)) {
         if (mounted) {
-          await ref
-              .read(sessaoControllerProvider.notifier)
-              .desbloquearComBiometria();
+          await _entrar();
         }
       } else if (mounted) {
         setState(() => _aviso = 'Não foi possível confirmar sua identidade.');

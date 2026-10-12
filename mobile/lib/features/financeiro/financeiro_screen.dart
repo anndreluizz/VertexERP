@@ -388,10 +388,8 @@ class _LinhaConta extends StatelessWidget {
     required this.detalhe,
     required this.valor,
     required this.aoTocar,
-    this.acao,
   });
 
-  final Widget? acao;
   final StatusVisualConta status;
   final DateTime vencimento;
   final String titulo;
@@ -455,7 +453,6 @@ class _LinhaConta extends StatelessWidget {
                         : null,
                   ),
                 ),
-                if (acao != null) ...[const SizedBox(height: 6), acao!],
               ],
             ),
           ],
@@ -483,72 +480,11 @@ class _LinhaContaPagar extends StatelessWidget {
         conta.categoria ?? '',
       ].where((p) => p.isNotEmpty).join(' · '),
       valor: conta.valor,
-      acao: status == StatusVisualConta.paga
-          ? null
-          : _BotaoPagar(
-              conta: conta,
-              destaque: status == StatusVisualConta.vencida,
-            ),
       aoTocar: () => showModalBottomSheet(
         context: context,
         isScrollControlled: true,
         builder: (context) => _DetalhesContaPagarSheet(conta: conta),
       ),
-    );
-  }
-}
-
-class _BotaoPagar extends StatelessWidget {
-  const _BotaoPagar({required this.conta, required this.destaque});
-
-  final ContaPagar conta;
-  final bool destaque;
-
-  @override
-  Widget build(BuildContext context) {
-    Future<void> pagar() async {
-      final mensageiro = ScaffoldMessenger.of(context);
-      final pago = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => RealizarPagamentoScreen(conta: conta),
-        ),
-      );
-      if (pago == true) {
-        mensageiro.showSnackBar(
-          const SnackBar(content: Text('Pagamento confirmado.')),
-        );
-      }
-    }
-
-    const tamanho = Size(0, 32);
-    const espaco = EdgeInsets.symmetric(horizontal: 14);
-    const texto = TextStyle(
-      fontFamily: 'Figtree',
-      fontSize: 13,
-      fontWeight: FontWeight.w700,
-    );
-
-    if (destaque) {
-      return FilledButton(
-        style: FilledButton.styleFrom(
-          minimumSize: tamanho,
-          padding: espaco,
-          textStyle: texto,
-        ),
-        onPressed: pagar,
-        child: const Text('Pagar'),
-      );
-    }
-    return OutlinedButton(
-      style: OutlinedButton.styleFrom(
-        minimumSize: tamanho,
-        padding: espaco,
-        textStyle: texto,
-        foregroundColor: VertexColors.primaria,
-        side: BorderSide(color: VertexColors.borda),
-      ),
-      onPressed: pagar,
-      child: const Text('Pagar'),
     );
   }
 }

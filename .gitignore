@@ -44,3 +44,7 @@ firebase-credentials.json
 # máquina, nunca deve ir pro repositório.
 certs/
 backend/certs/
+# Ferramentas locais de IA (skills de terceiros) -- nao fazem parte do produto
+.agents/
+.claude/
+skills-lock.json

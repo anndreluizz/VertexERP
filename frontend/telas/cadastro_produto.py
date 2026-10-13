@@ -798,7 +798,7 @@ class CadastroProdutoWindow(QDialog):
 
     def keyPressEvent(self, event):
         """Enter anda pelos campos essenciais na ordem em que se
-        preenche um cadastro e, no ultimo (categoria), cadastra --
+        preenche um cadastro e, no ultimo (estoque), cadastra --
         da' pra fazer tudo sem tirar a mao do teclado."""
 
         if event.key() not in (Qt.Key_Return, Qt.Key_Enter):
@@ -806,8 +806,8 @@ class CadastroProdutoWindow(QDialog):
             return
 
         ordem = [
-            self.codigo_barras, self.nome, self.preco_venda,
-            self.preco_custo, self.estoque, self.categoria,
+            self.codigo_barras, self.nome, self.categoria,
+            self.preco_venda, self.estoque,
         ]
 
         foco = QApplication.focusWidget()

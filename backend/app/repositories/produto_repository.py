@@ -1,4 +1,4 @@
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models.produto import Produto
@@ -34,6 +34,17 @@ class ProdutoRepository:
             .order_by(Produto.id)
             .all()
         )
+
+    @staticmethod
+    def proximo_codigo_interno(db: Session) -> int:
+        """Proximo numero da sequencia de codigos internos (0001, 0002...)
+        pra produto sem codigo de barras. EAN tem 8+ digitos, entao so'
+        codigo numerico curto entra na conta."""
+        codigos = db.query(Produto.codigo).filter(
+            func.length(Produto.codigo) <= 6
+        )
+        numeros = [int(c) for (c,) in codigos if c.isdigit()]
+        return max(numeros, default=0) + 1
 
     @staticmethod
     def buscar_por_id(db: Session, produto_id: int):

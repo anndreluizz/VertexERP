@@ -3,7 +3,7 @@
 (sem passar pelo QFileDialog de verdade, que exige interacao)."""
 from unittest import mock
 
-from telas.importar_produtos_csv import ImportarProdutosCsvDialog
+from telas.importar_produtos_csv import ImportarProdutosCsvDialog, ler_texto_csv
 
 PREVIEW_OK = {
     "itens": [
@@ -83,3 +83,9 @@ def test_confirmar_manda_so_os_itens_sem_erro(esperar_threads):
     assert all(item["erro"] is None for item in itens_enviados)
     assert sinal_recebido == [True]
     accept_mock.assert_called_once()
+
+
+def test_ler_csv_aceita_utf8_e_ansi_do_excel():
+    texto = "Nome;Categoria\r\nTÊNIS;CALÇADOS\r\n"
+    assert ler_texto_csv(texto.encode("utf-8-sig")) == texto
+    assert ler_texto_csv(texto.encode("cp1252")) == texto

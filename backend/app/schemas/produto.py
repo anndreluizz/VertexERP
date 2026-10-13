@@ -30,7 +30,7 @@ class ProdutoBase(BaseModel):
 
 
 class ProdutoCreate(ProdutoBase):
-    pass
+    codigo: str = ""  # vazio = proximo codigo interno (0001, 0002...)
 
 
 class ProdutoUpdate(ProdutoBase):

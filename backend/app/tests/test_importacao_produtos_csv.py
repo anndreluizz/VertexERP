@@ -33,7 +33,7 @@ def test_preview_linha_nova_sem_erro(client, auth_headers):
     item = dados["itens"][0]
     assert item["nome"] == "Camiseta Branca"
     assert item["produto_id"] is None
-    assert item["codigo"].startswith("PROD-")
+    assert item["codigo"] == "0001"  # sequencia interna, banco vazio
     assert float(item["preco_venda"]) == 39.9
 
 

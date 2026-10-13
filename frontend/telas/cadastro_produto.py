@@ -1,4 +1,3 @@
-from datetime import datetime
 
 from PySide6.QtWidgets import QMessageBox
 from PySide6.QtCore import Qt, QTimer, QBuffer, QIODevice, QDate
@@ -1869,9 +1868,7 @@ class CadastroProdutoWindow(QDialog):
         elif codigo_barras:
             codigo = codigo_barras
         else:
-            codigo = "PROD-" + datetime.now().strftime(
-                "%Y%m%d%H%M%S%f"
-            )
+            codigo = ""  # backend gera o proximo codigo interno (0001...)
 
         foto_base64 = None
 

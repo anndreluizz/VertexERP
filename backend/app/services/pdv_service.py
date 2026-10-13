@@ -32,6 +32,8 @@ class PDVService:
             .filter(
                 (Produto.codigo == codigo)
                 | (Produto.codigo_barras == codigo)
+                # "1" digitado no caixa acha o codigo interno "0001"
+                | (Produto.codigo == codigo.zfill(4))
             )
             .first()
         )

@@ -244,3 +244,27 @@ def test_estoque_minimo_e_por_loja_com_fallback_pro_global(
         f"/produtos/{produto.id}", headers=auth_headers
     )
     assert resposta_global.json()["estoque_minimo"] == minimo_global_original
+
+
+def test_codigo_interno_sequencial_e_numero_curto(client, auth_headers):
+    def criar(**extra):
+        r = client.post(
+            "/produtos/",
+            json={"nome": "SEM ETIQUETA", "preco_venda": "5.00", **extra},
+            headers=auth_headers,
+        )
+        assert r.status_code == 201, r.text
+        return r.json()
+
+    assert criar()["codigo"] == "0001"
+    # "7" digitado no campo de codigo de barras vira codigo interno
+    p = criar(codigo="7", codigo_barras="7")
+    assert (p["codigo"], p["codigo_barras"]) == ("0007", None)
+    assert criar()["codigo"] == "0008"
+    # EAN de verdade continua como veio
+    p = criar(codigo="7891234567895", codigo_barras="7891234567895")
+    assert p["codigo_barras"] == "7891234567895"
+    assert criar()["codigo"] == "0009"
+    # no caixa, "1" acha o "0001"
+    r = client.get("/pdv/produto/1", headers=auth_headers)
+    assert r.status_code == 200 and r.json()["codigo"] == "0001"

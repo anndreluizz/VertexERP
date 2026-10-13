@@ -1,6 +1,5 @@
 import csv
 import io
-from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy.orm import Session
@@ -103,6 +102,7 @@ class ImportacaoProdutosService:
 
         mapa = _mapear_colunas(linhas[0])
         itens = []
+        proximo_codigo = ProdutoRepository.proximo_codigo_interno(db)
 
         for indice, linha in enumerate(linhas[1:], start=2):
 
@@ -140,8 +140,16 @@ class ImportacaoProdutosService:
             codigo_barras = _valor(linha, mapa, "codigo_barras") or None
             codigo = _valor(linha, mapa, "codigo")
 
+            # mesma regra do cadastro manual (ver ProdutoService.criar)
+            if (
+                not codigo and codigo_barras
+                and codigo_barras.isdigit() and len(codigo_barras) <= 6
+            ):
+                codigo, codigo_barras = codigo_barras.zfill(4), None
+
             if not codigo:
-                codigo = f"PROD-{datetime.now().strftime('%Y%m%d%H%M%S%f')}-{indice}"
+                codigo = str(proximo_codigo).zfill(4)
+                proximo_codigo += 1
 
             produto_existente = ProdutoRepository.buscar_por_codigo(
                 db, codigo, loja_id

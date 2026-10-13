@@ -109,6 +109,19 @@ class ProdutoService:
     @staticmethod
     def criar(db: Session, dados: ProdutoCreate, loja_id: int | None = None):
 
+        # numero curto no campo de codigo de barras (o "01" que a loja
+        # inventa pra produto sem etiqueta) e' codigo interno, nao EAN
+        cb = dados.codigo_barras
+        if cb and cb.isdigit() and len(cb) <= 6 and dados.codigo in ("", cb):
+            dados.codigo, dados.codigo_barras = cb.zfill(4), None
+
+        # ponytail: dois cadastros no mesmo instante pegam o mesmo numero
+        # e o segundo cai no "ja existe" -- basta salvar de novo
+        if not dados.codigo:
+            dados.codigo = str(
+                ProdutoRepository.proximo_codigo_interno(db)
+            ).zfill(4)
+
         condicoes = [Produto.codigo == dados.codigo]
 
         if dados.codigo_barras:

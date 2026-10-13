@@ -38,6 +38,16 @@ MODELO_EXEMPLO = [
 ]
 
 
+def ler_texto_csv(dados):
+    """O Excel em portugues salva "CSV (separado por virgulas)" em
+    ANSI (cp1252), nao UTF-8 -- sem o fallback "CALÇADOS" quebrava a
+    leitura."""
+    try:
+        return dados.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return dados.decode("cp1252")
+
+
 class ImportarProdutosCsvDialog(QDialog):
 
     importado = Signal()
@@ -148,8 +158,8 @@ class ImportarProdutosCsvDialog(QDialog):
             return
 
         try:
-            with open(caminho, encoding="utf-8-sig") as arquivo:
-                conteudo = arquivo.read()
+            with open(caminho, "rb") as arquivo:
+                conteudo = ler_texto_csv(arquivo.read())
         except OSError as erro:
             Mensagem.erro(self, f"Não foi possível ler o arquivo.\n{erro}")
             return

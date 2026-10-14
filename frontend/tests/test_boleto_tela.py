@@ -51,7 +51,11 @@ _LIDO = {
 
 def _dialogo(**kw):
     with mock.patch.object(cadastro_despesa, "rodar_em_thread"):
-        return CadastroDespesaDialog(**kw)
+        dialogo = CadastroDespesaDialog(**kw)
+    # categoria agora e obrigatoria (comeca vazia)
+    dialogo._ao_carregar_categorias_sucesso([{"nome": "Fornecedores"}])
+    dialogo.categoria.setCurrentIndex(0)
+    return dialogo
 
 
 def test_boleto_lido_preenche_a_despesa(_qapp):

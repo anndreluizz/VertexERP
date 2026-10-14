@@ -303,6 +303,9 @@ class CadastroDespesaDialog(DialogoPadrao):
         # ======================
 
         self.categoria = self._combo()
+        # comeca VAZIA: antes ja vinha marcada a 1a da lista e passava
+        # batido -- parcelas de fornecedor foram parar em "Energia"
+        self.categoria.setPlaceholderText("Escolha a categoria")
         self._carregar_categorias()
         self.centro_custo = self._combo()
         self._carregar_centros_custo()
@@ -878,6 +881,8 @@ class CadastroDespesaDialog(DialogoPadrao):
         selecionada = self._categoria_selecionada_pendente
         if selecionada and self.categoria.findText(selecionada) >= 0:
             self.categoria.setCurrentText(selecionada)
+        else:
+            self.categoria.setCurrentIndex(-1)
 
     def gerenciar_categorias(self):
 
@@ -1137,6 +1142,15 @@ class CadastroDespesaDialog(DialogoPadrao):
                 "Atenção",
                 "Informe um valor válido pra despesa.",
             )
+            return
+
+        if self.categoria.currentIndex() < 0:
+            QMessageBox.warning(
+                self,
+                "Atenção",
+                "Escolha a categoria da despesa.",
+            )
+            self.categoria.setFocus()
             return
 
         data_qt = self.vencimento.date()

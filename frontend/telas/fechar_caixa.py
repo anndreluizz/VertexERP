@@ -21,7 +21,7 @@ from design.widgets import (
     BotaoPerigo, BotaoSecundario, BotaoSucesso, CampoTexto, DialogoPadrao,
     campo_rotulado, cor_forma_pagamento, titulo_secao,
 )
-from utils.formatacao import formatar_moeda
+from utils.formatacao import formatar_moeda, linhas_resumo_caixa
 
 
 # rotulos de tipo de movimento em texto puro pro extrato do dia --
@@ -34,7 +34,17 @@ _ROTULOS_TIPO_MOVIMENTO = {
     "SANGRIA": "Sangria",
     "RECEBIMENTO_FIADO": "Recebimento fiado",
     "ESTORNO": "Estorno",
+    "PAGAMENTO": "Conta paga",
 }
+
+
+def _mostrar_linha(linha, visivel):
+    """Mostra/esconde os rótulos de uma linha de _linha_valor (ela é
+    um layout, que não tem setVisible)."""
+    for i in range(linha.count()):
+        widget = linha.itemAt(i).widget()
+        if widget is not None:
+            widget.setVisible(visivel)
 
 
 def _formatar_data_curta(texto):
@@ -460,6 +470,9 @@ class FecharCaixaWindow(DialogoPadrao):
         linha, self.lbl_vendas_dinheiro = self._linha_valor("Vendas em dinheiro")
         bloco_layout.addLayout(linha)
 
+        linha, self.lbl_fiado_dinheiro = self._linha_valor("Fiado recebido em dinheiro")
+        bloco_layout.addLayout(linha)
+
         linha, self.lbl_suprimentos = self._linha_valor(
             "Suprimentos", cor=tokens.SECUNDARIA_HOVER
         )
@@ -467,6 +480,12 @@ class FecharCaixaWindow(DialogoPadrao):
 
         linha, self.lbl_sangrias = self._linha_valor("Sangrias", cor=tokens.ERRO)
         bloco_layout.addLayout(linha)
+
+        # so caixa antigo: boleto pago em dinheiro saia da gaveta
+        self.linha_contas, self.lbl_contas = self._linha_valor(
+            "Contas pagas (boleto)", cor=tokens.ERRO
+        )
+        bloco_layout.addLayout(self.linha_contas)
 
         bloco_layout.addWidget(self._separador())
 
@@ -483,21 +502,37 @@ class FecharCaixaWindow(DialogoPadrao):
         )
         outros_layout.addLayout(linha)
 
+        linha, self.lbl_fiado_pix = self._linha_valor(
+            "Fiado recebido no PIX", cor=cor_forma_pagamento("PIX")
+        )
+        outros_layout.addLayout(linha)
+
         linha, self.lbl_vendas_cartao = self._linha_valor(
             "Vendas cartão", cor=cor_forma_pagamento("CARTAO")
         )
         outros_layout.addLayout(linha)
 
-        linha, self.lbl_vendas_prazo = self._linha_valor(
-            "Vendas no crediário", cor=cor_forma_pagamento("PRAZO")
+        linha, self.lbl_fiado_cartao = self._linha_valor(
+            "Fiado recebido no cartão", cor=cor_forma_pagamento("CARTAO")
         )
         outros_layout.addLayout(linha)
+
+        self.linha_fiado_outros, self.lbl_fiado_outros = self._linha_valor(
+            "Fiado recebido (outras formas)"
+        )
+        outros_layout.addLayout(self.linha_fiado_outros)
 
         outros_layout.addStretch()
         outros_layout.addWidget(self._separador())
 
         linha, self.lbl_total_geral = self._linha_valor(
             "Total geral do turno", cor=tokens.PRIMARIA, destaque=True
+        )
+        outros_layout.addLayout(linha)
+
+        # crediario nao entrou dinheiro: fica fora do total, como nota
+        linha, self.lbl_vendas_prazo = self._linha_valor(
+            "Vendas no crediário (não soma)", cor=cor_forma_pagamento("PRAZO")
         )
         outros_layout.addLayout(linha)
 
@@ -542,6 +577,10 @@ class FecharCaixaWindow(DialogoPadrao):
 
         self.lbl_troco_inicial.setText(formatar_moeda(saldo_inicial))
         self.lbl_vendas_dinheiro.setText(formatar_moeda(vendas_dinheiro))
+        self.lbl_fiado_dinheiro.setText(formatar_moeda(float(r.get("recebimentos_fiado_dinheiro", 0) or 0)))
+        contas = float(r.get("contas_pagas_caixa", 0) or 0)
+        self.lbl_contas.setText(f"- {formatar_moeda(contas)}")
+        _mostrar_linha(self.linha_contas, abs(contas) >= 0.01)
         self.lbl_suprimentos.setText(f"+ {formatar_moeda(suprimentos)}")
         self.lbl_sangrias.setText(f"- {formatar_moeda(sangrias)}")
         self.lbl_previsto_bloco.setText(formatar_moeda(total_previsto))
@@ -578,6 +617,11 @@ class FecharCaixaWindow(DialogoPadrao):
 
         self.lbl_vendas_pix.setText(formatar_moeda(vendas_pix))
         self.lbl_vendas_cartao.setText(formatar_moeda(vendas_cartao))
+        self.lbl_fiado_pix.setText(formatar_moeda(float(r.get("recebimentos_fiado_pix", 0) or 0)))
+        self.lbl_fiado_cartao.setText(formatar_moeda(float(r.get("recebimentos_fiado_cartao", 0) or 0)))
+        fiado_outros = float(r.get("recebimentos_fiado_outros", 0) or 0)
+        self.lbl_fiado_outros.setText(formatar_moeda(fiado_outros))
+        _mostrar_linha(self.linha_fiado_outros, abs(fiado_outros) >= 0.01)
         self.lbl_vendas_prazo.setText(formatar_moeda(vendas_prazo))
         self.lbl_total_geral.setText(formatar_moeda(total_geral))
 
@@ -687,16 +731,7 @@ def montar_html_fechamento(caixa, resumo, movimentos, valor_contado, observacoes
     linhas_resumo = "".join(
         f"<tr><td>{rotulo}</td>"
         f"<td align='right'>{formatar_moeda(valor)}</td></tr>"
-        for rotulo, valor in (
-            ("Troco inicial", resumo.get("saldo_inicial", 0)),
-            ("Vendas em dinheiro", resumo.get("vendas_dinheiro", 0)),
-            ("Vendas PIX", resumo.get("vendas_pix", 0)),
-            ("Vendas cartão", resumo.get("vendas_cartao", 0)),
-            ("Vendas a prazo", resumo.get("vendas_prazo", 0)),
-            ("Suprimentos", resumo.get("suprimentos", 0)),
-            ("Sangrias", resumo.get("sangrias", 0)),
-            ("Recebimentos de fiado", resumo.get("recebimentos_fiado", 0)),
-        )
+        for rotulo, valor in linhas_resumo_caixa(resumo)
     )
 
     linhas_movimentos = "".join(
@@ -746,6 +781,8 @@ def montar_html_fechamento(caixa, resumo, movimentos, valor_contado, observacoes
     <h3 style="text-align:right;">
         Total geral do turno: {formatar_moeda(resumo.get('total_geral', 0))}
     </h3>
+    <p style="color:#666;">Vendas a prazo (fiado lançado, não entra nos totais):
+        {formatar_moeda(resumo.get('vendas_prazo', 0))}</p>
     <h3>Movimentações do Dia</h3>
     <table width="100%" border="1" cellspacing="0" cellpadding="6">
         <tr style="background:#f0f0f0;">

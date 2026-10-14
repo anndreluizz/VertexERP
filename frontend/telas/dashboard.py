@@ -262,7 +262,7 @@ class Dashboard(QWidget):
         self.kpi_lucro = CardKPI("Lucro Hoje", "trending-up", tokens.SECUNDARIA)
         self.kpi_ticket = CardKPI("Ticket Médio", "shopping-cart", tokens.PRIMARIA)
         self.kpi_pedidos = CardKPI("Pedidos Hoje", "file-text", tokens.PRIMARIA)
-        self.kpi_caixa = CardKPI("Fluxo de Caixa", "wallet", tokens.SECUNDARIA)
+        self.kpi_caixa = CardKPI("Dinheiro nas gavetas", "wallet", tokens.SECUNDARIA)
         self.kpi_clientes = CardKPI("Clientes", "users", tokens.PRIMARIA)
         self.kpi_produtos = CardKPI("Produtos", "package", tokens.PRIMARIA)
         self.kpi_estoque = CardKPI("Estoque em Alerta", "alert-triangle", tokens.ALERTA)
@@ -275,7 +275,7 @@ class Dashboard(QWidget):
             {"id": "lucro", "titulo": "Lucro Hoje", "widget": self.kpi_lucro},
             {"id": "ticket", "titulo": "Ticket Médio", "widget": self.kpi_ticket},
             {"id": "pedidos", "titulo": "Pedidos Hoje", "widget": self.kpi_pedidos},
-            {"id": "caixa", "titulo": "Fluxo de Caixa", "widget": self.kpi_caixa},
+            {"id": "caixa", "titulo": "Dinheiro nas gavetas", "widget": self.kpi_caixa},
             {"id": "clientes", "titulo": "Clientes", "widget": self.kpi_clientes},
             {"id": "produtos", "titulo": "Produtos", "widget": self.kpi_produtos},
             {"id": "estoque", "titulo": "Estoque em Alerta", "widget": self.kpi_estoque},
@@ -829,6 +829,7 @@ class Dashboard(QWidget):
         # não um fluxo diário -- comparar com "ontem" não tem o mesmo
         # significado e não temos snapshot histórico salvo pra isso
         self.kpi_caixa.definir_valor(formatar_moeda(dados.get("saldo_caixa", 0) or 0))
+        self.kpi_caixa.definir_legenda("nos caixas abertos agora")
         self.kpi_clientes.definir_valor(str(dados.get("clientes", 0)))
         self.kpi_produtos.definir_valor(str(dados.get("produtos", 0)))
         self.kpi_estoque.definir_valor(str(dados.get("estoque_baixo", 0)))

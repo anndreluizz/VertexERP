@@ -27,7 +27,7 @@ from datetime import datetime
 from io import BytesIO
 from urllib.parse import quote
 
-from utils.formatacao import formatar_moeda, nome_forma
+from utils.formatacao import formatar_moeda, linhas_resumo_caixa, nome_forma
 
 # ==================================================
 # COMANDOS ESC/POS
@@ -278,6 +278,7 @@ _ROTULOS_TIPO_MOVIMENTO = {
     "SANGRIA": "Sangria",
     "RECEBIMENTO_FIADO": "Receb. fiado",
     "ESTORNO": "Estorno",
+    "PAGAMENTO": "Conta paga",
 }
 
 
@@ -643,16 +644,10 @@ def gerar_comandos_fechamento_caixa(
     partes.append(_linha("Resumo do Turno"))
     partes.append(_negrito(False))
 
-    resumo_linhas = (
-        ("Troco inicial", resumo.get("saldo_inicial", 0)),
-        ("Vendas em dinheiro", resumo.get("vendas_dinheiro", 0)),
-        ("Vendas PIX", resumo.get("vendas_pix", 0)),
-        ("Vendas cartão", resumo.get("vendas_cartao", 0)),
-        ("Vendas a prazo", resumo.get("vendas_prazo", 0)),
-        ("Suprimentos", resumo.get("suprimentos", 0)),
-        ("Sangrias", resumo.get("sangrias", 0)),
-        ("Recebimentos de fiado", resumo.get("recebimentos_fiado", 0)),
-    )
+    # vendas a prazo vao no fim, como nota: nao entram nos totais
+    resumo_linhas = linhas_resumo_caixa(resumo) + [
+        ("Vendas a prazo (fiado)", resumo.get("vendas_prazo", 0)),
+    ]
 
     for rotulo, valor in resumo_linhas:
         partes.append(_linha_dupla_coluna(rotulo, _moeda(valor), largura))

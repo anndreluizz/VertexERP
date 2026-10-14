@@ -33,7 +33,9 @@ def test_pagar_sem_forma_pagamento_nao_exige_caixa(client, auth_headers):
     assert response.json()["status"] == "PAGO"
 
 
-def test_pagar_em_dinheiro_sem_caixa_aberto(client, auth_headers):
+def test_pagar_em_dinheiro_sem_caixa_aberto_funciona(client, auth_headers):
+    # boleto sai do dinheiro guardado (total geral), nao da gaveta do
+    # turno -- entao nem precisa de caixa aberto
     conta = _criar_conta(client, auth_headers)
 
     response = client.post(
@@ -42,11 +44,11 @@ def test_pagar_em_dinheiro_sem_caixa_aberto(client, auth_headers):
         headers=auth_headers,
     )
 
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Nenhum caixa aberto."
+    assert response.status_code == 200
+    assert response.json()["status"] == "PAGO"
 
 
-def test_pagar_em_dinheiro_com_caixa_aberto_estorna_saldo(
+def test_pagar_em_dinheiro_nao_mexe_no_caixa_do_dia(
     client, auth_headers, caixa_aberto
 ):
     conta = _criar_conta(client, auth_headers)
@@ -61,15 +63,14 @@ def test_pagar_em_dinheiro_com_caixa_aberto_estorna_saldo(
     assert response.json()["status"] == "PAGO"
 
     caixa = client.get("/caixa/aberto", headers=auth_headers).json()
-
-    assert caixa["saldo_final"] == float(caixa_aberto.saldo_inicial) - 150.0
+    assert caixa["saldo_final"] == float(caixa_aberto.saldo_inicial)
 
     movimentos = client.get("/movimentos-caixa/", headers=auth_headers).json()
+    assert not [m for m in movimentos if m["tipo"] == "PAGAMENTO"]
 
-    pagamento = [m for m in movimentos if m["tipo"] == "PAGAMENTO"]
-
-    assert len(pagamento) == 1
-    assert pagamento[0]["valor"] == -150.0
+    # mas sai do total geral (Relatorios > Caixa)
+    entradas = client.get("/caixa/entradas", headers=auth_headers).json()
+    assert float(entradas["contas_pagas"]) == 150.0
 
 
 def test_pagar_conta_ja_paga(client, auth_headers, caixa_aberto):

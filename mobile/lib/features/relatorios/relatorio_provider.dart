@@ -2,9 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../../models/conta_pagar.dart';
-import '../../models/conta_receber.dart';
 import '../../models/produto.dart';
-import '../../models/venda.dart';
 import '../vendas/vendas_provider.dart';
 import 'relatorio_dados.dart';
 
@@ -20,34 +18,43 @@ final relatorioProvider = FutureProvider.autoDispose<RelatorioDados>((
   final lojaId = ref.watch(lojaFiltroProvider);
   final filtroLoja = lojaId != null ? {'loja_id': lojaId} : null;
 
-  final vendasResp = await api.dio.get(
-    '/vendas/',
-    queryParameters: filtroLoja,
+  // mesmo calculo do Desktop (Relatorios > Vendas): so vendas
+  // finalizadas, sem limite de 100, e devolucao/troca ja descontada.
+  // Antes somava a lista /vendas/ (vinham canceladas e suspensas, e so
+  // as ultimas 100)
+  final agora = DateTime.now();
+  final hoje = DateTime(agora.year, agora.month, agora.day);
+  final DateTime? inicio = switch (periodo) {
+    PeriodoVendas.hoje => hoje,
+    PeriodoVendas.semana => hoje.subtract(const Duration(days: 6)),
+    PeriodoVendas.mes => DateTime(hoje.year, hoje.month),
+    PeriodoVendas.ano => DateTime(hoje.year),
+    PeriodoVendas.todos => null,
+  };
+  String dia(DateTime d) => d.toIso8601String().substring(0, 10);
+
+  final relResp = await api.dio.get(
+    '/relatorios/vendas',
+    queryParameters: {
+      'data_inicio': ?(inicio == null ? null : dia(inicio)),
+      'data_fim': dia(hoje),
+      'limit': 1,
+      'top_produtos_limite': 1,
+      ...?filtroLoja,
+    },
   );
-  final vendas = (vendasResp.data as List<dynamic>)
-      .map((json) => Venda.fromJson(json as Map<String, dynamic>))
-      .where((venda) => periodo.contem(venda.data))
-      .toList();
+  final rel = relResp.data as Map<String, dynamic>;
+  num atual(String chave) =>
+      num.tryParse('${(rel[chave] as Map<String, dynamic>)['atual']}') ?? 0;
 
-  final valorVendas = vendas.fold<double>(
-    0,
-    (soma, venda) => soma + venda.valorTotal,
-  );
+  final totalVendas = atual('quantidade_vendas').toInt();
+  final valorVendas = atual('receita_total').toDouble();
 
-  final mixPagamento = <String, double>{};
-
-  for (final venda in vendas) {
-    final valorForma2 = venda.valorForma2 ?? 0;
-    final valorFormaPrincipal = venda.valorTotal - valorForma2;
-
-    mixPagamento[venda.formaPagamento] =
-        (mixPagamento[venda.formaPagamento] ?? 0) + valorFormaPrincipal;
-
-    if (venda.formaPagamento2 != null && venda.valorForma2 != null) {
-      mixPagamento[venda.formaPagamento2!] =
-          (mixPagamento[venda.formaPagamento2!] ?? 0) + venda.valorForma2!;
-    }
-  }
+  final mixPagamento = <String, double>{
+    for (final f in rel['formas_pagamento'] as List<dynamic>)
+      (f as Map<String, dynamic>)['forma_pagamento'] as String:
+          (f['total'] as num).toDouble(),
+  };
 
   final contasPagarResp = await api.dio.get(
     '/contas-pagar/pendentes',
@@ -57,13 +64,13 @@ final relatorioProvider = FutureProvider.autoDispose<RelatorioDados>((
       .map((json) => ContaPagar.fromJson(json as Map<String, dynamic>))
       .fold<double>(0, (soma, conta) => soma + conta.valor);
 
-  final contasReceberResp = await api.dio.get(
-    '/contas-receber/pendentes',
-    queryParameters: filtroLoja,
-  );
-  final contasReceberPendente = (contasReceberResp.data as List<dynamic>)
-      .map((json) => ContaReceber.fromJson(json as Map<String, dynamic>))
-      .fold<double>(0, (soma, conta) => soma + conta.valor);
+  // "a receber" da loja e o fiado dos clientes (a tabela antiga de
+  // contas a receber nao e mais usada)
+  final saldosResp = await api.dio.get('/fiado/saldos');
+  final contasReceberPendente = (saldosResp.data as Map<String, dynamic>).values
+      .map((v) => (v as num).toDouble())
+      .where((saldo) => saldo > 0)
+      .fold<double>(0, (soma, saldo) => soma + saldo);
 
   final produtosResp = await api.dio.get(
     '/produtos/',
@@ -75,7 +82,7 @@ final relatorioProvider = FutureProvider.autoDispose<RelatorioDados>((
       .toList();
 
   return RelatorioDados(
-    totalVendas: vendas.length,
+    totalVendas: totalVendas,
     valorVendas: valorVendas,
     mixPagamento: mixPagamento,
     contasPagarPendente: contasPagarPendente,

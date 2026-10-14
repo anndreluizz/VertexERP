@@ -71,7 +71,7 @@ Future<Uint8List> gerarPdfRelatorio({
               formatarMoeda(dados.contasPagarPendente),
             ),
             _linha(
-              'Contas a receber pendentes',
+              'Fiado a receber (clientes)',
               formatarMoeda(dados.contasReceberPendente),
             ),
 

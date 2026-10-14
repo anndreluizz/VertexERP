@@ -207,3 +207,24 @@ def test_estoque_total_do_produto_acompanha_a_loja(db, produto):
     EstoqueLojaRepository.ajustar(db, produto, loja.id, 1)
     db.commit()
     assert produto.estoque == 9
+
+
+def test_relatorio_de_vendas_desconta_devolucao(
+    client, auth_headers, produto, caixa_aberto
+):
+    # 3 x R$ 20 = R$ 60, devolve 1 -> o relatorio mostra R$ 40 (igual
+    # a tela de Vendas), e o grafico/formas de pagamento batem com isso
+    venda = _vender(client, auth_headers, produto, quantidade=3)
+    assert _devolver(client, auth_headers, venda, 1).status_code == 200
+
+    hoje = date.today().isoformat()
+    rel = client.get(
+        "/relatorios/vendas",
+        params={"data_inicio": hoje, "data_fim": hoje},
+        headers=auth_headers,
+    ).json()
+
+    assert float(rel["receita_total"]["atual"]) == 40.0
+    assert rel["produtos_vendidos"]["atual"] == 2
+    assert sum(d["total"] for d in rel["vendas_por_dia"]) == 40.0
+    assert sum(f["total"] for f in rel["formas_pagamento"]) == 40.0

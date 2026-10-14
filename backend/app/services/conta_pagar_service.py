@@ -25,7 +25,6 @@ from app.schemas.conta_pagar import (
     ContaPagarUpdate,
 )
 
-from app.services.caixa_operacao_service import CaixaOperacaoService
 from app.services.conta_pagar_evento_service import ContaPagarEventoService
 from app.services.notificacao_service import NotificacaoService
 from app.services.pix_service import PixService, eh_copia_e_cola
@@ -466,12 +465,12 @@ class ContaPagarService:
         usuario_id: int | None = None,
         dispositivo: str | None = None,
     ):
-        # Despesas do estabelecimento (aluguel, funcionaria, contas)
-        # normalmente sao pagas via transferencia/PIX da conta da loja,
-        # nao saem da gaveta do caixa fisico do PDV -- por isso so
-        # DINHEIRO mexe no caixa aqui (mesmo criterio ja usado em
-        # MovimentoFiadoService pro recebimento de fiado); as outras
-        # formas so marcam a despesa como paga, sem tocar no caixa.
+        # Conta paga NAO mexe no caixa do dia, nem em dinheiro: a loja
+        # paga boleto com o dinheiro guardado (o total de todos os
+        # caixas), nao com a gaveta do turno. Ela ja sai do total geral
+        # em CaixaService.entradas (sobrou = entrou - contas pagas -
+        # sangrias). Antes saia da gaveta e a loja lancava um suprimento
+        # do mesmo valor so pra conta do dia fechar.
 
         conta = ContaPagarRepository.buscar_por_id(
             db,
@@ -486,18 +485,6 @@ class ContaPagarService:
 
         if conta.status == StatusContaPagar.CANCELADO.value:
             raise Exception("Conta cancelada.")
-
-        forma_pagamento_normalizada = (
-            forma_pagamento.upper() if forma_pagamento else None
-        )
-
-        caixa = None
-
-        if forma_pagamento_normalizada == "DINHEIRO":
-            caixa = CaixaOperacaoService.buscar_caixa_aberto(db, usuario_id)
-
-            if not caixa:
-                raise Exception("Nenhum caixa aberto.")
 
         conta.status = StatusContaPagar.PAGO.value
         conta.data_pagamento = datetime.now()
@@ -517,16 +504,6 @@ class ContaPagarService:
             db,
             conta,
         )
-
-        if caixa is not None:
-            CaixaOperacaoService.registrar_movimento(
-                db=db,
-                caixa=caixa,
-                usuario_id=usuario_id,
-                tipo="PAGAMENTO",
-                descricao=f"Pagamento de despesa - {conta.descricao or 'Despesa'}",
-                valor=-conta.valor,
-            )
 
         detalhes = None
         if forma_pagamento:

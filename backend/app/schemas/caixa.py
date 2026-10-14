@@ -42,6 +42,13 @@ class ResumoCaixaResponse(BaseModel):
     suprimentos: Decimal
     sangrias: Decimal
     recebimentos_fiado: Decimal
+    # fiado recebido separado por forma (outros = transferencia etc.)
+    recebimentos_fiado_dinheiro: Decimal = Decimal("0")
+    recebimentos_fiado_pix: Decimal = Decimal("0")
+    recebimentos_fiado_cartao: Decimal = Decimal("0")
+    recebimentos_fiado_outros: Decimal = Decimal("0")
+    # so caixas antigos: boleto pago em dinheiro que saiu da gaveta
+    contas_pagas_caixa: Decimal = Decimal("0")
     total_previsto: Decimal
     total_geral: Decimal
 

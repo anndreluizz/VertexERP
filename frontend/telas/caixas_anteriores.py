@@ -16,7 +16,7 @@ from services import api
 from services.caixa_service import historico_caixa, listar_movimentos_caixa, resumo_caixa_por_id
 from services.worker import em_paralelo, rodar_em_thread
 from telas.fechar_caixa import imprimir_fechamento
-from utils.formatacao import formatar_moeda, nome_forma
+from utils.formatacao import formatar_moeda, linhas_resumo_caixa, nome_forma
 from widgets.tables.standard_table import StandardTable
 
 _ROTULOS = {
@@ -25,6 +25,7 @@ _ROTULOS = {
     "SANGRIA": "Sangria",
     "ESTORNO": "Estorno",
     "VENDA": "Venda",
+    "PAGAMENTO": "Conta paga",
 }
 
 
@@ -177,16 +178,14 @@ class CaixasAnterioresDialog(QDialog):
         )
 
         contado = caixa.get("valor_contado")
+        # mesmas linhas da tela de Caixa (fiado separado por forma,
+        # boleto que saiu da gaveta em caixa antigo) -- 3 por linha
+        partes = [f"{rotulo} {formatar_moeda(valor)}" for rotulo, valor in linhas_resumo_caixa(resumo)]
+        partes.append(f"Vendas a prazo {formatar_moeda(resumo.get('vendas_prazo'))}")
+        grupos = ["  ·  ".join(partes[k:k + 3]) for k in range(0, len(partes), 3)]
         self.lbl_resumo.setText(
             f"Aberto {_data(caixa['data_abertura'])} · fechado {_data(caixa.get('data_fechamento'))}\n"
-            f"Troco inicial {formatar_moeda(resumo.get('saldo_inicial'))}  ·  "
-            f"Dinheiro {formatar_moeda(resumo.get('vendas_dinheiro'))}  ·  "
-            f"Pix {formatar_moeda(resumo.get('vendas_pix'))}  ·  "
-            f"Cartão {formatar_moeda(resumo.get('vendas_cartao'))}  ·  "
-            f"Fiado {formatar_moeda(resumo.get('vendas_prazo'))}\n"
-            f"Recebido de fiado {formatar_moeda(resumo.get('recebimentos_fiado'))}  ·  "
-            f"Suprimentos {formatar_moeda(resumo.get('suprimentos'))}  ·  "
-            f"Sangrias {formatar_moeda(resumo.get('sangrias'))}\n"
+            + "\n".join(grupos) + "\n"
             f"Previsto na gaveta {formatar_moeda(resumo.get('total_previsto'))}  ·  "
             f"Contado {formatar_moeda(contado) if contado is not None else 'não contado'}  ·  "
             f"Total geral do turno {formatar_moeda(resumo.get('total_geral'))}"

@@ -35,7 +35,7 @@ from services.movimento_caixa_service import (
 
 from design import tokens
 from design.icons import icone, icone_pixmap
-from design.privacidade import privacidade
+from design.privacidade import botao_olho, privacidade
 from design.widgets import Badge, BotaoSecundario, BotaoSucesso
 from services.worker import rodar_em_thread, em_paralelo
 from services import api
@@ -327,7 +327,12 @@ class Caixa(QWidget):
             font-size:{tokens.TAMANHO_XXL}px; font-weight:800;
         """)
 
-        col_total.addWidget(lbl_total_titulo)
+        linha_total_titulo = QHBoxLayout()
+        linha_total_titulo.setSpacing(4)
+        linha_total_titulo.addStretch()
+        linha_total_titulo.addWidget(lbl_total_titulo)
+        linha_total_titulo.addWidget(botao_olho("white", tamanho=32, tamanho_icone=20))
+        col_total.addLayout(linha_total_titulo)
         col_total.addWidget(self.lbl_total_previsto)
 
         status_layout.addLayout(col_total)

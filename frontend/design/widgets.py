@@ -24,7 +24,7 @@ from design import tokens
 from design.fonts import fonte
 from design.animations import fade_in
 from design.icons import icone, icone_pixmap
-from design.privacidade import privacidade
+from design.privacidade import botao_olho, privacidade
 from utils.acessibilidade import movimento_reduzido
 
 
@@ -134,6 +134,12 @@ class CardKPI(Card):
         topo.addWidget(badge_icone)
         topo.addWidget(lbl_titulo, stretch=1)
 
+        # olhinho no proprio card: so aparece quando o valor e dinheiro
+        # (ver definir_valor); clicar esconde/mostra todos os valores
+        self.bt_olho = botao_olho(tokens.TEXTO_CLARO if self._destaque else tokens.TEXTO_SECUNDARIO, tamanho=32, tamanho_icone=20)
+        self.bt_olho.hide()
+        topo.addWidget(self.bt_olho, alignment=Qt.AlignTop)
+
         layout.addLayout(topo)
 
         self.lbl_valor = QLabel("—")
@@ -205,6 +211,7 @@ class CardKPI(Card):
         # volta pra numero um texto ja formatado (moeda, unidade etc.)
         # via privacidade: com o olhinho fechado, valor em R$ vira mascara
         privacidade.definir_texto(self.lbl_valor, texto)
+        self.bt_olho.setVisible("R$" in (texto or ""))
         fade_in(self.lbl_valor, duracao=240)
 
 

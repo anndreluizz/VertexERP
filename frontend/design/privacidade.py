@@ -8,7 +8,8 @@ virada pro balcão); quem quer ver clica no olho."""
 import re
 import weakref
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QSize, Qt, Signal
+from PySide6.QtWidgets import QPushButton
 
 
 MASCARA = "R$ ••••"
@@ -56,3 +57,41 @@ class _Privacidade(QObject):
 
 
 privacidade = _Privacidade()
+
+
+def botao_olho(cor, tamanho=34, tamanho_icone=18):
+    """Olhinho clicável pra pôr do lado do valor (cards, total do
+    Caixa): qualquer um deles esconde/mostra todos os valores."""
+
+    from design.icons import icone
+
+    botao = QPushButton()
+    botao.setFixedSize(tamanho, tamanho)
+    botao.setCursor(Qt.PointingHandCursor)
+    botao.setIconSize(QSize(tamanho_icone, tamanho_icone))
+    botao.setStyleSheet(f"""
+        QPushButton {{ border:none; border-radius:8px; background:transparent; }}
+        QPushButton:hover {{ background:rgba(127, 127, 127, 0.18); }}
+    """)
+
+    def atualizar(ocultos):
+        botao.setIcon(icone("eye-off" if ocultos else "eye", cor=cor, tamanho=tamanho_icone))
+        botao.setToolTip("Mostrar valores" if ocultos else "Ocultar valores")
+
+    botao.clicked.connect(privacidade.alternar)
+    _OuvinteOlho(botao, atualizar)
+    atualizar(privacidade.ocultos)
+    return botao
+
+
+class _OuvinteOlho(QObject):
+    """Filho do botão (morre junto com ele) que repassa o sinal
+    mudou -- evita lambda solta conectada num botão já destruído."""
+
+    def __init__(self, botao, atualizar):
+        super().__init__(botao)
+        self._atualizar = atualizar
+        privacidade.mudou.connect(self._ao_mudar)
+
+    def _ao_mudar(self, ocultos):
+        self._atualizar(ocultos)

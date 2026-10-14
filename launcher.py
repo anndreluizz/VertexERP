@@ -610,6 +610,10 @@ def _fazer_backup():
         _validar_dump(temporario)
 
         ultimo = _backup_mais_recente(destino)
+        # filecmp guarda resultado por (tamanho, data) do arquivo: o .tmp
+        # tem sempre o mesmo nome, e um dump novo de mesmo tamanho no
+        # mesmo segundo seria dado como "igual" sem ler -- limpa antes
+        filecmp.clear_cache()
         if ultimo and filecmp.cmp(temporario, ultimo, shallow=False):
             # nada mudou desde o ultimo backup -- ele continua valendo
             return _ler_env("VERTEXERP_BACKUP_EXTRA"), None

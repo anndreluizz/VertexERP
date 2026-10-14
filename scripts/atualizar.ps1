@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Instala uma versao nova do Vertex ERP no PC-Servidor, com backup e
     volta automatica pra versao anterior se der errado.

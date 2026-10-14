@@ -14,7 +14,24 @@ from app.models.estoque_loja import EstoqueLoja
 from app.models.compra import Compra
 from app.models.fornecedor import Fornecedor
 from app.models.conta_pagar import ContaPagar
+from app.models.devolucao import Devolucao, ItemDevolucao
 from app.services.venda_service import _parcelas_pagamento
+
+
+def _devolvido_por_venda(db, ids):
+    """{venda_id: valor devolvido} -- devolucao/troca conta contra a
+    venda original (mesmo criterio da tela de Vendas, ver
+    VendaService.resumo_vendedores), pra receita do relatorio bater
+    com o que ficou de verdade."""
+    if not ids:
+        return {}
+    linhas = (
+        db.query(Devolucao.venda_id, func.sum(Devolucao.valor_total))
+        .filter(Devolucao.venda_id.in_(ids))
+        .group_by(Devolucao.venda_id)
+        .all()
+    )
+    return {venda_id: valor or Decimal("0") for venda_id, valor in linhas}
 
 
 class RelatorioService:
@@ -890,6 +907,11 @@ class RelatorioService:
             .scalar()
         )
 
+        # filtro por produto/categoria ja soma a venda inteira (nao so os
+        # itens filtrados), entao so desconta devolucao sem esse filtro
+        if produto_id is None and categoria is None:
+            receita_total -= sum(_devolvido_por_venda(db, ids).values(), Decimal("0"))
+
         quantidade_vendas = len(ids)
 
         clientes_atendidos = (
@@ -918,6 +940,21 @@ class RelatorioService:
         )
 
         produtos_vendidos = sum(item.quantidade for item, _ in itens)
+
+        # pecas devolvidas saem do lucro e das pecas vendidas
+        devolvidos_query = (
+            db.query(ItemDevolucao, Produto.preco_custo)
+            .join(Devolucao, Devolucao.id == ItemDevolucao.devolucao_id)
+            .join(Produto, ItemDevolucao.produto_id == Produto.id)
+            .filter(Devolucao.venda_id.in_(ids))
+        )
+        if produto_id is not None:
+            devolvidos_query = devolvidos_query.filter(Produto.id == produto_id)
+        if categoria is not None:
+            devolvidos_query = devolvidos_query.filter(Produto.categoria == categoria)
+        for item_dev, preco_custo in devolvidos_query.all():
+            lucro -= item_dev.valor - (preco_custo or 0) * item_dev.quantidade
+            produtos_vendidos -= item_dev.quantidade
 
         ticket_medio = (
             receita_total / quantidade_vendas
@@ -975,20 +1012,19 @@ class RelatorioService:
         if not ids:
             return []
 
-        resultados = (
-            db.query(
-                func.date(Venda.data).label("dia"),
-                func.sum(Venda.valor_total),
-            )
+        devolvido = _devolvido_por_venda(db, ids)
+        por_dia: dict = {}
+        for venda_id, data, total in (
+            db.query(Venda.id, Venda.data, Venda.valor_total)
             .filter(Venda.id.in_(ids))
-            .group_by("dia")
-            .order_by("dia")
             .all()
-        )
+        ):
+            dia = data.date()
+            por_dia[dia] = por_dia.get(dia, Decimal("0")) + total - devolvido.get(venda_id, 0)
 
         return [
             {"data": str(dia), "total": float(total)}
-            for dia, total in resultados
+            for dia, total in sorted(por_dia.items())
         ]
 
     # ==================================================
@@ -1098,8 +1134,14 @@ class RelatorioService:
         )
 
         agregados: dict[str, dict] = {}
+        devolvido = _devolvido_por_venda(db, ids)
 
         for venda in vendas:
+            # devolucao desconta proporcional de cada forma da venda
+            fator = (
+                (venda.valor_total - devolvido.get(venda.id, 0)) / venda.valor_total
+                if venda.valor_total else Decimal("1")
+            )
             for forma_parcela, valor_parcela in _parcelas_pagamento(
                 venda, venda.valor_total
             ):
@@ -1107,7 +1149,7 @@ class RelatorioService:
                     forma_parcela, {"quantidade": 0, "total": Decimal("0")}
                 )
                 bucket["quantidade"] += 1
-                bucket["total"] += valor_parcela
+                bucket["total"] += valor_parcela * fator
 
         return sorted(
             (

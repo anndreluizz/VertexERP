@@ -173,7 +173,7 @@ class _RelatoriosScreenState extends ConsumerState<RelatoriosScreen> {
                               VertexColors.erro,
                             ),
                             _linhaResumo(
-                              'Contas a receber pendentes',
+                              'Fiado a receber (clientes)',
                               moedaTela(dados.contasReceberPendente),
                               VertexColors.alerta,
                             ),

@@ -9,7 +9,6 @@ from fastapi.responses import JSONResponse
 from app.api.v1.pdv import router as pdv_router
 from app.api.v1.contas_pagar import router as contas_pagar_router
 from app.api.v1.contas_recorrentes import router as contas_recorrentes_router
-from app.api.v1.contas_receber import router as contas_receber_router
 from app.api.v1.categorias_despesa import (
     router as categorias_despesa_router,
 )
@@ -40,9 +39,6 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.estoque import router as estoque_router
 from app.api.v1.financeiro import router as fiado_router
-from app.api.v1.financeiro_fluxo_caixa import (
-    router as financeiro_fluxo_caixa_router,
-)
 from app.api.v1.relatorios import router as relatorios_router
 from app.api.v1.configuracoes import router as configuracoes_router
 from app.api.v1.notificacoes import router as notificacoes_router
@@ -100,7 +96,6 @@ app.include_router(caixa_router)
 app.include_router(movimento_caixa_router)
 app.include_router(contas_pagar_router)
 app.include_router(contas_recorrentes_router)
-app.include_router(contas_receber_router)
 app.include_router(categorias_despesa_router)
 app.include_router(centros_custo_router)
 app.include_router(plano_contas_router)
@@ -110,7 +105,6 @@ app.include_router(auditoria_router)
 app.include_router(pdv_router)
 app.include_router(estoque_router)
 app.include_router(fiado_router)
-app.include_router(financeiro_fluxo_caixa_router)
 app.include_router(relatorios_router)
 app.include_router(configuracoes_router)
 app.include_router(notificacoes_router)

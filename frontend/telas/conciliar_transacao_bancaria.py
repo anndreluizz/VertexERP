@@ -27,8 +27,8 @@ class ConciliarTransacaoDialog(QDialog):
     """Sugestoes automaticas (mesmo valor absoluto, data +-5 dias, ver
     ExtratoBancarioService.sugerir_candidatos) -- pra DEBITO (conta a
     pagar) tem tambem busca manual, ja que contas a pagar tem tela
-    propria no frontend; conta a receber nao (fiado ainda nao tem uma
-    tela de listagem dedicada), entao so' sugestao automatica."""
+    propria no frontend. Entrada (CREDITO) nao tem com o que casar
+    (venda/fiado nao vira conta a receber): so' da pra ignorar."""
 
     def __init__(self, transacao, parent=None):
         super().__init__(parent)
@@ -174,8 +174,7 @@ class ConciliarTransacaoDialog(QDialog):
             self,
             conciliar_transacao,
             self.transacao["id"],
-            conta_id if tipo == "PAGAR" else None,
-            conta_id if tipo == "RECEBER" else None,
+            conta_id,
             ao_sucesso=self._ao_conciliar_sucesso,
             ao_erro=self._ao_conciliar_erro,
         )

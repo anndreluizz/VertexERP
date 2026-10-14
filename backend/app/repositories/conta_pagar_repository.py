@@ -57,9 +57,8 @@ class ContaPagarRepository:
 
     @staticmethod
     def listar_pendentes(db: Session, loja_id: int | None = None):
-        # Sem paginação: usado internamente por FinanceiroService.fluxo_caixa,
-        # que precisa do total real de contas pendentes para o cálculo do
-        # saldo projetado, não só da primeira página.
+        # Sem paginação: quem chama (GET /contas-pagar/pendentes, usado no
+        # total "a pagar" do app) precisa de todas, não só da 1ª página.
         query = db.query(ContaPagar).filter(
             ContaPagar.status == StatusContaPagar.PENDENTE.value
         )

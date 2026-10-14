@@ -40,8 +40,6 @@ class TransacaoBancariaResponse(BaseModel):
     status: str
     conta_pagar_id: int | None = None
     conta_pagar_descricao: str | None = None
-    conta_receber_id: int | None = None
-    conta_receber_descricao: str | None = None
     conciliado_em: datetime | None = None
     conciliado_por_nome: str | None = None
 
@@ -51,11 +49,10 @@ class TransacaoBancariaResponse(BaseModel):
 
 class ConciliarRequest(BaseModel):
     conta_pagar_id: int | None = None
-    conta_receber_id: int | None = None
 
 
 class CandidatoConciliacao(BaseModel):
-    tipo: str  # PAGAR ou RECEBER
+    tipo: str  # PAGAR
     id: int
     descricao: str
     valor: Decimal

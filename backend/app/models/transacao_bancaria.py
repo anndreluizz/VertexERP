@@ -43,7 +43,7 @@ class TransacaoBancaria(Base):
 
     tipo: Mapped[str] = mapped_column(String(10), nullable=False)
 
-    # PENDENTE -> CONCILIADA (linkada a uma ContaPagar/ContaReceber) ou
+    # PENDENTE -> CONCILIADA (linkada a uma ContaPagar) ou
     # IGNORADA (nao corresponde a nada rastreado, ex.: tarifa bancaria,
     # transferencia entre contas proprias)
     status: Mapped[str] = mapped_column(
@@ -53,12 +53,6 @@ class TransacaoBancaria(Base):
 
     conta_pagar_id: Mapped[int | None] = mapped_column(
         ForeignKey("contas_pagar.id"),
-        index=True,
-        nullable=True,
-    )
-
-    conta_receber_id: Mapped[int | None] = mapped_column(
-        ForeignKey("contas_receber.id"),
         index=True,
         nullable=True,
     )
@@ -79,18 +73,11 @@ class TransacaoBancaria(Base):
     )
 
     conta_pagar = relationship("ContaPagar")
-    conta_receber = relationship("ContaReceber")
     conciliado_por = relationship("User")
 
     @property
     def conta_pagar_descricao(self) -> str | None:
         return self.conta_pagar.descricao if self.conta_pagar else None
-
-    @property
-    def conta_receber_descricao(self) -> str | None:
-        if not self.conta_receber:
-            return None
-        return self.conta_receber.observacao or f"Venda #{self.conta_receber.venda_id}"
 
     @property
     def conciliado_por_nome(self) -> str | None:

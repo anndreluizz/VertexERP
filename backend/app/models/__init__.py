@@ -23,7 +23,6 @@ from app.models.categoria_despesa import CategoriaDespesa
 from app.models.centro_custo import CentroCusto
 from app.models.plano_conta import PlanoConta
 from app.models.transacao_bancaria import TransacaoBancaria
-from app.models.conta_receber import ContaReceber
 from app.models.movimento_estoque import MovimentoEstoque
 from app.models.transferencia_estoque import TransferenciaEstoque
 from app.models.contagem_estoque import ContagemEstoque

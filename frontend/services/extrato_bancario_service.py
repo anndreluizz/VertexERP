@@ -42,14 +42,11 @@ def sugerir_candidatos(transacao_id):
     return response.json()
 
 
-def conciliar_transacao(transacao_id, conta_pagar_id=None, conta_receber_id=None):
+def conciliar_transacao(transacao_id, conta_pagar_id):
 
     return post(
         f"/extrato-bancario/{transacao_id}/conciliar",
-        {
-            "conta_pagar_id": conta_pagar_id,
-            "conta_receber_id": conta_receber_id,
-        },
+        {"conta_pagar_id": conta_pagar_id},
     )
 
 

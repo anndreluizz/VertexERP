@@ -260,8 +260,6 @@ class _Topo extends ConsumerWidget {
                   ],
                 ),
               ),
-              const BotaoOlhoValores(cor: Colors.white),
-              const SizedBox(width: 4),
               Material(
                 color: const Color(0xFF1C3357),
                 shape: RoundedRectangleBorder(
@@ -515,16 +513,20 @@ class _CartaoVendasHoje extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'VENDIDO HOJE',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.6,
-                            color: VertexColors.textoSecundario,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              'VENDIDO HOJE',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.6,
+                                color: VertexColors.textoSecundario,
+                              ),
+                            ),
+                            const BotaoOlhoValores(compacto: true),
+                          ],
                         ),
-                        const SizedBox(height: 4),
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
@@ -565,10 +567,7 @@ class _CartaoVendasHoje extends ConsumerWidget {
                     rotulo: 'Ticket médio',
                     valor: moedaTela(resumo.ticketMedio),
                   ),
-                  _Numero(
-                    rotulo: 'No mês',
-                    valor: moedaTela(resumo.vendasMes),
-                  ),
+                  _Numero(rotulo: 'No mês', valor: moedaTela(resumo.vendasMes)),
                 ],
               ),
             ],

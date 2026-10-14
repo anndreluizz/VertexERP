@@ -25,7 +25,38 @@ NOMES_FORMA = {
     "CREDITO": "Crédito",
     "BOLETO": "Boleto",
     "PRAZO": "Fiado",
+    "CARTAO": "Cartão",
+    "TRANSFERENCIA": "Transferência",
+    "CHEQUE": "Cheque",
 }
+
+
+def linhas_resumo_caixa(resumo):
+    """Linhas do resumo de um turno, na mesma ordem da tela de Caixa:
+    o que fica na gaveta e o que entrou fora dela (PIX/cartão), com o
+    fiado recebido separado por forma. Usado no extrato e no cupom do
+    fechamento e em Caixas anteriores. Linhas que só existem em caixa
+    antigo (boleto saindo da gaveta) ou forma rara somem quando zeradas.
+    Devolve [(rótulo, valor)]."""
+
+    def v(chave):
+        return float(resumo.get(chave, 0) or 0)
+
+    linhas = [
+        ("Troco inicial", v("saldo_inicial")),
+        ("Vendas em dinheiro", v("vendas_dinheiro")),
+        ("Fiado recebido em dinheiro", v("recebimentos_fiado_dinheiro")),
+        ("Suprimentos", v("suprimentos")),
+        ("Sangrias", -v("sangrias")),
+        ("Contas pagas (boleto)", -v("contas_pagas_caixa")),
+        ("Vendas PIX", v("vendas_pix")),
+        ("Fiado recebido no PIX", v("recebimentos_fiado_pix")),
+        ("Vendas cartão", v("vendas_cartao")),
+        ("Fiado recebido no cartão", v("recebimentos_fiado_cartao")),
+        ("Fiado recebido (outras formas)", v("recebimentos_fiado_outros")),
+    ]
+    opcionais = {"Contas pagas (boleto)", "Fiado recebido (outras formas)"}
+    return [(r, x) for r, x in linhas if r not in opcionais or abs(x) >= 0.01]
 
 
 def nome_forma(codigo):

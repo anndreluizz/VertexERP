@@ -48,6 +48,7 @@ _INFO_TIPO_MOVIMENTO = {
     "SANGRIA": ("Sangria", "erro"),
     "RECEBIMENTO_FIADO": ("Recebimento fiado", "sucesso"),
     "ESTORNO": ("Estorno", "alerta"),
+    "PAGAMENTO": ("Conta paga", "erro"),
 }
 
 
@@ -570,15 +571,19 @@ class Caixa(QWidget):
         )
         _, self.lbl_conf_suprimentos = linha("Suprimentos", "+")
         _, self.lbl_conf_sangrias = linha("Sangrias", "−")
+        # so caixas antigos: boleto pago em dinheiro saia da gaveta
+        self.linha_conf_contas, self.lbl_conf_contas = linha("Contas pagas (boleto)", "−")
         separador()
         _, self.lbl_conf_gaveta = linha("Deve ter na gaveta", "=", destaque=True)
 
         lay.addSpacing(14)
         secao("Fora da gaveta")
-        _, self.lbl_conf_pix = linha("PIX", "+")
-        _, self.lbl_conf_cartao = linha("Cartão (débito e crédito)", "+")
+        _, self.lbl_conf_pix = linha("Vendas no PIX", "+")
+        _, self.lbl_conf_fiado_pix = linha("Fiado recebido no PIX", "+")
+        _, self.lbl_conf_cartao = linha("Vendas no cartão (débito e crédito)", "+")
+        _, self.lbl_conf_fiado_cartao = linha("Fiado recebido no cartão", "+")
         self.linha_conf_fiado_outros, self.lbl_conf_fiado_outros = linha(
-            "Fiado recebido por PIX/cartão", "+"
+            "Fiado recebido em outras formas", "+"
         )
         separador()
         _, self.lbl_total_geral = linha("Total do turno", "=", destaque=True)
@@ -646,26 +651,27 @@ class Caixa(QWidget):
             gaveta = valor("total_previsto")
             pix = valor("vendas_pix")
             cartao = valor("vendas_cartao")
-            fiado = valor("recebimentos_fiado")
-
-            # o backend não manda o fiado recebido em dinheiro separado,
-            # mas ele é exatamente o que falta pra conta da gaveta fechar
-            # (ver CaixaService.resumo: saldo_final já inclui essa parte)
-            fiado_dinheiro = round(gaveta - troco - dinheiro - suprimentos + sangrias, 2)
-            fiado_outros = round(fiado - fiado_dinheiro, 2)
+            fiado_dinheiro = valor("recebimentos_fiado_dinheiro")
+            fiado_pix = valor("recebimentos_fiado_pix")
+            fiado_cartao = valor("recebimentos_fiado_cartao")
+            fiado_outros = valor("recebimentos_fiado_outros")
+            contas = valor("contas_pagas_caixa")
 
             privacidade.definir_texto(self.lbl_total_previsto, formatar_moeda(gaveta))
 
             privacidade.definir_texto(self.lbl_conf_troco, formatar_moeda(troco))
             privacidade.definir_texto(self.lbl_conf_dinheiro, formatar_moeda(dinheiro))
             privacidade.definir_texto(self.lbl_conf_fiado_dinheiro, formatar_moeda(fiado_dinheiro))
-            self.linha_conf_fiado_dinheiro.setVisible(abs(fiado_dinheiro) >= 0.01)
             privacidade.definir_texto(self.lbl_conf_suprimentos, formatar_moeda(suprimentos))
             privacidade.definir_texto(self.lbl_conf_sangrias, formatar_moeda(sangrias))
+            privacidade.definir_texto(self.lbl_conf_contas, formatar_moeda(contas))
+            self.linha_conf_contas.setVisible(abs(contas) >= 0.01)
             privacidade.definir_texto(self.lbl_conf_gaveta, formatar_moeda(gaveta))
 
             privacidade.definir_texto(self.lbl_conf_pix, formatar_moeda(pix))
+            privacidade.definir_texto(self.lbl_conf_fiado_pix, formatar_moeda(fiado_pix))
             privacidade.definir_texto(self.lbl_conf_cartao, formatar_moeda(cartao))
+            privacidade.definir_texto(self.lbl_conf_fiado_cartao, formatar_moeda(fiado_cartao))
             privacidade.definir_texto(self.lbl_conf_fiado_outros, formatar_moeda(fiado_outros))
             self.linha_conf_fiado_outros.setVisible(abs(fiado_outros) >= 0.01)
             privacidade.definir_texto(self.lbl_total_geral, formatar_moeda(valor("total_geral")))

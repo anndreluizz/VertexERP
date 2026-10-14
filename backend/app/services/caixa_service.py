@@ -149,9 +149,10 @@ class CaixaService:
             if tipo == "RECEBIMENTO_FIADO":
                 fiado_recebido += valor
 
-        # contas a pagar pagas no periodo (qualquer forma). A paga em
-        # dinheiro tambem vira movimento PAGAMENTO no caixa, mas esse
-        # tipo nao entra na soma acima -- entao nao conta duas vezes
+        # contas a pagar pagas no periodo (qualquer forma): saem daqui,
+        # do total, e nao do caixa do dia. Caixas antigos tem movimento
+        # PAGAMENTO pras pagas em dinheiro, mas esse tipo nao entra na
+        # soma acima -- entao nao conta duas vezes
         contas = (
             db.query(func.coalesce(func.sum(ContaPagar.valor), 0))
             .filter(ContaPagar.status == StatusContaPagar.PAGO.value)
@@ -218,6 +219,23 @@ class CaixaService:
         recebimentos_fiado_dinheiro = soma(
             tipo="RECEBIMENTO_FIADO", forma_pagamento="DINHEIRO"
         )
+        recebimentos_fiado_pix = soma(
+            tipo="RECEBIMENTO_FIADO", forma_pagamento="PIX"
+        )
+        # fiado no cartao grava CARTAO; DEBITO/CREDITO por garantia
+        recebimentos_fiado_cartao = sum(
+            (
+                soma(tipo="RECEBIMENTO_FIADO", forma_pagamento=forma)
+                for forma in ("CARTAO", "DEBITO", "CREDITO")
+            ),
+            Decimal("0"),
+        )
+
+        # caixas antigos: conta a pagar em dinheiro saia da gaveta como
+        # PAGAMENTO (negativo). Hoje boleto nao mexe mais no caixa do
+        # dia (ver ContaPagarService.pagar), mas o historico continua
+        # precisando dessa linha pra conta da gaveta fechar
+        contas_pagas_caixa = -soma(tipo="PAGAMENTO")
 
         # saldo_final ja e mantido incrementalmente (troco inicial +
         # vendas em dinheiro + suprimentos - sangrias - estornos +
@@ -250,6 +268,15 @@ class CaixaService:
             "suprimentos": suprimentos,
             "sangrias": sangrias,
             "recebimentos_fiado": recebimentos_fiado,
+            "recebimentos_fiado_dinheiro": recebimentos_fiado_dinheiro,
+            "recebimentos_fiado_pix": recebimentos_fiado_pix,
+            "recebimentos_fiado_cartao": recebimentos_fiado_cartao,
+            "recebimentos_fiado_outros": (
+                recebimentos_fiado_outros
+                - recebimentos_fiado_pix
+                - recebimentos_fiado_cartao
+            ),
+            "contas_pagas_caixa": contas_pagas_caixa,
             "total_previsto": total_previsto,
             "total_geral": total_geral,
         }

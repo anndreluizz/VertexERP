@@ -124,3 +124,37 @@ def test_entradas_soma_o_que_entrou_de_verdade(client, auth_headers, db, caixa_a
 
     tudo = client.get("/caixa/entradas", headers=auth_headers).json()
     assert float(tudo["total"]) == 590.0 + 999
+
+
+def test_resumo_separa_fiado_por_forma(client, auth_headers, cliente, caixa_aberto):
+    for forma, valor in (("DINHEIRO", 10.0), ("PIX", 20.0), ("CARTAO", 30.0)):
+        client.post(
+            "/fiado/compra",
+            json={"cliente_id": cliente.id, "valor": valor, "descricao": "x"},
+            headers=auth_headers,
+        )
+        response = client.post(
+            "/fiado/movimentos",
+            json={
+                "cliente_id": cliente.id,
+                "tipo": "PAGAMENTO",
+                "valor": valor,
+                "descricao": "pagou",
+                "forma_pagamento": forma,
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 200, response.text
+
+    resumo = client.get("/caixa/resumo", headers=auth_headers).json()
+
+    assert float(resumo["recebimentos_fiado"]) == 60.0
+    assert float(resumo["recebimentos_fiado_dinheiro"]) == 10.0
+    assert float(resumo["recebimentos_fiado_pix"]) == 20.0
+    assert float(resumo["recebimentos_fiado_cartao"]) == 30.0
+    assert float(resumo["recebimentos_fiado_outros"]) == 0.0
+    assert float(resumo["contas_pagas_caixa"]) == 0.0
+    # gaveta = troco + fiado em dinheiro; total = gaveta + pix + cartao
+    saldo_inicial = float(caixa_aberto.saldo_inicial)
+    assert float(resumo["total_previsto"]) == saldo_inicial + 10.0
+    assert float(resumo["total_geral"]) == saldo_inicial + 60.0

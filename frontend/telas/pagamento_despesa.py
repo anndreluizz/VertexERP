@@ -79,8 +79,8 @@ NOMES_FORMA = {valor: rotulo for rotulo, valor in FORMAS_PAGAMENTO}
 
 class PagamentoDespesaDialog(QDialog):
     """Confirmação antes de marcar uma despesa como paga. A forma
-    escolhida aqui vai pro backend em /pagar (só DINHEIRO mexe no
-    saldo do caixa, ver ContaPagarService.pagar) -- e também vira um
+    escolhida aqui vai pro backend em /pagar (nenhuma forma mexe no
+    caixa do dia, ver ContaPagarService.pagar) -- e também vira um
     texto legível gravado no campo `observacao` (que já existe) via um
     PATCH logo antes, pra ficar visível no histórico da despesa sem
     precisar abrir o extrato do caixa pra saber como foi pago."""

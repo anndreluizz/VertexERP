@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatadores.dart';
+import '../../core/privacidade.dart';
 import '../../models/venda.dart';
 import '../../theme/vertex_colors.dart';
 import 'vendas_provider.dart';
@@ -27,7 +28,7 @@ class VendaDetalheScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    formatarMoeda(venda.valorTotal),
+                    moedaTela(venda.valorTotal),
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
                   const SizedBox(height: 4),
@@ -48,13 +49,13 @@ class VendaDetalheScreen extends ConsumerWidget {
                       context,
                       'Segunda forma',
                       '${formatarFormaPagamento(venda.formaPagamento2)} '
-                          '(${formatarMoeda(venda.valorForma2 ?? 0)})',
+                          '(${moedaTela(venda.valorForma2 ?? 0)})',
                     ),
                   if (venda.desconto > 0)
                     _linha(
                       context,
                       'Desconto',
-                      '- ${formatarMoeda(venda.desconto)}',
+                      '- ${moedaTela(venda.desconto)}',
                     ),
                   if (venda.observacao != null && venda.observacao!.isNotEmpty)
                     _linha(context, 'Observação', venda.observacao!),
@@ -62,7 +63,7 @@ class VendaDetalheScreen extends ConsumerWidget {
                     _linha(
                       context,
                       'Lucro estimado',
-                      formatarMoeda(venda.lucro!),
+                      moedaTela(venda.lucro!),
                     ),
                 ],
               ),
@@ -130,7 +131,7 @@ class VendaDetalheScreen extends ConsumerWidget {
               children: [
                 Text(nome, style: const TextStyle(fontWeight: FontWeight.w600)),
                 Text(
-                  '${item.quantidade}x ${formatarMoeda(item.valorUnitario)}',
+                  '${item.quantidade}x ${moedaTela(item.valorUnitario)}',
                   style: TextStyle(
                     fontSize: 12.5,
                     color: VertexColors.textoSecundario,
@@ -140,7 +141,7 @@ class VendaDetalheScreen extends ConsumerWidget {
             ),
           ),
           Text(
-            formatarMoeda(item.subtotal),
+            moedaTela(item.subtotal),
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
         ],

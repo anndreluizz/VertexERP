@@ -24,6 +24,7 @@ from design import tokens
 from design.fonts import fonte
 from design.animations import fade_in
 from design.icons import icone, icone_pixmap
+from design.privacidade import privacidade
 from utils.acessibilidade import movimento_reduzido
 
 
@@ -175,9 +176,10 @@ class CardKPI(Card):
         cor_legenda = (
             "rgba(255, 255, 255, 0.6)" if self._destaque else tokens.TEXTO_TERCIARIO
         )
-        self.lbl_variacao.setText(
+        privacidade.definir_texto(
+            self.lbl_variacao,
             f'<span style="color:{cor}; font-weight:700;">{seta} {abs(percentual):.0f}%</span> '
-            f'<span style="color:{cor_legenda};">{legenda}</span>'
+            f'<span style="color:{cor_legenda};">{legenda}</span>',
         )
         self.lbl_variacao.show()
 
@@ -192,7 +194,8 @@ class CardKPI(Card):
             return
 
         cor = "rgba(255, 255, 255, 0.75)" if self._destaque else tokens.TEXTO_TERCIARIO
-        self.lbl_variacao.setText(f'<span style="color:{cor};">{texto}</span>')
+        # legenda pode trazer valor (ex.: "total pago: R$ ...")
+        privacidade.definir_texto(self.lbl_variacao, f'<span style="color:{cor};">{texto}</span>')
         self.lbl_variacao.show()
 
     def definir_valor(self, texto):
@@ -200,7 +203,8 @@ class CardKPI(Card):
         # muda (carregamento inicial ou um recarregar/filtro) -- sem
         # ficar sub/somando digito por digito, que exigiria parsear de
         # volta pra numero um texto ja formatado (moeda, unidade etc.)
-        self.lbl_valor.setText(texto)
+        # via privacidade: com o olhinho fechado, valor em R$ vira mascara
+        privacidade.definir_texto(self.lbl_valor, texto)
         fade_in(self.lbl_valor, duracao=240)
 
 

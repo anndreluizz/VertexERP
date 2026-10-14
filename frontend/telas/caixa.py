@@ -35,6 +35,7 @@ from services.movimento_caixa_service import (
 
 from design import tokens
 from design.icons import icone, icone_pixmap
+from design.privacidade import privacidade
 from design.widgets import Badge, BotaoSecundario, BotaoSucesso
 from services.worker import rodar_em_thread, em_paralelo
 from services import api
@@ -102,7 +103,8 @@ def _celula_valor_movimento(tipo, texto_valor):
     layout.setContentsMargins(12, 0, 12, 0)
     layout.setSpacing(0)
 
-    lbl = QLabel(texto_valor)
+    lbl = QLabel()
+    privacidade.definir_texto(lbl, texto_valor)
     lbl.setStyleSheet(f"""
         background:transparent; color:{_cor_valor_movimento(tipo)};
         font-weight:700; font-size:{tokens.TAMANHO_BASE}px;
@@ -647,24 +649,25 @@ class Caixa(QWidget):
             fiado_dinheiro = round(gaveta - troco - dinheiro - suprimentos + sangrias, 2)
             fiado_outros = round(fiado - fiado_dinheiro, 2)
 
-            self.lbl_total_previsto.setText(formatar_moeda(gaveta))
+            privacidade.definir_texto(self.lbl_total_previsto, formatar_moeda(gaveta))
 
-            self.lbl_conf_troco.setText(formatar_moeda(troco))
-            self.lbl_conf_dinheiro.setText(formatar_moeda(dinheiro))
-            self.lbl_conf_fiado_dinheiro.setText(formatar_moeda(fiado_dinheiro))
+            privacidade.definir_texto(self.lbl_conf_troco, formatar_moeda(troco))
+            privacidade.definir_texto(self.lbl_conf_dinheiro, formatar_moeda(dinheiro))
+            privacidade.definir_texto(self.lbl_conf_fiado_dinheiro, formatar_moeda(fiado_dinheiro))
             self.linha_conf_fiado_dinheiro.setVisible(abs(fiado_dinheiro) >= 0.01)
-            self.lbl_conf_suprimentos.setText(formatar_moeda(suprimentos))
-            self.lbl_conf_sangrias.setText(formatar_moeda(sangrias))
-            self.lbl_conf_gaveta.setText(formatar_moeda(gaveta))
+            privacidade.definir_texto(self.lbl_conf_suprimentos, formatar_moeda(suprimentos))
+            privacidade.definir_texto(self.lbl_conf_sangrias, formatar_moeda(sangrias))
+            privacidade.definir_texto(self.lbl_conf_gaveta, formatar_moeda(gaveta))
 
-            self.lbl_conf_pix.setText(formatar_moeda(pix))
-            self.lbl_conf_cartao.setText(formatar_moeda(cartao))
-            self.lbl_conf_fiado_outros.setText(formatar_moeda(fiado_outros))
+            privacidade.definir_texto(self.lbl_conf_pix, formatar_moeda(pix))
+            privacidade.definir_texto(self.lbl_conf_cartao, formatar_moeda(cartao))
+            privacidade.definir_texto(self.lbl_conf_fiado_outros, formatar_moeda(fiado_outros))
             self.linha_conf_fiado_outros.setVisible(abs(fiado_outros) >= 0.01)
-            self.lbl_total_geral.setText(formatar_moeda(valor("total_geral")))
+            privacidade.definir_texto(self.lbl_total_geral, formatar_moeda(valor("total_geral")))
 
             prazo = valor("vendas_prazo")
-            self.lbl_conf_prazo.setText(
+            privacidade.definir_texto(
+                self.lbl_conf_prazo,
                 f"Vendas a prazo (fiado lançado): {formatar_moeda(prazo)}. "
                 "Não entram nos totais porque o dinheiro ainda não chegou."
                 if prazo >= 0.01 else

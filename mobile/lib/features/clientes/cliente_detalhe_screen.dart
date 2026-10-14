@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/cliente_analise.dart';
 import '../../core/providers.dart';
 import '../../core/formatadores.dart';
+import '../../core/privacidade.dart';
 import '../../models/cliente.dart';
 import '../../models/movimento_fiado.dart';
 import '../../theme/componentes.dart';
@@ -565,7 +566,7 @@ class _Ficha extends ConsumerWidget {
           ),
           const SizedBox(width: 10),
           Text(
-            '${compra ? '+' : '−'} ${formatarMoeda(movimento.valor)}',
+            '${compra ? '+' : '−'} ${moedaTela(movimento.valor)}',
             style: TextStyle(
               fontSize: 14.5,
               fontWeight: FontWeight.w700,
@@ -699,7 +700,7 @@ class _PainelSaldo extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            saldo == null ? '—' : formatarMoeda(valor),
+            saldo == null ? '—' : moedaTela(valor),
             style: const TextStyle(
               fontFamily: VertexTheme.fonteDisplay,
               fontSize: 36,
@@ -735,7 +736,7 @@ class _PainelSaldo extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'Limite ${formatarMoeda(limite!)}',
+                  'Limite ${moedaTela(limite!)}',
                   style: const TextStyle(
                     fontSize: 13,
                     color: textoClaro,
@@ -797,7 +798,7 @@ class _Indicadores extends StatelessWidget {
         Expanded(
           child: _Indicador(
             rotulo: 'Total comprado no fiado',
-            valor: formatarMoeda(analise.totalComprado),
+            valor: moedaTela(analise.totalComprado),
           ),
         ),
       ],
@@ -935,7 +936,7 @@ class _ReceberSheetState extends State<_ReceberSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Deve ${formatarMoeda(widget.saldo)}',
+            'Deve ${moedaTela(widget.saldo)}',
             style: TextStyle(color: VertexColors.textoSecundario),
           ),
           const SizedBox(height: 16),

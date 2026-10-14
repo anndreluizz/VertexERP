@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatadores.dart';
+import '../../core/privacidade.dart';
+import '../../theme/componentes.dart';
 import '../../models/caixa.dart';
 import '../../theme/lista_agrupada.dart';
 import '../../theme/vertex_colors.dart';
@@ -24,7 +26,10 @@ class CaixasScreen extends ConsumerWidget {
     final operadoresAsync = ref.watch(operadoresLookupProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Caixas')),
+      appBar: AppBar(
+        title: const Text('Caixas'),
+        actions: const [BotaoOlhoValores()],
+      ),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(caixasProvider.future),
         child: caixasAsync.when(
@@ -148,7 +153,7 @@ class _LinhaCaixa extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                formatarMoeda(caixa.saldoFinal),
+                moedaTela(caixa.saldoFinal),
                 style: tema.titleSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                   fontFeatures: const [FontFeature.tabularFigures()],

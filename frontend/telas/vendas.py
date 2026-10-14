@@ -399,13 +399,13 @@ class Vendas(QWidget):
             for coluna, texto in enumerate(valores):
                 self.tabela_vendedoras.setItem(linha, coluna, QTableWidgetItem(texto))
 
-        self.card_total.lbl_valor.setText(
+        self.card_total.definir_valor(
             formatar_moeda(sum(float(i["total_liquido"]) for i in self.resumo))
         )
-        self.card_quantidade.lbl_valor.setText(
+        self.card_quantidade.definir_valor(
             str(sum(i["quantidade_vendas"] for i in self.resumo))
         )
-        self.card_devolvido.lbl_valor.setText(
+        self.card_devolvido.definir_valor(
             formatar_moeda(sum(float(i["total_devolvido"]) for i in self.resumo))
         )
 

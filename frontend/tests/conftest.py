@@ -39,6 +39,15 @@ def _qapp():
     gc.collect()
 
 
+@pytest.fixture(autouse=True)
+def _valores_visiveis():
+    """O app abre com os valores ocultos (olhinho do cabeçalho) -- os
+    testes conferem os textos de verdade, então liga a visibilidade."""
+    from design.privacidade import privacidade
+    privacidade.definir_ocultos(False)
+    yield
+
+
 @pytest.fixture()
 def esperar_threads(_qapp):
     """Devolve uma função que bombeia o loop de eventos do Qt até as

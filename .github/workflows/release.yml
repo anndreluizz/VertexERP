@@ -1,0 +1,102 @@
+name: Release
+
+# Cada push no main que passa no CI vira uma versao nova (Release no
+# GitHub) com o pacote de atualizacao do PC-Servidor. O launcher da loja
+# (atualizador.py) acha essa Release, pergunta "Atualizar agora?" e roda
+# o atualizar.ps1 que vai dentro do pacote.
+#
+# Versao = AAAA.MM.DD.<numero do run> (so' cresce; atualizador.py compara
+# numero a numero).
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  pacote:
+    name: Pacote do PC-Servidor
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            frontend/requirements.txt
+
+      - name: Instalar dependencias
+        run: |
+          pip install -r requirements.txt
+          pip install -r frontend/requirements.txt
+          pip install pyinstaller==6.22.3
+
+      - name: Versao
+        id: versao
+        shell: bash
+        run: echo "versao=$(date -u +%Y.%m.%d).${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build (launcher, backend, frontend)
+        run: |
+          python -m PyInstaller VertexERP.spec --noconfirm
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Push-Location backend
+          python -m PyInstaller VertexERP-Backend.spec --noconfirm
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Pop-Location
+          Push-Location frontend
+          python -m PyInstaller VertexERP-Frontend.spec --noconfirm
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Pop-Location
+
+      - name: Montar o pacote
+        run: |
+          $versao = "${{ steps.versao.outputs.versao }}"
+          $pacote = "pacote"
+          New-Item -ItemType Directory -Force "$pacote\kit" | Out-Null
+          Copy-Item dist\VertexERP.exe $pacote
+          Copy-Item backend\dist\VertexERP-Backend $pacote -Recurse
+          Copy-Item frontend\dist\VertexERP-Frontend $pacote -Recurse
+          Copy-Item scripts\atualizar.ps1, scripts\restaurar_backup.ps1, scripts\proteger_banco.ps1 $pacote
+          Copy-Item scripts\kit\* "$pacote\kit"
+          Set-Content "$pacote\versao.txt" $versao
+          $zip = "VertexERP-$versao.zip"
+          7z a -tzip $zip ".\$pacote\*" | Out-Null
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          Set-Content "$zip.sha256" "$hash  $zip" -NoNewline -Encoding ascii
+          "ZIP=$zip" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Publicar a Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          versao="${{ steps.versao.outputs.versao }}"
+          # notas = o que a loja ve no "Atualizar agora?": titulo do PR
+          # (1a linha do corpo do merge commit) ou o titulo do commit
+          assunto=$(git log -1 --format=%s)
+          if [[ "$assunto" == "Merge pull request"* ]]; then
+            git log -1 --format=%b | sed '/^$/d' | head -1 > notas.txt
+          else
+            echo "$assunto" > notas.txt
+          fi
+          gh release create "v$versao" "$ZIP" "$ZIP.sha256" \
+            --target "${{ github.event.workflow_run.head_sha }}" \
+            --title "Vertex ERP $versao" \
+            --notes-file notas.txt

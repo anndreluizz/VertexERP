@@ -5,6 +5,7 @@ semanas de dados: essa logica nao pode regredir calada."""
 
 import importlib.util
 import os
+import sys
 from datetime import datetime, timedelta
 
 import pytest
@@ -14,6 +15,9 @@ _RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 
 @pytest.fixture(scope="module")
 def launcher():
+    # launcher.py importa o atualizador.py, que mora do lado dele
+    if _RAIZ not in sys.path:
+        sys.path.insert(0, _RAIZ)
     spec = importlib.util.spec_from_file_location(
         "launcher", os.path.join(_RAIZ, "launcher.py")
     )
@@ -81,3 +85,32 @@ def test_trava_de_instancia_unica_bloqueia_a_segunda(launcher):
     # quando o processo morre, entao nunca fica trava orfa apos reboot
     assert launcher.obter_trava() is True
     assert launcher.obter_trava() is False
+
+
+def test_backup_igual_ao_anterior_e_descartado(launcher, tmp_path, monkeypatch):
+    # de hora em hora com a loja fechada o banco nao muda: nao pode
+    # encher a pasta (e o OneDrive) de copias identicas
+    conteudo = "-- dump\nCOPY public.vendas (id) FROM stdin;\n1\n\.\n\n-- PostgreSQL database dump complete\n"
+    anterior = tmp_path / "vertexerp_2026-10-14_080000.sql"
+    anterior.write_text(conteudo)
+
+    def pg_dump_falso(args, **kwargs):
+        destino = args[args.index("-f") + 1]
+        with open(destino, "w") as arquivo:
+            arquivo.write(conteudo_atual["valor"])
+        return type("R", (), {"returncode": 0, "stderr": ""})()
+
+    conteudo_atual = {"valor": conteudo}
+    monkeypatch.setattr(launcher, "_pasta_backups", lambda: str(tmp_path))
+    monkeypatch.setattr(launcher, "_pasta_backup_extra", lambda: None)
+    monkeypatch.setattr(launcher, "_ler_env", lambda chave: None)
+    monkeypatch.setattr(launcher, "_senha_banco", lambda: "x")
+    monkeypatch.setattr(launcher.subprocess, "run", pg_dump_falso)
+
+    launcher._fazer_backup()
+    assert [p.name for p in tmp_path.iterdir()] == [anterior.name]
+
+    conteudo_atual["valor"] = conteudo.replace("1\n", "2\n")
+    launcher._fazer_backup()
+    assert len(list(tmp_path.glob("*.sql"))) == 2
+    assert not list(tmp_path.glob("*.tmp"))

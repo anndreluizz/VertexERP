@@ -1,0 +1,59 @@
+KIT DE EMERGENCIA DO VERTEX ERP
+===============================
+
+Use isto quando o computador-servidor da loja QUEBRAR (nao liga, HD
+morreu, foi roubado). Com este kit, outro computador vira o servidor em
+poucos minutos, com os dados do ultimo backup (no maximo 1 hora atras).
+
+O que tem aqui:
+  - programa\           o Vertex ERP completo (atualizado todo dia sozinho)
+  - certs\              o certificado do servidor (os celulares e caixas
+                        continuam funcionando sem reconfigurar)
+  - VIRAR_SERVIDOR.ps1  o script que faz tudo
+  - versao.txt          quando o kit foi atualizado pela ultima vez
+Os backups ficam na pasta do lado: OneDrive\VertexERP-Backups.
+
+
+PASSO A PASSO
+-------------
+
+1. No computador novo (Windows 10 ou 11), entre no OneDrive com a MESMA
+   conta da loja e espere ele sincronizar as pastas VertexERP-Kit e
+   VertexERP-Backups.
+
+2. Abra a pasta OneDrive\VertexERP-Kit, clique com o botao direito em
+   VIRAR_SERVIDOR.ps1 > "Executar com o PowerShell".
+   (Melhor ainda: abra o PowerShell como administrador e rode
+    powershell -ExecutionPolicy Bypass -File "<caminho>\VIRAR_SERVIDOR.ps1"
+    -- assim ele ja libera o firewall pros outros caixas.)
+
+   Ele mostra quantos clientes, vendas e contas foram restaurados e
+   abre o Vertex. Faca login normalmente (mesmos usuarios e senhas).
+
+   Se o Windows bloquear o programa ("Controle Inteligente de
+   Aplicativos" / Smart App Control): Configuracoes > Privacidade e
+   seguranca > Seguranca do Windows > Controle de aplicativos e
+   navegador > Controle Inteligente de Aplicativos > Desligado.
+
+3. TAILSCALE (pra o celular e a filial acharem o servidor novo):
+   - Instale o Tailscale no PC novo e entre com a conta da loja.
+   - Em https://login.tailscale.com/admin/machines:
+       a) apague a maquina antiga ("eren");
+       b) na maquina nova, menu "..." > "Edit machine IPv4" e coloque
+          100.68.226.76 (o endereco do servidor antigo).
+   Pronto: celulares e caixas voltam a conectar sozinhos.
+   (Se nao der pra trocar o IP: em cada celular/caixa, troque o
+    endereco do servidor pelo IP novo que o Tailscale mostrar.)
+
+4. Confira no Vertex se as ultimas vendas e o caixa estao la. O que foi
+   lancado depois do ultimo backup (ver o nome do arquivo restaurado)
+   precisa ser lancado de novo.
+
+
+IMPORTANTE
+----------
+- O VIRAR_SERVIDOR nunca apaga nada: se o PC ja tiver um servidor em
+  C:\servidor, ele para sem mexer.
+- O backup continua de hora em hora no PC novo, pro mesmo OneDrive.
+- Quando o PC antigo voltar (consertado), NAO abra o Vertex nele sem
+  antes falar com o suporte: seriam dois servidores com dados diferentes.

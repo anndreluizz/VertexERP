@@ -40,7 +40,11 @@ class _Resposta:
 
 def _dialogo():
     with mock.patch.object(cadastro_despesa, "rodar_em_thread"):
-        return CadastroDespesaDialog()
+        dialogo = CadastroDespesaDialog()
+    # categoria agora e obrigatoria (comeca vazia)
+    dialogo._ao_carregar_categorias_sucesso([{"nome": "Fornecedores"}])
+    dialogo.categoria.setCurrentIndex(0)
+    return dialogo
 
 
 def _salvar(dialogo, esperar_threads, **patches):

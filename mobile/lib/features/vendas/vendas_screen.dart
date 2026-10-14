@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatadores.dart';
+import '../../core/privacidade.dart';
 import '../../models/movimento_fiado.dart';
 import '../../models/venda.dart';
 import '../../theme/componentes.dart';
@@ -211,7 +212,7 @@ class _Conteudo extends StatelessWidget {
           for (final (titulo, grupo) in _agrupar(doPeriodo, periodo)) ...[
             CabecalhoGrupo(
               titulo,
-              resumo: formatarMoeda(
+              resumo: moedaTela(
                 grupo.fold<double>(0, (s, i) => s + _valorEfetivo(i)),
               ),
             ),
@@ -341,7 +342,7 @@ class _Resumo extends StatelessWidget {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        formatarMoeda(total),
+                        moedaTela(total),
                         style: TextStyle(
                           fontFamily: VertexTheme.fonteDisplay,
                           fontSize: 30,
@@ -417,7 +418,7 @@ class _Resumo extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            formatarMoeda(f.value),
+                            moedaTela(f.value),
                             style: const TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w700,
@@ -554,7 +555,7 @@ class _LinhaVenda extends StatelessWidget {
       titulo: 'Venda #${venda.id}',
       detalhe: detalhe,
       corDetalhe: cancelada ? VertexColors.erro : null,
-      valor: formatarMoeda(venda.valorTotal),
+      valor: moedaTela(venda.valorTotal),
       riscado: cancelada,
       aoTocar: () => Navigator.of(context).push(
         MaterialPageRoute(
@@ -583,7 +584,7 @@ class _LinhaRecebimento extends StatelessWidget {
         'Recebeu fiado',
         formatarFormaPagamento(movimento.formaPagamento),
       ].where((p) => p.isNotEmpty).join(' · '),
-      valor: '+ ${formatarMoeda(movimento.valor)}',
+      valor: '+ ${moedaTela(movimento.valor)}',
       corValor: VertexColors.sucesso,
       aoTocar: () => Navigator.of(context).push(
         MaterialPageRoute(

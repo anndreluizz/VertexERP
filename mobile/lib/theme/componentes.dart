@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/cliente_analise.dart';
+import '../core/privacidade.dart';
 import 'vertex_colors.dart';
 import 'vertex_theme.dart';
 
@@ -275,8 +276,34 @@ class CabecalhoTela extends StatelessWidget {
               ],
             ),
           ),
+          const BotaoOlhoValores(),
           ?acao,
         ],
+      ),
+    );
+  }
+}
+
+/// Olhinho que mostra/oculta os valores em dinheiro (core/privacidade).
+class BotaoOlhoValores extends StatelessWidget {
+  const BotaoOlhoValores({super.key, this.cor, this.compacto = false});
+
+  final Color? cor;
+
+  /// Menor, pra ficar colado no titulo de um card.
+  final bool compacto;
+
+  @override
+  Widget build(BuildContext context) {
+    final ocultos = valoresOcultos.value;
+    return IconButton(
+      tooltip: ocultos ? 'Mostrar valores' : 'Ocultar valores',
+      onPressed: alternarValoresOcultos,
+      visualDensity: compacto ? VisualDensity.compact : null,
+      iconSize: compacto ? 20 : null,
+      icon: Icon(
+        ocultos ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+        color: cor ?? VertexColors.textoSecundario,
       ),
     );
   }

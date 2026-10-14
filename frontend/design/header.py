@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone
+from design.privacidade import privacidade
 from design.widgets import Avatar, BotaoPerigo, BotaoSucesso
 from services.aprovacao_service import aprovar, listar_pendentes, rejeitar
 from services import notificacao_service
@@ -491,6 +492,14 @@ class Header(QFrame):
         self.bt_tema.clicked.connect(self._alternar_tema)
         layout.addWidget(self.bt_tema)
 
+        # olhinho: esconde/mostra os valores em dinheiro (cards, caixa)
+        # pra cliente no balcao nao ver -- ver design/privacidade.py
+        self.bt_valores = self._botao_icone("eye-off")
+        self.bt_valores.clicked.connect(privacidade.alternar)
+        privacidade.mudou.connect(self._atualizar_olho)
+        self._atualizar_olho(privacidade.ocultos)
+        layout.addWidget(self.bt_valores)
+
         self.bt_notificacoes = self._botao_icone("bell")
         self.bt_notificacoes.setToolTip("Notificações")
         self.bt_notificacoes.clicked.connect(self._abrir_notificacoes)
@@ -628,6 +637,12 @@ class Header(QFrame):
             f"{dias[agora.weekday()]}, {agora.strftime('%d/%m/%Y')} · "
             f"{agora.strftime('%H:%M:%S')}"
         )
+
+    def _atualizar_olho(self, ocultos):
+        self.bt_valores.setIcon(
+            icone("eye-off" if ocultos else "eye", cor=tokens.TEXTO_SECUNDARIO, tamanho=18)
+        )
+        self.bt_valores.setToolTip("Mostrar valores" if ocultos else "Ocultar valores")
 
     def _alternar_tema(self):
         self._modo_escuro = not self._modo_escuro

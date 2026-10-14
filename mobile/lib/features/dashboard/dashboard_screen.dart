@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/cliente_analise.dart';
 import '../../core/formatadores.dart';
+import '../../core/privacidade.dart';
 import '../../core/providers.dart';
 import '../../models/dashboard_resumo.dart';
 import '../../models/venda.dart';
@@ -512,21 +513,25 @@ class _CartaoVendasHoje extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'VENDIDO HOJE',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.6,
-                            color: VertexColors.textoSecundario,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              'VENDIDO HOJE',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.6,
+                                color: VertexColors.textoSecundario,
+                              ),
+                            ),
+                            const BotaoOlhoValores(compacto: true),
+                          ],
                         ),
-                        const SizedBox(height: 4),
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            formatarMoeda(resumo.vendasHoje),
+                            moedaTela(resumo.vendasHoje),
                             style: TextStyle(
                               fontFamily: VertexTheme.fonteDisplay,
                               fontSize: 34,
@@ -560,12 +565,9 @@ class _CartaoVendasHoje extends ConsumerWidget {
                   _Numero(rotulo: 'Vendas', valor: '${resumo.vendasHojeQtd}'),
                   _Numero(
                     rotulo: 'Ticket médio',
-                    valor: formatarMoeda(resumo.ticketMedio),
+                    valor: moedaTela(resumo.ticketMedio),
                   ),
-                  _Numero(
-                    rotulo: 'No mês',
-                    valor: formatarMoeda(resumo.vendasMes),
-                  ),
+                  _Numero(rotulo: 'No mês', valor: moedaTela(resumo.vendasMes)),
                 ],
               ),
             ],
@@ -842,7 +844,7 @@ class _Atencao extends ConsumerWidget {
               '${inadimplentes.length} ${inadimplentes.length == 1 ? 'cliente inadimplente' : 'clientes inadimplentes'}',
           detalhe:
               'Mais de $prazoInadimplenciaDias dias sem pagar · '
-              '${formatarMoeda(valorInadimplente)}',
+              '${moedaTela(valorInadimplente)}',
           aoTocar: aoInadimplentes,
         ),
       if (resumo.contasVencidasQtd > 0)
@@ -852,7 +854,7 @@ class _Atencao extends ConsumerWidget {
           cor: VertexColors.erro,
           titulo:
               '${resumo.contasVencidasQtd} ${resumo.contasVencidasQtd == 1 ? 'conta vencida' : 'contas vencidas'}',
-          detalhe: '${formatarMoeda(resumo.contasVencidasValor)} em atraso',
+          detalhe: '${moedaTela(resumo.contasVencidasValor)} em atraso',
           aoTocar: aoContas,
         ),
       if (resumo.contasVencendoHojeQtd > 0)
@@ -862,7 +864,7 @@ class _Atencao extends ConsumerWidget {
           cor: VertexColors.alertaTexto,
           titulo:
               '${resumo.contasVencendoHojeQtd} ${resumo.contasVencendoHojeQtd == 1 ? 'conta vence hoje' : 'contas vencem hoje'}',
-          detalhe: formatarMoeda(resumo.contasVencendoHojeValor),
+          detalhe: moedaTela(resumo.contasVencendoHojeValor),
           aoTocar: aoContas,
         ),
       if (aprovacoes != null && aprovacoes.isNotEmpty)
@@ -1065,7 +1067,7 @@ class _FiadoDaLoja extends ConsumerWidget {
                                     fit: BoxFit.scaleDown,
                                     alignment: Alignment.centerLeft,
                                     child: Text(
-                                      formatarMoeda(total),
+                                      moedaTela(total),
                                       style: TextStyle(
                                         fontFamily: VertexTheme.fonteDisplay,
                                         fontSize: 24,
@@ -1090,7 +1092,7 @@ class _FiadoDaLoja extends ConsumerWidget {
                                     ),
                                   ),
                                   Text(
-                                    formatarMoeda(recebidoMes),
+                                    moedaTela(recebidoMes),
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w700,
@@ -1159,7 +1161,7 @@ class _FiadoDaLoja extends ConsumerWidget {
                         if (recebidoHoje != null && recebidoHoje! > 0) ...[
                           const SizedBox(height: 10),
                           Text(
-                            'Hoje entraram ${formatarMoeda(recebidoHoje!)} de fiado.',
+                            'Hoje entraram ${moedaTela(recebidoHoje!)} de fiado.',
                             style: TextStyle(
                               fontSize: 12.5,
                               color: VertexColors.textoSecundario,

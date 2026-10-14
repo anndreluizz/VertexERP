@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatadores.dart';
+import '../../core/privacidade.dart';
 import '../../models/conta_pagar.dart';
 import '../../theme/componentes.dart';
 import '../../theme/lista_agrupada.dart';
@@ -48,7 +49,10 @@ class _FinanceiroScreenState extends ConsumerState<FinanceiroScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Contas a pagar')),
+      appBar: AppBar(
+        title: const Text('Contas a pagar'),
+        actions: const [BotaoOlhoValores()],
+      ),
       body: const _AbaContasPagar(),
     );
   }
@@ -246,7 +250,7 @@ class _AbaContasPagarState extends ConsumerState<_AbaContasPagar> {
                     )) ...[
                       CabecalhoGrupo(
                         status.rotuloGrupo,
-                        resumo: formatarMoeda(
+                        resumo: moedaTela(
                           doGrupo.fold<double>(0, (t, c) => t + c.valor),
                         ),
                       ),
@@ -443,7 +447,7 @@ class _LinhaConta extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  formatarMoeda(valor),
+                  moedaTela(valor),
                   style: tema.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                     fontFeatures: const [FontFeature.tabularFigures()],
@@ -615,7 +619,7 @@ class _Quadro extends StatelessWidget {
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    formatarMoeda(total),
+                    moedaTela(total),
                     style: TextStyle(
                       fontSize: 12,
                       color: cor,
@@ -664,7 +668,7 @@ class _DetalhesContaPagarSheet extends ConsumerWidget {
             const SizedBox(height: 16),
             const SizedBox(height: 4),
             Text(
-              formatarMoeda(conta.valor),
+              moedaTela(conta.valor),
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 12),

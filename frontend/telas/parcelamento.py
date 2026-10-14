@@ -129,9 +129,9 @@ class ParcelamentoDialog(DialogoPadrao):
         pagas = [p for p in parcelas if p["status"] == "PAGO"]
         pendentes = [p for p in parcelas if p["status"] == "PENDENTE"]
 
-        self.card_total.lbl_valor.setText(formatar_moeda(sum(float(p["valor"]) for p in validas)))
-        self.card_pago.lbl_valor.setText(formatar_moeda(sum(float(p["valor"]) for p in pagas)))
-        self.card_falta.lbl_valor.setText(formatar_moeda(sum(float(p["valor"]) for p in pendentes)))
+        self.card_total.definir_valor(formatar_moeda(sum(float(p["valor"]) for p in validas)))
+        self.card_pago.definir_valor(formatar_moeda(sum(float(p["valor"]) for p in pagas)))
+        self.card_falta.definir_valor(formatar_moeda(sum(float(p["valor"]) for p in pendentes)))
         self.lbl_resumo.setText(
             f"{len(pagas)} de {len(validas)} parcela(s) paga(s) · "
             f"{len(pendentes)} em aberto"

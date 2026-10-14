@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/formatadores.dart';
+import '../../core/privacidade.dart';
 import '../../theme/componentes.dart';
 import '../../theme/lista_agrupada.dart';
 import '../../theme/skeleton.dart';
@@ -79,7 +79,7 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
               titulo: 'Clientes',
               subtitulo: dadosAsync.hasValue
                   ? '${todos.length} cadastrados · '
-                        '${formatarMoeda(totalFiado)} no fiado'
+                        '${moedaTela(totalFiado)} no fiado'
                   : null,
               acao: BotaoIcone(
                 icone: Icons.sort_rounded,
@@ -324,7 +324,7 @@ class _LinhaCliente extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  formatarMoeda(analise.devendo ? analise.saldoDevedor : 0),
+                  moedaTela(analise.devendo ? analise.saldoDevedor : 0),
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,

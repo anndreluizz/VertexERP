@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:printing/printing.dart';
 
 import '../../core/formatadores.dart';
+import '../../core/privacidade.dart';
+import '../../theme/componentes.dart';
 import '../../core/providers.dart';
 import '../../theme/vertex_colors.dart';
 import '../vendas/vendas_provider.dart';
@@ -49,7 +51,10 @@ class _RelatoriosScreenState extends ConsumerState<RelatoriosScreen> {
     final relatorioAsync = ref.watch(relatorioProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Relatórios')),
+      appBar: AppBar(
+        title: const Text('Relatórios'),
+        actions: const [BotaoOlhoValores()],
+      ),
       body: Column(
         children: [
           Padding(
@@ -92,7 +97,7 @@ class _RelatoriosScreenState extends ConsumerState<RelatoriosScreen> {
                               context,
                               'Vendas',
                               '${dados.totalVendas}',
-                              formatarMoeda(dados.valorVendas),
+                              moedaTela(dados.valorVendas),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -100,7 +105,7 @@ class _RelatoriosScreenState extends ConsumerState<RelatoriosScreen> {
                             child: _cartao(
                               context,
                               'Ticket médio',
-                              formatarMoeda(dados.ticketMedio),
+                              moedaTela(dados.ticketMedio),
                               null,
                             ),
                           ),
@@ -139,7 +144,7 @@ class _RelatoriosScreenState extends ConsumerState<RelatoriosScreen> {
                                           formatarFormaPagamento(entrada.key),
                                         ),
                                         Text(
-                                          formatarMoeda(entrada.value),
+                                          moedaTela(entrada.value),
                                           style: const TextStyle(
                                             fontWeight: FontWeight.w700,
                                           ),
@@ -164,12 +169,12 @@ class _RelatoriosScreenState extends ConsumerState<RelatoriosScreen> {
                           children: [
                             _linhaResumo(
                               'Contas a pagar pendentes',
-                              formatarMoeda(dados.contasPagarPendente),
+                              moedaTela(dados.contasPagarPendente),
                               VertexColors.erro,
                             ),
                             _linhaResumo(
                               'Contas a receber pendentes',
-                              formatarMoeda(dados.contasReceberPendente),
+                              moedaTela(dados.contasReceberPendente),
                               VertexColors.alerta,
                             ),
                             _linhaResumo(

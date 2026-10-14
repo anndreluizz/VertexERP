@@ -35,6 +35,7 @@ from telas.parcelamento import copiar_codigo_boleto
 
 from design import tokens
 from design.icons import icone, icone_pixmap
+from design.privacidade import privacidade
 from design.widgets import Badge, BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
 from utils.formatacao import formatar_moeda
 from utils.pix import texto_pra_copiar
@@ -259,7 +260,8 @@ class DespesaLinha(QFrame):
             lay_copiar.addWidget(self.bt_copiar)
         layout.addWidget(area_copiar)
 
-        valor = QLabel(formatar_moeda(conta.get("valor", 0)))
+        valor = QLabel()
+        privacidade.definir_texto(valor, formatar_moeda(conta.get("valor", 0)))
         valor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         valor.setStyleSheet(f"""
             background:transparent; border:none;
@@ -950,8 +952,10 @@ class ContasPagar(QWidget):
             background:transparent; color:{cor};
             font-size:{tokens.TAMANHO_XS}px; font-weight:800; letter-spacing:0.5px;
         """)
-        lbl_resumo = QLabel(
-            f"{qtd} conta{'s' if qtd != 1 else ''}  ·  {formatar_moeda(total)}"
+        lbl_resumo = QLabel()
+        privacidade.definir_texto(
+            lbl_resumo,
+            f"{qtd} conta{'s' if qtd != 1 else ''}  ·  {formatar_moeda(total)}",
         )
         lbl_resumo.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO_TERCIARIO};

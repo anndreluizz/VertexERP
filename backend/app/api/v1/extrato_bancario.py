@@ -100,7 +100,6 @@ def conciliar(
             db,
             transacao_id,
             dados.conta_pagar_id,
-            dados.conta_receber_id,
             usuario.id,
         )
     except Exception as e:

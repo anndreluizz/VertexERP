@@ -180,7 +180,8 @@ Já vem ligado por padrão no PC-Servidor, sem precisar configurar nada. Um
 backup completo do banco é salvo em `Documentos\VertexERP\Backups\`
 (dentro dos Documentos do Windows do usuário que abriu o sistema)
 enquanto o Vertex ERP estiver aberto — o primeiro roda logo na abertura,
-os seguintes a cada 4 horas. Os backups dos últimos 7 dias ficam todos;
+os seguintes de hora em hora (um backup igual ao anterior, com a loja
+parada, é descartado). Os backups dos últimos 7 dias ficam todos;
 entre 7 e 30 dias fica só o último de cada dia; com mais de 30 dias são
 apagados, pra não acumular espaço em disco sem limite.
 
@@ -217,6 +218,35 @@ outro arquivo).
 Da próxima vez que o backup automático rodar, uma cópia extra vai pra essa
 pasta também (mesma regra de retenção acima) -- o backup local continua
 existindo do mesmo jeito de sempre, essa é só uma cópia a mais.
+
+### Kit de emergência (PC-Servidor quebrou)
+
+Com o backup no OneDrive, dá pra manter também uma cópia do **programa**
+lá: a pasta `OneDrive\VertexERP-Kit` (programa, certificado do servidor
+e o script `VIRAR_SERVIDOR.ps1`). Se o PC-Servidor quebrar, em qualquer
+outro PC com o mesmo OneDrive: botão direito em `VIRAR_SERVIDOR.ps1` >
+Executar com o PowerShell. Ele instala em `C:\servidor`, restaura o
+backup mais recente e abre o Vertex (passo a passo completo, incluindo o
+Tailscale, no `LEIA-ME.txt` do kit).
+
+O kit é mantido pelo `kit\atualizar_kit.ps1` (tarefa agendada "VertexERP
+Kit", todo dia 20:30, e depois de cada atualização). Fontes em
+`scripts/kit/`.
+
+## Atualização automática
+
+Cada merge no `main` que passa no CI vira uma Release no GitHub
+(`.github/workflows/release.yml`) com o pacote do PC-Servidor. O launcher
+consulta o GitHub 5 minutos depois de abrir e a cada 6 horas; com versão
+nova, pergunta **"Atualizar agora?"** (Não = pergunta de novo no dia
+seguinte). No Sim, baixa, confere o sha256 e roda o `atualizar.ps1` do
+pacote: backup do banco, troca do launcher/backend/frontend (os atuais
+ficam como `*_antes_atualizacao`), reabre e, se o servidor novo não
+subir em 2 minutos, volta sozinho pra versão anterior e restaura o
+backup. Histórico em `atualizacao_log.txt`; versão instalada em
+`versao.txt`. Pra desligar: `VERTEXERP_ATUALIZAR=0` no `.env`.
+
+Terminais (só o frontend) ainda são atualizados à mão.
 
 ### Restaurar um backup
 

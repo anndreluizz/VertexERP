@@ -104,27 +104,6 @@ def test_usuario_comum_nao_pode_cancelar_conta_pagar(
     assert any(c["id"] == conta["id"] for c in pagas)
 
 
-def test_usuario_comum_nao_pode_cancelar_conta_receber(
-    client, auth_headers, auth_headers_comum, cliente
-):
-    conta = client.post(
-        "/contas-receber/",
-        json={
-            "cliente_id": cliente.id,
-            "data_vencimento": "2026-12-31T00:00:00",
-            "valor": 100.0,
-        },
-        headers=auth_headers,
-    ).json()
-
-    response = client.post(
-        f"/contas-receber/{conta['id']}/cancelar",
-        headers=auth_headers_comum,
-    )
-
-    assert response.status_code == 403
-
-
 def test_admin_pode_excluir_cliente(client, auth_headers, cliente):
     response = client.delete(f"/clientes/{cliente.id}", headers=auth_headers)
 

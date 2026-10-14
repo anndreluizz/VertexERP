@@ -17,17 +17,6 @@ def test_resumo_dashboard(
         headers=auth_headers,
     )
 
-    # conta a receber pendente
-    client.post(
-        "/contas-receber/",
-        json={
-            "cliente_id": cliente.id,
-            "data_vencimento": "2026-12-31T00:00:00",
-            "valor": 100.0,
-        },
-        headers=auth_headers,
-    )
-
     # conta a pagar pendente
     client.post(
         "/contas-pagar/",

@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.models.conta_pagar import ContaPagar
-from app.models.conta_receber import ContaReceber
 from app.models.transacao_bancaria import TransacaoBancaria
 from app.repositories.transacao_bancaria_repository import (
     TransacaoBancariaRepository,
@@ -131,35 +130,9 @@ class ExtratoBancarioService:
                 for c in contas
             ]
 
-        else:
-
-            ja_conciliadas = db.query(TransacaoBancaria.conta_receber_id).filter(
-                TransacaoBancaria.status == "CONCILIADA",
-                TransacaoBancaria.conta_receber_id.is_not(None),
-            )
-
-            contas = (
-                db.query(ContaReceber)
-                .filter(
-                    ContaReceber.status == "RECEBIDO",
-                    ContaReceber.valor == valor_absoluto,
-                    ContaReceber.data_recebimento >= inicio,
-                    ContaReceber.data_recebimento <= fim + timedelta(days=1),
-                    ContaReceber.id.not_in(ja_conciliadas),
-                )
-                .all()
-            )
-
-            candidatos = [
-                CandidatoConciliacao(
-                    tipo="RECEBER",
-                    id=c.id,
-                    descricao=c.observacao or f"Venda #{c.venda_id}",
-                    valor=c.valor,
-                    data=c.data_recebimento,
-                )
-                for c in contas
-            ]
+        # entrada (credito) nao tem com o que conciliar: o que a loja
+        # recebe e venda/fiado, que nao vira "conta a receber" (essa
+        # tabela antiga foi removida) -- entrada so pode ser ignorada
 
         return candidatos
 
@@ -168,7 +141,6 @@ class ExtratoBancarioService:
         db: Session,
         transacao_id: int,
         conta_pagar_id: int | None,
-        conta_receber_id: int | None,
         usuario_id: int,
     ):
 
@@ -182,52 +154,30 @@ class ExtratoBancarioService:
         if transacao.status != "PENDENTE":
             raise Exception("Essa transação já foi conciliada ou ignorada.")
 
-        if bool(conta_pagar_id) == bool(conta_receber_id):
-            raise Exception(
-                "Informe uma conta a pagar OU uma conta a receber, "
-                "nunca as duas nem nenhuma."
-            )
+        if not conta_pagar_id:
+            raise Exception("Informe a conta a pagar.")
 
-        if conta_pagar_id is not None and transacao.tipo != "DEBITO":
+        if transacao.tipo != "DEBITO":
             raise Exception(
                 "Só é possível conciliar uma saída (débito) com uma "
                 "conta a pagar."
             )
 
-        if conta_receber_id is not None and transacao.tipo != "CREDITO":
-            raise Exception(
-                "Só é possível conciliar uma entrada (crédito) com "
-                "uma conta a receber."
-            )
+        conta = db.query(ContaPagar).filter(
+            ContaPagar.id == conta_pagar_id
+        ).first()
+        if not conta:
+            raise Exception("Conta a pagar não encontrada.")
 
-        if conta_pagar_id is not None:
-            conta = db.query(ContaPagar).filter(
-                ContaPagar.id == conta_pagar_id
-            ).first()
-            if not conta:
-                raise Exception("Conta a pagar não encontrada.")
-
-        if conta_receber_id is not None:
-            conta = db.query(ContaReceber).filter(
-                ContaReceber.id == conta_receber_id
-            ).first()
-            if not conta:
-                raise Exception("Conta a receber não encontrada.")
-
-        # uma conta a pagar/receber so' pode estar linkada a UMA
-        # transacao bancaria conciliada por vez -- sem isso, duas
-        # linhas de extrato diferentes poderiam "quitar" a mesma
-        # despesa/recebimento
+        # uma conta a pagar so' pode estar linkada a UMA transacao
+        # bancaria conciliada por vez -- sem isso, duas linhas de
+        # extrato diferentes poderiam "quitar" a mesma despesa
         ja_linkada = (
             db.query(TransacaoBancaria)
             .filter(
                 TransacaoBancaria.status == "CONCILIADA",
                 TransacaoBancaria.id != transacao_id,
-                (
-                    (TransacaoBancaria.conta_pagar_id == conta_pagar_id)
-                    if conta_pagar_id is not None
-                    else (TransacaoBancaria.conta_receber_id == conta_receber_id)
-                ),
+                TransacaoBancaria.conta_pagar_id == conta_pagar_id,
             )
             .first()
         )
@@ -238,7 +188,6 @@ class ExtratoBancarioService:
             )
 
         transacao.conta_pagar_id = conta_pagar_id
-        transacao.conta_receber_id = conta_receber_id
         transacao.status = "CONCILIADA"
         transacao.conciliado_em = datetime.now()
         transacao.conciliado_por_id = usuario_id
@@ -259,7 +208,6 @@ class ExtratoBancarioService:
             raise Exception("Essa transação já está pendente.")
 
         transacao.conta_pagar_id = None
-        transacao.conta_receber_id = None
         transacao.status = "PENDENTE"
         transacao.conciliado_em = None
         transacao.conciliado_por_id = None

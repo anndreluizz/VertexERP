@@ -10,7 +10,6 @@ import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../models/conta_pagar.dart';
 import '../../models/conta_pagar_evento.dart';
-import '../../models/conta_receber.dart';
 
 /// Nome de plataforma pra anexar nos eventos de auditoria (ver
 /// ContaPagarEvento no backend) -- so um rotulo, nao muda nenhuma
@@ -66,25 +65,6 @@ final eventosContaProvider = FutureProvider.autoDispose
           )
           .toList();
     });
-
-final contasReceberProvider = FutureProvider.autoDispose<List<ContaReceber>>((
-  ref,
-) async {
-  final api = ref.watch(apiClientProvider);
-  final lojaId = ref.watch(lojaFiltroProvider);
-  final resposta = await api.dio.get(
-    '/contas-receber/',
-    queryParameters: lojaId != null ? {'loja_id': lojaId} : null,
-  );
-
-  final contas = (resposta.data as List<dynamic>)
-      .map((json) => ContaReceber.fromJson(json as Map<String, dynamic>))
-      .where((conta) => conta.status != 'CANCELADO')
-      .toList();
-
-  contas.sort((a, b) => a.dataVencimento.compareTo(b.dataVencimento));
-  return contas;
-});
 
 class FinanceiroActions {
   FinanceiroActions(this._ref);
@@ -202,20 +182,6 @@ class FinanceiroActions {
           e,
           fallback: 'Não foi possível cancelar essa despesa.',
         ),
-      );
-    }
-  }
-
-  Future<String?> receberConta(int contaId) async {
-    try {
-      final api = _ref.read(apiClientProvider);
-      await api.dio.post('/contas-receber/$contaId/receber');
-      _ref.invalidate(contasReceberProvider);
-      return null;
-    } catch (e) {
-      return mensagemDeErro(
-        e,
-        fallback: 'Não foi possível marcar essa conta como recebida.',
       );
     }
   }

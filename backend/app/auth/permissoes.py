@@ -21,7 +21,6 @@ PERMISSOES_DISPONIVEIS = {
     "estoque.ajustar": "Ajustar estoque manualmente",
     "contas_pagar.excluir": "Excluir contas a pagar",
     "fiado.corrigir": "Corrigir/excluir lançamentos de fiado",
-    "contas_receber.cancelar": "Cancelar contas a receber",
     "caixa.fechar": "Fechar caixa",
     "aprovacoes.gerenciar": "Aprovar/rejeitar solicitações",
     "clientes.lgpd": "Exportar/apagar dados de cliente (LGPD)",

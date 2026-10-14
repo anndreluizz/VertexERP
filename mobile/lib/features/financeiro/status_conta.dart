@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../models/conta_pagar.dart';
-import '../../models/conta_receber.dart';
 import '../../theme/vertex_colors.dart';
 
 /// Classificacao visual de uma conta a pagar -- cruza o status
@@ -47,13 +46,6 @@ extension StatusVisualContaInfo on StatusVisualConta {
 StatusVisualConta statusVisual(ContaPagar conta) {
   if (conta.status == 'CANCELADO') return StatusVisualConta.cancelada;
   if (conta.status == 'PAGO') return StatusVisualConta.paga;
-  return _porVencimento(conta.dataVencimento);
-}
-
-/// Mesmo criterio pra conta a receber ("paga" = RECEBIDO).
-StatusVisualConta statusVisualReceber(ContaReceber conta) {
-  if (conta.status == 'CANCELADO') return StatusVisualConta.cancelada;
-  if (conta.status == 'RECEBIDO') return StatusVisualConta.paga;
   return _porVencimento(conta.dataVencimento);
 }
 

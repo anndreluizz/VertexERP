@@ -307,23 +307,3 @@ def test_haver_avisa(client, auth_headers, db, usuario, produto, cliente, caixa_
     assert response.status_code == 200
 
     assert "Haver lançado" in _titulos_do(db, usuario.id)
-
-
-def test_conta_a_receber_recebida_avisa(
-    client, auth_headers, db, usuario, cliente, caixa_aberto
-):
-    conta = client.post(
-        "/contas-receber/",
-        json={
-            "cliente_id": cliente.id,
-            "data_vencimento": "2026-12-31T00:00:00",
-            "valor": 200.0,
-        },
-        headers=auth_headers,
-    ).json()
-
-    client.post(f"/contas-receber/{conta['id']}/receber", headers=auth_headers)
-
-    corpo = _corpo(db, usuario.id, "Conta recebida")
-    assert cliente.nome in corpo
-    assert "R$ 200,00" in corpo

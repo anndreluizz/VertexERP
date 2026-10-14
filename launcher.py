@@ -1,5 +1,6 @@
 import ctypes
 import ctypes.wintypes
+import filecmp
 import json
 import os
 import secrets
@@ -10,6 +11,8 @@ import tempfile
 import threading
 import time
 from datetime import datetime, timedelta
+
+import atualizador
 
 if getattr(sys, "frozen", False):
     # Empacotado pelo PyInstaller: __file__ aponta pra uma pasta temporária
@@ -316,6 +319,16 @@ def _perguntar_sim_nao(titulo, mensagem):
     return resposta == 6
 
 
+def _perguntar_na_frente(titulo, mensagem):
+    """Igual _perguntar_sim_nao, mas por cima da janela do Vertex aberta
+    (MB_SYSTEMMODAL | MB_SETFOREGROUND) -- usada pela atualizacao, que
+    pergunta com o sistema ja em uso."""
+    resposta = ctypes.windll.user32.MessageBoxW(
+        None, mensagem, titulo, 0x4 | 0x20 | 0x1000 | 0x10000
+    )
+    return resposta == 6
+
+
 def garantir_env():
     """Gera o backend/.env (na raiz da instalação) apontando pro Postgres
     portátil, se ainda não existir — não sobrescreve um .env que o usuário
@@ -473,14 +486,15 @@ DIAS_PARA_MANTER_BACKUP = 30
 
 # Nos ultimos DIAS_COM_TODOS_OS_BACKUPS fica tudo; dali ate
 # DIAS_PARA_MANTER_BACKUP fica so' o ultimo backup de cada dia -- sem
-# isso, rodando a cada 4h, a pasta (e a copia no OneDrive, que tem cota)
-# cresceria ~6x mais rapido do que com o backup diario de antes.
+# isso, rodando de hora em hora, a pasta (e a copia no OneDrive, que tem
+# cota) cresceria muito mais rapido do que com o backup diario de antes.
 DIAS_COM_TODOS_OS_BACKUPS = 7
 
-# 4h -- a primeira ja quase na hora de abrir. Era 24h, mas isso deixava
-# ate um dia inteiro de vendas descoberto se o PC-Servidor morresse
-# (issue #4: foi exatamente o que aconteceu com a matriz em 25/09).
-_INTERVALO_BACKUP_SEGUNDOS = 4 * 60 * 60
+# 1h: se o PC-Servidor morrer, perde no maximo 1 hora de movimento (era
+# 24h, depois 4h -- issue #4: a matriz perdeu dados em 25/09). Backup
+# igual ao anterior (noite, loja fechada) e' descartado, entao a pasta
+# so cresce quando o banco muda de verdade.
+_INTERVALO_BACKUP_SEGUNDOS = 60 * 60
 
 # Lido pelo backend (app/services/backup_service.py) pra avisar o admin
 # na tela quando o backup falha -- antes a falha morria calada dentro
@@ -594,6 +608,12 @@ def _fazer_backup():
             raise RuntimeError(f"pg_dump falhou:\n{resultado.stderr}")
 
         _validar_dump(temporario)
+
+        ultimo = _backup_mais_recente(destino)
+        if ultimo and filecmp.cmp(temporario, ultimo, shallow=False):
+            # nada mudou desde o ultimo backup -- ele continua valendo
+            return _ler_env("VERTEXERP_BACKUP_EXTRA"), None
+
         os.replace(temporario, arquivo)
 
     finally:
@@ -620,6 +640,16 @@ def _fazer_backup():
         pasta_extra = pasta_extra or _ler_env("VERTEXERP_BACKUP_EXTRA")
 
     return pasta_extra, erro_copia_externa
+
+
+def _backup_mais_recente(pasta):
+    """Caminho do .sql mais novo da pasta (None se nao tiver)."""
+    arquivos = [
+        os.path.join(pasta, nome)
+        for nome in os.listdir(pasta)
+        if nome.endswith(".sql")
+    ]
+    return max(arquivos, key=os.path.getmtime, default=None)
 
 
 # Ultima linha que o pg_dump (formato plain) escreve -- se nao estiver
@@ -775,7 +805,7 @@ def _loop_backup_diario():
 
 def iniciar_backup_diario():
     """Chamado uma vez, depois que o backend confirma que subiu (ver
-    main()) -- repete o backup a cada 4h numa thread em segundo plano
+    main()) -- repete o backup de hora em hora numa thread em segundo plano
     (daemon: nao impede o launcher de fechar normalmente quando o
     usuario sai do sistema). O primeiro backup da sessao roda antes,
     em main(), de forma sincrona."""
@@ -901,6 +931,11 @@ def main():
 
         iniciar_backup_diario()
         iniciar_watchdog_backend(backend)
+
+        # atualizacao automatica pelo GitHub (ver atualizador.py);
+        # VERTEXERP_ATUALIZAR=0 no .env desliga
+        if _ler_env("VERTEXERP_ATUALIZAR") != "0":
+            atualizador.iniciar_verificacao(BASE_DIR, _perguntar_na_frente, _mostrar_erro)
 
         frontend = iniciar_frontend()
         frontend.wait()

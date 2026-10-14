@@ -66,7 +66,7 @@ class ConciliacaoBancaria(QWidget):
 
         subtitulo = QLabel(
             "Importa o extrato do banco (arquivo OFX) e casa cada linha "
-            "com uma conta a pagar paga ou conta a receber recebida."
+            "de saída com uma conta a pagar já paga."
         )
         subtitulo.setWordWrap(True)
         subtitulo.setStyleSheet(
@@ -166,11 +166,7 @@ class ConciliacaoBancaria(QWidget):
             sinal = "+" if t["tipo"] == "CREDITO" else "-"
             valor_texto = f"{sinal} {formatar_moeda(abs(float(t['valor'])))}"
 
-            conciliado_com = (
-                t.get("conta_pagar_descricao")
-                or t.get("conta_receber_descricao")
-                or ""
-            )
+            conciliado_com = t.get("conta_pagar_descricao") or ""
 
             self.tabela.setItem(
                 linha, 0,

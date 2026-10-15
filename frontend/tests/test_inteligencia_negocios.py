@@ -77,3 +77,26 @@ def test_erro_de_permissao_aparece_na_tela():
 
     assert not tela.lbl_erro.isHidden()
     assert "permissão" in tela.lbl_erro.text()
+
+
+def test_valor_digitado():
+    from telas.inteligencia_negocios import valor_digitado
+    assert valor_digitado("10.000,50") == 10000.5
+    assert valor_digitado("R$ 800") == 800
+    assert valor_digitado("1500.5") == 1500.5
+    assert valor_digitado("0") == 0
+    assert valor_digitado("-5") is None
+    assert valor_digitado("abc") is None
+    assert valor_digitado("") is None
+
+
+def test_mostra_dinheiro_guardado():
+    tela = InteligenciaNegocios()
+    dados = _resumo()
+    tela._ao_carregar(dados)
+    assert "não informado" in tela.lbl_guardado.text()
+
+    dados["caixa"].update(dinheiro_guardado=1234.5, dinheiro_guardado_em="2026-10-15T14:30:00")
+    tela._ao_carregar(dados)
+    assert "R$ 1.234,50" in tela.lbl_guardado.text()
+    assert "15/10/2026" in tela.lbl_guardado.text()

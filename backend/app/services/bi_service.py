@@ -22,6 +22,7 @@ from app.models.movimento_caixa import MovimentoCaixa
 from app.models.movimento_fiado import MovimentoFiado
 from app.models.produto import Produto
 from app.models.venda import Venda
+from app.services.configuracao_service import ConfiguracaoService
 from app.services.relatorio_service import RelatorioService, _devolvido_por_venda
 
 FORMAS_A_PRAZO = {"PRAZO"}
@@ -78,6 +79,20 @@ class BiService:
         contas = BiService._contas_pagar(db, inicio, fim, agora, loja_id)
         gavetas = BiService._dinheiro_nas_gavetas(db, loja_id)
         avisos, qualidade = BiService._avisos(db, loja_id, fiado)
+        # cofre + banco e' da empresa toda: nao da' pra dividir por loja
+        guardado, guardado_em = (
+            BiService.dinheiro_guardado(db) if loja_id is None else (None, None)
+        )
+        if loja_id is None and guardado is None:
+            avisos.append(
+                "Dinheiro guardado (cofre + banco) não informado: a previsão de "
+                "30 dias considera só o dinheiro dos caixas abertos."
+            )
+        elif guardado_em is not None and (agora - guardado_em).days > 7:
+            avisos.append(
+                f"Dinheiro guardado informado em {guardado_em:%d/%m/%Y} "
+                f"({(agora - guardado_em).days} dias atrás): atualize para a previsão ficar certa."
+            )
 
         resultado = {
             "periodo": {
@@ -97,8 +112,10 @@ class BiService:
             "caixa": {
                 "dinheiro_nas_gavetas": gavetas,
                 "entrou_no_periodo": vendas["a_vista"] + Decimal(recebido_fiado),
+                "dinheiro_guardado": guardado,
+                "dinheiro_guardado_em": guardado_em,
             },
-            "previsao_30_dias": BiService._previsao(db, agora, loja_id, gavetas, contas),
+            "previsao_30_dias": BiService._previsao(db, agora, loja_id, gavetas, contas, guardado),
             "lojas": BiService._lojas(db, inicio, fim, agora) if loja_id is None else [],
             "avisos": avisos,
             "qualidade_dados": qualidade,
@@ -293,7 +310,7 @@ class BiService:
         return query.scalar()
 
     @staticmethod
-    def _previsao(db, agora, loja_id, gavetas, contas):
+    def _previsao(db, agora, loja_id, gavetas, contas, guardado=None):
         """Entradas = media diaria do que entrou de verdade (vendas a vista
         + fiado recebido) nos ultimos 30 dias, vezes 30. So' uma
         referencia: nao promete que vai vender igual."""
@@ -322,16 +339,35 @@ class BiService:
             "dias_de_base": dias_base,
             "saidas_previstas": saidas,
             "dinheiro_nas_gavetas": gavetas,
-            "saldo_previsto": Decimal(gavetas) + entradas - saidas,
+            "dinheiro_guardado": guardado,
+            "saldo_previsto": Decimal(gavetas) + (guardado or _ZERO) + entradas - saidas,
             "observacao": (
                 "Entradas estimadas pela média do que entrou de verdade "
                 f"(vendas à vista + fiado recebido) nos últimos {dias_base} dias. "
                 "Saídas = contas pendentes vencidas e com vencimento nos "
-                "próximos 30 dias. Parte só do dinheiro que está nos caixas abertos "
-                "agora: o dinheiro já guardado depois de fechar o caixa (cofre, "
-                "banco, retiradas) não é registrado no sistema e não entra na conta."
+                "próximos 30 dias. "
+                + (
+                    "Parte do dinheiro dos caixas abertos mais o dinheiro guardado "
+                    "(cofre + banco) informado pelo dono."
+                    if guardado is not None else
+                    "Parte só do dinheiro que está nos caixas abertos agora: o "
+                    "dinheiro guardado (cofre + banco) não foi informado e não entra na conta."
+                )
             ),
         }
+
+    @staticmethod
+    def dinheiro_guardado(db):
+        config = ConfiguracaoService.buscar(db)
+        return config.dinheiro_guardado, config.dinheiro_guardado_em
+
+    @staticmethod
+    def informar_dinheiro_guardado(db, valor: Decimal):
+        config = ConfiguracaoService.buscar(db)
+        config.dinheiro_guardado = valor
+        config.dinheiro_guardado_em = datetime.now()
+        db.commit()
+        return config.dinheiro_guardado, config.dinheiro_guardado_em
 
     @staticmethod
     def _vendas_a_vista(db, inicio, fim, loja_id):
@@ -492,7 +528,8 @@ def recomendacoes(r):
     if prev["dias_de_base"] and Decimal(prev["saldo_previsto"]) < 0:
         sete_dias = Decimal(contas["proximos_7_dias"]["total"])
         cabe_na_semana = (
-            Decimal(prev["dinheiro_nas_gavetas"]) + Decimal(prev["media_diaria_entradas"]) * 7
+            Decimal(prev["dinheiro_nas_gavetas"]) + Decimal(prev.get("dinheiro_guardado") or 0)
+            + Decimal(prev["media_diaria_entradas"]) * 7
         )
         maiores = sorted(contas["proximas"], key=lambda c: c["valor"], reverse=True)[:3]
         add(
@@ -504,16 +541,21 @@ def recomendacoes(r):
                 f"Entradas estimadas: {_brl(prev['entradas_estimadas'])} (média de "
                 f"{_brl(prev['media_diaria_entradas'])}/dia dos últimos "
                 f"{prev['dias_de_base']} dias).",
-                f"Dinheiro nos caixas abertos agora: {_brl(prev['dinheiro_nas_gavetas'])} "
-                "(o que já foi guardado depois de fechar o caixa não é registrado).",
+                f"Dinheiro nos caixas abertos agora: {_brl(prev['dinheiro_nas_gavetas'])}.",
+                (
+                    f"Dinheiro guardado (cofre + banco) informado: {_brl(prev['dinheiro_guardado'])}."
+                    if prev.get("dinheiro_guardado") is not None else
+                    "Dinheiro guardado (cofre + banco): não informado, ficou de fora da conta."
+                ),
                 f"Falta estimada: {_brl(-Decimal(prev['saldo_previsto']))}.",
             ] + [
                 f"Conta próxima: {c['descricao'] or 'sem descrição'}, "
                 f"{_brl(c['valor'])} em {c['vencimento']:%d/%m}." for c in maiores
             ],
-            "Risco de faltar dinheiro para pagar as contas. A conta não inclui o "
-            "dinheiro guardado no cofre ou no banco (não registrado no sistema): "
-            "se houver, a falta real é menor nesse valor.",
+            "Risco de faltar dinheiro para pagar as contas."
+            + ("" if prev.get("dinheiro_guardado") is not None else
+               " Se houver dinheiro guardado no cofre ou no banco, a falta real é "
+               "menor nesse valor: informe o valor para a conta ficar certa."),
             "Priorizar a cobrança dos maiores devedores do fiado, tentar adiar ou "
             "parcelar as maiores contas acima e segurar despesas que podem esperar.",
             "Esta semana", "Saldo previsto em 30 dias maior ou igual a R$ 0,00",

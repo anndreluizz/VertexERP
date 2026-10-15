@@ -1295,13 +1295,21 @@ class Relatorios(QWidget):
         self.card_sangrias.definir_legenda("retiradas do caixa")
         sobrou = valor("sobrou")
         self.card_sobrou.definir_valor(("− " if sobrou < 0 else "") + formatar_moeda(abs(sobrou)))
-        self.card_sobrou.definir_legenda("entrou − contas − sangrias")
+        # so' desconta o que foi lancado no sistema: despesas pagas fora
+        # dele (ou antes das contas a pagar existirem) nao saem daqui
+        self.card_sobrou.definir_legenda("entrou − contas − sangrias · só o lançado no sistema")
+        self.card_sobrou.setToolTip(
+            "Não é o dinheiro que a loja tem: só desconta as contas pagas e as "
+            "sangrias lançadas no sistema. Despesas pagas por fora (ou antes de "
+            "serem cadastradas) não saem daqui."
+        )
         self.card_entrou_fiado.definir_valor(formatar_moeda(valor("fiado_recebido")))
         self.card_entrou_fiado.definir_legenda("já somado no dinheiro, PIX e cartão")
 
         nota = (
             "Soma as vendas (menos estornos) e o fiado que os clientes pagaram, de todos os caixas. "
-            "Troco inicial e suprimentos não entram."
+            "Troco inicial e suprimentos não entram. \"Sobrou\" não é o dinheiro em "
+            "mãos: despesas pagas fora do sistema não são descontadas."
         )
         if valor("outros") >= 0.01:
             nota += f" Outras formas: {formatar_moeda(valor('outros'))}."

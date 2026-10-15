@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 from app.schemas.movimento_fiado import MovimentoFiadoResponse
 
@@ -51,6 +51,9 @@ class ClienteResponse(BaseModel):
     data_nascimento: date | None = None
     limite_credito: Decimal | None = None
     tem_foto: bool = False
+    negativado: bool = False
+    negativado_em: datetime | None = None
+    negativado_motivo: str | None = None
 
     class Config:
         orm_mode = True
@@ -125,3 +128,7 @@ class ClienteDadosLgpdResponse(BaseModel):
 class ClienteAnonimizadoResponse(BaseModel):
     cliente_id: int
     mensagem: str
+
+
+class NegativarClienteRequest(BaseModel):
+    motivo: str = Field(min_length=1, max_length=200)

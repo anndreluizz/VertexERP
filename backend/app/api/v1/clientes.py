@@ -11,12 +11,13 @@ from app.schemas.cliente import (
     ClienteObservacaoResponse,
     ClienteDadosLgpdResponse,
     ClienteAnonimizadoResponse,
+    NegativarClienteRequest,
 )
 from app.services.cliente_service import ClienteService
 from app.services.cliente_observacao_service import ClienteObservacaoService
 from app.services.aprovacao_service import AprovacaoService
 from app.services.whatsapp_service import WhatsappService
-from app.auth.dependencies import get_current_user, exigir_permissao, resolver_loja_id
+from app.auth.dependencies import get_current_admin, get_current_user, exigir_permissao, resolver_loja_id
 
 router = APIRouter(
     prefix="/clientes",
@@ -237,6 +238,33 @@ def reativar_cliente(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
+
+@router.post("/{cliente_id}/negativar", response_model=ClienteResponse)
+def negativar_cliente(
+    cliente_id: int,
+    dados: NegativarClienteRequest,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_admin),
+):
+    """Bloqueia o cliente (nao compra nada) e baixa a divida como perda.
+    So' admin; get_current_admin registra na auditoria."""
+    try:
+        return ClienteService.negativar(db, cliente_id, dados.motivo.strip(), usuario.id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{cliente_id}/desbloquear", response_model=ClienteResponse)
+def desbloquear_cliente(
+    cliente_id: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_admin),
+):
+    try:
+        return ClienteService.desbloquear(db, cliente_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/{cliente_id}/dados-lgpd", response_model=ClienteDadosLgpdResponse)

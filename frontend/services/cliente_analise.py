@@ -88,11 +88,14 @@ def calcular_agregados(cliente, movimentos_do_cliente):
     pagamentos = [
         m for m in movimentos_do_cliente if m.get("tipo") == "PAGAMENTO"
     ]
+    # tudo que nao e' compra abate a divida (pagamento, haver, PERDA =
+    # divida baixada de negativado) -- mesma regra do saldo no backend
+    abatimentos = [m for m in movimentos_do_cliente if m.get("tipo") != "COMPRA"]
 
     saldo_devedor = sum(
         float(m.get("valor", 0) or 0) for m in compras
     ) - sum(
-        float(m.get("valor", 0) or 0) for m in pagamentos
+        float(m.get("valor", 0) or 0) for m in abatimentos
     )
 
     datas_compra = [
@@ -122,7 +125,7 @@ def calcular_agregados(cliente, movimentos_do_cliente):
 
     criado_em = _parse_data(cliente.get("criado_em"))
 
-    compra_em_aberto, prazo_medio = _fifo_pagamentos(compras, pagamentos)
+    compra_em_aberto, prazo_medio = _fifo_pagamentos(compras, abatimentos)
 
     return {
         "saldo_devedor": saldo_devedor,
@@ -149,6 +152,10 @@ def calcular_agregados(cliente, movimentos_do_cliente):
             if saldo_devedor > _EPSILON else None
         ),
         "prazo_medio_pagamento": prazo_medio,
+        "perdido": sum(
+            float(m.get("valor", 0) or 0)
+            for m in movimentos_do_cliente if m.get("tipo") == "PERDA"
+        ),
     }
 
 

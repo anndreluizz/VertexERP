@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import String, Boolean, DateTime, Date, ForeignKey, Numeric, LargeBinary
+from sqlalchemy import String, Boolean, DateTime, Date, ForeignKey, Numeric, LargeBinary, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -87,6 +87,25 @@ class Cliente(Base):
     # cliente nao paga (ver whatsapp_lembrete_service.py).
     whatsapp_fiado_avisado_em: Mapped[datetime | None] = mapped_column(
         DateTime,
+        nullable=True
+    )
+
+    # negativado: nao compra nada (nem a vista) e a divida foi baixada
+    # como perda (MovimentoFiado tipo PERDA) -- so' admin liga/desliga
+    negativado: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=false(),
+        nullable=False
+    )
+
+    negativado_em: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True
+    )
+
+    negativado_motivo: Mapped[str | None] = mapped_column(
+        String(255),
         nullable=True
     )
 

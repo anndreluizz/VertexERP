@@ -28,6 +28,7 @@ from app.services.relatorio_service import RelatorioService, _devolvido_por_vend
 FORMAS_A_PRAZO = {"PRAZO"}
 CODIGO_PRODUTO_GENERICO = "PLANILHA"  # vendas lancadas depois, sem itens reais
 HISTORICO_MINIMO_DIAS = 60
+DIAS_PRA_SUGERIR_BAIXA = 365  # sem nenhum movimento (compra ou pagamento)
 # faixas de atraso do fiado (dias desde a compra mais antiga ainda em aberto)
 FAIXAS_ATRASO = [(0, 30), (31, 60), (61, 90), (91, 180), (181, None)]
 
@@ -217,16 +218,28 @@ class BiService:
             for de, ate in FAIXAS_ATRASO
         ]
         devedores = []
+        sugestao_baixa = []
+        perdas = _ZERO
 
         for cliente_id, movs in movimentos_por_cliente.items():
+            perdas += sum((m.valor for m in movs if m.tipo == "PERDA"), _ZERO)
             saldo = sum(
                 (m.valor if m.tipo == "COMPRA" else -m.valor for m in movs), _ZERO
             )
-            if saldo <= _EPSILON:
+            cliente = clientes.get(cliente_id)
+            # negativado: divida tratada como dinheiro perdido, fora do aberto
+            if saldo <= _EPSILON or (cliente and cliente.negativado):
                 continue
             desde = _compra_mais_antiga_em_aberto(movs)
             dias = max((agora - desde).days, 0) if desde else 0
-            cliente = clientes.get(cliente_id)
+            ultima = max(m.data for m in movs)
+            if (agora - ultima).days > DIAS_PRA_SUGERIR_BAIXA:
+                sugestao_baixa.append({
+                    "cliente_id": cliente_id,
+                    "nome": cliente.nome if cliente else f"Cliente #{cliente_id}",
+                    "saldo": saldo,
+                    "ultima_movimentacao": ultima,
+                })
             pagamentos = [m.data for m in movs if m.tipo == "PAGAMENTO"]
             devedores.append({
                 "cliente_id": cliente_id,
@@ -244,6 +257,7 @@ class BiService:
                     break
 
         devedores.sort(key=lambda d: d["saldo"], reverse=True)
+        sugestao_baixa.sort(key=lambda d: d["saldo"], reverse=True)
 
         return {
             "saldo_em_aberto": sum((d["saldo"] for d in devedores), _ZERO),
@@ -255,6 +269,10 @@ class BiService:
                 1 for d in devedores
                 if d["limite_credito"] is not None and d["saldo"] > d["limite_credito"]
             ),
+            # dinheiro perdido: dividas baixadas (negativados), nao e' "a receber"
+            "perdas_total": perdas,
+            "clientes_negativados": db.query(Cliente).filter(Cliente.negativado.is_(True)).count(),
+            "sugestao_baixa": sugestao_baixa,
         }
 
     # ---------------- contas a pagar ----------------
@@ -612,6 +630,22 @@ def recomendacoes(r):
                 "dentro do limite de crédito de cada cliente.",
                 "Próximos 30 dias", "% das vendas a prazo",
             )
+
+    if fiado.get("sugestao_baixa"):
+        candidatos = fiado["sugestao_baixa"]
+        add(
+            "media", "Dívidas paradas há mais de 1 ano: avaliar baixar como perda.",
+            [f"{len(candidatos)} clientes devem e não compram nem pagam nada há mais de "
+             f"1 ano, somando {_brl(sum(Decimal(c['saldo']) for c in candidatos))}."]
+            + [f"{c['nome']}: {_brl(c['saldo'])}, último movimento em "
+               f"{c['ultima_movimentacao']:%d/%m/%Y}." for c in candidatos[:10]],
+            "Contar como \"a receber\" o que provavelmente não volta deixa os números "
+            "otimistas demais.",
+            "Conferir na ficha de papel; se não há chance de receber, usar \"Negativar\" "
+            "na ficha do cliente (baixa como perda e bloqueia novas vendas). "
+            "Nada é baixado sem sua decisão.",
+            "Próximos 30 dias", "Dívidas paradas há mais de 1 ano",
+        )
 
     if fiado["acima_do_limite"]:
         add(

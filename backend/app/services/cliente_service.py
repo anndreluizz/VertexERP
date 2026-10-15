@@ -1,9 +1,11 @@
 import base64
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from app.schemas.cliente import ClienteUpdate
 from app.models.cliente import Cliente
+from app.models.movimento_fiado import MovimentoFiado
 from app.schemas.cliente import ClienteCreate
 from app.repositories.cliente_repository import ClienteRepository
 from app.repositories.movimento_fiado_repository import MovimentoFiadoRepository
@@ -127,6 +129,66 @@ class ClienteService:
         return {
             "mensagem": "Cliente reativado com sucesso."
         }
+
+    @staticmethod
+    def recusar_se_negativado(db: Session, cliente_id: int | None):
+        """Negativado nao compra nada, nem a vista (decisao do dono) --
+        chamado na venda, na venda suspensa e na compra manual no fiado.
+        Receber pagamento dele continua liberado."""
+        if cliente_id is None:
+            return
+        cliente = db.get(Cliente, cliente_id)
+        if cliente is not None and cliente.negativado:
+            raise Exception(
+                f"{cliente.nome} está NEGATIVADO: não é possível vender para "
+                "este cliente. Só um administrador pode desbloquear."
+            )
+
+    @staticmethod
+    def negativar(db: Session, cliente_id: int, motivo: str, usuario_id: int):
+        """Bloqueia o cliente e baixa o saldo devedor como PERDA: sai do
+        fiado em aberto, mas fica no historico. Pra receber depois, exclui
+        o lancamento de PERDA na ficha e registra o pagamento."""
+        cliente = (
+            db.query(Cliente).filter(Cliente.id == cliente_id)
+            .with_for_update().first()
+        )
+        if not cliente:
+            raise Exception("Cliente não encontrado.")
+        if cliente.negativado:
+            raise Exception(f"{cliente.nome} já está negativado.")
+
+        saldo = MovimentoFiadoRepository.saldo_por_cliente(db, cliente_id)
+        if saldo > 0:
+            db.add(MovimentoFiado(
+                cliente_id=cliente_id,
+                usuario_id=usuario_id,
+                tipo="PERDA",
+                valor=saldo,
+                descricao=f"Dívida baixada como perda: {motivo}"[:255],
+                data=datetime.now(),
+            ))
+
+        cliente.negativado = True
+        cliente.negativado_em = datetime.now()
+        cliente.negativado_motivo = motivo
+        db.commit()
+        db.refresh(cliente)
+        return cliente
+
+    @staticmethod
+    def desbloquear(db: Session, cliente_id: int):
+        """Tira o bloqueio. A divida baixada continua como perda: pra
+        cobrar de novo, exclui o lancamento de PERDA na ficha."""
+        cliente = ClienteRepository.buscar_por_id(db, cliente_id)
+        if not cliente:
+            raise Exception("Cliente não encontrado.")
+        cliente.negativado = False
+        cliente.negativado_em = None
+        cliente.negativado_motivo = None
+        db.commit()
+        db.refresh(cliente)
+        return cliente
 
     # ==================================================
     # LGPD -- direito de acesso (exportar) e ao esquecimento (anonimizar)

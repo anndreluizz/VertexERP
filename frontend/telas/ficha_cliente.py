@@ -46,6 +46,8 @@ from services.cliente_service import (
     criar_observacao_cliente,
     excluir_observacao_cliente,
     enviar_whatsapp_texto,
+    negativar_cliente,
+    desbloquear_cliente,
 )
 from telas import comprovante_acoes
 from services import cliente_analise
@@ -101,6 +103,7 @@ from design.widgets import (
     CardKPI,
     DialogoPadrao,
     estilo_botao_forma,
+    pedir_texto,
     SecaoCard,
 )
 
@@ -1355,6 +1358,8 @@ class FichaClienteDialog(QDialog):
         linha_nome.addWidget(self.lbl_titulo)
         linha_nome.addWidget(self.badge_ativo, 0, Qt.AlignVCenter)
         linha_nome.addWidget(self.badge_pontuacao, 0, Qt.AlignVCenter)
+        self.badge_negativado = Badge("NEGATIVADO · não vender", "erro")
+        linha_nome.addWidget(self.badge_negativado, 0, Qt.AlignVCenter)
         linha_nome.addStretch()
 
         self.lbl_subtitulo = QLabel()
@@ -1387,6 +1392,13 @@ class FichaClienteDialog(QDialog):
         self.bt_editar_cabecalho.setAutoDefault(False)
         self.bt_editar_cabecalho.clicked.connect(self.editar_cliente)
         linha_contato.addWidget(self.bt_editar_cabecalho)
+
+        # so' admin negativa/desbloqueia (o backend tambem barra)
+        self.bt_negativar = BotaoPerigo("Negativar", icone_nome="lock")
+        self.bt_negativar.setAutoDefault(False)
+        self.bt_negativar.clicked.connect(self._alternar_negativado)
+        self.bt_negativar.setVisible(api.usuario_e_admin())
+        linha_contato.addWidget(self.bt_negativar)
 
         layout.addLayout(linha_contato)
 
@@ -2365,6 +2377,10 @@ class FichaClienteDialog(QDialog):
             cor = tokens.ALERTA
             icone_nome = "gift"
             rotulo_tipo = "Haver"
+        elif tipo == "PERDA":
+            cor = tokens.ERRO
+            icone_nome = "lock"
+            rotulo_tipo = "Perda (baixada)"
         elif tipo == "COMPRA":
             cor = tokens.PRIMARIA
             icone_nome = "shopping-cart"
@@ -2679,6 +2695,45 @@ class FichaClienteDialog(QDialog):
         self.bt_ligar.setEnabled(bool(cliente.get("telefone")))
         self.bt_email.setEnabled(bool(cliente.get("email")))
 
+        negativado = bool(cliente.get("negativado"))
+        self.badge_negativado.setVisible(negativado)
+        self.bt_negativar.setText("Desbloquear" if negativado else "Negativar")
+        if negativado and cliente.get("negativado_motivo"):
+            self.badge_negativado.setToolTip(f"Motivo: {cliente['negativado_motivo']}")
+
+    def _alternar_negativado(self):
+        nome = self.cliente["nome"]
+        try:
+            if self.cliente.get("negativado"):
+                resposta = QMessageBox.question(
+                    self, "Desbloquear cliente",
+                    f"Desbloquear {nome}? Ele volta a poder comprar.\n\n"
+                    "A dívida baixada continua como perda. Para cobrar de novo, "
+                    "exclua o lançamento \"Perda\" no histórico.",
+                )
+                if resposta != QMessageBox.Yes:
+                    return
+                atualizado = desbloquear_cliente(self.cliente["id"])
+            else:
+                motivo, ok = pedir_texto(
+                    self, "Negativar cliente", "Motivo (fica registrado)",
+                    icone_nome="lock",
+                    subtitulo=(
+                        f"{nome} não poderá comprar nada e a dívida será "
+                        "baixada como dinheiro perdido"
+                    ),
+                    texto_botao="Negativar",
+                )
+                if not ok or not motivo.strip():
+                    return
+                atualizado = negativar_cliente(self.cliente["id"], motivo.strip())
+        except Exception as erro:
+            QMessageBox.warning(self, "Não foi possível", str(erro))
+            return
+        self.cliente.update(atualizado)
+        self._atualizar_cabecalho(self.cliente)
+        self.carregar()
+
     def _atualizar_detalhes_cadastro(self, cliente):
         """Dados de cadastro no painel Detalhes -- separado de
         _atualizar_cabecalho porque o cabeçalho é montado antes do
@@ -2912,7 +2967,7 @@ class FichaClienteDialog(QDialog):
 
     def _ao_carregar_finalizado(self):
         self._carregando = False
-        self.bt_lancar_fiado.setEnabled(True)
+        self.bt_lancar_fiado.setEnabled(not self.cliente.get("negativado"))
 
     def _ao_carregar_sucesso(self, resultado):
 

@@ -45,6 +45,8 @@ FILTROS = [
     ("Em Dia", "EM_DIA"),
     ("Bons Pagadores", "BONS_PAGADORES"),
     ("Novos Clientes", "NOVOS"),
+    # aba so' deles: divida baixada como perda, fora de todo o resto
+    ("Negativados", "NEGATIVADOS"),
 ]
 
 # icone (lucide) de cada filtro -- nao ha "clock" no pacote baixado,
@@ -57,6 +59,7 @@ _ICONES_FILTRO = {
     "EM_DIA": "check",
     "BONS_PAGADORES": "star",
     "NOVOS": "user",
+    "NEGATIVADOS": "lock",
 }
 
 # rótulo exibido -> chave interna da ordenação, na ordem que aparece no combo
@@ -134,6 +137,9 @@ def _status_cliente(cliente, agr, prazo_dias):
     inativo > inadimplente > perto do limite > devendo > em dia. É o
     que faz quem precisa de atenção saltar aos olhos na lista sem abrir
     a ficha."""
+
+    if cliente.get("negativado"):
+        return "Negativado", "erro"
 
     if not cliente.get("ativo", True):
         return "Inativo", "neutro"
@@ -267,6 +273,10 @@ class ClienteLinha(QFrame):
 
         saldo = float((agr or {}).get("saldo_devedor", 0) or 0)
         texto_status, variante = _status_cliente(cliente, agr, prazo_dias)
+        if cliente.get("negativado"):
+            # o valor da linha e' o dinheiro perdido (divida baixada)
+            saldo = float((agr or {}).get("perdido", 0) or 0)
+            texto_status = "Negativado · perdido"
 
         # uso do limite -- só quem tem limite definido; sem limite, um
         # espaço vazio do mesmo tamanho mantém as colunas alinhadas
@@ -939,14 +949,24 @@ class Clientes(QWidget):
 
     def atualizar_cards_resumo(self):
 
-        total = len(self.clientes)
+        # negativados ficam fora de tudo (contagens e a receber): a divida
+        # deles e' dinheiro perdido, so' aparece na aba deles
+        negativados = [c for c in self.clientes if c.get("negativado")]
+        normais = [c for c in self.clientes if not c.get("negativado")]
+        perdido = sum(
+            float(self.agregados_por_cliente.get(c["id"], {}).get("perdido", 0) or 0)
+            for c in negativados
+        )
+
+        total = len(normais)
         contagem = {chave: 0 for _, chave in FILTROS}
         contagem["TODOS"] = total
+        contagem["NEGATIVADOS"] = len(negativados)
 
         devendo = 0
         valor_inadimplente = 0.0
 
-        for cliente in self.clientes:
+        for cliente in normais:
 
             agr = self.agregados_por_cliente.get(cliente["id"])
 
@@ -970,12 +990,13 @@ class Clientes(QWidget):
                 contagem["BONS_PAGADORES"] += 1
 
         total_a_receber = sum(
-            float(c.get("saldo_fiado", 0) or 0) for c in self.clientes
+            float(c.get("saldo_fiado", 0) or 0) for c in normais
         )
 
         self.card_a_receber.definir_valor(formatar_moeda(total_a_receber))
         self.card_a_receber.definir_legenda(
             f"{devendo} cliente{'s' if devendo != 1 else ''} com saldo"
+            + (f" · {formatar_moeda(perdido)} perdido (negativados)" if perdido else "")
         )
         self.card_recebido_fiado.definir_valor(
             formatar_moeda(self.recebido_fiado_total)
@@ -1059,7 +1080,8 @@ class Clientes(QWidget):
 
         texto = self.pesquisa.text().lower().strip()
 
-        clientes = self.clientes
+        negativados = self.filtro_status == "NEGATIVADOS"
+        clientes = [c for c in self.clientes if bool(c.get("negativado")) == negativados]
 
         def agr(c):
             return self.agregados_por_cliente.get(c["id"], {})

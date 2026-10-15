@@ -359,6 +359,7 @@ class _Ficha extends ConsumerWidget {
         'COMPRA' => '🛒 Compra',
         'PAGAMENTO' => '💵 Pagamento',
         'HAVER' => '💰 Haver',
+        'PERDA' => '🔒 Perda (baixada)',
         _ => mov.tipo,
       };
       final sinal = compra ? '+' : '-';
@@ -518,6 +519,11 @@ class _Ficha extends ConsumerWidget {
       fundo = VertexColors.alertaClaro;
       cor = VertexColors.alertaTexto;
       titulo = movimento.descricao ?? 'Crédito (haver)';
+    } else if (movimento.tipo == 'PERDA') {
+      icone = Icons.lock_outline;
+      fundo = VertexColors.erroClaro;
+      cor = VertexColors.erro;
+      titulo = movimento.descricao ?? 'Dívida baixada como perda';
     } else {
       icone = Icons.check_rounded;
       fundo = VertexColors.sucessoClaro;

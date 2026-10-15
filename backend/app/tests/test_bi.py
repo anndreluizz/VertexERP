@@ -171,6 +171,7 @@ def test_contas_por_vencimento_e_previsao(client, auth_headers, db, produto, usu
     assert float(contas["pagas_no_periodo"]) == 5
     assert float(dados["recebimentos"]["fiado_recebido"]) == 60
     assert float(dados["caixa"]["dinheiro_nas_gavetas"]) == 70
+    assert float(dados["caixa"]["entrou_no_periodo"]) == 30 + 60
 
     prev = dados["previsao_30_dias"]
     # 1 dia de historico: (30 a vista + 60 fiado) / 1 dia * 30

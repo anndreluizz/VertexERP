@@ -92,7 +92,12 @@ class BiService:
             "recebimentos": {"fiado_recebido": recebido_fiado},
             "fiado": fiado,
             "contas_pagar": contas,
-            "caixa": {"dinheiro_nas_gavetas": gavetas},
+            # gavetas = so' os caixas ABERTOS agora; ao fechar, o dinheiro sai
+            # pro cofre/banco/donos e o sistema nao registra esse saldo
+            "caixa": {
+                "dinheiro_nas_gavetas": gavetas,
+                "entrou_no_periodo": vendas["a_vista"] + Decimal(recebido_fiado),
+            },
             "previsao_30_dias": BiService._previsao(db, agora, loja_id, gavetas, contas),
             "lojas": BiService._lojas(db, inicio, fim, agora) if loja_id is None else [],
             "avisos": avisos,
@@ -322,7 +327,9 @@ class BiService:
                 "Entradas estimadas pela média do que entrou de verdade "
                 f"(vendas à vista + fiado recebido) nos últimos {dias_base} dias. "
                 "Saídas = contas pendentes vencidas e com vencimento nos "
-                "próximos 30 dias. Não inclui saldo bancário (não registrado)."
+                "próximos 30 dias. Parte só do dinheiro que está nos caixas abertos "
+                "agora: o dinheiro já guardado depois de fechar o caixa (cofre, "
+                "banco, retiradas) não é registrado no sistema e não entra na conta."
             ),
         }
 
@@ -497,14 +504,16 @@ def recomendacoes(r):
                 f"Entradas estimadas: {_brl(prev['entradas_estimadas'])} (média de "
                 f"{_brl(prev['media_diaria_entradas'])}/dia dos últimos "
                 f"{prev['dias_de_base']} dias).",
-                f"Dinheiro nas gavetas agora: {_brl(prev['dinheiro_nas_gavetas'])}.",
+                f"Dinheiro nos caixas abertos agora: {_brl(prev['dinheiro_nas_gavetas'])} "
+                "(o que já foi guardado depois de fechar o caixa não é registrado).",
                 f"Falta estimada: {_brl(-Decimal(prev['saldo_previsto']))}.",
             ] + [
                 f"Conta próxima: {c['descricao'] or 'sem descrição'}, "
                 f"{_brl(c['valor'])} em {c['vencimento']:%d/%m}." for c in maiores
             ],
-            "Risco de faltar dinheiro para pagar as contas. A estimativa não inclui "
-            "saldo bancário (não registrado no sistema).",
+            "Risco de faltar dinheiro para pagar as contas. A conta não inclui o "
+            "dinheiro guardado no cofre ou no banco (não registrado no sistema): "
+            "se houver, a falta real é menor nesse valor.",
             "Priorizar a cobrança dos maiores devedores do fiado, tentar adiar ou "
             "parcelar as maiores contas acima e segurar despesas que podem esperar.",
             "Esta semana", "Saldo previsto em 30 dias maior ou igual a R$ 0,00",

@@ -190,7 +190,7 @@ class InteligenciaNegocios(QWidget):
         self.secao_lojas = SecaoCard("Matriz × Filial", "store")
         self.tabela_lojas = tabela_lista([
             "Loja", "Faturamento", "Vendas", "Ticket médio", "À vista", "A prazo",
-            "Fiado recebido", "Contas 30 dias", "Nas gavetas",
+            "Fiado recebido", "Contas 30 dias", "Nos caixas abertos",
         ])
         self.secao_lojas.corpo.addWidget(self.tabela_lojas)
         layout.addWidget(self.secao_lojas)
@@ -326,7 +326,10 @@ class InteligenciaNegocios(QWidget):
             f"{fiado['clientes_devendo']} clientes · empresa toda · não é dinheiro em caixa"
         )
         self.card_recebido.definir_valor(formatar_moeda(d["recebimentos"]["fiado_recebido"]))
-        self.card_recebido.definir_legenda("no período, pelos lançamentos do caixa")
+        self.card_recebido.definir_legenda(
+            f"entrou no período (à vista + fiado): "
+            f"{formatar_moeda(d['caixa']['entrou_no_periodo'])}"
+        )
         a_pagar = float(contas["vencidas"]["total"]) + float(contas["proximos_30_dias"]["total"])
         self.card_contas.definir_valor(formatar_moeda(a_pagar))
         self.card_contas.definir_legenda(
@@ -336,7 +339,7 @@ class InteligenciaNegocios(QWidget):
         self.card_previsao.definir_valor(formatar_moeda(prev["saldo_previsto"]))
         self.card_previsao.definir_legenda(
             f"entra ~{formatar_moeda(prev['entradas_estimadas'])} · "
-            f"sai {formatar_moeda(prev['saidas_previstas'])} · estimativa"
+            f"sai {formatar_moeda(prev['saidas_previstas'])} · sem cofre/banco"
         )
         self.card_previsao.setToolTip(prev["observacao"])
 

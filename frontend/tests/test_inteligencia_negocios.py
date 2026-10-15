@@ -29,6 +29,7 @@ def _resumo(lucro=None, recomendacoes=(), avisos=(), lojas=()):
                        {"forma_pagamento": "PIX", "quantidade": 1, "total": 70}],
                    "mais_vendidos": [{"produto": "Caneta", "quantidade": 3, "total": 9}]},
         "recebimentos": {"fiado_recebido": 5},
+        "caixa": {"dinheiro_nas_gavetas": 0, "entrou_no_periodo": 75},
         "fiado": {"saldo_em_aberto": 40, "clientes_devendo": 1,
                   "faixas_atraso": [{"de_dias": 181, "ate_dias": None, "clientes": 1, "total": 40}],
                   "maiores_devedores": [{"nome": "Ana", "saldo": 40, "dias_em_atraso": 200,

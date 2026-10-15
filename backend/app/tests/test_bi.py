@@ -209,3 +209,97 @@ def test_usuario_preso_a_loja_so_ve_a_dele(client, db, produto, usuario_comum):
 def test_data_final_antes_da_inicial(client, auth_headers):
     resposta = _resumo(client, auth_headers, inicio=HOJE, fim=HOJE - timedelta(days=1))
     assert resposta.status_code == 400
+
+
+# ---------------- recomendacoes (regras puras, sem banco) ----------------
+
+from copy import deepcopy
+from decimal import Decimal
+
+from app.services.bi_service import recomendacoes
+
+SAUDAVEL = {
+    "periodo": {"data_inicio": date(2026, 10, 1), "data_fim": date(2026, 10, 30),
+                "dias": 30, "loja_nome": "Todas as lojas"},
+    "vendas": {"a_prazo": Decimal("100"), "faturamento_liquido": Decimal("1000"),
+               "quantidade": 50, "produtos_sem_venda": {"quantidade": 0, "exemplos": []}},
+    "recebimentos": {"fiado_recebido": Decimal("150")},
+    "fiado": {"faixas_atraso": [{"de_dias": 0, "clientes": 1, "total": Decimal("50")},
+                                {"de_dias": 91, "clientes": 0, "total": Decimal("0")}],
+              "maiores_devedores": [], "saldo_em_aberto": Decimal("50"),
+              "clientes_devendo": 1, "devedores_sem_telefone": 0, "acima_do_limite": 0},
+    "contas_pagar": {"vencidas": {"quantidade": 0, "total": Decimal("0")},
+                     "proximos_7_dias": {"quantidade": 0, "total": Decimal("0")},
+                     "proximas": []},
+    "previsao_30_dias": {"dias_de_base": 30, "saldo_previsto": Decimal("500"),
+                         "saidas_previstas": Decimal("100"), "entradas_estimadas": Decimal("600"),
+                         "media_diaria_entradas": Decimal("20"), "dinheiro_nas_gavetas": Decimal("0")},
+    "qualidade_dados": {"produtos_ativos": 10, "produtos_sem_custo": 0,
+                        "produtos_sem_estoque_minimo": 0, "dias_de_historico": 90},
+    "lojas": [],
+}
+
+
+def _com(**mudancas):
+    r = deepcopy(SAUDAVEL)
+    for caminho, valor in mudancas.items():
+        alvo = r
+        *pais, chave = caminho.split("__")
+        for p in pais:
+            alvo = alvo[p]
+        alvo[chave] = valor
+    return [(x["prioridade"], x["problema"]) for x in recomendacoes(r)]
+
+
+def test_empresa_saudavel_nao_gera_alarme():
+    assert recomendacoes(deepcopy(SAUDAVEL)) == []
+
+
+def test_cada_regra_dispara_com_a_prioridade_certa():
+    assert _com(contas_pagar__vencidas={"quantidade": 2, "total": Decimal("300")})[0][0] == "critica"
+    # falta no mes, mas a semana cabe no caixa: alta
+    assert _com(previsao_30_dias__saldo_previsto=Decimal("-10"))[0][0] == "alta"
+    # e a semana nao cabe: critica
+    r = deepcopy(SAUDAVEL)
+    r["previsao_30_dias"]["saldo_previsto"] = Decimal("-10")
+    r["contas_pagar"]["proximos_7_dias"]["total"] = Decimal("1000")
+    assert recomendacoes(r)[0]["prioridade"] == "critica"
+
+    antigo = [{"de_dias": 91, "clientes": 3, "total": Decimal("900")}]
+    assert ("alta", "Fiado com mais de 90 dias em aberto.") in _com(fiado__faixas_atraso=antigo)
+    assert _com(recebimentos__fiado_recebido=Decimal("10"))[0][1].startswith("O fiado está crescendo")
+    assert _com(vendas__a_prazo=Decimal("600"),
+                recebimentos__fiado_recebido=Decimal("600"))[0][1].endswith("a maior parte das vendas é a prazo.")
+    assert _com(fiado__acima_do_limite=2)[0][0] == "media"
+    assert _com(fiado__devedores_sem_telefone=1)[0][0] == "media"
+    assert _com(qualidade_dados__produtos_sem_custo=3)[0][0] == "media"
+    assert _com(qualidade_dados__produtos_sem_estoque_minimo=3)[0][0] == "baixa"
+
+
+def test_nao_conclui_com_poucos_dados():
+    # poucas vendas: nao julga a participacao a prazo
+    assert _com(vendas__a_prazo=Decimal("600"), vendas__quantidade=5,
+                recebimentos__fiado_recebido=Decimal("600")) == []
+    # sem historico de entradas: nao faz previsao
+    assert _com(previsao_30_dias__saldo_previsto=Decimal("-10"),
+                previsao_30_dias__dias_de_base=0) == []
+    # produto parado so' conta com 30+ dias de historico
+    parado = {"quantidade": 1, "exemplos": [{"produto": "X", "estoque": 5}]}
+    assert _com(vendas__produtos_sem_venda=parado, qualidade_dados__dias_de_historico=10) == []
+    assert _com(vendas__produtos_sem_venda=parado)[0][0] == "baixa"
+
+
+def test_resumo_traz_recomendacoes_ordenadas(client, auth_headers, db, produto):
+    matriz, _ = _lojas(db)
+    produto.preco_custo = 0
+    db.add(ContaPagar(valor=50, data_vencimento=datetime.now() - timedelta(days=2),
+                      loja_id=matriz.id))
+    db.commit()
+
+    recs = _resumo(client, auth_headers).json()["recomendacoes"]
+
+    prioridades = [r["prioridade"] for r in recs]
+    assert prioridades[0] == "critica"
+    assert prioridades == sorted(prioridades, key=["critica", "alta", "media", "baixa"].index)
+    assert all({"problema", "evidencias", "impacto", "acao", "prazo", "indicador"} <= r.keys()
+               for r in recs)

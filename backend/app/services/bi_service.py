@@ -77,8 +77,9 @@ class BiService:
         fiado = BiService._fiado(db, agora)
         contas = BiService._contas_pagar(db, inicio, fim, agora, loja_id)
         gavetas = BiService._dinheiro_nas_gavetas(db, loja_id)
+        avisos, qualidade = BiService._avisos(db, loja_id, fiado)
 
-        return {
+        resultado = {
             "periodo": {
                 "data_inicio": data_inicio,
                 "data_fim": data_fim,
@@ -94,8 +95,11 @@ class BiService:
             "caixa": {"dinheiro_nas_gavetas": gavetas},
             "previsao_30_dias": BiService._previsao(db, agora, loja_id, gavetas, contas),
             "lojas": BiService._lojas(db, inicio, fim, agora) if loja_id is None else [],
-            "avisos": BiService._avisos(db, loja_id, fiado),
+            "avisos": avisos,
+            "qualidade_dados": qualidade,
         }
+        resultado["recomendacoes"] = recomendacoes(resultado)
+        return resultado
 
     # ---------------- vendas ----------------
 
@@ -393,6 +397,7 @@ class BiService:
         if loja_id is not None:
             primeira = primeira.filter(Venda.loja_id == loja_id)
         primeira = primeira.scalar()
+        dias_historico = (datetime.now() - primeira).days + 1 if primeira else 0
         if primeira is None:
             avisos.append("Nenhuma venda registrada ainda.")
         elif (datetime.now() - primeira).days < HISTORICO_MINIMO_DIAS:
@@ -419,4 +424,198 @@ class BiService:
                 "O fiado é da empresa toda: o caderno não separa por loja "
                 "(dívidas antigas foram migradas sem loja)."
             )
-        return avisos
+        return avisos, {
+            "produtos_ativos": total_ativos,
+            "produtos_sem_custo": sem_custo,
+            "produtos_sem_estoque_minimo": sem_minimo,
+            "vendas_sem_produto": genericas,
+            "dias_de_historico": dias_historico,
+        }
+
+
+# ==================================================
+# RECOMENDACOES (regras fixas sobre os numeros ja calculados -- nada
+# aqui e' estimado por IA; cada uma diz de onde veio o numero)
+# ==================================================
+
+ORDEM_PRIORIDADE = {"critica": 0, "alta": 1, "media": 2, "baixa": 3}
+PARTICIPACAO_A_PRAZO_ALTA = Decimal("0.5")
+RECEBIMENTO_MINIMO_DO_VENDIDO_A_PRAZO = Decimal("0.5")
+VENDAS_MINIMAS_PRA_CONCLUIR = 20
+
+
+def _brl(valor):
+    texto = f"{Decimal(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {texto}"
+
+
+def _pct(parte, todo):
+    return f"{Decimal(parte) / Decimal(todo) * 100:.0f}%"
+
+
+def recomendacoes(r):
+    """Transforma o resumo em acoes pro dono. Recebe o dict de
+    BiService.resumo (sem banco), entao cada regra e' testavel sozinha."""
+    lista = []
+    periodo = r["periodo"]
+    rotulo = (
+        f"{periodo['data_inicio']:%d/%m/%Y} a {periodo['data_fim']:%d/%m/%Y} "
+        f"({periodo['loja_nome']})"
+    )
+    vendas, fiado, contas = r["vendas"], r["fiado"], r["contas_pagar"]
+    prev, qualidade = r["previsao_30_dias"], r["qualidade_dados"]
+
+    def add(prioridade, problema, evidencias, impacto, acao, prazo, indicador):
+        lista.append({
+            "prioridade": prioridade, "problema": problema, "evidencias": evidencias,
+            "impacto": impacto, "acao": acao, "prazo": prazo, "indicador": indicador,
+        })
+
+    if contas["vencidas"]["quantidade"]:
+        add(
+            "critica", "Há contas a pagar vencidas.",
+            [f"{contas['vencidas']['quantidade']} contas vencidas somando "
+             f"{_brl(contas['vencidas']['total'])} (contas a pagar pendentes)."],
+            "Juros, multa e risco de corte ou protesto.",
+            "Pagar ou renegociar as vencidas antes das próximas; ligar para o "
+            "fornecedor e pedir novo vencimento quando não houver dinheiro.",
+            "Hoje", "Contas vencidas = R$ 0,00",
+        )
+
+    if prev["dias_de_base"] and Decimal(prev["saldo_previsto"]) < 0:
+        sete_dias = Decimal(contas["proximos_7_dias"]["total"])
+        cabe_na_semana = (
+            Decimal(prev["dinheiro_nas_gavetas"]) + Decimal(prev["media_diaria_entradas"]) * 7
+        )
+        maiores = sorted(contas["proximas"], key=lambda c: c["valor"], reverse=True)[:3]
+        add(
+            "critica" if sete_dias > cabe_na_semana else "alta",
+            "A previsão de pagamentos dos próximos 30 dias supera as entradas estimadas.",
+            [
+                f"Saídas previstas: {_brl(prev['saidas_previstas'])} (contas vencidas e "
+                "com vencimento em até 30 dias).",
+                f"Entradas estimadas: {_brl(prev['entradas_estimadas'])} (média de "
+                f"{_brl(prev['media_diaria_entradas'])}/dia dos últimos "
+                f"{prev['dias_de_base']} dias).",
+                f"Dinheiro nas gavetas agora: {_brl(prev['dinheiro_nas_gavetas'])}.",
+                f"Falta estimada: {_brl(-Decimal(prev['saldo_previsto']))}.",
+            ] + [
+                f"Conta próxima: {c['descricao'] or 'sem descrição'}, "
+                f"{_brl(c['valor'])} em {c['vencimento']:%d/%m}." for c in maiores
+            ],
+            "Risco de faltar dinheiro para pagar as contas. A estimativa não inclui "
+            "saldo bancário (não registrado no sistema).",
+            "Priorizar a cobrança dos maiores devedores do fiado, tentar adiar ou "
+            "parcelar as maiores contas acima e segurar despesas que podem esperar.",
+            "Esta semana", "Saldo previsto em 30 dias maior ou igual a R$ 0,00",
+        )
+
+    antigas = [f for f in fiado["faixas_atraso"] if f["de_dias"] > 90]
+    total_antigo = sum((Decimal(f["total"]) for f in antigas), _ZERO)
+    if total_antigo > 0:
+        clientes_antigos = sum(f["clientes"] for f in antigas)
+        alvos = [d for d in fiado["maiores_devedores"] if d["dias_em_atraso"] > 90][:5]
+        add(
+            "alta", "Fiado com mais de 90 dias em aberto.",
+            [f"{clientes_antigos} clientes devem há mais de 90 dias, somando "
+             f"{_brl(total_antigo)} de {_brl(fiado['saldo_em_aberto'])} em aberto "
+             "(caderno de fiado, empresa toda)."]
+            + [f"{d['nome']}: {_brl(d['saldo'])}, compra mais antiga em aberto há "
+               f"{d['dias_em_atraso']} dias." for d in alvos],
+            "Quanto mais antiga a dívida, menor a chance de receber.",
+            "Cobrar primeiro os maiores valores mais antigos; oferecer parcelamento "
+            "em vez de esperar o valor inteiro. Envio de cobrança só com sua autorização.",
+            "Próximos 15 dias", "Fiado com mais de 90 dias (R$)",
+        )
+
+    a_prazo = Decimal(vendas["a_prazo"])
+    recebido = Decimal(r["recebimentos"]["fiado_recebido"])
+    if (
+        a_prazo > 0 and periodo["dias"] >= 7
+        and recebido < a_prazo * RECEBIMENTO_MINIMO_DO_VENDIDO_A_PRAZO
+    ):
+        add(
+            "alta", "O fiado está crescendo: entra menos do que se vende a prazo.",
+            [f"Vendido a prazo em {rotulo}: {_brl(a_prazo)}.",
+             f"Fiado recebido no mesmo período: {_brl(recebido)} "
+             f"({_pct(recebido, a_prazo)} do vendido a prazo)."],
+            f"A dívida dos clientes aumentou cerca de {_brl(a_prazo - recebido)} no período.",
+            "Combinar data de pagamento em toda venda a prazo e cobrar no vencimento; "
+            "segurar novas vendas a prazo para quem está atrasado.",
+            "Próximos 30 dias", "Fiado recebido dividido pelo vendido a prazo (meta 100%)",
+        )
+
+    escopos = r["lojas"] or [{"loja_nome": periodo["loja_nome"], **vendas}]
+    for loja in escopos:
+        liquido = Decimal(loja["faturamento_liquido"])
+        if loja["quantidade"] < VENDAS_MINIMAS_PRA_CONCLUIR or liquido <= 0:
+            continue
+        if Decimal(loja["a_prazo"]) / liquido > PARTICIPACAO_A_PRAZO_ALTA:
+            add(
+                "alta", f"{loja['loja_nome']}: a maior parte das vendas é a prazo.",
+                [f"A prazo: {_brl(loja['a_prazo'])} de {_brl(liquido)} vendidos em "
+                 f"{periodo['data_inicio']:%d/%m/%Y} a {periodo['data_fim']:%d/%m/%Y} "
+                 f"({_pct(loja['a_prazo'], liquido)}), em {loja['quantidade']} vendas."],
+                "Venda a prazo não vira dinheiro no caixa até o cliente pagar.",
+                "Incentivar pagamento à vista (PIX/dinheiro) e vender a prazo só "
+                "dentro do limite de crédito de cada cliente.",
+                "Próximos 30 dias", "% das vendas a prazo",
+            )
+
+    if fiado["acima_do_limite"]:
+        add(
+            "media", "Clientes com dívida acima do limite de crédito.",
+            [f"{fiado['acima_do_limite']} clientes devem mais do que o limite cadastrado."],
+            "Mais venda a prazo para quem já passou do limite aumenta o risco de não receber.",
+            "Revisar esses clientes antes de vender a prazo de novo. O sistema avisa, "
+            "mas não bloqueia sozinho; mudar limite ou bloquear só com sua decisão.",
+            "Próximos 15 dias", "Clientes acima do limite",
+        )
+
+    if fiado["devedores_sem_telefone"]:
+        sem_tel = [d for d in fiado["maiores_devedores"] if not d["tem_telefone"]][:5]
+        add(
+            "media", "Clientes devendo sem telefone cadastrado.",
+            [f"{fiado['devedores_sem_telefone']} de {fiado['clientes_devendo']} clientes "
+             "com saldo em aberto não têm telefone."]
+            + [f"{d['nome']}: {_brl(d['saldo'])}." for d in sem_tel],
+            "Sem contato não há como cobrar nem lembrar do vencimento.",
+            "Pedir e cadastrar o telefone na próxima vez que o cliente vier, "
+            "começando pelos maiores saldos.",
+            "Próximos 30 dias", "Devedores sem telefone",
+        )
+
+    if qualidade["produtos_sem_custo"]:
+        add(
+            "media", "Produtos sem custo cadastrado.",
+            [f"{qualidade['produtos_sem_custo']} de {qualidade['produtos_ativos']} "
+             "produtos ativos sem preço de custo."],
+            "Sem custo não dá para saber o lucro nem quais produtos dão mais margem.",
+            "Cadastrar o custo (nota do fornecedor) começando pelos produtos que mais vendem.",
+            "Próximos 30 dias", "Produtos sem custo",
+        )
+
+    if qualidade["produtos_sem_estoque_minimo"]:
+        add(
+            "baixa", "Produtos sem estoque mínimo.",
+            [f"{qualidade['produtos_sem_estoque_minimo']} de {qualidade['produtos_ativos']} "
+             "produtos ativos sem estoque mínimo."],
+            "O sistema não consegue avisar quando repor.",
+            "Definir o estoque mínimo dos produtos que vendem com frequência.",
+            "Próximos 30 dias", "Produtos sem estoque mínimo",
+        )
+
+    parados = [p for p in vendas["produtos_sem_venda"]["exemplos"] if p["estoque"] > 0]
+    if parados and periodo["dias"] >= 30 and qualidade["dias_de_historico"] >= 30:
+        add(
+            "baixa", "Produtos com estoque e sem venda no período.",
+            [f"{vendas['produtos_sem_venda']['quantidade']} produtos ativos sem venda "
+             f"em {rotulo}."]
+            + [f"{p['produto']}: {p['estoque']} em estoque." for p in parados[:5]],
+            "Dinheiro parado em mercadoria.",
+            "Avaliar promoção, combo ou exposição melhor para esses itens.",
+            "Próximos 30 dias", "Produtos sem venda no período",
+        )
+
+    lista.sort(key=lambda x: ORDEM_PRIORIDADE[x["prioridade"]])
+    return lista

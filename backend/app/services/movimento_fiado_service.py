@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
+from app.models.caixa import Caixa
 from app.models.cliente import Cliente
 from app.models.movimento_fiado import MovimentoFiado
 from app.models.movimento_caixa import MovimentoCaixa
@@ -26,12 +27,18 @@ def _ajustar_caixa_por_correcao(
     diferenca: Decimal,
     forma_pagamento: str,
     motivo: str,
+    caixa_id_original: int | None = None,
 ) -> bool:
     """Reflete a correcao/exclusao de um PAGAMENTO de fiado no caixa --
     mesmo 'tipo' (RECEBIMENTO_FIADO) do lancamento original, so que com
     o valor da diferenca (negativo reduz, positivo aumenta), pra toda
     soma existente (CaixaService.resumo) continuar batendo sozinha,
     sem precisar conhecer um tipo novo 'estorno'.
+
+    Vai no caixa onde o recebimento entrou se ele ainda estiver aberto
+    (o dinheiro esta naquela gaveta, mesmo que quem corrige seja outro
+    usuario); ja fechado ou recebimento antigo sem caixa_id, vai no
+    caixa aberto de quem esta corrigindo.
 
     Devolve False (e nao mexe em nada) se nao houver caixa aberto pro
     usuario que esta corrigindo -- a correcao do fiado em si acontece
@@ -41,7 +48,20 @@ def _ajustar_caixa_por_correcao(
     if diferenca == 0:
         return True
 
-    caixa = CaixaRepository.buscar_aberto(db, usuario_id, para_atualizar=True)
+    caixa = None
+
+    if caixa_id_original is not None:
+        caixa = (
+            db.query(Caixa)
+            .filter(Caixa.id == caixa_id_original, Caixa.status == "ABERTO")
+            .with_for_update()
+            .first()
+        )
+
+    if not caixa:
+        caixa = CaixaRepository.buscar_aberto(
+            db, usuario_id, para_atualizar=True
+        )
 
     if not caixa:
         return False
@@ -186,6 +206,7 @@ class MovimentoFiadoService:
                 )
             )
 
+        caixa_id = caixa.id if tipo == "PAGAMENTO" and forma_pagamento else None
         data = dados.data or datetime.now()
         venda_id = dados.venda_id
 
@@ -218,6 +239,7 @@ class MovimentoFiadoService:
             cliente_id=dados.cliente_id,
             venda_id=venda_id,
             usuario_id=usuario_id,
+            caixa_id=caixa_id,
             tipo=tipo,
             valor=dados.valor,
             descricao=dados.descricao,
@@ -277,7 +299,8 @@ class MovimentoFiadoService:
     ) -> tuple:
         """Corrige um lancamento errado (valor e/ou descricao). Se for
         um PAGAMENTO que tinha impactado o caixa, a diferenca de valor
-        e refletida no caixa aberto de quem esta corrigindo -- devolve
+        e refletida no caixa onde ele entrou (ou, ja fechado, no de quem
+        esta corrigindo) -- devolve
         (movimento, caixa_ajustado) pra API poder avisar quando nao
         havia caixa aberto pra ajustar automaticamente."""
 
@@ -316,6 +339,7 @@ class MovimentoFiadoService:
                 dados.valor - valor_antigo,
                 movimento.forma_pagamento,
                 "Ajuste de fiado",
+                movimento.caixa_id,
             )
 
         movimento = MovimentoFiadoRepository.atualizar(db, movimento)
@@ -325,8 +349,8 @@ class MovimentoFiadoService:
     @staticmethod
     def excluir(db: Session, movimento_id: int, usuario_id: int) -> bool:
         """Exclui um lancamento errado. Se era um PAGAMENTO que tinha
-        impactado o caixa, estorna no caixa aberto de quem esta
-        excluindo -- devolve False se nao havia caixa aberto (o
+        impactado o caixa, estorna no caixa onde ele entrou (ou,
+        ja fechado, no de quem esta excluindo) -- devolve False se nao havia caixa aberto (o
         lancamento e excluido de qualquer forma, so o estorno
         automatico do caixa fica pendente)."""
 
@@ -350,6 +374,7 @@ class MovimentoFiadoService:
                 -movimento.valor,
                 movimento.forma_pagamento,
                 "Exclusão de fiado",
+                movimento.caixa_id,
             )
 
         MovimentoFiadoRepository.excluir(db, movimento)

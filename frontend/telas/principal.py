@@ -9,6 +9,7 @@ from telas.contagem_estoque import ContagemEstoque
 from telas.clientes import Clientes
 from telas.fornecedores import Fornecedores
 from telas.relatorios import Relatorios
+from telas.inteligencia_negocios import InteligenciaNegocios
 from telas.contas_pagar import ContasPagar
 from telas.conciliacao_bancaria import ConciliacaoBancaria
 from telas.visao_geral import VisaoGeral
@@ -133,6 +134,7 @@ ITENS_MENU = [
     ("conciliacao_bancaria", "credit-card", "Conciliação Bancária"),
     ("visao_geral", "trending-up", "Visão Geral"),
     ("relatorios", "bar-chart-2", "Relatórios"),
+    ("inteligencia", "lightbulb", "Inteligência de Negócios"),
     ("config", "settings", "Configurações"),
 ]
 
@@ -239,6 +241,8 @@ class PrincipalWindow(QMainWindow):
 
         self.relatorios = Relatorios()
 
+        self.inteligencia = InteligenciaNegocios()
+
         self.config = Configuracoes()
 
         self.paginas.addWidget(self.dashboard)
@@ -255,6 +259,7 @@ class PrincipalWindow(QMainWindow):
         self.paginas.addWidget(self.conciliacao_bancaria)
         self.paginas.addWidget(self.visao_geral)
         self.paginas.addWidget(self.relatorios)
+        self.paginas.addWidget(self.inteligencia)
         self.paginas.addWidget(self.config)
 
         layout.addWidget(area_central, stretch=1)
@@ -402,6 +407,7 @@ class PrincipalWindow(QMainWindow):
             "contas_pagar": self.ir_para_contas_pagar,
             "visao_geral": self.ir_para_visao_geral,
             "relatorios": self.ir_para_relatorios,
+            "inteligencia": self.ir_para_inteligencia,
         }
 
         if chave in despachantes:
@@ -547,6 +553,11 @@ class PrincipalWindow(QMainWindow):
 
         self.relatorios.carregar()
         self._exibir_pagina("relatorios", self.relatorios)
+
+    def ir_para_inteligencia(self):
+
+        self.inteligencia.carregar()
+        self._exibir_pagina("inteligencia", self.inteligencia)
 
     def ir_para_contas_pagar(self):
 

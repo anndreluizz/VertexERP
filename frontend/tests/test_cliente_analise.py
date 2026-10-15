@@ -82,3 +82,12 @@ def test_selo_ao_lado_do_nome():
     assert ca.selo_pagador(lento) == ("Paga com atraso", "alerta")
     assert ca.selo_pagador(_agr(_mov("COMPRA", 50, 3))) is None
     assert ca.selo_pagador({}) is None
+
+
+def test_haver_e_perda_abatem_a_divida():
+    # antes so' PAGAMENTO abatia: haver e divida baixada (PERDA) ficavam
+    # contando como "a receber"
+    agr = _agr(_mov("COMPRA", 100, 400), _mov("HAVER", 30, 10), _mov("PERDA", 70, 1))
+    assert agr["saldo_devedor"] == 0
+    assert agr["perdido"] == 70
+    assert agr["dias_em_atraso"] is None

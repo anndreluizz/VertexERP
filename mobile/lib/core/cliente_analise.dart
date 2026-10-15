@@ -109,7 +109,8 @@ AnaliseCliente analisarCliente(
     ..sort((a, b) => a.data.compareTo(b.data));
   final abatimentos =
       movimentos
-          .where((m) => m.tipo == 'PAGAMENTO' || m.tipo == 'HAVER')
+          // tudo que nao e' compra abate (PERDA = divida baixada)
+          .where((m) => m.tipo != 'COMPRA')
           .toList()
         ..sort((a, b) => a.data.compareTo(b.data));
 

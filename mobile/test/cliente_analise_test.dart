@@ -97,4 +97,10 @@ void main() {
     expect(todos[1]!.saldoDevedor, 10);
     expect(todos[2]!.saldoDevedor, 30);
   });
+
+  test('divida baixada como perda nao conta como a receber', () {
+    final a = _agr([_mov('COMPRA', 100, 400), _mov('PERDA', 100, 1)]);
+    expect(a.saldoDevedor, 0);
+    expect(a.diasEmAtraso, isNull);
+  });
 }

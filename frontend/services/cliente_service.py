@@ -121,3 +121,28 @@ def remover_dados_lgpd(cliente_id):
     irreversível)."""
 
     return delete(f"/clientes/{cliente_id}/dados-lgpd")
+
+
+def negativar_cliente(cliente_id, motivo):
+    """Bloqueia o cliente (nao compra nada) e baixa a divida como perda.
+    So' admin -- o backend recusa os outros."""
+
+    response = post(f"/clientes/{cliente_id}/negativar", {"motivo": motivo})
+    if response.status_code != 200:
+        raise Exception(_detalhe(response))
+    return response.json()
+
+
+def desbloquear_cliente(cliente_id):
+
+    response = post(f"/clientes/{cliente_id}/desbloquear", {})
+    if response.status_code != 200:
+        raise Exception(_detalhe(response))
+    return response.json()
+
+
+def _detalhe(response):
+    try:
+        return response.json().get("detail") or response.text
+    except ValueError:
+        return response.text

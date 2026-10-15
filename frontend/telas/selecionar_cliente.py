@@ -3,6 +3,7 @@ import unicodedata
 from PySide6.QtCore import Qt, Signal, QEvent
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QMessageBox,
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -79,6 +80,9 @@ def situacao_fiado(cliente):
     saldo = float(agr.get("saldo_devedor", 0) or 0)
     limite = float(cliente.get("limite_credito") or 0)
     disponivel = (limite - saldo) if limite > 0 else None
+
+    if cliente.get("negativado"):
+        return "NEGATIVADO · não vender", "erro", None
 
     if agr and cliente_analise.eh_inadimplente(agr):
         return f"Atrasado · {agr.get('dias_em_atraso')} dias", "erro", disponivel
@@ -417,6 +421,15 @@ class SelecionarClienteDialog(DialogoPadrao):
 
         # devolve o cliente sem os campos internos da busca
         cliente = {k: v for k, v in item.data(Qt.UserRole).items() if not k.startswith("_")}
+
+        # negativado nao compra nada (o backend tambem recusa a venda)
+        if cliente.get("negativado"):
+            QMessageBox.warning(
+                self, "Cliente negativado",
+                f"{cliente.get('nome')} está NEGATIVADO: não é possível vender para "
+                "este cliente. Só um administrador pode desbloquear, na ficha dele.",
+            )
+            return
 
         self.cliente_selecionado.emit(cliente)
 

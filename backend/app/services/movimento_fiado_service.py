@@ -149,6 +149,12 @@ class MovimentoFiadoService:
         if tipo not in ("COMPRA", "PAGAMENTO", "HAVER"):
             raise Exception("Tipo de movimento inválido.")
 
+        if tipo == "COMPRA" and cliente.negativado:
+            raise Exception(
+                f"{cliente.nome} está NEGATIVADO: não é possível lançar compra "
+                "no fiado. Só um administrador pode desbloquear."
+            )
+
         if dados.valor <= 0:
             _rotulo = {
                 "COMPRA": "compra",

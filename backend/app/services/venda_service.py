@@ -29,6 +29,7 @@ from app.services.movimento_fiado_service import (
     _verificar_limite_credito,
 )
 from app.services.notificacao_service import NotificacaoService, nome_do_usuario
+from app.services.cliente_service import ClienteService
 from app.services.configuracao_service import ConfiguracaoService
 from app.services.whatsapp_service import WhatsappService
 
@@ -376,6 +377,8 @@ class VendaService:
                     "Venda a prazo exige selecionar um cliente."
                 )
 
+            ClienteService.recusar_se_negativado(db, dados.cliente_id)
+
             venda = Venda(
                 cliente_id=dados.cliente_id,
                 usuario_id=usuario_id,
@@ -651,6 +654,8 @@ class VendaService:
         usuario_id: int,
         loja_id: int | None = None,
     ):
+        ClienteService.recusar_se_negativado(db, dados.cliente_id)
+
         venda = Venda(
             cliente_id=dados.cliente_id,
             usuario_id=usuario_id,

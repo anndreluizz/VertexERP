@@ -354,3 +354,56 @@ def test_filial_so_ve_as_vendas_da_propria_loja(
     # pedir a Matriz explicitamente nao adianta: continua vendo so' a Filial
     assert [v["id"] for v in tentando_matriz] == [v["id"] for v in vistas]
     assert len(admin_ve) == 2
+
+
+def test_correcao_de_recebimento_ajusta_o_caixa_onde_ele_entrou(
+    client, db, auth_headers, auth_headers_comum, cliente,
+    caixa_aberto, caixa_aberto_comum,
+):
+    """Operador recebe no caixa dele; admin corrige do outro terminal.
+    O ajuste vai pra gaveta do operador (onde o dinheiro esta), nao pra
+    do admin. Com o caixa original fechado, cai no caixa de quem corrige."""
+
+    client.post(
+        "/fiado/compra",
+        json={"cliente_id": cliente.id, "valor": 100.0},
+        headers=auth_headers,
+    )
+    pagamento = client.post(
+        "/fiado/movimentos",
+        json={
+            "cliente_id": cliente.id,
+            "tipo": "PAGAMENTO",
+            "valor": 30.0,
+            "forma_pagamento": "DINHEIRO",
+        },
+        headers=auth_headers_comum,
+    )
+    assert pagamento.status_code == 200, pagamento.json()
+    pagamento = pagamento.json()
+
+    editar = client.put(
+        f"/fiado/movimentos/{pagamento['id']}",
+        json={"valor": 20.0},
+        headers=auth_headers,
+    )
+    assert editar.status_code == 200
+    assert editar.json()["caixa_ajustado"] is True
+
+    db.refresh(caixa_aberto_comum)
+    db.refresh(caixa_aberto)
+    assert float(caixa_aberto_comum.saldo_final) == 20.0
+    assert float(caixa_aberto.saldo_final) == 100.0
+
+    caixa_aberto_comum.status = "FECHADO"
+    db.commit()
+
+    apagar = client.delete(
+        f"/fiado/movimentos/{pagamento['id']}", headers=auth_headers
+    )
+    assert apagar.json()["caixa_ajustado"] is True
+
+    db.refresh(caixa_aberto_comum)
+    db.refresh(caixa_aberto)
+    assert float(caixa_aberto_comum.saldo_final) == 20.0
+    assert float(caixa_aberto.saldo_final) == 80.0

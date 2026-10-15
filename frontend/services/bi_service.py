@@ -1,6 +1,6 @@
 from urllib.parse import urlencode
 
-from services.api import get
+from services.api import get, put
 
 
 def resumo(data_inicio, data_fim, loja_id=None):
@@ -21,6 +21,21 @@ def resumo(data_inicio, data_fim, loja_id=None):
     if response.status_code != 200:
         raise Exception(
             f"Falha ao carregar a Inteligência de Negócios "
+            f"(HTTP {response.status_code}): {response.text}"
+        )
+
+    return response.json()
+
+
+def informar_dinheiro_guardado(valor):
+    """PUT /bi/dinheiro-guardado -- total no cofre + banco (o sistema nao
+    registra pra onde vai o dinheiro quando o caixa fecha)."""
+
+    response = put("/bi/dinheiro-guardado", {"valor": f"{valor:.2f}"})
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Não foi possível salvar o dinheiro guardado "
             f"(HTTP {response.status_code}): {response.text}"
         )
 

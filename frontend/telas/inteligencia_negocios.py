@@ -19,8 +19,8 @@ from PySide6.QtWidgets import (
 )
 
 from design import tokens
-from design.widgets import Badge, BotaoSecundario, CardKPI, SecaoCard, tabela_lista
-from services.bi_service import resumo
+from design.widgets import Badge, BotaoSecundario, CardKPI, SecaoCard, pedir_texto, tabela_lista
+from services.bi_service import informar_dinheiro_guardado, resumo
 from services.loja_service import listar_lojas
 from services.worker import rodar_em_thread
 from utils.formatacao import formatar_moeda
@@ -62,6 +62,18 @@ def datas_do_periodo(nome, hoje):
 def _buscar(data_inicio, data_fim, loja_id):
     """Roda na worker thread."""
     return resumo(data_inicio.isoformat(), data_fim.isoformat(), loja_id)
+
+
+def valor_digitado(texto):
+    """'10.000,50' / 'R$ 800' / '1500.5' -> float >= 0, ou None se invalido."""
+    texto = (texto or "").replace("R$", "").strip()
+    if "," in texto:
+        texto = texto.replace(".", "").replace(",", ".")
+    try:
+        valor = float(texto)
+    except ValueError:
+        return None
+    return valor if valor >= 0 else None
 
 
 def _texto(texto, tamanho=None, cor=None, negrito=False):
@@ -155,6 +167,17 @@ class InteligenciaNegocios(QWidget):
         self.lbl_periodo = _texto("", cor=tokens.TEXTO_SECUNDARIO)
         layout.addWidget(self.lbl_periodo)
 
+        # cofre + banco: o sistema nao sabe pra onde vai o dinheiro quando
+        # o caixa fecha, entao o dono informa (entra na previsao de 30 dias)
+        linha_guardado = QHBoxLayout()
+        self.lbl_guardado = _texto("", cor=tokens.TEXTO_SECUNDARIO)
+        self.bt_guardado = BotaoSecundario("Informar dinheiro guardado")
+        self.bt_guardado.clicked.connect(self._informar_guardado)
+        linha_guardado.addWidget(self.lbl_guardado, 1)
+        linha_guardado.addWidget(self.bt_guardado)
+        layout.addLayout(linha_guardado)
+        self._guardado_atual = None
+
         self.lbl_erro = _texto("", cor=tokens.ERRO)
         self.lbl_erro.setVisible(False)
         layout.addWidget(self.lbl_erro)
@@ -190,7 +213,7 @@ class InteligenciaNegocios(QWidget):
         self.secao_lojas = SecaoCard("Matriz × Filial", "store")
         self.tabela_lojas = tabela_lista([
             "Loja", "Faturamento", "Vendas", "Ticket médio", "À vista", "A prazo",
-            "Fiado recebido", "Contas 30 dias", "Nas gavetas",
+            "Fiado recebido", "Contas 30 dias", "Nos caixas abertos",
         ])
         self.secao_lojas.corpo.addWidget(self.tabela_lojas)
         layout.addWidget(self.secao_lojas)
@@ -291,10 +314,49 @@ class InteligenciaNegocios(QWidget):
             f"{inicio:%d/%m/%Y} a {fim:%d/%m/%Y} · {periodo['loja_nome']} · "
             f"dados do sistema às {gerado:%H:%M}"
         )
+        self._mostrar_guardado(dados["caixa"])
         self._mostrar_kpis(dados)
         self._mostrar_avisos(dados["avisos"])
         self._mostrar_recomendacoes(dados["recomendacoes"])
         self._mostrar_tabelas(dados)
+
+    def _mostrar_guardado(self, caixa):
+        self._guardado_atual = caixa.get("dinheiro_guardado")
+        if self._guardado_atual is None:
+            self.lbl_guardado.setText(
+                "Dinheiro guardado (cofre + banco): não informado — a previsão "
+                "de 30 dias conta só o dinheiro dos caixas abertos."
+            )
+            return
+        em = datetime.fromisoformat(caixa["dinheiro_guardado_em"])
+        self.lbl_guardado.setText(
+            f"Dinheiro guardado (cofre + banco): {formatar_moeda(self._guardado_atual)} "
+            f"· informado em {em:%d/%m/%Y %H:%M} · empresa toda (não entra no filtro por loja)"
+        )
+
+    def _informar_guardado(self):
+        atual = (
+            formatar_moeda(self._guardado_atual, com_simbolo=False)
+            if self._guardado_atual is not None else ""
+        )
+        texto, ok = pedir_texto(
+            self, "Dinheiro guardado", "Total no cofre + banco (R$)", valor=atual,
+            icone_nome="wallet",
+            subtitulo="O sistema não registra o dinheiro depois que o caixa fecha",
+        )
+        if not ok:
+            return
+        valor = valor_digitado(texto)
+        if valor is None:
+            self._mostrar_erro("Valor inválido. Digite só o número, ex.: 10.000,00")
+            return
+        rodar_em_thread(
+            self, informar_dinheiro_guardado, valor,
+            ao_sucesso=self._ao_salvar_guardado, ao_erro=self._ao_erro,
+        )
+
+    def _ao_salvar_guardado(self, _resposta):
+        self.carregar()
 
     # ---------------- preenchimento ----------------
 
@@ -326,7 +388,10 @@ class InteligenciaNegocios(QWidget):
             f"{fiado['clientes_devendo']} clientes · empresa toda · não é dinheiro em caixa"
         )
         self.card_recebido.definir_valor(formatar_moeda(d["recebimentos"]["fiado_recebido"]))
-        self.card_recebido.definir_legenda("no período, pelos lançamentos do caixa")
+        self.card_recebido.definir_legenda(
+            f"entrou no período (à vista + fiado): "
+            f"{formatar_moeda(d['caixa']['entrou_no_periodo'])}"
+        )
         a_pagar = float(contas["vencidas"]["total"]) + float(contas["proximos_30_dias"]["total"])
         self.card_contas.definir_valor(formatar_moeda(a_pagar))
         self.card_contas.definir_legenda(
@@ -336,7 +401,7 @@ class InteligenciaNegocios(QWidget):
         self.card_previsao.definir_valor(formatar_moeda(prev["saldo_previsto"]))
         self.card_previsao.definir_legenda(
             f"entra ~{formatar_moeda(prev['entradas_estimadas'])} · "
-            f"sai {formatar_moeda(prev['saidas_previstas'])} · estimativa"
+            f"sai {formatar_moeda(prev['saidas_previstas'])} · sem cofre/banco"
         )
         self.card_previsao.setToolTip(prev["observacao"])
 

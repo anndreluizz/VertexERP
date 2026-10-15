@@ -171,6 +171,7 @@ def test_contas_por_vencimento_e_previsao(client, auth_headers, db, produto, usu
     assert float(contas["pagas_no_periodo"]) == 5
     assert float(dados["recebimentos"]["fiado_recebido"]) == 60
     assert float(dados["caixa"]["dinheiro_nas_gavetas"]) == 70
+    assert float(dados["caixa"]["entrou_no_periodo"]) == 30 + 60
 
     prev = dados["previsao_30_dias"]
     # 1 dia de historico: (30 a vista + 60 fiado) / 1 dia * 30
@@ -303,3 +304,37 @@ def test_resumo_traz_recomendacoes_ordenadas(client, auth_headers, db, produto):
     assert prioridades == sorted(prioridades, key=["critica", "alta", "media", "baixa"].index)
     assert all({"problema", "evidencias", "impacto", "acao", "prazo", "indicador"} <= r.keys()
                for r in recs)
+
+
+def test_dinheiro_guardado_entra_na_previsao_e_nao_vaza(client, auth_headers, auth_headers_comum, db):
+    from app.models.log_auditoria import LogAuditoria
+
+    _lojas(db)
+    db.add(ContaPagar(valor=500, data_vencimento=datetime.now() + timedelta(days=3)))
+    db.commit()
+
+    antes = _resumo(client, auth_headers).json()
+    assert antes["caixa"]["dinheiro_guardado"] is None
+    assert float(antes["previsao_30_dias"]["saldo_previsto"]) == -500
+    assert any("não informado" in a for a in antes["avisos"])
+
+    assert client.put("/bi/dinheiro-guardado", json={"valor": -1},
+                      headers=auth_headers).status_code == 422
+    assert client.put("/bi/dinheiro-guardado", json={"valor": 800},
+                      headers=auth_headers_comum).status_code == 403
+    r = client.put("/bi/dinheiro-guardado", json={"valor": 800}, headers=auth_headers)
+    assert r.status_code == 200
+
+    depois = _resumo(client, auth_headers).json()
+    assert float(depois["caixa"]["dinheiro_guardado"]) == 800
+    assert float(depois["previsao_30_dias"]["saldo_previsto"]) == 300
+    assert not any("não informado" in a for a in depois["avisos"])
+    assert not any(r["problema"].startswith("A previsão") for r in depois["recomendacoes"])
+
+    # cofre + banco e' da empresa toda: filtro por loja nao usa
+    matriz_id = depois["lojas"][0]["loja_id"]
+    assert _resumo(client, auth_headers, loja_id=matriz_id).json()["caixa"]["dinheiro_guardado"] is None
+    # GET /configuracoes e' aberto a qualquer usuario: o valor nao aparece la
+    config = client.get("/configuracoes/", headers=auth_headers_comum).json()
+    assert "dinheiro_guardado" not in config
+    assert db.query(LogAuditoria).filter(LogAuditoria.acao == "bi.dinheiro_guardado").count() == 1

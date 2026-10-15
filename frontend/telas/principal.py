@@ -42,7 +42,7 @@ from design.sidebar import Sidebar
 from design.header import Header
 from design.janela import pintar_barra_titulo
 from design.widgets import BotaoSecundario, PilhaPaginas
-from services import api, backup_service
+from services import api, atualizacao_terminal, backup_service
 from services.caixa_service import caixa_aberto, abrir_caixa
 from services.preferencias_service import salvar_tema_escuro
 from services.worker import rodar_em_thread
@@ -59,6 +59,7 @@ _INTERVALO_CONEXAO_MS = 20_000
 # ao abrir, senao numa loja que ficou fechada no domingo o aviso de
 # "backup atrasado" piscaria toda segunda de manha a' toa.
 _ATRASO_PRIMEIRA_CHECAGEM_BACKUP_MS = 60_000
+_ATRASO_CHECAGEM_TERMINAL_MS = 15_000
 _INTERVALO_BACKUP_MS = 30 * 60_000
 
 
@@ -346,6 +347,10 @@ class PrincipalWindow(QMainWindow):
         # GET /backup/, que e' get_current_admin)
         # ======================
 
+        # TERMINAL (PC da filial): versao nova no servidor? oferece trocar
+        # (no PC-servidor quem atualiza e' o launcher; ver atualizacao_terminal)
+        QTimer.singleShot(_ATRASO_CHECAGEM_TERMINAL_MS, self._checar_atualizacao_terminal)
+
         if info_usuario.get("admin"):
             self._timer_backup = QTimer(self)
             self._timer_backup.timeout.connect(self._checar_backup)
@@ -353,6 +358,41 @@ class PrincipalWindow(QMainWindow):
             QTimer.singleShot(
                 _ATRASO_PRIMEIRA_CHECAGEM_BACKUP_MS, self._checar_backup
             )
+
+    def _checar_atualizacao_terminal(self):
+        rodar_em_thread(
+            self, atualizacao_terminal.versao_disponivel,
+            ao_sucesso=self._ao_versao_terminal,
+        )
+
+    def _ao_versao_terminal(self, versao):
+        if not versao:
+            return
+        resposta = QMessageBox.question(
+            self, "Atualização do Vertex ERP",
+            f"O servidor da loja já está na versão {versao}.\n\n"
+            "Atualizar este computador agora? O Vertex fecha e abre de novo "
+            "sozinho em cerca de 1 minuto. (\"Não\" pergunta de novo na "
+            "próxima vez que abrir.)",
+        )
+        if resposta == QMessageBox.Yes:
+            rodar_em_thread(
+                self, atualizacao_terminal.baixar_e_preparar, versao,
+                ao_sucesso=self._ao_pacote_terminal,
+                ao_erro=self._ao_erro_atualizacao_terminal,
+            )
+
+    def _ao_pacote_terminal(self, resultado):
+        script, destino, versao = resultado
+        atualizacao_terminal.iniciar_troca(script, destino, versao)
+        QApplication.quit()
+
+    def _ao_erro_atualizacao_terminal(self, erro):
+        QMessageBox.warning(
+            self, "Atualização do Vertex ERP",
+            f"Não foi possível atualizar agora:\n{erro}\n\n"
+            "O Vertex continua funcionando na versão atual.",
+        )
 
     def _checar_backup(self):
         # sem ao_erro de proposito: servidor fora do ar ja' tem o aviso

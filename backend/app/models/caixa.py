@@ -51,6 +51,18 @@ class Caixa(Base):
         nullable=True
     )
 
+    # destino do dinheiro no fechamento: cofre/banco e retirada dos
+    # socios (o resto fica de troco). None = caixa fechado antes disso
+    valor_guardado: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
+        nullable=True
+    )
+
+    valor_retirado: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
+        nullable=True
+    )
+
     usuario_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"),
         index=True,

@@ -338,3 +338,59 @@ def test_dinheiro_guardado_entra_na_previsao_e_nao_vaza(client, auth_headers, au
     config = client.get("/configuracoes/", headers=auth_headers_comum).json()
     assert "dinheiro_guardado" not in config
     assert db.query(LogAuditoria).filter(LogAuditoria.acao == "bi.dinheiro_guardado").count() == 1
+
+
+def test_dinheiro_guardado_segue_sozinho_depois_de_informado(client, auth_headers, db, usuario):
+    """Base informada + guardado no fechamento + PIX/cartao (banco) -
+    contas pagas - suprimentos. A retirada dos socios nao entra."""
+    from app.models.movimento_caixa import MovimentoCaixa
+
+    matriz, _ = _lojas(db)
+    client.put("/bi/dinheiro-guardado", json={"valor": 1000}, headers=auth_headers)
+
+    caixa = Caixa(saldo_inicial=0, saldo_final=300, status="ABERTO", usuario_id=usuario.id,
+                  loja_id=matriz.id)
+    db.add(caixa)
+    db.commit()
+    for tipo, forma, valor in [("VENDA", "PIX", 50), ("VENDA", "DINHEIRO", 300),
+                               ("SUPRIMENTO", None, 30)]:
+        db.add(MovimentoCaixa(caixa_id=caixa.id, usuario_id=usuario.id, tipo=tipo,
+                              forma_pagamento=forma, valor=valor, descricao="t"))
+    db.add(ContaPagar(valor=100, data_vencimento=datetime.now(), status="PAGO",
+                      data_pagamento=datetime.now()))
+    db.commit()
+
+    # gaveta: 300; 200 vai pro cofre, 60 os socios levam, 40 fica de troco
+    r = client.post("/caixa/fechar", json={"valor_contado": 300, "valor_guardado": 200,
+                                           "valor_retirado": 60}, headers=auth_headers)
+    assert r.status_code == 200, r.text
+
+    caixa_bi = _resumo(client, auth_headers).json()["caixa"]
+    assert float(caixa_bi["dinheiro_guardado_base"]) == 1000
+    detalhe = {k: float(v) for k, v in caixa_bi["dinheiro_guardado_detalhe"].items()}
+    assert detalhe == {"fechamentos": 200, "direto_no_banco": 50, "contas_pagas": 100,
+                       "suprimentos": 30, "total": 120}
+    assert float(caixa_bi["dinheiro_guardado"]) == 1120
+
+
+def test_fechamento_nao_tira_mais_do_que_tem_e_retirada_conta_como_sangria(
+    client, auth_headers, db, usuario
+):
+    caixa = Caixa(saldo_inicial=0, saldo_final=100, status="ABERTO", usuario_id=usuario.id)
+    db.add(caixa)
+    db.commit()
+
+    r = client.post("/caixa/fechar", json={"valor_contado": 100, "valor_guardado": 80,
+                                           "valor_retirado": 30}, headers=auth_headers)
+    assert r.status_code == 400
+    assert client.post("/caixa/fechar", json={"valor_guardado": -1},
+                       headers=auth_headers).status_code == 422
+
+    r = client.post("/caixa/fechar", json={"valor_contado": 100, "valor_guardado": 70,
+                                           "valor_retirado": 30}, headers=auth_headers)
+    assert r.status_code == 200
+    assert float(r.json()["valor_guardado"]) == 70
+
+    hoje = HOJE.isoformat()
+    entradas = client.get(f"/caixa/entradas?inicio={hoje}&fim={hoje}", headers=auth_headers).json()
+    assert float(entradas["sangrias"]) == 30

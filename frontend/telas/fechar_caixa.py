@@ -64,7 +64,8 @@ def _buscar_dados_fechamento():
     return caixa or {}, resumo or {}
 
 
-def _confirmar_e_preparar_impressao(valor_contado, observacoes, caixa_id):
+def _confirmar_e_preparar_impressao(valor_contado, observacoes, caixa_id,
+                                    valor_guardado=None, valor_retirado=None):
     """Roda na worker thread -- fecha o caixa e, se deu certo, ja'
     busca tudo que imprimir_extrato_dia() vai precisar (movimentos do
     dia, nome do responsavel, configuracoes da loja) numa tacada so',
@@ -73,6 +74,8 @@ def _confirmar_e_preparar_impressao(valor_contado, observacoes, caixa_id):
     response = fechar_caixa(
         valor_contado=valor_contado,
         observacoes=observacoes,
+        valor_guardado=valor_guardado,
+        valor_retirado=valor_retirado,
     )
 
     if response.status_code != 200:
@@ -552,6 +555,25 @@ class FecharCaixaWindow(DialogoPadrao):
         colunas.addLayout(col_outros, 1)
         layout.addLayout(colunas)
 
+        # pra onde vai o dinheiro da gaveta: alimenta o "dinheiro guardado"
+        # da Inteligencia de Negocios (o resto fica de troco pro proximo dia)
+        layout.addWidget(titulo_secao("Para onde vai o dinheiro da gaveta"))
+        self.guardado_input = CampoTexto("0,00")
+        self.retirado_input = CampoTexto("0,00")
+        self.guardado_input.textChanged.connect(self._atualizar_troco)
+        self.retirado_input.textChanged.connect(self._atualizar_troco)
+        self.lbl_fica_troco = QLabel()
+        self.lbl_fica_troco.setStyleSheet(
+            f"background:transparent; color:{tokens.TEXTO_SECUNDARIO}; "
+            f"font-size:{tokens.TAMANHO_SM}px;"
+        )
+        destino = QHBoxLayout()
+        destino.setSpacing(16)
+        destino.addWidget(campo_rotulado("Vai para o cofre/banco (R$)", self.guardado_input), 1)
+        destino.addWidget(campo_rotulado("Retirada dos sócios (R$)", self.retirado_input), 1)
+        layout.addLayout(destino)
+        layout.addWidget(self.lbl_fica_troco)
+
         self.observacoes_input = CampoTexto(
             "Ex.: diferença por troco errado, sangria não registrada..."
         )
@@ -593,6 +615,10 @@ class FecharCaixaWindow(DialogoPadrao):
         """)
 
         self.lbl_valor_contado.setText(formatar_moeda(self.valor_contado))
+        # padrao: tudo que foi contado vai pro cofre/banco
+        self.guardado_input.setText(formatar_moeda(self.valor_contado, com_simbolo=False))
+        self.retirado_input.setText("0,00")
+        self._atualizar_troco()
         self.cartao_contado.lbl_extra.setText("o que você informou na etapa 1")
         self.cartao_contado.lbl_extra.setStyleSheet(f"""
             background:transparent; border:none; font-size:{tokens.TAMANHO_XS}px;
@@ -636,7 +662,39 @@ class FecharCaixaWindow(DialogoPadrao):
         self.valor_input.setFocus()
         self.valor_input.selectAll()
 
+    def _destino(self):
+        """(guardado, retirado, troco) ou None se algum valor e' invalido
+        ou se tira mais do que foi contado."""
+        guardado = _texto_para_valor(self.guardado_input.text() or "0")
+        retirado = _texto_para_valor(self.retirado_input.text() or "0")
+        if guardado is None or retirado is None or guardado < 0 or retirado < 0:
+            return None
+        troco = round(self.valor_contado - guardado - retirado, 2)
+        if troco < -0.009:
+            return None
+        return guardado, retirado, troco
+
+    def _atualizar_troco(self, *_):
+        destino = self._destino()
+        if destino is None:
+            self.lbl_fica_troco.setText(
+                "Valores inválidos: cofre/banco + retirada não pode passar do contado."
+            )
+        else:
+            self.lbl_fica_troco.setText(
+                f"Fica na gaveta de troco: {formatar_moeda(destino[2])}"
+            )
+
     def confirmar_fechamento(self):
+
+        destino = self._destino()
+        if destino is None:
+            QMessageBox.warning(
+                self, "Fechar Caixa",
+                "Confira os valores de cofre/banco e retirada: a soma não pode "
+                "passar do dinheiro contado na gaveta.",
+            )
+            return
 
         resposta = QMessageBox.question(
             self,
@@ -659,6 +717,8 @@ class FecharCaixaWindow(DialogoPadrao):
             self.valor_contado,
             self.observacoes_input.text().strip() or None,
             self.caixa.get("id"),
+            destino[0],
+            destino[1],
             ao_sucesso=self._ao_confirmar_sucesso,
             ao_erro=self._ao_confirmar_erro,
             ao_finalizar=self._ao_confirmar_finalizado,

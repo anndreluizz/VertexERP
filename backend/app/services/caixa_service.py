@@ -60,6 +60,8 @@ class CaixaService:
         valor_contado: Decimal | None = None,
         observacoes: str | None = None,
         loja_id: int | None = None,
+        valor_guardado: Decimal | None = None,
+        valor_retirado: Decimal | None = None,
     ):
 
         caixa = CaixaRepository.buscar_aberto(
@@ -69,10 +71,20 @@ class CaixaService:
         if not caixa:
             raise Exception("Nenhum caixa aberto.")
 
+        saiu = (valor_guardado or 0) + (valor_retirado or 0)
+        disponivel = valor_contado if valor_contado is not None else caixa.saldo_final
+        if saiu > Decimal(disponivel) + Decimal("0.009"):
+            raise Exception(
+                "O que vai pro cofre/banco mais a retirada dos sócios não pode "
+                "passar do dinheiro que está na gaveta."
+            )
+
         caixa.status = "FECHADO"
         caixa.data_fechamento = datetime.now()
         caixa.valor_contado = valor_contado
         caixa.observacoes = observacoes
+        caixa.valor_guardado = valor_guardado
+        caixa.valor_retirado = valor_retirado
 
         caixa = CaixaRepository.atualizar(db, caixa)
 
@@ -164,6 +176,16 @@ class CaixaService:
         if loja_id is not None:
             contas = contas.filter(ContaPagar.loja_id == loja_id)
         contas_pagas = contas.scalar() or zero
+
+        # retirada dos socios no fechamento e' o mesmo que sangria pro dono
+        retiradas = db.query(func.coalesce(func.sum(Caixa.valor_retirado), 0))
+        if inicio:
+            retiradas = retiradas.filter(Caixa.data_fechamento >= inicio)
+        if fim:
+            retiradas = retiradas.filter(Caixa.data_fechamento < fim + timedelta(days=1))
+        if loja_id is not None:
+            retiradas = retiradas.filter(Caixa.loja_id == loja_id)
+        sangrias += retiradas.scalar() or zero
 
         total = sum(por_forma.values(), zero)
         return {

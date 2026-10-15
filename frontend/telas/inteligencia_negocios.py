@@ -171,7 +171,7 @@ class InteligenciaNegocios(QWidget):
         # o caixa fecha, entao o dono informa (entra na previsao de 30 dias)
         linha_guardado = QHBoxLayout()
         self.lbl_guardado = _texto("", cor=tokens.TEXTO_SECUNDARIO)
-        self.bt_guardado = BotaoSecundario("Informar dinheiro guardado")
+        self.bt_guardado = BotaoSecundario("Conferir dinheiro guardado")
         self.bt_guardado.clicked.connect(self._informar_guardado)
         linha_guardado.addWidget(self.lbl_guardado, 1)
         linha_guardado.addWidget(self.bt_guardado)
@@ -329,10 +329,20 @@ class InteligenciaNegocios(QWidget):
             )
             return
         em = datetime.fromisoformat(caixa["dinheiro_guardado_em"])
-        self.lbl_guardado.setText(
+        texto = (
             f"Dinheiro guardado (cofre + banco): {formatar_moeda(self._guardado_atual)} "
-            f"· informado em {em:%d/%m/%Y %H:%M} · empresa toda (não entra no filtro por loja)"
+            f"· estimado a partir do valor conferido em {em:%d/%m/%Y}"
         )
+        det = caixa.get("dinheiro_guardado_detalhe")
+        if det:
+            texto += (
+                f" ({formatar_moeda(caixa['dinheiro_guardado_base'])}"
+                f" + fechamentos {formatar_moeda(det['fechamentos'])}"
+                f" + PIX/cartão {formatar_moeda(det['direto_no_banco'])}"
+                f" − contas {formatar_moeda(det['contas_pagas'])}"
+                f" − suprimentos {formatar_moeda(det['suprimentos'])})"
+            )
+        self.lbl_guardado.setText(texto + " · empresa toda")
 
     def _informar_guardado(self):
         atual = (
@@ -340,9 +350,10 @@ class InteligenciaNegocios(QWidget):
             if self._guardado_atual is not None else ""
         )
         texto, ok = pedir_texto(
-            self, "Dinheiro guardado", "Total no cofre + banco (R$)", valor=atual,
-            icone_nome="wallet",
-            subtitulo="O sistema não registra o dinheiro depois que o caixa fecha",
+            self, "Conferir dinheiro guardado", "Total hoje no cofre + banco (R$)",
+            valor=atual, icone_nome="wallet",
+            subtitulo="Daqui pra frente o sistema soma os fechamentos e PIX/cartão e "
+                      "desconta as contas pagas; confira de vez em quando",
         )
         if not ok:
             return

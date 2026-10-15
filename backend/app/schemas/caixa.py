@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CaixaBase(BaseModel):
@@ -15,6 +15,9 @@ class CaixaCreate(CaixaBase):
 class FecharCaixaRequest(BaseModel):
     valor_contado: Decimal | None = None
     observacoes: str | None = None
+    # pra onde vai o dinheiro da gaveta (o resto fica de troco)
+    valor_guardado: Decimal | None = Field(None, ge=0)
+    valor_retirado: Decimal | None = Field(None, ge=0)
 
 
 class CaixaResponse(BaseModel):
@@ -26,6 +29,8 @@ class CaixaResponse(BaseModel):
     status: str
     valor_contado: Decimal | None = None
     observacoes: str | None = None
+    valor_guardado: Decimal | None = None
+    valor_retirado: Decimal | None = None
     usuario_id: int | None = None
     usuario_nome: str | None = None  # so' no /historico
 

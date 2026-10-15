@@ -158,6 +158,15 @@ Da segunda vez em diante, o endereço já fica salvo e não precisa configurar
 de novo — só se o PC-Servidor mudar de endereço, aí é só abrir de novo a
 tela de "Configurar servidor" (link discreto embaixo da tela de login).
 
+### Atualização do Terminal
+
+O Terminal se atualiza sozinho pela rede da loja: uns segundos depois do
+login ele compara a versão dele com a do Servidor e, se estiver atrasado,
+pergunta "Atualizar este computador agora?". Baixa do próprio Servidor
+(não precisa de internet), troca a pasta `VertexERP-Frontend` e abre de
+novo. A versão anterior fica em `VertexERP-Frontend_antes_atualizacao` e o
+histórico em `atualizacao_log.txt`, na pasta do Terminal.
+
 Se a primeira abertura demorar bem mais que o normal, veja a dica de
 `excluir_do_defender.ps1` na seção A.2 acima — vale pro Terminal também
 (a cópia dele já vem junto na pasta `Terminal/`).

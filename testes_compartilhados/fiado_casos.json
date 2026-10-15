@@ -1,0 +1,21 @@
+{
+  "_sobre": "Casos de fiado que o servidor (backend/app/tests/test_fiado_casos_compartilhados.py), o PC (frontend/tests/test_fiado_casos_compartilhados.py) e o app (mobile/test/fiado_casos_compartilhados_test.dart) precisam calcular igual. Saldo = compras menos tudo que nao e' compra (pagamento, haver, perda). Atraso = dias desde a compra mais antiga ainda nao paga (pagamentos abatem as mais antigas primeiro); null quando nao deve nada. Mudou a regra? Mude aqui e nos tres.",
+  "casos": [
+    {"nome": "so compra", "movimentos": [["COMPRA", 100, 40]], "saldo": 100, "dias_em_atraso": 40},
+    {"nome": "compra recente nao zera atraso da antiga",
+     "movimentos": [["COMPRA", 100, 120], ["COMPRA", 50, 1]], "saldo": 150, "dias_em_atraso": 120},
+    {"nome": "pagamento quita a mais antiga primeiro",
+     "movimentos": [["COMPRA", 100, 120], ["COMPRA", 100, 20], ["PAGAMENTO", 100, 10]],
+     "saldo": 100, "dias_em_atraso": 20},
+    {"nome": "pagamento parcial nao muda o atraso",
+     "movimentos": [["COMPRA", 100, 90], ["PAGAMENTO", 40, 5]], "saldo": 60, "dias_em_atraso": 90},
+    {"nome": "haver abate como pagamento",
+     "movimentos": [["COMPRA", 80, 60], ["HAVER", 30, 2]], "saldo": 50, "dias_em_atraso": 60},
+    {"nome": "perda (divida baixada) zera o saldo",
+     "movimentos": [["COMPRA", 100, 400], ["PAGAMENTO", 20, 300], ["PERDA", 80, 1]],
+     "saldo": 0, "dias_em_atraso": null},
+    {"nome": "quitado", "movimentos": [["COMPRA", 70, 30], ["PAGAMENTO", 70, 3]],
+     "saldo": 0, "dias_em_atraso": null},
+    {"nome": "sem movimento", "movimentos": [], "saldo": 0, "dias_em_atraso": null}
+  ]
+}

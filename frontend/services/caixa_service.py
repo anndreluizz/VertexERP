@@ -25,13 +25,16 @@ def abrir_caixa(saldo_inicial):
     )
 
 
-def fechar_caixa(valor_contado=None, observacoes=None):
+def fechar_caixa(valor_contado=None, observacoes=None, valor_guardado=None,
+                 valor_retirado=None):
 
     return post(
         endpoint_com_loja("/caixa/fechar"),
         {
             "valor_contado": valor_contado,
             "observacoes": observacoes,
+            "valor_guardado": valor_guardado,
+            "valor_retirado": valor_retirado,
         },
     )
 

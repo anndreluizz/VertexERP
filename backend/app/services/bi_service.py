@@ -26,6 +26,7 @@ from app.services.configuracao_service import ConfiguracaoService
 from app.services.relatorio_service import RelatorioService, _devolvido_por_venda
 
 FORMAS_A_PRAZO = {"PRAZO"}
+FORMAS_DIRETO_NO_BANCO = ("PIX", "DEBITO", "CREDITO", "CARTAO", "TRANSFERENCIA")
 CODIGO_PRODUTO_GENERICO = "PLANILHA"  # vendas lancadas depois, sem itens reais
 HISTORICO_MINIMO_DIAS = 60
 DIAS_PRA_SUGERIR_BAIXA = 365  # sem nenhum movimento (compra ou pagamento)
@@ -81,18 +82,25 @@ class BiService:
         gavetas = BiService._dinheiro_nas_gavetas(db, loja_id)
         avisos, qualidade = BiService._avisos(db, loja_id, fiado)
         # cofre + banco e' da empresa toda: nao da' pra dividir por loja
-        guardado, guardado_em = (
+        base, guardado_em = (
             BiService.dinheiro_guardado(db) if loja_id is None else (None, None)
         )
-        if loja_id is None and guardado is None:
+        guardado = detalhe_guardado = None
+        if base is not None:
+            # parte do ultimo valor informado e segue sozinho com o que
+            # entrou/saiu do cofre+banco desde entao
+            detalhe_guardado = BiService.movimento_guardado_desde(db, guardado_em)
+            guardado = base + detalhe_guardado["total"]
+        if loja_id is None and base is None:
             avisos.append(
                 "Dinheiro guardado (cofre + banco) não informado: a previsão de "
                 "30 dias considera só o dinheiro dos caixas abertos."
             )
-        elif guardado_em is not None and (agora - guardado_em).days > 7:
+        elif guardado_em is not None and (agora - guardado_em).days > 30:
             avisos.append(
-                f"Dinheiro guardado informado em {guardado_em:%d/%m/%Y} "
-                f"({(agora - guardado_em).days} dias atrás): atualize para a previsão ficar certa."
+                f"Dinheiro guardado conferido pela última vez em {guardado_em:%d/%m/%Y}: "
+                "confira o cofre e o banco e informe de novo (acerta taxas de "
+                "cartão e o que não passou pelo sistema)."
             )
 
         resultado = {
@@ -115,6 +123,8 @@ class BiService:
                 "entrou_no_periodo": vendas["a_vista"] + Decimal(recebido_fiado),
                 "dinheiro_guardado": guardado,
                 "dinheiro_guardado_em": guardado_em,
+                "dinheiro_guardado_base": base,
+                "dinheiro_guardado_detalhe": detalhe_guardado,
             },
             "previsao_30_dias": BiService._previsao(db, agora, loja_id, gavetas, contas, guardado),
             "lojas": BiService._lojas(db, inicio, fim, agora) if loja_id is None else [],
@@ -366,7 +376,9 @@ class BiService:
                 "próximos 30 dias. "
                 + (
                     "Parte do dinheiro dos caixas abertos mais o dinheiro guardado "
-                    "(cofre + banco) informado pelo dono."
+                    "(cofre + banco): o último valor conferido pelo dono, somado ao que "
+                    "foi guardado nos fechamentos e entrou por PIX/cartão, menos contas "
+                    "pagas e suprimentos desde então."
                     if guardado is not None else
                     "Parte só do dinheiro que está nos caixas abertos agora: o "
                     "dinheiro guardado (cofre + banco) não foi informado e não entra na conta."
@@ -378,6 +390,39 @@ class BiService:
     def dinheiro_guardado(db):
         config = ConfiguracaoService.buscar(db)
         return config.dinheiro_guardado, config.dinheiro_guardado_em
+
+    @staticmethod
+    def movimento_guardado_desde(db, desde):
+        """O que entrou e saiu do cofre+banco desde o ultimo valor
+        informado. PIX/cartao/transferencia caem direto no banco; conta a
+        pagar sai do dinheiro guardado (ver ContaPagarService.pagar);
+        suprimento sai do cofre pra gaveta. Taxa de cartao nao entra: o
+        dono acerta informando o valor de novo de vez em quando."""
+        def soma(query):
+            return Decimal(query.scalar() or 0)
+
+        fechamentos = soma(db.query(func.sum(Caixa.valor_guardado))
+                           .filter(Caixa.data_fechamento > desde))
+        direto_no_banco = soma(
+            db.query(func.sum(MovimentoCaixa.valor)).filter(
+                MovimentoCaixa.data > desde,
+                MovimentoCaixa.tipo.in_(("VENDA", "ESTORNO", "RECEBIMENTO_FIADO")),
+                MovimentoCaixa.forma_pagamento.in_(FORMAS_DIRETO_NO_BANCO),
+            )
+        )
+        contas = soma(db.query(func.sum(ContaPagar.valor)).filter(
+            ContaPagar.status == "PAGO", ContaPagar.data_pagamento > desde,
+        ))
+        suprimentos = soma(db.query(func.sum(MovimentoCaixa.valor)).filter(
+            MovimentoCaixa.tipo == "SUPRIMENTO", MovimentoCaixa.data > desde,
+        ))
+        return {
+            "fechamentos": fechamentos,
+            "direto_no_banco": direto_no_banco,
+            "contas_pagas": contas,
+            "suprimentos": suprimentos,
+            "total": fechamentos + direto_no_banco - contas - suprimentos,
+        }
 
     @staticmethod
     def informar_dinheiro_guardado(db, valor: Decimal):
@@ -561,7 +606,7 @@ def recomendacoes(r):
                 f"{prev['dias_de_base']} dias).",
                 f"Dinheiro nos caixas abertos agora: {_brl(prev['dinheiro_nas_gavetas'])}.",
                 (
-                    f"Dinheiro guardado (cofre + banco) informado: {_brl(prev['dinheiro_guardado'])}."
+                    f"Dinheiro guardado (cofre + banco) estimado: {_brl(prev['dinheiro_guardado'])}."
                     if prev.get("dinheiro_guardado") is not None else
                     "Dinheiro guardado (cofre + banco): não informado, ficou de fora da conta."
                 ),

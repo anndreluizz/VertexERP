@@ -96,7 +96,13 @@ def test_mostra_dinheiro_guardado():
     tela._ao_carregar(dados)
     assert "não informado" in tela.lbl_guardado.text()
 
-    dados["caixa"].update(dinheiro_guardado=1234.5, dinheiro_guardado_em="2026-10-15T14:30:00")
+    dados["caixa"].update(
+        dinheiro_guardado=1234.5, dinheiro_guardado_em="2026-10-15T14:30:00",
+        dinheiro_guardado_base=1000,
+        dinheiro_guardado_detalhe={"fechamentos": 200, "direto_no_banco": 134.5,
+                                   "contas_pagas": 100, "suprimentos": 0, "total": 234.5},
+    )
     tela._ao_carregar(dados)
     assert "R$ 1.234,50" in tela.lbl_guardado.text()
     assert "15/10/2026" in tela.lbl_guardado.text()
+    assert "fechamentos R$ 200,00" in tela.lbl_guardado.text()

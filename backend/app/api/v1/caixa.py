@@ -43,6 +43,8 @@ def caixa_to_response(caixa):
         status=caixa.status,
         valor_contado=caixa.valor_contado,
         observacoes=caixa.observacoes,
+        valor_guardado=caixa.valor_guardado,
+        valor_retirado=caixa.valor_retirado,
         usuario_id=caixa.usuario_id,
     )
 
@@ -77,6 +79,8 @@ def fechar_caixa(
             dados.valor_contado,
             dados.observacoes,
             loja_efetiva,
+            valor_guardado=dados.valor_guardado,
+            valor_retirado=dados.valor_retirado,
         )
         return caixa_to_response(caixa)
     except Exception as e:

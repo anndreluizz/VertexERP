@@ -3,6 +3,7 @@ import base64
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.models.estoque_loja import EstoqueLoja
 from app.models.produto import Produto
 from app.models.produto_foto import ProdutoFoto
 from app.models.historico_preco import HistoricoPreco
@@ -49,11 +50,19 @@ def _aplicar_estoque_por_loja(db: Session, produtos, loja_id: int):
     mapa_minimo = EstoqueLojaRepository.minimos_por_loja(
         db, ids, loja_id
     )
+    # na_loja: o produto ja' teve estoque nesta loja (tem linha aqui) ou
+    # nunca teve em loja nenhuma -- a tela de Produtos esconde o resto
+    # (catalogo e' unico, mas a Matriz nao quer ver o que so' a Filial tem)
+    com_linha = {
+        produto_id for (produto_id,) in db.query(EstoqueLoja.produto_id)
+        .filter(EstoqueLoja.produto_id.in_(ids)).distinct()
+    } if ids else set()
     for produto in produtos:
         produto.estoque = mapa_quantidade.get(produto.id, 0)
         produto.estoque_minimo = mapa_minimo.get(
             produto.id, produto.estoque_minimo
         )
+        produto.na_loja = produto.id in mapa_minimo or produto.id not in com_linha
     return produtos
 
 
@@ -174,11 +183,13 @@ class ProdutoService:
         # existirem, e essa loja nova ainda nao tem nenhuma: o estoque
         # inicial digitado no cadastro sumiria (viraria 0) assim que
         # outra loja mexesse no produto primeiro.
-        if loja_id is not None and produto.estoque:
+        # mesmo com estoque 0 cria a linha: marca a loja onde o produto foi
+        # cadastrado (ver na_loja em _aplicar_estoque_por_loja)
+        if loja_id is not None:
             registro = EstoqueLojaRepository.obter_ou_criar(
                 db, produto.id, loja_id
             )
-            registro.quantidade = produto.estoque
+            registro.quantidade = produto.estoque or 0
             db.add(registro)
             db.commit()
 

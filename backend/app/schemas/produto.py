@@ -40,6 +40,9 @@ class ProdutoUpdate(ProdutoBase):
 class ProdutoResponse(BaseModel):
     id: int
     loja_id: int | None = None
+    # so' vem False na listagem por loja (?loja_id=): produto que so'
+    # outra loja tem; a tela de Produtos esconde por padrao
+    na_loja: bool = True
     codigo: str
     nome: str
     descricao: str | None = None

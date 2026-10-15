@@ -1,6 +1,6 @@
 import csv
 
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QCheckBox, QMessageBox
 
 from telas.cadastro_produto import CadastroProdutoWindow
 from telas.produto_criado import ProdutoCriadoDialog
@@ -43,7 +43,9 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone, icone_pixmap
-from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI
+from design.widgets import (
+    Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI, estilo_checkbox,
+)
 from services.worker import rodar_em_thread, em_paralelo
 from services import api
 from utils.formatacao import formatar_moeda
@@ -128,6 +130,7 @@ class Produtos(QWidget):
         super().__init__()
 
         self.produtos = []
+        self._todos_produtos = []
         self.produtos_exibidos = []
         self.categorias = []
         self.filtro_categoria = None
@@ -292,6 +295,14 @@ class Produtos(QWidget):
         self.combo_ordenacao.setStyleSheet(estilo_combo)
         self.combo_ordenacao.currentIndexChanged.connect(self.alterar_ordenacao)
         barra.addWidget(self.combo_ordenacao)
+
+        # catalogo e' unico entre as lojas, mas cada loja so' quer ver o
+        # que ela tem (na_loja, ver ProdutoService no backend)
+        self.chk_outras_lojas = QCheckBox("Mostrar produtos das outras lojas")
+        self.chk_outras_lojas.setStyleSheet(estilo_checkbox())
+        self.chk_outras_lojas.setVisible(False)
+        self.chk_outras_lojas.toggled.connect(self._aplicar_filtro_loja)
+        barra.addWidget(self.chk_outras_lojas)
 
         conteudo_layout.addLayout(barra)
 
@@ -574,14 +585,24 @@ class Produtos(QWidget):
         # etc.) deixava o skeleton preso na tela pra sempre, mesmo com
         # o "finalizado" ja tendo reabilitado os controles
         try:
-            self.produtos, self.categorias = dados
-
-            self.atualizar_cards_resumo()
-            self.atualizar_filtro_categorias()
-
-            self.filtrar_produtos()
+            self._todos_produtos, self.categorias = dados
+            self._aplicar_filtro_loja()
         except Exception as erro:
             self._ao_carregar_erro(erro)
+
+    def _aplicar_filtro_loja(self):
+        da_loja = [p for p in self._todos_produtos if p.get("na_loja", True)]
+        outras = len(self._todos_produtos) - len(da_loja)
+        self.chk_outras_lojas.setVisible(outras > 0)
+        self.chk_outras_lojas.setText(f"Mostrar produtos das outras lojas ({outras})")
+        self.produtos = (
+            self._todos_produtos if self.chk_outras_lojas.isChecked() else da_loja
+        )
+
+        self.atualizar_cards_resumo()
+        self.atualizar_filtro_categorias()
+
+        self.filtrar_produtos()
 
     def _ao_carregar_erro(self, erro):
         self.tabela.setRowCount(0)

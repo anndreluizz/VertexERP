@@ -24,4 +24,5 @@ PERMISSOES_DISPONIVEIS = {
     "caixa.fechar": "Fechar caixa",
     "aprovacoes.gerenciar": "Aprovar/rejeitar solicitações",
     "clientes.lgpd": "Exportar/apagar dados de cliente (LGPD)",
+    "bi.ver": "Ver Inteligência de Negócios (faturamento, fiado, contas)",
 }

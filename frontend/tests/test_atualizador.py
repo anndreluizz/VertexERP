@@ -8,6 +8,7 @@ import importlib.util
 import io
 import json
 import os
+import time
 import zipfile
 from datetime import date
 
@@ -157,3 +158,21 @@ def test_sem_internet_nao_incomoda(atualizador, tmp_path):
         str(tmp_path), perguntar, lambda *a: None, buscar=buscar,
     )
     assert "sem rede" in (tmp_path / "atualizacao_log.txt").read_text(encoding="utf-8")
+
+
+def test_instalacao_roda_mesmo_o_atualizar_ps1(atualizador, tmp_path):
+    """O launcher mandava 'instalar' e o powershell (DETACHED_PROCESS)
+    saia sem rodar nada -- a loja nunca atualizava, sem erro nenhum."""
+    marca = tmp_path / "rodou.txt"
+    (tmp_path / "atualizar.ps1").write_text(
+        'param([string]$Raiz)\nSet-Content -Path "$Raiz\\rodou.txt" -Value ok\n',
+        encoding="utf-8",
+    )
+
+    atualizador.iniciar_instalacao(str(tmp_path), str(tmp_path))
+
+    for _ in range(60):
+        if marca.exists():
+            break
+        time.sleep(0.5)
+    assert marca.exists()

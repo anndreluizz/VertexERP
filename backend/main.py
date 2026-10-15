@@ -40,6 +40,7 @@ from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.estoque import router as estoque_router
 from app.api.v1.financeiro import router as fiado_router
 from app.api.v1.relatorios import router as relatorios_router
+from app.api.v1.bi import router as bi_router
 from app.api.v1.configuracoes import router as configuracoes_router
 from app.api.v1.notificacoes import router as notificacoes_router
 from app.api.v1.backup import router as backup_router
@@ -106,6 +107,7 @@ app.include_router(pdv_router)
 app.include_router(estoque_router)
 app.include_router(fiado_router)
 app.include_router(relatorios_router)
+app.include_router(bi_router)
 app.include_router(configuracoes_router)
 app.include_router(notificacoes_router)
 app.include_router(backup_router)

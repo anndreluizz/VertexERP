@@ -34,7 +34,9 @@ PASTA_ATUALIZACOES = "atualizacoes"
 ESPERA_INICIAL_SEGUNDOS = 5 * 60
 INTERVALO_SEGUNDOS = 6 * 60 * 60
 
-DETACHED_PROCESS = 0x00000008
+# CREATE_NO_WINDOW, nao DETACHED_PROCESS: powershell sem console nenhum
+# (DETACHED) sai na hora com codigo 0 sem rodar o script
+CREATE_NO_WINDOW = 0x08000000
 CREATE_NEW_PROCESS_GROUP = 0x00000200
 
 
@@ -155,7 +157,7 @@ def iniciar_instalacao(base, pasta):
             "-Raiz", base,
         ],
         cwd=pasta,
-        creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+        creationflags=CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP,
         close_fds=True,
     )
 

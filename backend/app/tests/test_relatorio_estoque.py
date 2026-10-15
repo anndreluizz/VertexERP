@@ -325,3 +325,46 @@ def test_vendas_dia_semana_hora_sem_vendas_retorna_matriz_zerada(client, auth_he
     itens = response.json()
     assert len(itens) == 7 * 24
     assert all(i["quantidade"] == 0 for i in itens)
+
+
+def test_produto_sem_custo_marca_lucro_como_incompleto(client, auth_headers, db):
+    """Sem custo cadastrado o 'lucro' seria o proprio faturamento (margem
+    100%) -- os relatorios avisam pra tela mostrar "—"."""
+    com_custo = _criar_produto(db, "CST-OK", "Com custo")
+    sem_custo = _criar_produto(db, "CST-NAO", "Sem custo")
+    sem_custo.categoria = "Sem Custo"
+    sem_custo.preco_custo = 0
+    db.commit()
+    _criar_venda_item(db, com_custo, valor_unitario=5)
+
+    def buscar():
+        params = _periodo_hoje()
+        vendas = client.get(
+            "/relatorios/vendas", params=params, headers=auth_headers
+        ).json()
+        lojas = client.get(
+            "/relatorios/comparativo-lojas", params=params, headers=auth_headers
+        ).json()
+        categorias = client.get(
+            "/relatorios/margem-categoria", params=params, headers=auth_headers
+        ).json()
+        return vendas, lojas, {c["categoria"]: c for c in categorias}
+
+    vendas, _, categorias = buscar()
+    assert vendas["custo_incompleto"] is False
+    assert categorias["Geral"]["custo_incompleto"] is False
+
+    loja = Loja(nome="Loja Custo", ativa=True)
+    db.add(loja)
+    db.commit()
+    venda = _criar_venda_item(db, sem_custo, valor_unitario=7)
+    venda.loja_id = loja.id
+    db.commit()
+
+    vendas, lojas, categorias = buscar()
+    assert vendas["custo_incompleto"] is True
+    assert categorias["Sem Custo"]["custo_incompleto"] is True
+    assert categorias["Geral"]["custo_incompleto"] is False
+    assert {l["loja_nome"]: l["custo_incompleto"] for l in lojas} == {
+        "Loja Custo": True
+    }

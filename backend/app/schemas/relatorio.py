@@ -44,6 +44,7 @@ class ComparativoLojaItem(BaseModel):
     quantidade_vendas: int
     ticket_medio: Decimal
     margem_lucro: Decimal
+    custo_incompleto: bool = False
 
 
 class FunilVendasResponse(BaseModel):
@@ -59,6 +60,7 @@ class MargemCategoriaItem(BaseModel):
     lucro: Decimal
     margem_pct: Decimal
     quantidade: int
+    custo_incompleto: bool = False
 
 
 class EstoqueCategoriaItem(BaseModel):
@@ -139,6 +141,7 @@ class RelatorioVendasResponse(BaseModel):
     clientes_atendidos: KpiValor
     produtos_vendidos: KpiValor
     margem_lucro: KpiValor
+    custo_incompleto: bool = False
     vendas_por_dia: list[VendaPorDia]
     top_produtos: list[ProdutoMaisVendido]
     formas_pagamento: list[FormaPagamentoTotal]

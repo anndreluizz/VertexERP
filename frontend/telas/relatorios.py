@@ -882,7 +882,9 @@ class Relatorios(QWidget):
                 linha, 1, QTableWidgetItem(formatar_moeda(item["receita_total"]))
             )
             self.tabela_comparativo_lojas.setItem(
-                linha, 2, QTableWidgetItem(formatar_moeda(item["lucro"]))
+                linha, 2, QTableWidgetItem(
+                    "—" if item.get("custo_incompleto") else formatar_moeda(item["lucro"])
+                )
             )
             self.tabela_comparativo_lojas.setItem(
                 linha, 3, QTableWidgetItem(str(item["quantidade_vendas"]))
@@ -1011,6 +1013,10 @@ class Relatorios(QWidget):
                 card.definir_legenda("sem período anterior pra comparar")
 
         self.card_lucro.definir_legenda(f"margem de {margem:.1f}%".replace(".", ","))
+        if relatorio.get("custo_incompleto"):
+            self.card_lucro.definir_valor("—")
+            self.card_lucro.definir_variacao(None)
+            self.card_lucro.definir_legenda("produto vendido sem custo cadastrado")
 
         self._atualizar_ranking_produtos(relatorio["top_produtos"])
         self._atualizar_mix_pagamentos(relatorio["formas_pagamento"])
@@ -1769,10 +1775,15 @@ class Relatorios(QWidget):
                 linha, 1, QTableWidgetItem(formatar_moeda(item["receita"]))
             )
             self.tabela_margem_categoria.setItem(
-                linha, 2, QTableWidgetItem(formatar_moeda(item["lucro"]))
+                linha, 2, QTableWidgetItem(
+                    "—" if item.get("custo_incompleto") else formatar_moeda(item["lucro"])
+                )
             )
             self.tabela_margem_categoria.setItem(
-                linha, 3, QTableWidgetItem(f"{float(item['margem_pct']):.1f}%".replace(".", ","))
+                linha, 3, QTableWidgetItem(
+                    "—" if item.get("custo_incompleto")
+                    else f"{float(item['margem_pct']):.1f}%".replace(".", ",")
+                )
             )
 
         # estoque por categoria

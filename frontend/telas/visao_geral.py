@@ -621,6 +621,9 @@ class VisaoGeral(QWidget):
 
     def _custo_produtos_vendidos(self, vendas_periodo):
 
+        """None se algum produto vendido nao tem custo cadastrado -- com
+        custo 0 o "lucro" viraria o faturamento."""
+
         custos_por_produto = {
             p["id"]: float(p.get("preco_custo", 0) or 0)
             for p in self.produtos
@@ -633,6 +636,8 @@ class VisaoGeral(QWidget):
                 custo_unit = custos_por_produto.get(
                     item.get("produto_id"), 0
                 )
+                if not custo_unit:
+                    return None
                 total += custo_unit * item.get("quantidade", 0)
 
         return total
@@ -701,8 +706,14 @@ class VisaoGeral(QWidget):
             vendas_periodo_ant
         )
 
-        lucro = faturamento - custo_produtos - despesas
-        lucro_ant = faturamento_ant - custo_produtos_ant - despesas_ant
+        lucro = (
+            None if custo_produtos is None
+            else faturamento - custo_produtos - despesas
+        )
+        lucro_ant = (
+            None if custo_produtos_ant is None
+            else faturamento_ant - custo_produtos_ant - despesas_ant
+        )
 
         def variacao(atual, anterior):
             if anterior == 0:
@@ -714,8 +725,9 @@ class VisaoGeral(QWidget):
             variacao(faturamento, faturamento_ant),
         )
         self.card_lucro.atualizar(
-            formatar_moeda(lucro),
-            variacao(lucro, lucro_ant),
+            "— (sem custo)" if lucro is None else formatar_moeda(lucro),
+            None if lucro is None or lucro_ant is None
+            else variacao(lucro, lucro_ant),
         )
         self.card_despesas.atualizar(
             formatar_moeda(despesas),

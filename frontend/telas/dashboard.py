@@ -166,6 +166,7 @@ class Dashboard(QWidget):
         self._clientes = []
         self._totais_por_dia = {}
         self._lucros_por_dia = {}
+        self._dias_sem_custo = set()
 
         self._grafico_metrica = "vendas"
         self._grafico_periodo_dias = 7
@@ -746,6 +747,10 @@ class Dashboard(QWidget):
             self._totais_por_dia, self._lucros_por_dia = self._construir_series_diarias(
                 vendas_finalizadas, produtos_por_id
             )
+            self.bt_aba_lucro.setVisible(not self._dias_sem_custo)
+            if self._dias_sem_custo and self._grafico_metrica == "lucro":
+                self.bt_aba_vendas.setChecked(True)
+                self._grafico_metrica = "vendas"
 
             self._atualizar_kpis(dados)
             self._atualizar_grafico()
@@ -777,6 +782,9 @@ class Dashboard(QWidget):
 
         totais_por_dia = {}
         lucros_por_dia = {}
+        # dias com produto vendido sem custo: o "lucro" desses dias seria
+        # o faturamento, entao o KPI mostra "—" e a aba Lucro some
+        self._dias_sem_custo = set()
 
         for venda in vendas_finalizadas:
 
@@ -793,7 +801,9 @@ class Dashboard(QWidget):
 
             for item in venda.get("itens", []):
                 produto = produtos_por_id.get(item.get("produto_id"))
-                custo = float(produto.get("preco_custo", 0)) if produto else 0.0
+                custo = float(produto.get("preco_custo") or 0) if produto else 0.0
+                if not custo:
+                    self._dias_sem_custo.add(dia)
                 valor_unit = float(item.get("valor_unitario", 0))
                 lucro_venda += (valor_unit - custo) * item.get("quantidade", 0)
 
@@ -836,8 +846,13 @@ class Dashboard(QWidget):
 
         lucro_hoje = self._lucros_por_dia.get(hoje, 0.0)
         lucro_ontem = self._lucros_por_dia.get(ontem, 0.0)
-        self.kpi_lucro.definir_valor(formatar_moeda(lucro_hoje))
-        self.kpi_lucro.definir_variacao(_variacao_percentual(lucro_hoje, lucro_ontem))
+        if hoje in self._dias_sem_custo:
+            self.kpi_lucro.definir_valor("—")
+            self.kpi_lucro.definir_variacao(None)
+            self.kpi_lucro.definir_legenda("produto vendido sem custo cadastrado")
+        else:
+            self.kpi_lucro.definir_valor(formatar_moeda(lucro_hoje))
+            self.kpi_lucro.definir_variacao(_variacao_percentual(lucro_hoje, lucro_ontem))
 
     def _atualizar_grafico(self):
 

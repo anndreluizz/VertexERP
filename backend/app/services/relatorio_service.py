@@ -118,6 +118,7 @@ class RelatorioService:
             "margem_lucro": RelatorioService._kpi_valor(
                 kpis_atual["margem_lucro"], kpis_anterior["margem_lucro"]
             ),
+            "custo_incompleto": kpis_atual["custo_incompleto"],
             "vendas_por_dia": RelatorioService._vendas_por_dia(
                 db, inicio, fim, **filtros
             ),
@@ -175,6 +176,7 @@ class RelatorioService:
                 "quantidade_vendas": kpis["quantidade_vendas"],
                 "ticket_medio": kpis["ticket_medio"],
                 "margem_lucro": kpis["margem_lucro"],
+                "custo_incompleto": kpis["custo_incompleto"],
             })
 
         return resultado
@@ -276,8 +278,10 @@ class RelatorioService:
         for item, categoria, preco_custo in itens:
             chave = categoria or "Sem categoria"
             bucket = agregados.setdefault(
-                chave, {"receita": Decimal("0"), "lucro": Decimal("0"), "quantidade": 0}
+                chave, {"receita": Decimal("0"), "lucro": Decimal("0"), "quantidade": 0,
+                        "custo_incompleto": False}
             )
+            bucket["custo_incompleto"] |= not preco_custo
             bucket["receita"] += item.subtotal
             bucket["lucro"] += (
                 item.valor_unitario - (preco_custo or 0)
@@ -294,6 +298,7 @@ class RelatorioService:
                     if dados["receita"] else Decimal("0")
                 ),
                 "quantidade": dados["quantidade"],
+                "custo_incompleto": dados["custo_incompleto"],
             }
             for categoria, dados in agregados.items()
         ]
@@ -899,6 +904,7 @@ class RelatorioService:
                 "clientes_atendidos": 0,
                 "produtos_vendidos": 0,
                 "margem_lucro": Decimal("0"),
+                "custo_incompleto": False,
             }
 
         receita_total = (
@@ -973,6 +979,9 @@ class RelatorioService:
             "clientes_atendidos": clientes_atendidos,
             "produtos_vendidos": produtos_vendidos,
             "margem_lucro": margem_lucro,
+            # produto vendido sem custo cadastrado conta custo 0 e o
+            # "lucro" vira o faturamento -- a tela mostra "—" em vez disso
+            "custo_incompleto": any(not custo for _, custo in itens),
         }
 
     @staticmethod

@@ -268,3 +268,35 @@ def test_codigo_interno_sequencial_e_numero_curto(client, auth_headers):
     # no caixa, "1" acha o "0001"
     r = client.get("/pdv/produto/1", headers=auth_headers)
     assert r.status_code == 200 and r.json()["codigo"] == "0001"
+
+
+def test_listagem_por_loja_marca_so_o_que_a_loja_tem(client, auth_headers, db):
+    """Catalogo unico, mas produto cadastrado na Filial (mesmo com
+    estoque 0) nao e' 'da' Matriz: na_loja=False la, e a tela esconde."""
+    from app.models.loja import Loja
+
+    matriz, filial = Loja(nome="Matriz"), Loja(nome="Filial")
+    db.add_all([matriz, filial])
+    db.commit()
+
+    def criar(nome, loja, estoque):
+        r = client.post(
+            f"/produtos/?loja_id={loja.id}",
+            json={"nome": nome, "preco_venda": "5.00", "estoque": estoque},
+            headers=auth_headers,
+        )
+        assert r.status_code == 201, r.text
+        return r.json()["id"]
+
+    da_filial_zerado = criar("SO FILIAL", filial, 0)
+    da_matriz = criar("SO MATRIZ", matriz, 3)
+
+    def na_loja(loja):
+        lista = client.get(f"/produtos/?loja_id={loja.id}", headers=auth_headers).json()
+        return {p["id"]: p["na_loja"] for p in lista}
+
+    assert na_loja(matriz) == {da_filial_zerado: False, da_matriz: True}
+    assert na_loja(filial) == {da_filial_zerado: True, da_matriz: False}
+    # sem loja (visao geral) nada some
+    sem_loja = client.get("/produtos/", headers=auth_headers).json()
+    assert all(p["na_loja"] for p in sem_loja)

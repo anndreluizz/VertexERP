@@ -67,9 +67,13 @@ class AnaliseCliente {
       (diasEmAtraso == null || diasEmAtraso! <= prazoBomPagadorDias) &&
       !inadimplente;
 
+  /// costuma demorar pra quitar OU tem compra em aberto ha mais que o
+  /// prazo de bom pagador agora (mesmo sem nunca ter pago -- antes
+  /// esse cliente aparecia "Em dia")
   bool get pagaComAtraso =>
-      prazoMedioPagamento != null &&
-      prazoMedioPagamento! > prazoBomPagadorDias &&
+      ((prazoMedioPagamento != null &&
+              prazoMedioPagamento! > prazoBomPagadorDias) ||
+          (diasEmAtraso != null && diasEmAtraso! > prazoBomPagadorDias)) &&
       !inadimplente;
 
   /// Mesma prioridade do status_financeiro do Desktop, com "Quitado"
@@ -133,9 +137,13 @@ AnaliseCliente analisarCliente(
       final dataCompra = abertas[i][0] as DateTime;
       final resto = abertas[i][1] as double;
       final abatido = resto < valor ? resto : valor;
-      somaValor += abatido;
-      final dias = pagamento.data.difference(dataCompra).inDays;
-      somaValorDias += abatido * (dias < 0 ? 0 : dias);
+      // PERDA (divida baixada) abate mas ninguem pagou: fora do prazo
+      // medio, senao negativado vira "Paga com atraso"/"Bom pagador"
+      if (pagamento.tipo != 'PERDA') {
+        somaValor += abatido;
+        final dias = pagamento.data.difference(dataCompra).inDays;
+        somaValorDias += abatido * (dias < 0 ? 0 : dias);
+      }
       abertas[i][1] = resto - abatido;
       valor -= abatido;
       if ((abertas[i][1] as double) <= _epsilon) i++;
@@ -150,6 +158,7 @@ AnaliseCliente analisarCliente(
   for (final m in movimentos) {
     if (ultima == null || m.data.isAfter(ultima)) ultima = m.data;
   }
+  final pagos = abatimentos.where((m) => m.tipo != 'PERDA').toList();
 
   return AnaliseCliente(
     saldoDevedor: saldo,
@@ -162,9 +171,9 @@ AnaliseCliente analisarCliente(
     prazoMedioPagamento: somaValor > 0
         ? (somaValorDias / somaValor).round()
         : null,
-    diasDesdeUltimoPagamento: abatimentos.isEmpty
+    diasDesdeUltimoPagamento: pagos.isEmpty
         ? null
-        : _diasAte(abatimentos.last.data, hoje),
+        : _diasAte(pagos.last.data, hoje),
   );
 }
 

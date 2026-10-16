@@ -37,6 +37,11 @@ void main() {
 
       expect(a.saldoDevedor, closeTo((caso['saldo'] as num).toDouble(), 0.001));
       expect(a.diasEmAtraso, caso['dias_em_atraso']);
+      // no celular "Quitado" e' um "Em dia" sem saldo
+      final status = a.status == StatusCliente.quitado
+          ? StatusCliente.emDia.rotulo
+          : a.status.rotulo;
+      expect(status.toLowerCase(), (caso['status'] as String).toLowerCase());
     });
   }
 }

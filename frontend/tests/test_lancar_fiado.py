@@ -19,7 +19,7 @@ _CLIENTE = {"id": 3, "nome": "BERNAZIO", "limite_credito": None}
 
 def _enviar(dialogo, esperar_threads):
     with mock.patch(
-        "telas.ficha_cliente.lancar_fiado_manual", return_value=_Resposta()
+        "telas.ficha_cliente.lancar_fiado.lancar_fiado_manual", return_value=_Resposta()
     ) as lancar:
         dialogo.confirmar()
         esperar_threads(dialogo)

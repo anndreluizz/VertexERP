@@ -42,14 +42,14 @@ def test_montar_html_extrato_usa_template_premium_compartilhado():
     dialogo = _instancia_minima()
 
     with mock.patch(
-        "telas.ficha_cliente.api.configuracoes",
+        "telas.ficha_cliente.extrato.api.configuracoes",
         return_value={"nome_loja": "Loja Teste", "telefone": "11999998888"},
     ), mock.patch(
-        "telas.ficha_cliente.api.me", return_value={"nome": "Ana Vendedora"}
+        "telas.ficha_cliente.extrato.api.me", return_value={"nome": "Ana Vendedora"}
     ), mock.patch(
-        "telas.ficha_cliente.saldo_cliente", return_value=150.0
+        "telas.ficha_cliente.extrato.saldo_cliente", return_value=150.0
     ), mock.patch(
-        "telas.ficha_cliente.listar_observacoes_cliente", return_value=[]
+        "telas.ficha_cliente.extrato.listar_observacoes_cliente", return_value=[]
     ):
         html = dialogo._montar_html_extrato()
 

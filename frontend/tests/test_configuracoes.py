@@ -1,14 +1,14 @@
 """Testes da tela de Configurações -- por enquanto só a aba
 "Hardware / Scanner" (informativa: leitor USB/Bluetooth já funciona
-sem nenhuma configuração, ver telas/pdv.py e telas/cadastro_produto.py)."""
+sem nenhuma configuração, ver telas/pdv/ e telas/cadastro_produto.py)."""
 from unittest import mock
 
 from telas.configuracoes import Configuracoes
 
 
 def _tela_configuracoes():
-    with mock.patch("telas.configuracoes.configuracoes", return_value={}):
-        with mock.patch("telas.configuracoes.me", return_value={"nome": "Usuário Teste", "id": 1}):
+    with mock.patch("telas.configuracoes.configuracoes.configuracoes", return_value={}):
+        with mock.patch("telas.configuracoes.paginas.me", return_value={"nome": "Usuário Teste", "id": 1}):
             with mock.patch("services.preferencias_service.carregar", return_value={}):
                 with mock.patch(
                     "services.impressora_termica_service.listar_impressoras_windows",

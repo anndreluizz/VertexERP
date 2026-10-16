@@ -31,11 +31,11 @@ def test_imprimir_relatorio_financeiro_monta_html_premium_e_chama_imprimir():
     tela = _tela_minima()
 
     with mock.patch(
-        "telas.relatorios.configuracoes", return_value={"nome_loja": "Loja Teste"}
+        "telas.relatorios.financeiro.configuracoes", return_value={"nome_loja": "Loja Teste"}
     ), mock.patch(
-        "telas.relatorios.comprovante_service.obter_logo_loja", return_value=None
+        "telas.relatorios.financeiro.comprovante_service.obter_logo_loja", return_value=None
     ), mock.patch(
-        "telas.relatorios.comprovante_service.imprimir"
+        "telas.relatorios.financeiro.comprovante_service.imprimir"
     ) as mock_imprimir:
         tela.imprimir_relatorio_financeiro()
 
@@ -56,7 +56,7 @@ def test_imprimir_relatorio_financeiro_nao_faz_nada_fora_da_aba_financeiro():
     tela._aba_atual = 1  # aba Caixa
 
     with mock.patch(
-        "telas.relatorios.comprovante_service.imprimir"
+        "telas.relatorios.financeiro.comprovante_service.imprimir"
     ) as mock_imprimir:
         tela.imprimir_relatorio_financeiro()
 

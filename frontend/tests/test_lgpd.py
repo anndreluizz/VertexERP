@@ -1,6 +1,6 @@
 """Testes dos botões de LGPD na ficha do cliente -- exportar dados
 pessoais e remover dados pessoais (direito de acesso e ao
-esquecimento). Ver telas/ficha_cliente.py e services/cliente_service.py."""
+esquecimento). Ver telas/ficha_cliente/ficha.py e services/cliente_service.py."""
 from unittest import mock
 
 from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
@@ -43,7 +43,7 @@ def test_exportar_chama_o_servico_e_salva_o_json():
     ) as exportar_mock, mock.patch.object(
         QFileDialog, "getSaveFileName", return_value=("C:/fake/dados_lgpd.json", "")
     ), mock.patch("builtins.open", mock.mock_open()) as open_mock, mock.patch(
-        "telas.ficha_cliente.json.dump"
+        "telas.ficha_cliente.ficha.json.dump"
     ) as dump_mock, mock.patch.object(QMessageBox, "information") as info_mock:
 
         tela.exportar_dados_lgpd_atual()

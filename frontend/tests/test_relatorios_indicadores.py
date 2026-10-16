@@ -9,7 +9,7 @@ cliente_analise (que ja tem seus proprios testes/uso real alhures)."""
 from datetime import datetime, timedelta
 from unittest import mock
 
-from telas.relatorios import _buscar_dados_indicadores
+from telas.relatorios.indicadores import _buscar_dados_indicadores
 
 
 def _cliente(id_, nome, limite_credito=None):
@@ -40,7 +40,7 @@ def _rodar(clientes=None, movimentos=None, usuarios=None, lojas=None, **extras):
     }
 
     with mock.patch.multiple(
-        "telas.relatorios",
+        "telas.relatorios.indicadores",
         **{nome: mock.DEFAULT for nome in patches},
     ) as mocks:
         for nome, valor in patches.items():

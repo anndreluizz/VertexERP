@@ -29,7 +29,7 @@ def test_nao_imprime_recibo_se_usuario_recusar(esperar_threads):
     dialogo = _dialogo()
 
     with mock.patch(
-        "telas.ficha_cliente.registrar_pagamento", return_value=_RespostaOk()
+        "telas.ficha_cliente.registrar_pagamento.registrar_pagamento", return_value=_RespostaOk()
     ), mock.patch.object(
         QMessageBox, "question", return_value=QMessageBox.No
     ), mock.patch.object(
@@ -46,7 +46,7 @@ def test_imprime_recibo_apenas_se_usuario_confirmar(esperar_threads):
     dialogo = _dialogo()
 
     with mock.patch(
-        "telas.ficha_cliente.registrar_pagamento", return_value=_RespostaOk()
+        "telas.ficha_cliente.registrar_pagamento.registrar_pagamento", return_value=_RespostaOk()
     ), mock.patch.object(
         QMessageBox, "question", return_value=QMessageBox.Yes
     ), mock.patch.object(

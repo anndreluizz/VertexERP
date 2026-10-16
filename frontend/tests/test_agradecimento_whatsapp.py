@@ -14,8 +14,8 @@ def _ficha(*movimentos, telefone="(97) 90000-0001"):
 
 
 def _enviar(ficha, saldo=300.96, acao="agradecer_pagamento_whatsapp"):
-    with mock.patch("telas.ficha_cliente.saldo_cliente", return_value=saldo), \
-         mock.patch("telas.ficha_cliente.api.configuracoes", return_value={"nome_loja": "3.L.A VARIEDADES"}):
+    with mock.patch("telas.ficha_cliente.whatsapp.saldo_cliente", return_value=saldo), \
+         mock.patch("telas.ficha_cliente.whatsapp.api.configuracoes", return_value={"nome_loja": "3.L.A VARIEDADES"}):
         getattr(ficha, acao)()
     return ficha._enviar_texto_whatsapp.call_args[0][0]
 

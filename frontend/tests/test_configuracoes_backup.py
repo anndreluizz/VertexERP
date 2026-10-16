@@ -7,9 +7,9 @@ from telas.configuracoes import Configuracoes
 
 
 def _tela_configuracoes(admin=False):
-    with mock.patch("telas.configuracoes.configuracoes", return_value={}), \
-         mock.patch("telas.configuracoes.me", return_value={"nome": "Usuário Teste", "id": 1}), \
-         mock.patch("telas.configuracoes.usuario_e_admin", return_value=admin), \
+    with mock.patch("telas.configuracoes.configuracoes.configuracoes", return_value={}), \
+         mock.patch("telas.configuracoes.paginas.me", return_value={"nome": "Usuário Teste", "id": 1}), \
+         mock.patch("telas.configuracoes.configuracoes.usuario_e_admin", return_value=admin), \
          mock.patch("services.preferencias_service.carregar", return_value={}), \
          mock.patch(
              "services.impressora_termica_service.listar_impressoras_windows",
@@ -48,7 +48,7 @@ def test_selecionar_aba_backup_carrega_historico_uma_vez(esperar_threads):
     }
 
     with mock.patch(
-        "telas.configuracoes.backup_service.listar_backups",
+        "telas.configuracoes.backup.backup_service.listar_backups",
         return_value=resposta,
     ) as listar_mock:
 
@@ -69,7 +69,7 @@ def test_selecionar_aba_backup_carrega_historico_uma_vez(esperar_threads):
 
 def _carregar_aba_backup(tela, resposta, esperar_threads):
     with mock.patch(
-        "telas.configuracoes.backup_service.listar_backups",
+        "telas.configuracoes.backup.backup_service.listar_backups",
         return_value=resposta,
     ):
         tela._selecionar_aba(8)

@@ -131,7 +131,7 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
         # ---------- Identificação ----------
 
         cartao_ident, corpo_ident = self._construir_cartao_secao(
-            "Identificação", "Como o produto aparece na busca, no PDV e no cupom.",
+            "Principal", "Bipe o código e vá no Enter: no estoque, Enter cadastra.",
             "edit-2", tokens.PRIMARIA,
         )
 
@@ -211,37 +211,6 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
             font-size:{tokens.TAMANHO_XS}px;
         """)
 
-        grade_ident = QGridLayout()
-        grade_ident.setHorizontalSpacing(14)
-        grade_ident.setVerticalSpacing(14)
-        grade_ident.addWidget(self._campo(
-            "Código de barras", self._linha(self.codigo_barras, self.bt_buscar),
-        ), 0, 0, 1, 3)
-        grade_ident.addWidget(self._campo("Nome do produto", self.nome, obrigatorio=True), 1, 0, 1, 3)
-        grade_ident.addWidget(self._campo(
-            "Categoria", self._linha(self.categoria, self.bt_nova_categoria, self.bt_gerenciar_categorias),
-        ), 2, 0, 1, 2)
-        grade_ident.addWidget(self._campo(
-            "Marca", self._linha(self.marca, self.bt_nova_marca, self.bt_gerenciar_marcas),
-        ), 2, 2)
-        grade_ident.addWidget(self._campo("Coleção", self.colecao), 3, 0)
-        grade_ident.addWidget(self._campo("Cor", self.cor), 3, 1)
-        grade_ident.addWidget(self._campo("Tamanho", self.tamanho), 3, 2)
-        grade_ident.addWidget(self._campo("Descrição", self.descricao), 4, 0, 1, 3)
-        grade_ident.addWidget(self.lbl_contador_descricao, 5, 0, 1, 3)
-        for coluna in range(3):
-            grade_ident.setColumnStretch(coluna, 1)
-        corpo_ident.addLayout(grade_ident)
-
-        esquerda.addWidget(cartao_ident)
-
-        # ---------- Preço e estoque ----------
-
-        cartao_preco, corpo_preco = self._construir_cartao_secao(
-            "Preço e estoque", "O custo é opcional, mas é ele que mostra o lucro.",
-            "dollar-sign", tokens.SECUNDARIA,
-        )
-
         self.preco_venda = self._dinheiro()
         self.preco_custo = self._dinheiro()
 
@@ -280,17 +249,50 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
             font-size:{tokens.TAMANHO_XS}px;
         """)
 
+        # O essencial fica junto no topo, na mesma ordem do Enter
+        # (ver keyPressEvent); o resto vai pro cartao "Detalhes".
+        grade_ident = QGridLayout()
+        grade_ident.setHorizontalSpacing(14)
+        grade_ident.setVerticalSpacing(14)
+        grade_ident.addWidget(self._campo(
+            "Código de barras", self._linha(self.codigo_barras, self.bt_buscar),
+        ), 0, 0, 1, 3)
+        grade_ident.addWidget(self._campo("Nome do produto", self.nome, obrigatorio=True), 1, 0, 1, 3)
+        grade_ident.addWidget(self._campo(
+            "Categoria", self._linha(self.categoria, self.bt_nova_categoria, self.bt_gerenciar_categorias),
+        ), 2, 0, 1, 3)
+        grade_ident.addWidget(self._campo("Preço de venda (R$)", self.preco_venda, obrigatorio=True), 3, 0)
+        grade_ident.addWidget(self._campo("Custo de compra (R$)", self.preco_custo), 3, 1)
+        grade_ident.addWidget(self._campo(
+            "Estoque atual" if produto else "Estoque inicial", self.estoque,
+        ), 3, 2)
+        grade_ident.addWidget(self.lbl_margem, 4, 0, 1, 3)
+        for coluna in range(3):
+            grade_ident.setColumnStretch(coluna, 1)
+        corpo_ident.addLayout(grade_ident)
+
+        esquerda.addWidget(cartao_ident)
+
+        # ---------- Detalhes (opcional) ----------
+
+        cartao_preco, corpo_preco = self._construir_cartao_secao(
+            "Detalhes", "Opcional -- dá pra cadastrar sem e completar depois.",
+            "file-text", tokens.SECUNDARIA,
+        )
+
         grade_preco = QGridLayout()
         grade_preco.setHorizontalSpacing(14)
         grade_preco.setVerticalSpacing(14)
-        grade_preco.addWidget(self._campo("Preço de venda (R$)", self.preco_venda, obrigatorio=True), 0, 0)
-        grade_preco.addWidget(self._campo("Custo de compra (R$)", self.preco_custo), 0, 1)
-        grade_preco.addWidget(self._campo("Vendido por", seletor_modo), 0, 2)
-        grade_preco.addWidget(self.lbl_margem, 1, 0, 1, 3)
         grade_preco.addWidget(self._campo(
-            "Estoque atual" if produto else "Estoque inicial", self.estoque,
-        ), 2, 0)
-        grade_preco.addWidget(self._campo("Estoque mínimo (alerta)", self.estoque_minimo), 2, 1)
+            "Marca", self._linha(self.marca, self.bt_nova_marca, self.bt_gerenciar_marcas),
+        ), 0, 0, 1, 2)
+        grade_preco.addWidget(self._campo("Vendido por", seletor_modo), 0, 2)
+        grade_preco.addWidget(self._campo("Coleção", self.colecao), 1, 0)
+        grade_preco.addWidget(self._campo("Cor", self.cor), 1, 1)
+        grade_preco.addWidget(self._campo("Tamanho", self.tamanho), 1, 2)
+        grade_preco.addWidget(self._campo("Estoque mínimo (alerta)", self.estoque_minimo), 2, 0)
+        grade_preco.addWidget(self._campo("Descrição", self.descricao), 3, 0, 1, 3)
+        grade_preco.addWidget(self.lbl_contador_descricao, 4, 0, 1, 3)
         for coluna in range(3):
             grade_preco.setColumnStretch(coluna, 1)
         corpo_preco.addLayout(grade_preco)
@@ -667,9 +669,11 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
             super().keyPressEvent(event)
             return
 
+        # mesma ordem do cartao "Principal"; custo vazio e' so' mais um
+        # Enter, e sem ele o lucro/BI ficam em branco
         ordem = [
             self.codigo_barras, self.nome, self.categoria,
-            self.preco_venda, self.estoque,
+            self.preco_venda, self.preco_custo, self.estoque,
         ]
 
         foco = QApplication.focusWidget()

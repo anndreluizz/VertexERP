@@ -16,13 +16,13 @@ _PNG_1X1 = base64.b64decode(
 
 def _tela_pdv(tem_logo=False, logo_bytes=_PNG_1X1):
     config = {"nome_loja": "Loja Teste", "tem_logo": tem_logo}
-    with mock.patch("telas.pdv.configuracoes", return_value=config):
-        with mock.patch("telas.pdv.me", return_value={"id": 1}):
+    with mock.patch("telas.pdv.layout.configuracoes", return_value=config):
+        with mock.patch("telas.pdv.pdv.me", return_value={"id": 1}):
             with mock.patch(
                 "services.preferencias_service.carregar", return_value={}
             ):
                 with mock.patch(
-                    "telas.pdv.comprovante_service.obter_logo_loja",
+                    "telas.pdv.layout.comprovante_service.obter_logo_loja",
                     return_value=logo_bytes,
                 ):
                     return PDV()
@@ -61,10 +61,10 @@ def test_montar_documento_orcamento_usa_template_premium_compartilhado():
     ]
 
     with mock.patch(
-        "telas.pdv.configuracoes",
+        "telas.pdv.orcamento.configuracoes",
         return_value={"nome_loja": "Loja Teste"},
     ), mock.patch(
-        "telas.pdv.comprovante_service.obter_logo_loja", return_value=None,
+        "telas.pdv.orcamento.comprovante_service.obter_logo_loja", return_value=None,
     ):
         documento = tela._montar_documento_orcamento()
 

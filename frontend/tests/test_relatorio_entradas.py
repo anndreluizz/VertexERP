@@ -1,8 +1,18 @@
 """Relatorios > Caixa: cards de dinheiro que entrou no periodo."""
 from unittest import mock
 
-from telas import relatorios
+from telas.relatorios import Relatorios, caixa, estoque, financeiro, indicadores
+from telas.relatorios import relatorios as nucleo
 from services import caixa_service
+
+# rodar_em_thread e' importado em cada aba do pacote telas.relatorios
+_MODULOS_COM_THREAD = (nucleo, caixa, estoque, financeiro, indicadores)
+
+
+def _sem_thread(monkeypatch):
+    for modulo in _MODULOS_COM_THREAD:
+        monkeypatch.setattr(modulo, "rodar_em_thread", lambda *a, **k: None)
+
 
 DADOS = {
     "dinheiro": "140.00", "pix": "100.00", "cartao": "50.00", "outros": "0",
@@ -12,8 +22,8 @@ DADOS = {
 
 
 def test_cards_mostram_o_que_entrou(_qapp, monkeypatch):
-    monkeypatch.setattr(relatorios, "rodar_em_thread", lambda *a, **k: None)
-    tela = relatorios.Relatorios()
+    _sem_thread(monkeypatch)
+    tela = Relatorios()
     tela._ao_atualizar_entradas(DADOS)
 
     assert tela.card_entrou_total.lbl_valor.text() == "R$ 290,00"
@@ -26,8 +36,8 @@ def test_cards_mostram_o_que_entrou(_qapp, monkeypatch):
 
 
 def test_sobrou_negativo_mostra_sinal(_qapp, monkeypatch):
-    monkeypatch.setattr(relatorios, "rodar_em_thread", lambda *a, **k: None)
-    tela = relatorios.Relatorios()
+    _sem_thread(monkeypatch)
+    tela = Relatorios()
     tela._ao_atualizar_entradas({**DADOS, "sobrou": "-40.00"})
     assert tela.card_sobrou.lbl_valor.text() == "− R$ 40,00"
 
@@ -43,11 +53,11 @@ def test_service_monta_a_url_com_periodo_e_loja():
 def test_atualizar_entradas_passa_na_validacao_do_worker(_qapp, monkeypatch):
     """Sem mock do rodar_em_thread: ele recusa callback que nao seja
     metodo de QObject (foi o que deixou os cards em branco na loja)."""
-    monkeypatch.setattr(relatorios, "entradas_caixa", lambda *a: DADOS)
-    tela = relatorios.Relatorios.__new__(relatorios.Relatorios)
-    monkeypatch.setattr(relatorios, "rodar_em_thread", lambda *a, **k: None)
-    relatorios.Relatorios.__init__(tela)
+    monkeypatch.setattr(caixa, "entradas_caixa", lambda *a: DADOS)
+    tela = Relatorios.__new__(Relatorios)
+    _sem_thread(monkeypatch)
+    Relatorios.__init__(tela)
     monkeypatch.undo()
-    monkeypatch.setattr(relatorios, "entradas_caixa", lambda *a: DADOS)
+    monkeypatch.setattr(caixa, "entradas_caixa", lambda *a: DADOS)
 
     tela._atualizar_entradas()  # levantava TypeError

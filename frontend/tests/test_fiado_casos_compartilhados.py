@@ -24,3 +24,4 @@ def test_caso_compartilhado(caso):
 
     assert round(agr["saldo_devedor"], 2) == caso["saldo"]
     assert agr["dias_em_atraso"] == caso["dias_em_atraso"]
+    assert cliente_analise.status_financeiro(agr).lower() == caso["status"].lower()

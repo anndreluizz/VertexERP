@@ -1,21 +1,17 @@
 {
-  "_sobre": "Casos de fiado que o servidor (backend/app/tests/test_fiado_casos_compartilhados.py), o PC (frontend/tests/test_fiado_casos_compartilhados.py) e o app (mobile/test/fiado_casos_compartilhados_test.dart) precisam calcular igual. Saldo = compras menos tudo que nao e' compra (pagamento, haver, perda). Atraso = dias desde a compra mais antiga ainda nao paga (pagamentos abatem as mais antigas primeiro); null quando nao deve nada. Mudou a regra? Mude aqui e nos tres.",
+  "_sobre": "Casos de fiado que o servidor (backend/app/tests/test_fiado_casos_compartilhados.py), o PC (frontend/tests/test_fiado_casos_compartilhados.py) e o app (mobile/test/fiado_casos_compartilhados_test.dart) precisam calcular igual. Saldo = compras menos tudo que nao e' compra (pagamento, haver, perda). Atraso = dias desde a compra mais antiga ainda nao paga (pagamentos abatem as mais antigas primeiro); null quando nao deve nada. Mudou a regra? Mude aqui e nos tres. Status (so PC e app): Inadimplente = compra aberta ha mais de 90 dias e nada pago em 90 dias; Paga com atraso = leva mais de 30 dias em media pra quitar OU tem compra aberta ha mais de 30 dias; Bom pagador = quita em ate 30 dias em media e nada aberto ha mais de 30; senao Em dia. PERDA abate o saldo mas nao conta como pagamento.",
   "casos": [
-    {"nome": "so compra", "movimentos": [["COMPRA", 100, 40]], "saldo": 100, "dias_em_atraso": 40},
-    {"nome": "compra recente nao zera atraso da antiga",
-     "movimentos": [["COMPRA", 100, 120], ["COMPRA", 50, 1]], "saldo": 150, "dias_em_atraso": 120},
-    {"nome": "pagamento quita a mais antiga primeiro",
-     "movimentos": [["COMPRA", 100, 120], ["COMPRA", 100, 20], ["PAGAMENTO", 100, 10]],
-     "saldo": 100, "dias_em_atraso": 20},
-    {"nome": "pagamento parcial nao muda o atraso",
-     "movimentos": [["COMPRA", 100, 90], ["PAGAMENTO", 40, 5]], "saldo": 60, "dias_em_atraso": 90},
-    {"nome": "haver abate como pagamento",
-     "movimentos": [["COMPRA", 80, 60], ["HAVER", 30, 2]], "saldo": 50, "dias_em_atraso": 60},
-    {"nome": "perda (divida baixada) zera o saldo",
-     "movimentos": [["COMPRA", 100, 400], ["PAGAMENTO", 20, 300], ["PERDA", 80, 1]],
-     "saldo": 0, "dias_em_atraso": null},
-    {"nome": "quitado", "movimentos": [["COMPRA", 70, 30], ["PAGAMENTO", 70, 3]],
-     "saldo": 0, "dias_em_atraso": null},
-    {"nome": "sem movimento", "movimentos": [], "saldo": 0, "dias_em_atraso": null}
+    {"nome": "so compra", "movimentos": [["COMPRA", 100, 40]], "saldo": 100, "dias_em_atraso": 40, "status": "Paga com atraso"},
+    {"nome": "compra recente nao zera atraso da antiga", "movimentos": [["COMPRA", 100, 120], ["COMPRA", 50, 1]], "saldo": 150, "dias_em_atraso": 120, "status": "Inadimplente"},
+    {"nome": "pagamento quita a mais antiga primeiro", "movimentos": [["COMPRA", 100, 120], ["COMPRA", 100, 20], ["PAGAMENTO", 100, 10]], "saldo": 100, "dias_em_atraso": 20, "status": "Paga com atraso"},
+    {"nome": "pagamento parcial nao muda o atraso", "movimentos": [["COMPRA", 100, 90], ["PAGAMENTO", 40, 5]], "saldo": 60, "dias_em_atraso": 90, "status": "Paga com atraso"},
+    {"nome": "haver abate como pagamento", "movimentos": [["COMPRA", 80, 60], ["HAVER", 30, 2]], "saldo": 50, "dias_em_atraso": 60, "status": "Paga com atraso"},
+    {"nome": "perda (divida baixada) zera o saldo", "movimentos": [["COMPRA", 100, 400], ["PAGAMENTO", 20, 300], ["PERDA", 80, 1]], "saldo": 0, "dias_em_atraso": null, "status": "Paga com atraso"},
+    {"nome": "quitado", "movimentos": [["COMPRA", 70, 30], ["PAGAMENTO", 70, 3]], "saldo": 0, "dias_em_atraso": null, "status": "Bom pagador"},
+    {"nome": "sem movimento", "movimentos": [], "saldo": 0, "dias_em_atraso": null, "status": "Em dia"},
+    {"nome": "compra recente sem pagar fica em dia", "movimentos": [["COMPRA", 100, 10]], "saldo": 100, "dias_em_atraso": 10, "status": "Em dia"},
+    {"nome": "paga rapido mas tem compra velha aberta", "movimentos": [["COMPRA", 50, 70], ["PAGAMENTO", 50, 65], ["COMPRA", 50, 60]], "saldo": 50, "dias_em_atraso": 60, "status": "Paga com atraso"},
+    {"nome": "divida velha mas voltou a pagar nao e inadimplente", "movimentos": [["COMPRA", 100, 200], ["PAGAMENTO", 10, 5]], "saldo": 90, "dias_em_atraso": 200, "status": "Paga com atraso"},
+    {"nome": "perda sozinha nao conta como pagamento", "movimentos": [["COMPRA", 100, 400], ["PERDA", 100, 1]], "saldo": 0, "dias_em_atraso": null, "status": "Em dia"}
   ]
 }

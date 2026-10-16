@@ -91,3 +91,21 @@ def test_haver_e_perda_abatem_a_divida():
     assert agr["saldo_devedor"] == 0
     assert agr["perdido"] == 70
     assert agr["dias_em_atraso"] is None
+
+
+def test_negativado_tem_status_proprio_e_nao_ganha_selo():
+    # antes a baixa (PERDA) contava como pagamento e o negativado
+    # aparecia "Paga com atraso" ou ate' "Bom pagador"
+    movs = [_mov("COMPRA", 100, 400), _mov("PERDA", 100, 1)]
+    agr = ca.calcular_agregados({"negativado": True}, movs)
+    assert agr["prazo_medio_pagamento"] is None
+    assert ca.status_financeiro(agr) == "Negativado"
+    assert ca.selo_pagador(agr) is None
+    assert ca.calcular_pontuacao(agr) == "🔴 Cliente Negativado"
+
+
+def test_devendo_ha_mais_de_30_dias_sem_pagar_nao_e_em_dia():
+    agr = _agr(_mov("COMPRA", 100, 45))
+    assert ca.status_financeiro(agr) == "Paga com Atraso"
+    assert ca.calcular_aviso(agr) == "🟡 Pagamento atrasado · compra em aberto há 45 dias"
+    assert ca.status_financeiro(_agr(_mov("COMPRA", 100, 10))) == "Em Dia"

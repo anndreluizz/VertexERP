@@ -706,6 +706,10 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
         elif hasattr(proximo, "lineEdit") and proximo.lineEdit():
             proximo.lineEdit().selectAll()
 
+        # categoria: ja' abre a lista -- setas + Enter escolhem
+        if proximo is self.categoria:
+            proximo.showPopup()
+
     # ==========================================
     # DESCRIÇÃO (limite de 300 caracteres)
     # ==========================================

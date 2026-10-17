@@ -39,12 +39,15 @@ def _focado(tela, campo):
 def test_enter_segue_a_ordem_do_cartao_principal_e_cadastra_no_estoque(_qapp, monkeypatch):
     tela = _tela(monkeypatch)
     tela.salvar = mock.Mock()
+    tela.categoria.showPopup = mock.Mock()
     tela.codigo_barras.setFocus()
     QApplication.processEvents()
 
     for campo in (tela.nome, tela.categoria, tela.preco_venda, tela.preco_custo, tela.estoque):
         _enter(tela)
         assert _focado(tela, campo)
+        if campo is tela.categoria:
+            tela.categoria.showPopup.assert_called_once()
 
     tela.salvar.assert_not_called()
     _enter(tela)

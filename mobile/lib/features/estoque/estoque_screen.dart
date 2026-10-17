@@ -6,6 +6,7 @@ import '../../models/produto.dart';
 import '../../theme/lista_agrupada.dart';
 import '../../theme/skeleton.dart';
 import '../../theme/vertex_colors.dart';
+import 'cadastro_produto_screen.dart';
 import 'estoque_provider.dart';
 
 enum FiltroEstoque { todos, criticos, semEstoque }
@@ -24,6 +25,13 @@ class EstoqueScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Estoque')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const CadastroProdutoScreen()),
+        ),
+        icon: const Icon(Icons.add),
+        label: const Text('Novo produto'),
+      ),
       body: Column(
         children: [
           Padding(

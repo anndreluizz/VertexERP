@@ -556,13 +556,19 @@ class LayoutMixin:
         inicio = hoje - timedelta(days=30)
 
         try:
-            relatorio = relatorio_vendas(
-                inicio.isoformat(), hoje.isoformat(), limit=1
-            )
             produtos = listar_produtos()
         except Exception:
             self.linha_mais_vendidos.setVisible(False)
             return
+
+        # Vendedor (sem financeiro.ver) leva 403 em Relatorios: cai nos
+        # favoritos logo abaixo
+        try:
+            relatorio = relatorio_vendas(
+                inicio.isoformat(), hoje.isoformat(), limit=1
+            )
+        except Exception:
+            relatorio = {}
 
         produtos_por_nome = {p["nome"]: p for p in produtos}
         top = relatorio.get("top_produtos", [])[:5]

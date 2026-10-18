@@ -230,7 +230,7 @@ class NovoUsuarioDialog(DialogoPadrao):
 
         self.perfil = QComboBox()
         self.perfil.setStyleSheet(_estilo_combo())
-        self.perfil.addItem("Sem perfil (só o básico)", None)
+        self.perfil.addItem("Vendedor (só as próprias vendas e caixa)", None)
         for perfil in perfis or []:
             self.perfil.addItem(perfil["nome"], perfil["id"])
 
@@ -634,10 +634,10 @@ class GerenciarUsuariosDialog(DialogoPadrao):
         self.linha_badges.addStretch()
 
         self.combo_perfil.clear()
-        self.combo_perfil.addItem("Sem perfil", None)
+        self.combo_perfil.addItem("Vendedor", None)
         for perfil in self.perfis:
             self.combo_perfil.addItem(perfil["nome"], perfil["id"])
-        indice = self.combo_perfil.findText(usuario.get("perfil_nome") or "Sem perfil")
+        indice = self.combo_perfil.findText(usuario.get("perfil_nome") or "Vendedor")
         self.combo_perfil.setCurrentIndex(max(indice, 0))
         # admin já pode tudo -- perfil não muda nada pra ele
         self.combo_perfil.setEnabled(not usuario.get("admin"))
@@ -712,7 +712,7 @@ class GerenciarUsuariosDialog(DialogoPadrao):
             item_nome.setToolTip(usuario.get("email") or "")
             self.tabela.setItem(linha, 0, item_nome)
 
-            perfil = "Administrador" if usuario.get("admin") else (usuario.get("perfil_nome") or "Sem perfil")
+            perfil = "Administrador" if usuario.get("admin") else (usuario.get("perfil_nome") or "Vendedor")
             item_perfil = QTableWidgetItem(perfil)
             if usuario.get("admin"):
                 item_perfil.setForeground(QColor(tokens.PRIMARIA))

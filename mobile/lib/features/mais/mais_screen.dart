@@ -54,7 +54,9 @@ class MaisScreen extends ConsumerWidget {
               _ItemMenu(
                 icone: Icons.point_of_sale_outlined,
                 titulo: 'Caixas',
-                subtitulo: 'Status de todos os caixas da loja',
+                subtitulo: (sessao.usuario?.financeiro ?? true)
+                    ? 'Status de todos os caixas da loja'
+                    : 'Seus caixas',
                 aoTocar: () => _abrir(context, const CaixasScreen()),
               ),
               if (ehAdmin)
@@ -69,12 +71,13 @@ class MaisScreen extends ConsumerWidget {
                   contador: qtdAprovacoes,
                   aoTocar: () => _abrir(context, const AprovacoesScreen()),
                 ),
-              _ItemMenu(
-                icone: Icons.bar_chart_outlined,
-                titulo: 'Relatórios',
-                subtitulo: 'Resumo gerencial e PDF',
-                aoTocar: () => _abrir(context, const RelatoriosScreen()),
-              ),
+              if (sessao.usuario?.financeiro ?? true)
+                _ItemMenu(
+                  icone: Icons.bar_chart_outlined,
+                  titulo: 'Relatórios',
+                  subtitulo: 'Resumo gerencial e PDF',
+                  aoTocar: () => _abrir(context, const RelatoriosScreen()),
+                ),
             ],
           ),
           const CabecalhoGrupo('Conta'),

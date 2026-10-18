@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, exigir_permissao, loja_para_leitura, resolver_loja_id
+from app.auth.dependencies import exigir_financeiro, get_current_user, exigir_permissao, loja_para_leitura, resolver_loja_id, usuario_tem_permissao
 from app.database.session import SessionLocal
 from app.models.caixa import Caixa
 from app.models.user import User
@@ -128,7 +128,9 @@ def historico_caixa(
     usuario=Depends(get_current_user),
 ):
     loja_id = loja_para_leitura(usuario, loja_id)
-    caixas = CaixaService.historico(db, limite=limite, loja_id=loja_id)
+    # Vendedor so' ve os proprios caixas
+    so_dele = None if usuario_tem_permissao(db, usuario, "financeiro.ver") else usuario.id
+    caixas = CaixaService.historico(db, limite=limite, loja_id=loja_id, usuario_id=so_dele)
 
     nomes = dict(db.query(User.id, User.nome).filter(
         User.id.in_({c.usuario_id for c in caixas if c.usuario_id})
@@ -148,7 +150,7 @@ def entradas_caixa(
     fim: date | None = None,
     loja_id: int | None = None,
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(exigir_financeiro),
 ):
     """Quanto entrou de verdade no periodo, somando todos os caixas
     (Relatorios > Caixa)."""
@@ -169,6 +171,10 @@ def resumo_caixa_por_id(
     loja_permitida = loja_para_leitura(usuario)
 
     if caixa is None or (loja_permitida is not None and caixa.loja_id != loja_permitida):
+        raise HTTPException(status_code=404, detail="Caixa não encontrado.")
+
+    # Vendedor so' ve o proprio caixa
+    if caixa.usuario_id != usuario.id and not usuario_tem_permissao(db, usuario, "financeiro.ver"):
         raise HTTPException(status_code=404, detail="Caixa não encontrado.")
 
     return CaixaService.resumo(db, caixa)

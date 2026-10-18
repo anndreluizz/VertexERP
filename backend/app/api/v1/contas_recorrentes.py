@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.v1.contas_pagar import get_db
-from app.auth.dependencies import get_current_user, loja_para_leitura, resolver_loja_id
+from app.auth.dependencies import exigir_financeiro, get_current_user, loja_para_leitura, resolver_loja_id
 from app.schemas.conta_pagar import (
     ContaRecorrenteCreate,
     ContaRecorrenteResponse,
@@ -16,6 +16,7 @@ from app.services.conta_recorrente_service import ContaRecorrenteService
 router = APIRouter(
     prefix="/contas-recorrentes",
     tags=["Contas fixas"],
+    dependencies=[Depends(exigir_financeiro)],
 )
 
 

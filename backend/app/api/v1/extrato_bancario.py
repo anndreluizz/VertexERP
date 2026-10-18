@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, resolver_loja_id
+from app.auth.dependencies import exigir_financeiro, get_current_user, resolver_loja_id
 from app.database.session import SessionLocal
 from app.schemas.transacao_bancaria import (
     OfxImportarRequest,
@@ -16,6 +16,7 @@ from app.services.extrato_bancario_service import ExtratoBancarioService
 router = APIRouter(
     prefix="/extrato-bancario",
     tags=["Extrato Bancário"],
+    dependencies=[Depends(exigir_financeiro)],
 )
 
 

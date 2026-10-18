@@ -456,6 +456,16 @@ def usuario_e_admin():
     return bool(_INFO_USUARIO_CACHE.get("admin"))
 
 
+def cargo_usuario(info_usuario) -> str:
+    """Rotulo do topo/menu: Vendedor = comum sem financeiro.ver."""
+
+    if info_usuario.get("admin"):
+        return "Administrador"
+    if "financeiro.ver" in (info_usuario.get("permissoes") or []):
+        return info_usuario.get("perfil_nome") or "Gerente"
+    return "Vendedor"
+
+
 def usuario_tem_permissao(chave: str) -> bool:
     """Se o usuario logado pode fazer 'chave' (ver
     app/auth/permissoes.py no backend pro catalogo) -- admin sempre

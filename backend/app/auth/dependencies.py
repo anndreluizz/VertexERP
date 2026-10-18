@@ -171,7 +171,7 @@ def usuario_tem_permissao(db: Session, usuario: User, chave: str) -> bool:
     return bool(perfil and chave in (perfil.permissoes or []))
 
 
-def exigir_permissao(chave: str):
+def exigir_permissao(chave: str, auditar: bool = True):
     """Dependency factory -- Depends(exigir_permissao("produtos.excluir"))
     numa rota. Admin sempre passa (superusuario); usuario comum passa
     so' se o Perfil dele tiver essa chave (ver app/models/perfil.py e
@@ -189,13 +189,20 @@ def exigir_permissao(chave: str):
                 detail="Você não tem permissão para realizar essa ação.",
             )
 
-        LogAuditoriaService.registrar(
-            db, usuario.id, chave, ip=_ip_do_pedido(request)
-        )
+        # leitura de tela (auditar=False) nao vira linha de auditoria,
+        # senao cada GET de Contas a Pagar/Relatorios lotava o log
+        if auditar:
+            LogAuditoriaService.registrar(
+                db, usuario.id, chave, ip=_ip_do_pedido(request)
+            )
 
         return usuario
 
     return dependencia
+
+
+# telas financeiras inteiras (router-level) -- quem nao tem e' Vendedor
+exigir_financeiro = exigir_permissao("financeiro.ver", auditar=False)
 
 
 def exigir_admin_apos_primeiro_usuario(

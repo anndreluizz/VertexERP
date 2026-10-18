@@ -25,4 +25,7 @@ PERMISSOES_DISPONIVEIS = {
     "aprovacoes.gerenciar": "Aprovar/rejeitar solicitações",
     "clientes.lgpd": "Exportar/apagar dados de cliente (LGPD)",
     "bi.ver": "Ver Inteligência de Negócios (faturamento, fiado, contas)",
+    # sem ela o usuario e' "Vendedor": ve so' as proprias vendas/caixa
+    # e nao abre Contas a Pagar, Relatorios, Conciliacao nem Compras
+    "financeiro.ver": "Ver financeiro: faturamento da loja, vendas de todos, contas a pagar, relatórios, conciliação e compras",
 }

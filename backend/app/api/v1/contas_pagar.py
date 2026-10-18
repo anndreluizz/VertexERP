@@ -2,7 +2,7 @@ import base64
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import exigir_permissao, get_current_user, loja_para_leitura, resolver_loja_id
+from app.auth.dependencies import exigir_financeiro, exigir_permissao, get_current_user, loja_para_leitura, resolver_loja_id
 from app.database.session import SessionLocal
 
 from app.schemas.conta_pagar import (
@@ -29,6 +29,7 @@ from app.enums.status_conta_pagar import StatusContaPagar
 router = APIRouter(
     prefix="/contas-pagar",
     tags=["Contas a Pagar"],
+    dependencies=[Depends(exigir_financeiro)],
 )
 
 

@@ -118,6 +118,31 @@ class FaixaAvisoBackup(QFrame):
         self.setVisible(bool(alerta))
 
 
+# telas que exigem permissao (ver app/auth/permissoes.py); "admin" =
+# so' administrador. Sem financeiro.ver o usuario e' Vendedor.
+PERMISSAO_TELA = {
+    "ajuste_estoque": "estoque.ajustar",
+    "transferencia_estoque": "estoque.ajustar",
+    "contagem_estoque": "estoque.ajustar",
+    "fornecedores": "financeiro.ver",
+    "contas_pagar": "financeiro.ver",
+    "conciliacao_bancaria": "financeiro.ver",
+    "visao_geral": "financeiro.ver",
+    "relatorios": "financeiro.ver",
+    "inteligencia": "bi.ver",
+    "config": "admin",
+}
+
+
+def pode_abrir_tela(chave):
+    permissao = PERMISSAO_TELA.get(chave)
+    if permissao is None:
+        return True
+    if permissao == "admin":
+        return api.usuario_e_admin()
+    return api.usuario_tem_permissao(permissao)
+
+
 # (chave, ícone lucide, rótulo) — única fonte de verdade pra montar tanto
 # os itens da sidebar quanto o título mostrado no header.
 ITENS_MENU = [
@@ -169,7 +194,7 @@ class PrincipalWindow(QMainWindow):
             config = api.configuracoes()
 
         nome_usuario = info_usuario.get("nome") or "Usuário"
-        cargo = "Administrador" if info_usuario.get("admin") else "Operador"
+        cargo = api.cargo_usuario(info_usuario)
 
         nome_loja = config.get("nome_loja") or "Vertex ERP"
 
@@ -189,7 +214,8 @@ class PrincipalWindow(QMainWindow):
         self._titulos = {chave: titulo for chave, _, titulo in ITENS_MENU}
 
         for chave, icone_nome, titulo in ITENS_MENU:
-            self.sidebar.adicionar_item(chave, icone_nome, titulo)
+            if pode_abrir_tela(chave):
+                self.sidebar.adicionar_item(chave, icone_nome, titulo)
 
         self.sidebar.item_clicado.connect(self._navegar)
 
@@ -419,6 +445,10 @@ class PrincipalWindow(QMainWindow):
 
     def _exibir_pagina(self, chave, pagina):
 
+        # Vendedor chegando por atalho/botao numa tela que nao e' dele
+        if not pode_abrir_tela(chave):
+            return
+
         if chave == "dashboard":
             self.dashboard.carregar()
         elif chave == "clientes":
@@ -590,6 +620,11 @@ class PrincipalWindow(QMainWindow):
         self._exibir_pagina("pdv", self.pdv)
 
     def ir_para_relatorios(self):
+
+        # "ver todas as vendas" do Inicio: Vendedor vai pra Vendas (so' as dele)
+        if not pode_abrir_tela("relatorios"):
+            self._exibir_pagina("vendas", self.vendas)
+            return
 
         self.relatorios.carregar()
         self._exibir_pagina("relatorios", self.relatorios)

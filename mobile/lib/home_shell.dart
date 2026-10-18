@@ -23,14 +23,6 @@ class HomeShell extends ConsumerStatefulWidget {
 }
 
 class _HomeShellState extends ConsumerState<HomeShell> {
-  static const _paginas = [
-    DashboardScreen(),
-    VendasScreen(),
-    ClientesScreen(),
-    FinanceiroScreen(),
-    MaisScreen(),
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -69,11 +61,26 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    final indice = ref.watch(abaSelecionadaProvider);
     final naoLidas = ref.watch(naoLidasProvider);
+    // Vendedor nao tem a aba Financeiro (Mais vira o indice 3); o clamp
+    // cobre trocar de admin pra vendedor parado na aba Mais
+    final financeiro =
+        ref.watch(sessaoControllerProvider).usuario?.financeiro ?? true;
+    final indice = ref
+        .watch(abaSelecionadaProvider)
+        .clamp(0, financeiro ? 4 : 3);
 
     return Scaffold(
-      body: IndexedStack(index: indice, children: _paginas),
+      body: IndexedStack(
+        index: indice,
+        children: [
+          const DashboardScreen(),
+          const VendasScreen(),
+          const ClientesScreen(),
+          if (financeiro) const FinanceiroScreen(),
+          const MaisScreen(),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: indice,
         onDestinationSelected: (novoIndice) =>
@@ -94,11 +101,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             selectedIcon: Icon(Icons.people),
             label: 'Clientes',
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            selectedIcon: Icon(Icons.account_balance_wallet),
-            label: 'Financeiro',
-          ),
+          if (financeiro)
+            const NavigationDestination(
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              selectedIcon: Icon(Icons.account_balance_wallet),
+              label: 'Financeiro',
+            ),
           NavigationDestination(
             icon: Badge(
               isLabelVisible: naoLidas > 0,

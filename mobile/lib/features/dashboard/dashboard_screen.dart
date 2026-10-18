@@ -80,6 +80,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final resumoAsync = ref.watch(dashboardProvider);
+    final financeiro =
+        ref.watch(sessaoControllerProvider).usuario?.financeiro ?? true;
 
     return Scaffold(
       body: RefreshIndicator(
@@ -118,8 +120,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       _abaClientes,
                       filtro: FiltroClientes.inadimplentes,
                     ),
-                    aoPagar: () => _irPara(_abaFinanceiro),
-                    aoRelatorio: () => _abrir(const RelatoriosScreen()),
+                    aoPagar: financeiro ? () => _irPara(_abaFinanceiro) : null,
+                    aoRelatorio: financeiro
+                        ? () => _abrir(const RelatoriosScreen())
+                        : null,
                   ),
                   if (resumoAsync.valueOrNull?.resumo case final resumo?)
                     _Atencao(
@@ -131,11 +135,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       aoContas: () => _irPara(_abaFinanceiro),
                       aoAprovacoes: () => _abrir(const AprovacoesScreen()),
                     ),
-                  _FiadoDaLoja(
-                    recebidoHoje:
-                        resumoAsync.valueOrNull?.resumo.fiadoRecebidoHoje,
-                    aoTocar: () => _irPara(_abaClientes),
-                  ),
+                  if (financeiro)
+                    _FiadoDaLoja(
+                      recebidoHoje:
+                          resumoAsync.valueOrNull?.resumo.fiadoRecebidoHoje,
+                      aoTocar: () => _irPara(_abaClientes),
+                    ),
                 ]),
               ),
             ),
@@ -682,14 +687,15 @@ class _AtalhosRapidos extends StatelessWidget {
   const _AtalhosRapidos({
     required this.aoReceber,
     required this.aoCobrar,
-    required this.aoPagar,
-    required this.aoRelatorio,
+    this.aoPagar,
+    this.aoRelatorio,
   });
 
   final VoidCallback aoReceber;
   final VoidCallback aoCobrar;
-  final VoidCallback aoPagar;
-  final VoidCallback aoRelatorio;
+  // null = Vendedor (sem financeiro.ver): o atalho some
+  final VoidCallback? aoPagar;
+  final VoidCallback? aoRelatorio;
 
   @override
   Widget build(BuildContext context) {
@@ -716,21 +722,23 @@ class _AtalhosRapidos extends StatelessWidget {
                 : VertexColors.primaria,
             aoTocar: aoCobrar,
           ),
-          _Atalho(
-            icone: Icons.receipt_long_outlined,
-            rotulo: 'Pagar conta',
-            fundo: VertexColors.alertaClaro,
-            cor: VertexColors.alertaTexto,
-            aoTocar: aoPagar,
-          ),
-          _Atalho(
-            icone: Icons.bar_chart_rounded,
-            rotulo: 'Relatório',
-            fundo: VertexColors.card,
-            cor: VertexColors.texto,
-            borda: true,
-            aoTocar: aoRelatorio,
-          ),
+          if (aoPagar case final aoPagar?)
+            _Atalho(
+              icone: Icons.receipt_long_outlined,
+              rotulo: 'Pagar conta',
+              fundo: VertexColors.alertaClaro,
+              cor: VertexColors.alertaTexto,
+              aoTocar: aoPagar,
+            ),
+          if (aoRelatorio case final aoRelatorio?)
+            _Atalho(
+              icone: Icons.bar_chart_rounded,
+              rotulo: 'Relatório',
+              fundo: VertexColors.card,
+              cor: VertexColors.texto,
+              borda: true,
+              aoTocar: aoRelatorio,
+            ),
         ],
       ),
     );
@@ -885,7 +893,11 @@ class _Atencao extends ConsumerWidget {
           titulo:
               '${resumo.estoqueBaixo} ${resumo.estoqueBaixo == 1 ? 'produto com estoque baixo' : 'produtos com estoque baixo'}',
           detalhe: 'Veja em Mais › Estoque',
-          aoTocar: () => ref.read(abaSelecionadaProvider.notifier).state = 4,
+          // aba Mais: 4, ou 3 pro Vendedor (sem a aba Financeiro)
+          aoTocar: () => ref.read(abaSelecionadaProvider.notifier).state =
+              (ref.read(sessaoControllerProvider).usuario?.financeiro ?? true)
+              ? 4
+              : 3,
         ),
     ];
 

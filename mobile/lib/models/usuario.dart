@@ -6,6 +6,7 @@ class Usuario {
     required this.ativo,
     required this.admin,
     this.lojaId,
+    this.permissoes = const [],
   });
 
   factory Usuario.fromJson(Map<String, dynamic> json) {
@@ -16,6 +17,7 @@ class Usuario {
       ativo: json['ativo'] as bool,
       admin: json['admin'] as bool,
       lojaId: json['loja_id'] as int?,
+      permissoes: (json['permissoes'] as List?)?.cast<String>() ?? const [],
     );
   }
 
@@ -28,5 +30,16 @@ class Usuario {
   // app/auth/dependencies.resolver_loja_id no backend.
   final int? lojaId;
 
-  String get cargo => admin ? 'Administrador' : 'Operador';
+  // admin ja' vem com o catalogo inteiro (ver User.permissoes no backend)
+  final List<String> permissoes;
+
+  /// Sem financeiro.ver = Vendedor: so' as proprias vendas/caixa, sem
+  /// Financeiro nem Relatorios (o backend tambem barra).
+  bool get financeiro => admin || permissoes.contains('financeiro.ver');
+
+  String get cargo => admin
+      ? 'Administrador'
+      : financeiro
+      ? 'Gerente'
+      : 'Vendedor';
 }

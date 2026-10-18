@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import (
+    exigir_financeiro,
     exigir_permissao,
     get_current_user,
     resolver_loja_id,
@@ -20,6 +21,7 @@ from app.services.importacao_nfe_service import ImportacaoNfeService
 router = APIRouter(
     prefix="/compras",
     tags=["Compras"],
+    dependencies=[Depends(exigir_financeiro)],
 )
 
 

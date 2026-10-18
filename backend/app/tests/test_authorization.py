@@ -71,9 +71,22 @@ def test_usuario_comum_nao_pode_fechar_caixa(
     assert response.status_code == 403
 
 
+def _dar_financeiro(db, usuario):
+    # Contas a Pagar so' abre com financeiro.ver (sem ela e' Vendedor,
+    # ver test_perfil_vendedor.py)
+    from app.models.perfil import Perfil
+
+    perfil = Perfil(nome="Gerente", permissoes=["financeiro.ver"])
+    db.add(perfil)
+    db.commit()
+    usuario.perfil_id = perfil.id
+    db.commit()
+
+
 def test_usuario_comum_nao_pode_cancelar_conta_pagar(
-    client, auth_headers, auth_headers_comum
+    client, auth_headers, auth_headers_comum, db, usuario_comum
 ):
+    _dar_financeiro(db, usuario_comum)
     # Conta PENDENTE (nenhum dinheiro saiu ainda) é baixo risco -- pode
     # ser cancelada direto por qualquer usuário autenticado (ver
     # docstring de api/v1/contas_pagar.py::cancelar). O bloqueio de

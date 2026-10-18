@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, resolver_loja_id
+from app.auth.dependencies import get_current_user, resolver_loja_id, usuario_tem_permissao
 from app.database.session import SessionLocal
 
 from app.schemas.dashboard import DashboardResponse
@@ -32,4 +32,6 @@ def resumo(
     usuario=Depends(get_current_user),
 ):
     loja_efetiva = resolver_loja_id(db, usuario, loja_id)
-    return DashboardService.resumo(db, loja_efetiva)
+    if usuario_tem_permissao(db, usuario, "financeiro.ver"):
+        return DashboardService.resumo(db, loja_efetiva)
+    return DashboardService.resumo(db, loja_efetiva, usuario_id=usuario.id)

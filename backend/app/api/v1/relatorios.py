@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, loja_para_leitura
+from app.auth.dependencies import exigir_financeiro, get_current_user, loja_para_leitura
 from app.database.session import SessionLocal
 from app.schemas.relatorio import (
     CategoriaSemVendaItem,
@@ -26,6 +26,7 @@ from app.services.relatorio_service import RelatorioService
 router = APIRouter(
     prefix="/relatorios",
     tags=["Relatórios"],
+    dependencies=[Depends(exigir_financeiro)],
 )
 
 

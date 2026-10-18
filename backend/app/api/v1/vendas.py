@@ -57,6 +57,9 @@ def listar(
     usuario=Depends(get_current_user),
 ):
     loja_id = loja_para_leitura(usuario, loja_id)
+    # Vendedor so' ve as proprias vendas (ver financeiro.ver)
+    if not usuario_tem_permissao(db, usuario, "financeiro.ver"):
+        usuario_id = usuario.id
     return VendaService.listar(
         db, skip, limit, loja_id, data_inicio, data_fim, usuario_id
     )
@@ -71,7 +74,10 @@ def resumo_vendedores(
     usuario=Depends(get_current_user),
 ):
     loja_id = loja_para_leitura(usuario, loja_id)
-    return VendaService.resumo_vendedores(db, data_inicio, data_fim, loja_id)
+    resumo = VendaService.resumo_vendedores(db, data_inicio, data_fim, loja_id)
+    if not usuario_tem_permissao(db, usuario, "financeiro.ver"):
+        resumo = [r for r in resumo if r.get("usuario_id") == usuario.id]
+    return resumo
 
 
 @router.get("/suspensas", response_model=list[VendaSuspensaResponse])

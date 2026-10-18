@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import func, or_, true
+from sqlalchemy import and_, func, or_, true
 from sqlalchemy.orm import Session
 
 from app.models.caixa import Caixa
@@ -20,6 +20,16 @@ from app.services.movimento_fiado_service import MovimentoFiadoService
 # quantos meses (incluindo o atual) entram nos graficos de serie mensal
 # do dashboard financeiro do mobile.
 MESES_SERIE = 6
+
+# o que o Vendedor (sem financeiro.ver) recebe zerado no resumo
+_CHAVES_FINANCEIRAS = (
+    "compras_hoje", "contas_receber", "total_fiado_devedor", "contas_pagar",
+    "contas_vencidas_qtd", "contas_vencidas_valor",
+    "contas_vencendo_hoje_qtd", "contas_vencendo_hoje_valor",
+    "contas_pagas_hoje_qtd", "contas_pagas_hoje_valor",
+    "fiado_recebido_hoje", "contas_mes_pago", "contas_mes_pendente",
+    "serie_pagamentos_mensal",
+)
 
 
 class DashboardService:
@@ -75,7 +85,9 @@ class DashboardService:
         return serie
 
     @staticmethod
-    def resumo(db: Session, loja_id: int | None = None):
+    def resumo(db: Session, loja_id: int | None = None, usuario_id: int | None = None):
+        """usuario_id = Vendedor (sem financeiro.ver): vendas e caixa so'
+        dele, e os numeros financeiros da loja vem zerados."""
 
         # hora local do servidor -- mesmo fuso em que Venda/ContaPagar
         # gravam a data (datetime.now; ate a migracao
@@ -90,6 +102,8 @@ class DashboardService:
         filtro_loja_venda = (
             Venda.loja_id == loja_id if loja_id is not None else true()
         )
+        if usuario_id is not None:
+            filtro_loja_venda = and_(filtro_loja_venda, Venda.usuario_id == usuario_id)
         filtro_loja_conta_pagar = (
             ContaPagar.loja_id == loja_id if loja_id is not None else true()
         )
@@ -202,6 +216,11 @@ class DashboardService:
         if loja_id is not None:
             query_saldo_caixa = query_saldo_caixa.filter(
                 Caixa.loja_id == loja_id
+            )
+
+        if usuario_id is not None:
+            query_saldo_caixa = query_saldo_caixa.filter(
+                Caixa.usuario_id == usuario_id
             )
 
         saldo_caixa = query_saldo_caixa.scalar()
@@ -373,7 +392,7 @@ class DashboardService:
             ],
         )
 
-        return {
+        resultado = {
             "vendas_hoje": float(vendas_hoje),
             "vendas_hoje_qtd": vendas_hoje_qtd,
             "vendas_ontem": float(vendas_ontem),
@@ -400,3 +419,14 @@ class DashboardService:
             "serie_recebimentos_mensal": serie_recebimentos_mensal,
             "serie_pagamentos_mensal": serie_pagamentos_mensal,
         }
+
+        if usuario_id is not None:
+            # ponytail: calcula e depois zera; separar as queries so' se pesar
+            for chave in _CHAVES_FINANCEIRAS:
+                valor = resultado[chave]
+                resultado[chave] = (
+                    [{**item, "valor": 0.0} for item in valor]
+                    if isinstance(valor, list) else type(valor)(0)
+                )
+
+        return resultado

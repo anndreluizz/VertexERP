@@ -23,7 +23,7 @@ from design.widgets import CardKPI, SecaoCard, Badge, BotaoPrimario, BotaoSecund
 from design.charts import GraficoArea, LinhaProgresso
 from telas.dashboard_personalizar import KPIS_OCULTOS_PADRAO
 
-from services.api import dashboard, me
+from services.api import dashboard, me, usuario_tem_permissao
 from services.venda_service import listar_vendas
 from services.produto_service import listar_produtos
 from services.conta_pagar_service import listar_contas_pagar
@@ -257,8 +257,12 @@ class Dashboard(QWidget):
         for coluna in range(4):
             self.grid_kpi.setColumnStretch(coluna, 1)
 
+        # Vendedor (sem financeiro.ver): o backend ja' manda so' as vendas
+        # e o caixa dele -- aqui so' muda o rotulo e tira lucro/despesa
+        self._financeiro = usuario_tem_permissao("financeiro.ver")
         self.kpi_faturamento = CardKPI(
-            "Faturamento Hoje", "dollar-sign", tokens.PRIMARIA, destaque=True
+            "Faturamento Hoje" if self._financeiro else "Minhas vendas hoje",
+            "dollar-sign", tokens.PRIMARIA, destaque=True
         )
         self.kpi_lucro = CardKPI("Lucro Hoje", "trending-up", tokens.SECUNDARIA)
         self.kpi_ticket = CardKPI("Ticket Médio", "shopping-cart", tokens.PRIMARIA)
@@ -281,6 +285,9 @@ class Dashboard(QWidget):
             {"id": "produtos", "titulo": "Produtos", "widget": self.kpi_produtos},
             {"id": "estoque", "titulo": "Estoque em Alerta", "widget": self.kpi_estoque},
         ]
+        if not self._financeiro:
+            self.kpi_lucro.hide()
+            self.registro_kpis = [k for k in self.registro_kpis if k["id"] != "lucro"]
 
         self.layout_principal.addLayout(self.grid_kpi)
 
@@ -420,6 +427,8 @@ class Dashboard(QWidget):
             ("users", "Novo cliente", "F7", self._acao_novo_cliente),
             ("file-text", "Registrar despesa", "F8", self._acao_registrar_despesa),
         ]
+        if not self._financeiro:
+            acoes.pop()
 
         for icone_nome, texto, atalho, callback in acoes:
             botao = BotaoSecundario(texto, icone_nome=icone_nome)
@@ -487,6 +496,9 @@ class Dashboard(QWidget):
         dialogo.exec()
 
     def _acao_registrar_despesa(self):
+
+        if not self._financeiro:
+            return
 
         from telas.cadastro_despesa import CadastroDespesaDialog
 

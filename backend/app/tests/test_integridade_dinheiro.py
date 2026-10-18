@@ -341,7 +341,15 @@ def test_filial_so_ve_as_vendas_da_propria_loja(
         )
         assert resposta.status_code == 201, resposta.json()
 
+    # gerente da filial (financeiro.ver): ve as vendas de todos da loja
+    # dele -- sem isso e' Vendedor e so' veria as proprias
+    from app.models.perfil import Perfil
+
+    gerente = Perfil(nome="Gerente", permissoes=["financeiro.ver"])
+    db.add(gerente)
+    db.commit()
     usuario_comum.loja_id = filial.id
+    usuario_comum.perfil_id = gerente.id
     db.commit()
 
     vistas = client.get("/vendas/", headers=auth_headers_comum).json()

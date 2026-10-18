@@ -109,7 +109,13 @@ class Vendas(QWidget):
         kpis.addWidget(self.card_total, 0, 0)
         kpis.addWidget(self.card_quantidade, 0, 1)
         kpis.addWidget(self.card_devolvido, 0, 2)
-        layout.addLayout(kpis)
+        # Vendedor: a lista das proprias vendas com valor, sem os totais
+        self._financeiro = api.usuario_tem_permissao("financeiro.ver")
+        if self._financeiro:
+            layout.addLayout(kpis)
+        else:
+            for card in (self.card_total, self.card_quantidade, self.card_devolvido):
+                card.hide()
 
         corpo = QHBoxLayout()
         corpo.setSpacing(16)
@@ -124,7 +130,9 @@ class Vendas(QWidget):
         lateral.setSpacing(16)
         # vendedoras sao poucas (2-3 linhas): tamanho fixo, o resto vai pros
         # itens da venda -- antes os dois dividiam e a lista de itens sumia
-        lateral.addWidget(self._construir_card_vendedoras())
+        card_vendedoras = self._construir_card_vendedoras()
+        card_vendedoras.setVisible(self._financeiro)
+        lateral.addWidget(card_vendedoras)
         lateral.addWidget(self._construir_card_detalhe(), stretch=1)
         corpo.addLayout(lateral, stretch=2)
 
@@ -236,6 +244,8 @@ class Vendas(QWidget):
         bt_imprimir = BotaoSecundario("Imprimir", icone_nome="printer")
         bt_imprimir.setToolTip("Imprime as vendas da lista, com os itens de cada uma")
         bt_imprimir.clicked.connect(self.imprimir)
+        # imprime o total por forma de pagamento
+        bt_imprimir.setVisible(api.usuario_tem_permissao("financeiro.ver"))
         filtros.addWidget(bt_imprimir)
 
         filtros.addStretch()

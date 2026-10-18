@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.hash import gerar_hash, verificar_hash
 from app.models.user import User
+from app.models.loja import Loja
 from app.models.perfil import Perfil
 from app.models.refresh_token import RefreshToken
 from app.schemas.user import UserCreate
@@ -73,6 +74,10 @@ class UserService:
                 Perfil.id == campos["perfil_id"]
             ).first():
                 raise Exception("Perfil não encontrado.")
+
+        if campos.get("loja_id") is not None:
+            if not db.query(Loja).filter(Loja.id == campos["loja_id"]).first():
+                raise Exception("Loja não encontrada.")
 
         # Se essa troca tira o admin (por remocao explicita da
         # administracao ou por desativar a conta) de quem hoje e' um

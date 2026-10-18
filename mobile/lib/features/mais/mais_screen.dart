@@ -51,14 +51,14 @@ class MaisScreen extends ConsumerWidget {
                 subtitulo: 'Produtos críticos e sem estoque',
                 aoTocar: () => _abrir(context, const EstoqueScreen()),
               ),
-              _ItemMenu(
-                icone: Icons.point_of_sale_outlined,
-                titulo: 'Caixas',
-                subtitulo: (sessao.usuario?.financeiro ?? true)
-                    ? 'Status de todos os caixas da loja'
-                    : 'Seus caixas',
-                aoTocar: () => _abrir(context, const CaixasScreen()),
-              ),
+              // historico de caixas tem valores: so' financeiro
+              if (sessao.usuario?.financeiro ?? true)
+                _ItemMenu(
+                  icone: Icons.point_of_sale_outlined,
+                  titulo: 'Caixas',
+                  subtitulo: 'Status de todos os caixas da loja',
+                  aoTocar: () => _abrir(context, const CaixasScreen()),
+                ),
               if (ehAdmin)
                 _ItemMenu(
                   icone: Icons.rule_outlined,

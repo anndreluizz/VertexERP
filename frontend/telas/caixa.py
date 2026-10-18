@@ -148,7 +148,7 @@ def _pill_tipo_movimento(tipo):
     return container
 
 
-def _buscar_dados_caixa():
+def _buscar_dados_caixa(com_resumo=True):
     """Roda na worker thread -- caixa_aberto() + resumo_caixa() +
     listar_movimentos_caixa(), as 3 chamadas que Caixa.carregar()
     precisa. caixa_aberto() precisa vir primeiro (movimentos depende
@@ -159,6 +159,10 @@ def _buscar_dados_caixa():
 
     if caixa is None:
         return caixa, None, []
+
+    # Vendedor nao ve totais (backend responde 403 no resumo)
+    if not com_resumo:
+        return caixa, {}, listar_movimentos_caixa(caixa["id"])
 
     resumo, movimentos = em_paralelo(
         (resumo_caixa,), (listar_movimentos_caixa, caixa["id"])
@@ -248,6 +252,13 @@ class Caixa(QWidget):
 
     def _criar_pagina_com_caixa(self):
 
+        # Vendedor so' abre e faz sangria/suprimento: sem saldo nem
+        # conferencia (quem fecha precisa conferir, ver caixa.fechar)
+        self._ve_totais = (
+            api.usuario_tem_permissao("financeiro.ver")
+            or api.usuario_tem_permissao("caixa.fechar")
+        )
+
         pagina = QWidget()
 
         layout = QVBoxLayout(pagina)
@@ -336,7 +347,11 @@ class Caixa(QWidget):
         col_total.addLayout(linha_total_titulo)
         col_total.addWidget(self.lbl_total_previsto)
 
-        status_layout.addLayout(col_total)
+        if self._ve_totais:
+            status_layout.addLayout(col_total)
+        else:
+            lbl_total_titulo.hide()
+            self.lbl_total_previsto.hide()
         status_layout.addSpacing(12)
 
         # ações sobre o fundo escuro: contorno claro, e o Encerrar
@@ -394,7 +409,9 @@ class Caixa(QWidget):
         corpo = QHBoxLayout()
         corpo.setSpacing(18)
 
-        corpo.addWidget(self._criar_cartao_conferencia())
+        cartao_conferencia = self._criar_cartao_conferencia()
+        cartao_conferencia.setVisible(self._ve_totais)
+        corpo.addWidget(cartao_conferencia)
 
         # histórico
         col_historico = QVBoxLayout()
@@ -419,6 +436,7 @@ class Caixa(QWidget):
         historico_cabecalho.addWidget(lbl_historico_titulo)
         historico_cabecalho.addStretch()
         historico_cabecalho.addWidget(self.bt_caixas_anteriores)
+        self.bt_caixas_anteriores.setVisible(api.usuario_tem_permissao("financeiro.ver"))
         historico_cabecalho.addWidget(self.bt_atualizar_historico)
 
         col_historico.addLayout(historico_cabecalho)
@@ -617,6 +635,7 @@ class Caixa(QWidget):
         rodar_em_thread(
             self,
             _buscar_dados_caixa,
+            self._ve_totais,
             ao_sucesso=self._ao_carregar_sucesso,
             ao_erro=self._ao_carregar_erro,
             ao_finalizar=self._ao_carregar_finalizado,

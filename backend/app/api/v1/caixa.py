@@ -49,6 +49,15 @@ def caixa_to_response(caixa):
     )
 
 
+def _ve_totais_do_caixa(db, usuario) -> bool:
+    """Saldo/totais do caixa: financeiro.ver, ou caixa.fechar (fechar
+    exige conferir). Vendedor comum so' abre e faz sangria/suprimento."""
+    return (
+        usuario_tem_permissao(db, usuario, "financeiro.ver")
+        or usuario_tem_permissao(db, usuario, "caixa.fechar")
+    )
+
+
 @router.post("/abrir", response_model=CaixaResponse)
 def abrir_caixa(
     dados: CaixaCreate,
@@ -99,7 +108,11 @@ def caixa_aberto(
     if caixa is None:
         return None
 
-    return caixa_to_response(caixa)
+    resposta = caixa_to_response(caixa)
+    # Vendedor abre o caixa e faz sangria/suprimento, mas nao ve o saldo
+    if not _ve_totais_do_caixa(db, usuario):
+        resposta.saldo_final = 0
+    return resposta
 
 
 @router.get("/resumo", response_model=ResumoCaixaResponse)
@@ -108,6 +121,9 @@ def resumo_caixa(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    if not _ve_totais_do_caixa(db, usuario):
+        raise HTTPException(status_code=403, detail="Você não tem permissão para ver os totais do caixa.")
+
     loja_efetiva = resolver_loja_id(db, usuario, loja_id)
     resumo = CaixaService.resumo_aberto(db, usuario.id, loja_efetiva)
 
@@ -125,12 +141,10 @@ def historico_caixa(
     loja_id: int | None = None,
     limite: int = Query(20, ge=1, le=500),
     db: Session = Depends(get_db),
-    usuario=Depends(get_current_user),
+    usuario=Depends(exigir_financeiro),
 ):
     loja_id = loja_para_leitura(usuario, loja_id)
-    # Vendedor so' ve os proprios caixas
-    so_dele = None if usuario_tem_permissao(db, usuario, "financeiro.ver") else usuario.id
-    caixas = CaixaService.historico(db, limite=limite, loja_id=loja_id, usuario_id=so_dele)
+    caixas = CaixaService.historico(db, limite=limite, loja_id=loja_id)
 
     nomes = dict(db.query(User.id, User.nome).filter(
         User.id.in_({c.usuario_id for c in caixas if c.usuario_id})
@@ -173,8 +187,9 @@ def resumo_caixa_por_id(
     if caixa is None or (loja_permitida is not None and caixa.loja_id != loja_permitida):
         raise HTTPException(status_code=404, detail="Caixa não encontrado.")
 
-    # Vendedor so' ve o proprio caixa
-    if caixa.usuario_id != usuario.id and not usuario_tem_permissao(db, usuario, "financeiro.ver"):
+    # Vendedor so' ve o proprio caixa, e so' se puder fecha-lo
+    financeiro = usuario_tem_permissao(db, usuario, "financeiro.ver")
+    if not financeiro and (caixa.usuario_id != usuario.id or not _ve_totais_do_caixa(db, usuario)):
         raise HTTPException(status_code=404, detail="Caixa não encontrado.")
 
     return CaixaService.resumo(db, caixa)

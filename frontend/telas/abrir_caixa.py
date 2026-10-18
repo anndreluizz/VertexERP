@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
+from services import api
 from services.caixa_service import historico_caixa
 from services.worker import rodar_em_thread
 
@@ -70,7 +71,10 @@ class AbrirCaixaWindow(DialogoPadrao):
         # HISTÓRICO DE SESSÕES
         # ======================
 
-        corpo.addWidget(titulo_secao("Últimas sessões"))
+        # Vendedor nao ve o historico (tem o valor de cada fechamento)
+        ve_historico = api.usuario_tem_permissao("financeiro.ver")
+        if ve_historico:
+            corpo.addWidget(titulo_secao("Últimas sessões"))
 
         historico_frame = QFrame()
         historico_frame.setStyleSheet(f"""
@@ -84,9 +88,9 @@ class AbrirCaixaWindow(DialogoPadrao):
         self.historico_layout.setColumnStretch(0, 1)
         self.historico_layout.setColumnStretch(2, 1)
 
-        corpo.addWidget(historico_frame)
-
-        self.carregar_historico()
+        if ve_historico:
+            corpo.addWidget(historico_frame)
+            self.carregar_historico()
 
         corpo.addStretch()
 

@@ -33,3 +33,29 @@ def test_cargo():
     assert api.cargo_usuario(
         {"admin": False, "permissoes": ["financeiro.ver"], "perfil_nome": "Gerente Filial"}
     ) == "Gerente Filial"
+
+
+def test_caixa_do_vendedor_nao_busca_os_totais(monkeypatch):
+    from telas import caixa as tela_caixa
+
+    def resumo_proibido():
+        raise AssertionError("vendedor nao pode pedir o resumo do caixa")
+
+    monkeypatch.setattr(tela_caixa, "caixa_aberto", lambda: {"id": 7})
+    monkeypatch.setattr(tela_caixa, "resumo_caixa", resumo_proibido)
+    monkeypatch.setattr(tela_caixa, "listar_movimentos_caixa", lambda caixa_id: ["mov"])
+
+    assert tela_caixa._buscar_dados_caixa(False) == ({"id": 7}, {}, ["mov"])
+
+
+def test_tela_caixa_do_vendedor_esconde_saldo_e_conferencia(_qapp, monkeypatch):
+    from telas.caixa import Caixa
+
+    monkeypatch.setattr(api, "_INFO_USUARIO_CACHE", {"admin": False, "permissoes": []})
+    monkeypatch.setattr(Caixa, "carregar", lambda self: None)
+    tela = Caixa()
+
+    assert tela._ve_totais is False
+    assert tela.lbl_total_previsto.isHidden()
+    assert tela.bt_caixas_anteriores.isHidden()
+    assert not tela.bt_sangria.isHidden() and not tela.bt_suprimento.isHidden()

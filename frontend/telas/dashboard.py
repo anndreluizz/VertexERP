@@ -285,9 +285,12 @@ class Dashboard(QWidget):
             {"id": "produtos", "titulo": "Produtos", "widget": self.kpi_produtos},
             {"id": "estoque", "titulo": "Estoque em Alerta", "widget": self.kpi_estoque},
         ]
+        # Vendedor: de valor em R$ so' "Minhas vendas hoje"
         if not self._financeiro:
-            self.kpi_lucro.hide()
-            self.registro_kpis = [k for k in self.registro_kpis if k["id"] != "lucro"]
+            self.registro_kpis = [
+                k for k in self.registro_kpis
+                if k["id"] not in ("lucro", "ticket", "caixa")
+            ]
 
         self.layout_principal.addLayout(self.grid_kpi)
 
@@ -359,6 +362,11 @@ class Dashboard(QWidget):
             {"id": "clientes_recentes", "titulo": "Clientes Recentes", "widget": self.secao_clientes_recentes, "linha": "listas", "peso": 1},
             {"id": "alertas", "titulo": "Alertas", "widget": self.secao_alertas, "linha": "listas", "peso": 1},
         ]
+        if not self._financeiro:
+            self.registro_paineis = [
+                p for p in self.registro_paineis
+                if p["id"] not in ("grafico", "pagamentos")
+            ]
 
         self.layout_principal.addStretch()
 

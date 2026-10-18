@@ -23,6 +23,7 @@ from services.user_service import (
     redefinir_senha,
 )
 from services.perfil_service import listar_perfis
+from services.loja_service import listar_lojas
 from services import api
 from services.worker import rodar_em_thread, em_paralelo
 from telas.gerenciar_perfis import GerenciarPerfisDialog
@@ -397,6 +398,7 @@ class GerenciarUsuariosDialog(DialogoPadrao):
 
         self.usuarios = []
         self.perfis = []
+        self.lojas = []
         self.meu_id = None
         self._carregando = False
         self._selecionar_id = None
@@ -543,6 +545,14 @@ class GerenciarUsuariosDialog(DialogoPadrao):
         self.combo_perfil.activated.connect(self._ao_escolher_perfil)
         conteudo.addWidget(self.combo_perfil)
 
+        # loja: preso a ela, so' ve e registra nela (ver resolver_loja_id)
+        self.lbl_loja = self._rotulo_painel("Loja")
+        conteudo.addWidget(self.lbl_loja)
+        self.combo_loja = QComboBox()
+        self.combo_loja.setStyleSheet(_estilo_combo())
+        self.combo_loja.activated.connect(self._ao_escolher_loja)
+        conteudo.addWidget(self.combo_loja)
+
         # segurança
         conteudo.addWidget(self._rotulo_painel("Segurança"))
         grade = QGridLayout()
@@ -645,6 +655,14 @@ class GerenciarUsuariosDialog(DialogoPadrao):
             "Administrador já tem acesso a tudo." if usuario.get("admin") else ""
         )
 
+        self.combo_loja.clear()
+        self.combo_loja.addItem("Todas as lojas", None)
+        for loja in self.lojas:
+            self.combo_loja.addItem(loja["nome"], loja["id"])
+        self.combo_loja.setCurrentIndex(max(self.combo_loja.findData(usuario.get("loja_id")), 0))
+        self.combo_loja.setVisible(len(self.lojas) > 1)
+        self.lbl_loja.setVisible(len(self.lojas) > 1)
+
         self.bt_2fa.setText("Desativar 2FA" if usuario.get("dois_fatores_ativo") else "Ativar 2FA")
         self._botoes_acesso(usuario)
 
@@ -672,6 +690,7 @@ class GerenciarUsuariosDialog(DialogoPadrao):
             (listar_usuarios,),
             (api.me,),
             (listar_perfis,),
+            (listar_lojas,),
             ao_sucesso=self._ao_carregar_sucesso,
             ao_erro=self._ao_carregar_erro,
             ao_finalizar=self._ao_carregar_finalizado,
@@ -689,7 +708,8 @@ class GerenciarUsuariosDialog(DialogoPadrao):
 
     def _ao_carregar_sucesso(self, resultado):
 
-        usuarios, eu, perfis = resultado
+        usuarios, eu, perfis, lojas = resultado
+        self.lojas = lojas or []
         # ativos primeiro, depois por nome -- inativo vai pro fim da fila
         self.usuarios = sorted(
             usuarios or [],
@@ -878,6 +898,15 @@ class GerenciarUsuariosDialog(DialogoPadrao):
             return
 
         self._atualizar_usuario_async(usuario["id"], {"perfil_id": perfil_id})
+
+    def _ao_escolher_loja(self, _indice):
+
+        usuario = self._usuario_atual()
+        loja_id = self.combo_loja.currentData()
+        if usuario is None or loja_id == usuario.get("loja_id"):
+            return
+
+        self._atualizar_usuario_async(usuario["id"], {"loja_id": loja_id})
 
     def gerenciar_perfis(self):
 

@@ -19,6 +19,7 @@ ROTAS_FINANCEIRAS = [
     "/extrato-bancario/",
     "/compras/",
     "/caixa/entradas",
+    "/caixa/historico",
 ]
 
 
@@ -76,7 +77,8 @@ def test_dashboard_do_vendedor_so_com_os_numeros_dele(client, db, usuario, usuar
 
     dele = client.get("/dashboard/", headers=auth_headers_comum).json()
     assert float(dele["vendas_hoje"]) == 30
-    assert float(dele["saldo_caixa"]) == 20
+    # nem o saldo da propria gaveta (so' abre e faz sangria/suprimento)
+    assert float(dele["saldo_caixa"]) == 0
     assert float(dele["contas_pagar"]) == 0
     assert all(float(p["valor"]) == 0 for p in dele["serie_pagamentos_mensal"])
 
@@ -85,13 +87,42 @@ def test_dashboard_do_vendedor_so_com_os_numeros_dele(client, db, usuario, usuar
     assert float(loja["saldo_caixa"]) == 70
 
 
-def test_historico_de_caixa_do_vendedor_so_com_os_dele(client, db, caixa_aberto, usuario_comum, auth_headers_comum, auth_headers):
-    db.add(Caixa(saldo_inicial=20, saldo_final=20, status="FECHADO", usuario_id=usuario_comum.id))
+def test_vendedor_abre_caixa_mas_nao_ve_totais(client, db, usuario_comum, auth_headers_comum):
+    aberto = client.post("/caixa/abrir", json={"saldo_inicial": 50}, headers=auth_headers_comum)
+    assert aberto.status_code == 200, aberto.json()
+    sangria = client.post(
+        "/movimentos-caixa/", json={"tipo": "SUPRIMENTO", "valor": 10, "descricao": "t"},
+        headers=auth_headers_comum,
+    )
+    assert sangria.status_code == 200, sangria.json()
+
+    assert float(client.get("/caixa/aberto", headers=auth_headers_comum).json()["saldo_final"]) == 0
+    assert client.get("/caixa/resumo", headers=auth_headers_comum).status_code == 403
+    caixa_id = aberto.json()["id"]
+    assert client.get(f"/caixa/{caixa_id}/resumo", headers=auth_headers_comum).status_code == 404
+
+    # com caixa.fechar precisa conferir: ve os totais
+    perfil = Perfil(nome="Fecha caixa", permissoes=["caixa.fechar"])
+    db.add(perfil)
+    db.commit()
+    usuario_comum.perfil_id = perfil.id
+    db.commit()
+    assert client.get("/caixa/resumo", headers=auth_headers_comum).status_code == 200
+
+
+def test_admin_prende_usuario_na_filial(client, db, usuario_comum, auth_headers):
+    from app.models.loja import Loja
+
+    filial = Loja(nome="Filial", ativa=True)
+    db.add(filial)
     db.commit()
 
-    dele = client.get("/caixa/historico", headers=auth_headers_comum).json()
-    assert [c["usuario_id"] for c in dele] == [usuario_comum.id]
-    assert len(client.get("/caixa/historico", headers=auth_headers).json()) == 2
+    resposta = client.put(f"/users/{usuario_comum.id}", json={"loja_id": filial.id}, headers=auth_headers)
+    assert resposta.status_code == 200, resposta.json()
+    db.refresh(usuario_comum)
+    assert usuario_comum.loja_id == filial.id
+
+    assert client.put(f"/users/{usuario_comum.id}", json={"loja_id": 9999}, headers=auth_headers).status_code == 400
 
 
 def test_vendedor_nao_ve_resumo_do_caixa_de_outro(client, db, caixa_aberto, auth_headers_comum, auth_headers):

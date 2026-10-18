@@ -48,14 +48,11 @@ class CaixaRepository:
         return caixa
 
     @staticmethod
-    def listar(db: Session, limite: int = 20, loja_id: int | None = None, usuario_id: int | None = None):
+    def listar(db: Session, limite: int = 20, loja_id: int | None = None):
         query = db.query(Caixa)
 
         if loja_id is not None:
             query = query.filter(Caixa.loja_id == loja_id)
-
-        if usuario_id is not None:
-            query = query.filter(Caixa.usuario_id == usuario_id)
 
         return (
             query

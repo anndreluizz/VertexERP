@@ -1,8 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
-
+from app.schemas.base import Schema
 from app.enums.forma_pagamento import FormaPagamento
 
 
@@ -10,11 +9,11 @@ from app.enums.forma_pagamento import FormaPagamento
 # PREVIEW (POST /fornecedores/importar-nfe)
 # ==========================================
 
-class NFeImportarRequest(BaseModel):
+class NFeImportarRequest(Schema):
     xml_conteudo: str
 
 
-class FornecedorPreviewResponse(BaseModel):
+class FornecedorPreviewResponse(Schema):
     encontrado: bool
     id: int | None = None
     cnpj: str
@@ -23,7 +22,7 @@ class FornecedorPreviewResponse(BaseModel):
     margem_padrao: Decimal = Decimal("0")
 
 
-class ItemPreviewResponse(BaseModel):
+class ItemPreviewResponse(Schema):
     codigo: str
     descricao: str
     codigo_barras: str | None = None
@@ -34,7 +33,7 @@ class ItemPreviewResponse(BaseModel):
     preco_sugerido: Decimal
 
 
-class NFePreviewResponse(BaseModel):
+class NFePreviewResponse(Schema):
     fornecedor: FornecedorPreviewResponse
     itens: list[ItemPreviewResponse]
 
@@ -43,14 +42,14 @@ class NFePreviewResponse(BaseModel):
 # CONFIRMACAO (POST /compras/importar-nfe)
 # ==========================================
 
-class FornecedorNovoRequest(BaseModel):
+class FornecedorNovoRequest(Schema):
     razao_social: str
     nome_fantasia: str | None = None
     cnpj: str
     margem_padrao: Decimal = Decimal("0")
 
 
-class ItemImportacaoRequest(BaseModel):
+class ItemImportacaoRequest(Schema):
     produto_id: int | None = None
     codigo: str
     descricao: str
@@ -65,7 +64,7 @@ class ItemImportacaoRequest(BaseModel):
     atualizar_preco_venda: bool = False
 
 
-class ImportarNFeConfirmarRequest(BaseModel):
+class ImportarNFeConfirmarRequest(Schema):
     fornecedor_id: int | None = None
     fornecedor_novo: FornecedorNovoRequest | None = None
     forma_pagamento: FormaPagamento

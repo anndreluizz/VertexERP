@@ -1,10 +1,12 @@
 from datetime import datetime
 from decimal import Decimal
 from app.enums.forma_pagamento import FormaPagamento
-from pydantic import BaseModel, conint, condecimal, constr
+from pydantic import conint, condecimal, constr
+
+from app.schemas.base import Schema
 
 
-class ItemVendaCreate(BaseModel):
+class ItemVendaCreate(Schema):
     produto_id: int
     # quantidade <= 0 passava na checagem de estoque e SOMAVA estoque
     # (devolucao disfarcada de venda, sem passar pelo cancelamento)
@@ -12,7 +14,7 @@ class ItemVendaCreate(BaseModel):
     valor_unitario: condecimal(ge=0, decimal_places=2)
 
 
-class ItemVendaResponse(BaseModel):
+class ItemVendaResponse(Schema):
     id: int
     produto_id: int
     produto_nome: str | None = None
@@ -20,11 +22,8 @@ class ItemVendaResponse(BaseModel):
     valor_unitario: Decimal
     subtotal: Decimal
 
-    class Config:
-        orm_mode = True
 
-
-class VendaCreate(BaseModel):
+class VendaCreate(Schema):
     cliente_id: int | None = None
 
     observacao: str | None = None
@@ -49,7 +48,7 @@ class VendaCreate(BaseModel):
     itens: list[ItemVendaCreate]
 
 
-class VendaSuspensaCreate(BaseModel):
+class VendaSuspensaCreate(Schema):
     """Carrinho salvo pra retomar depois (status=ABERTA) -- sem forma
     de pagamento, sem data de vencimento: nada disso foi decidido
     ainda, a venda so vira de verdade quando for retomada e finalizada
@@ -62,7 +61,7 @@ class VendaSuspensaCreate(BaseModel):
     itens: list[ItemVendaCreate]
 
 
-class ItemVendaSuspensaResponse(BaseModel):
+class ItemVendaSuspensaResponse(Schema):
     produto_id: int
     codigo: str | None = None
     nome: str
@@ -71,26 +70,26 @@ class ItemVendaSuspensaResponse(BaseModel):
     estoque: int | None = None
 
 
-class VendaSuspensaResponse(BaseModel):
+class VendaSuspensaResponse(Schema):
     """Mesma ideia de VendaResponse, mas com nome/codigo/estoque atual
     do produto já embutidos em cada item -- pra tela de PDV conseguir
     repopular o carrinho ao retomar sem precisar de uma chamada extra
     por produto."""
 
     id: int
-    cliente_id: int | None
-    cliente_nome: str | None
+    cliente_id: int | None = None
+    cliente_nome: str | None = None
     data: datetime
     desconto: Decimal
     itens: list[ItemVendaSuspensaResponse]
 
 
-class VendaResponse(BaseModel):
+class VendaResponse(Schema):
     id: int
 
     loja_id: int | None = None
 
-    cliente_id: int | None
+    cliente_id: int | None = None
     cliente_nome: str | None = None
 
     usuario_id: int | None = None
@@ -105,8 +104,7 @@ class VendaResponse(BaseModel):
 
     desconto: Decimal
 
-    observacao: str | None
-
+    observacao: str | None = None
     status: str
 
     forma_pagamento: FormaPagamento
@@ -123,24 +121,21 @@ class VendaResponse(BaseModel):
 
     itens: list[ItemVendaResponse]
 
-    class Config:
-        orm_mode = True
 
-
-class ComprovanteEnvioCreate(BaseModel):
+class ComprovanteEnvioCreate(Schema):
     canal: str  # WHATSAPP ou EMAIL
     destino: str
     status: str  # ENVIADO ou FALHOU
     erro: str | None = None
 
 
-class ComprovanteEnviarWhatsappRequest(BaseModel):
+class ComprovanteEnviarWhatsappRequest(Schema):
     pdf_base64: str
     nome_arquivo: str = "comprovante.pdf"
     legenda: str = ""
 
 
-class ComprovanteEnviarEmailRequest(BaseModel):
+class ComprovanteEnviarEmailRequest(Schema):
     pdf_base64: str
     destinatario: str | None = None
     nome_arquivo: str = "comprovante.pdf"
@@ -148,21 +143,18 @@ class ComprovanteEnviarEmailRequest(BaseModel):
     corpo: str = ""
 
 
-class ComprovanteEnvioResponse(BaseModel):
+class ComprovanteEnvioResponse(Schema):
     id: int
     canal: str
     destino: str
     status: str
-    erro: str | None
-    usuario_id: int | None
-    usuario_nome: str | None
+    erro: str | None = None
+    usuario_id: int | None = None
+    usuario_nome: str | None = None
     data: datetime
 
-    class Config:
-        orm_mode = True
 
-
-class ComprovanteItemResponse(BaseModel):
+class ComprovanteItemResponse(Schema):
     produto_id: int
     nome: str
     quantidade: int
@@ -170,35 +162,35 @@ class ComprovanteItemResponse(BaseModel):
     subtotal: Decimal
 
 
-class ComprovanteVendaResponse(BaseModel):
+class ComprovanteVendaResponse(Schema):
     """Tudo que o comprovante de uma venda precisa numa unica chamada
     -- evita o frontend combinar varias requisicoes (venda + cliente +
     saldo devedor + nome dos produtos) so pra montar o PDF."""
 
     venda_id: int
     data: datetime
-    usuario_nome: str | None
-    cliente_id: int | None
-    cliente_nome: str | None
-    cliente_cpf_cnpj: str | None
-    cliente_telefone: str | None
-    cliente_email: str | None
+    usuario_nome: str | None = None
+    cliente_id: int | None = None
+    cliente_nome: str | None = None
+    cliente_cpf_cnpj: str | None = None
+    cliente_telefone: str | None = None
+    cliente_email: str | None = None
     itens: list[ComprovanteItemResponse]
     desconto: Decimal
     valor_total: Decimal
     forma_pagamento: str
     forma_pagamento_2: str | None = None
     valor_forma_2: Decimal | None = None
-    observacao: str | None
+    observacao: str | None = None
     situacao: str  # PAGO ou FIADO
     saldo_devedor_cliente: Decimal | None = None
 
 
-class ResumoVendedorItem(BaseModel):
+class ResumoVendedorItem(Schema):
     """Total vendido por usuário (vendedora) num período -- ver
     GET /vendas/resumo-vendedores."""
-    usuario_id: int | None
-    usuario_nome: str | None
+    usuario_id: int | None = None
+    usuario_nome: str | None = None
     quantidade_vendas: int
     total_vendido: Decimal
     total_devolvido: Decimal

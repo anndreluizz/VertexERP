@@ -1,16 +1,16 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class BackupItem(BaseModel):
+class BackupItem(Schema):
     nome: str
     tamanho_bytes: int
     criado_em: datetime
 
 
-class BackupListResponse(BaseModel):
+class BackupListResponse(Schema):
     itens: list[BackupItem]
     pasta: str
     copia_externa: Optional[str] = None

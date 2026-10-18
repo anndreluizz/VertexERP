@@ -1,13 +1,13 @@
 from decimal import Decimal
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class ImportarCsvRequest(BaseModel):
+class ImportarCsvRequest(Schema):
     csv_conteudo: str
 
 
-class ItemImportacaoPreview(BaseModel):
+class ItemImportacaoPreview(Schema):
     linha: int
     codigo: str
     nome: str
@@ -22,14 +22,14 @@ class ItemImportacaoPreview(BaseModel):
     erro: str | None = None
 
 
-class PreviewImportacaoResponse(BaseModel):
+class PreviewImportacaoResponse(Schema):
     itens: list[ItemImportacaoPreview]
     total_novos: int
     total_atualizados: int
     total_com_erro: int
 
 
-class ItemImportacaoConfirmar(BaseModel):
+class ItemImportacaoConfirmar(Schema):
     codigo: str
     nome: str
     categoria: str | None = None
@@ -42,10 +42,10 @@ class ItemImportacaoConfirmar(BaseModel):
     produto_id: int | None = None
 
 
-class ConfirmarImportacaoRequest(BaseModel):
+class ConfirmarImportacaoRequest(Schema):
     itens: list[ItemImportacaoConfirmar]
 
 
-class ConfirmarImportacaoResponse(BaseModel):
+class ConfirmarImportacaoResponse(Schema):
     criados: int
     atualizados: int

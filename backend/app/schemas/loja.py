@@ -1,22 +1,19 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class LojaCreate(BaseModel):
+class LojaCreate(Schema):
     nome: str
 
 
-class LojaUpdate(BaseModel):
+class LojaUpdate(Schema):
     nome: str | None = None
     ativa: bool | None = None
 
 
-class LojaResponse(BaseModel):
+class LojaResponse(Schema):
     id: int
     nome: str
     ativa: bool
     criado_em: datetime
-
-    class Config:
-        orm_mode = True

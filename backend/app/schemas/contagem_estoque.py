@@ -1,28 +1,25 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class ItemContagemEstoqueResponse(BaseModel):
+class ItemContagemEstoqueResponse(Schema):
     id: int
     produto_id: int
     produto_nome: str | None = None
     quantidade_sistema: int
     quantidade_contada: int | None = None
 
-    class Config:
-        orm_mode = True
 
-
-class ItemContagemEstoqueUpdate(BaseModel):
+class ItemContagemEstoqueUpdate(Schema):
     quantidade_contada: int
 
 
-class ContagemEstoqueCreate(BaseModel):
+class ContagemEstoqueCreate(Schema):
     observacao: str | None = None
 
 
-class ContagemEstoqueResponse(BaseModel):
+class ContagemEstoqueResponse(Schema):
     id: int
     loja_id: int
     usuario_id: int
@@ -31,6 +28,3 @@ class ContagemEstoqueResponse(BaseModel):
     criado_em: datetime
     finalizado_em: datetime | None = None
     itens: list[ItemContagemEstoqueResponse] = []
-
-    class Config:
-        orm_mode = True

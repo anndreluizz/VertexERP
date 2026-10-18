@@ -1,20 +1,17 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class CentroCustoCreate(BaseModel):
+class CentroCustoCreate(Schema):
     nome: str
 
 
-class CentroCustoUpdate(BaseModel):
+class CentroCustoUpdate(Schema):
     nome: str
 
 
-class CentroCustoResponse(BaseModel):
+class CentroCustoResponse(Schema):
     id: int
     nome: str
     criado_em: datetime
-
-    class Config:
-        orm_mode = True

@@ -1,10 +1,12 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from app.schemas.base import Schema
 
 
-class CaixaBase(BaseModel):
+class CaixaBase(Schema):
     saldo_inicial: Decimal
 
 
@@ -12,7 +14,7 @@ class CaixaCreate(CaixaBase):
     pass
 
 
-class FecharCaixaRequest(BaseModel):
+class FecharCaixaRequest(Schema):
     valor_contado: Decimal | None = None
     observacoes: str | None = None
     # pra onde vai o dinheiro da gaveta (o resto fica de troco)
@@ -20,7 +22,7 @@ class FecharCaixaRequest(BaseModel):
     valor_retirado: Decimal | None = Field(None, ge=0)
 
 
-class CaixaResponse(BaseModel):
+class CaixaResponse(Schema):
     id: int
     data_abertura: datetime
     data_fechamento: datetime | None = None
@@ -34,11 +36,8 @@ class CaixaResponse(BaseModel):
     usuario_id: int | None = None
     usuario_nome: str | None = None  # so' no /historico
 
-    class Config:
-        orm_mode = True
 
-
-class ResumoCaixaResponse(BaseModel):
+class ResumoCaixaResponse(Schema):
     saldo_inicial: Decimal
     vendas_dinheiro: Decimal
     vendas_pix: Decimal
@@ -58,7 +57,7 @@ class ResumoCaixaResponse(BaseModel):
     total_geral: Decimal
 
 
-class EntradasCaixaResponse(BaseModel):
+class EntradasCaixaResponse(Schema):
     """Dinheiro que entrou no periodo (ver CaixaService.entradas)."""
     dinheiro: Decimal
     pix: Decimal

@@ -40,7 +40,7 @@ def criar_movimento(
             resolver_loja_id(db, usuario, loja_id),
         )
 
-        return MovimentoCaixaResponse.from_orm(movimento)
+        return MovimentoCaixaResponse.model_validate(movimento)
 
     except Exception as e:
         raise HTTPException(
@@ -61,7 +61,7 @@ def listar_movimentos(
     movimentos = MovimentoCaixaService.listar(db, skip, limit, loja_id)
 
     return [
-        MovimentoCaixaResponse.from_orm(m)
+        MovimentoCaixaResponse.model_validate(m)
         for m in movimentos
     ]
 
@@ -81,7 +81,7 @@ def listar_por_caixa(
     )
 
     return [
-        MovimentoCaixaResponse.from_orm(m)
+        MovimentoCaixaResponse.model_validate(m)
         for m in movimentos
     ]
 
@@ -98,6 +98,6 @@ def listar_por_tipo(
     movimentos = MovimentoCaixaService.listar_por_tipo(db, tipo)
 
     return [
-        MovimentoCaixaResponse.from_orm(m)
+        MovimentoCaixaResponse.model_validate(m)
         for m in movimentos
     ]

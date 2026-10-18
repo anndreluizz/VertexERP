@@ -1,18 +1,15 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class NotificacaoResponse(BaseModel):
+class NotificacaoResponse(Schema):
     id: int
     titulo: str
     corpo: str
     lida: bool
     criado_em: datetime
 
-    class Config:
-        orm_mode = True
 
-
-class ContagemNaoLidasResponse(BaseModel):
+class ContagemNaoLidasResponse(Schema):
     nao_lidas: int

@@ -72,7 +72,7 @@ def criar_movimento(
             ),
         )
 
-        return MovimentoFiadoResponse.from_orm(movimento)
+        return MovimentoFiadoResponse.model_validate(movimento)
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -86,7 +86,7 @@ def listar_movimentos(
     movimentos = MovimentoFiadoService.listar(db)
 
     return [
-        MovimentoFiadoResponse.from_orm(m)
+        MovimentoFiadoResponse.model_validate(m)
         for m in movimentos
     ]
 
@@ -106,7 +106,7 @@ def listar_por_cliente(
     )
 
     return [
-        MovimentoFiadoResponse.from_orm(m)
+        MovimentoFiadoResponse.model_validate(m)
         for m in movimentos
     ]
 
@@ -123,7 +123,7 @@ def atualizar_movimento(
             db, movimento_id, dados, usuario.id,
         )
 
-        resposta = MovimentoFiadoResponse.from_orm(movimento).dict()
+        resposta = MovimentoFiadoResponse.model_validate(movimento).model_dump()
         resposta["caixa_ajustado"] = caixa_ajustado
         return resposta
 
@@ -215,7 +215,7 @@ def registrar_pagamento_avulso(
 
     movimento = MovimentoFiadoService.criar(db, movimento_dados, usuario.id)
 
-    return MovimentoFiadoResponse.from_orm(movimento)
+    return MovimentoFiadoResponse.model_validate(movimento)
 
 
 @router.post(
@@ -243,4 +243,4 @@ def registrar_compra_avulsa(
         usuario.id,
     )
 
-    return MovimentoFiadoResponse.from_orm(movimento)
+    return MovimentoFiadoResponse.model_validate(movimento)

@@ -367,7 +367,7 @@ class ContaPagarService:
         if not conta:
             raise Exception("Conta não encontrada.")
 
-        dados_dict = dados.dict(
+        dados_dict = dados.model_dump(
             exclude_unset=True,
             exclude={
                 "documento_base64",

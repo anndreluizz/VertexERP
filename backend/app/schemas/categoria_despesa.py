@@ -1,20 +1,17 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class CategoriaDespesaCreate(BaseModel):
+class CategoriaDespesaCreate(Schema):
     nome: str
 
 
-class CategoriaDespesaUpdate(BaseModel):
+class CategoriaDespesaUpdate(Schema):
     nome: str
 
 
-class CategoriaDespesaResponse(BaseModel):
+class CategoriaDespesaResponse(Schema):
     id: int
     nome: str
     criado_em: datetime
-
-    class Config:
-        orm_mode = True

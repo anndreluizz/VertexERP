@@ -1,26 +1,23 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class CategoriaCreate(BaseModel):
+class CategoriaCreate(Schema):
     nome: str
     descricao: Optional[str] = None
 
 
-class CategoriaUpdate(BaseModel):
+class CategoriaUpdate(Schema):
     nome: Optional[str] = None
     descricao: Optional[str] = None
     ativo: Optional[bool] = None
 
 
-class CategoriaResponse(BaseModel):
+class CategoriaResponse(Schema):
     id: int
     nome: str
-    descricao: Optional[str]
+    descricao: Optional[str] = None
     ativo: bool
     criado_em: datetime
-
-    class Config:
-        orm_mode = True

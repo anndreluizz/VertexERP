@@ -49,7 +49,7 @@ class MarcaService:
         if not marca:
             raise Exception("Marca não encontrada.")
 
-        campos = dados.dict(exclude_unset=True)
+        campos = dados.model_dump(exclude_unset=True)
 
         novo_nome = campos.get("nome")
         if novo_nome and novo_nome != marca.nome:

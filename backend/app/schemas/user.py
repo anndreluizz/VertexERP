@@ -1,13 +1,15 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import EmailStr
+
+from app.schemas.base import Schema
 
 
-class UserCreate(BaseModel):
+class UserCreate(Schema):
     nome: str
     email: EmailStr
     senha: str
 
 
-class UserLogin(BaseModel):
+class UserLogin(Schema):
     email: EmailStr
     senha: str
     # opcional -- so o app mobile envia (ex.: "Android - Pixel 7"), pra
@@ -16,7 +18,7 @@ class UserLogin(BaseModel):
     dispositivo: str | None = None
 
 
-class UserUpdate(BaseModel):
+class UserUpdate(Schema):
     nome: str | None = None
     ativo: bool | None = None
     admin: bool | None = None
@@ -24,15 +26,15 @@ class UserUpdate(BaseModel):
     perfil_id: int | None = None
 
 
-class UserAdminUpdate(BaseModel):
+class UserAdminUpdate(Schema):
     admin: bool
 
 
-class UserAtivoUpdate(BaseModel):
+class UserAtivoUpdate(Schema):
     ativo: bool
 
 
-class Verificar2FARequest(BaseModel):
+class Verificar2FARequest(Schema):
     """Segundo passo do login quando o usuario tem 2FA ativo (ver
     POST /auth/verificar-2fa) -- verificacao_id e o que voltou do
     primeiro passo (POST /auth/login), codigo e o numero de 6 digitos
@@ -42,21 +44,21 @@ class Verificar2FARequest(BaseModel):
     dispositivo: str | None = None
 
 
-class TrocarSenhaRequest(BaseModel):
+class TrocarSenhaRequest(Schema):
     """Usuário trocando a própria senha -- precisa confirmar a senha
     atual (ver /auth/senha)."""
     senha_atual: str
     senha_nova: str
 
 
-class RedefinirSenhaRequest(BaseModel):
+class RedefinirSenhaRequest(Schema):
     """Admin redefinindo a senha de outro usuário (ex.: funcionário
     esqueceu a senha) -- não precisa da senha atual (ver
     /users/{user_id}/senha)."""
     senha_nova: str
 
 
-class UserResponse(BaseModel):
+class UserResponse(Schema):
     id: int
     nome: str
     email: EmailStr
@@ -70,6 +72,3 @@ class UserResponse(BaseModel):
     perfil_id: int | None = None
     perfil_nome: str | None = None
     permissoes: list[str] = []
-
-    class Config:
-        orm_mode = True

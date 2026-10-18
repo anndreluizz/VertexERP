@@ -56,7 +56,7 @@ def criar_movimento(
             resolver_loja_id(db, usuario, loja_id),
         )
 
-        return MovimentoEstoqueResponse.from_orm(movimento)
+        return MovimentoEstoqueResponse.model_validate(movimento)
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -70,7 +70,7 @@ def listar_movimentos(
     movimentos = MovimentoEstoqueService.listar(db)
 
     return [
-        MovimentoEstoqueResponse.from_orm(m)
+        MovimentoEstoqueResponse.model_validate(m)
         for m in movimentos
     ]
 
@@ -94,7 +94,7 @@ def criar_transferencia(
             resolver_loja_id(db, usuario, loja_id),
         )
 
-        return TransferenciaEstoqueResponse.from_orm(transferencia)
+        return TransferenciaEstoqueResponse.model_validate(transferencia)
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -112,7 +112,7 @@ def listar_transferencias(
     transferencias = TransferenciaEstoqueService.listar(db, skip, limit)
 
     return [
-        TransferenciaEstoqueResponse.from_orm(t)
+        TransferenciaEstoqueResponse.model_validate(t)
         for t in transferencias
     ]
 
@@ -132,7 +132,7 @@ def listar_por_produto(
     )
 
     return [
-        MovimentoEstoqueResponse.from_orm(m)
+        MovimentoEstoqueResponse.model_validate(m)
         for m in movimentos
     ]
 
@@ -156,7 +156,7 @@ def abrir_contagem(
             resolver_loja_id(db, usuario, loja_id),
         )
 
-        return ContagemEstoqueResponse.from_orm(contagem)
+        return ContagemEstoqueResponse.model_validate(contagem)
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -175,7 +175,7 @@ def contagem_aberta(
     if contagem is None:
         return None
 
-    return ContagemEstoqueResponse.from_orm(contagem)
+    return ContagemEstoqueResponse.model_validate(contagem)
 
 
 @router.get("/contagens", response_model=list[ContagemEstoqueResponse])
@@ -187,7 +187,7 @@ def listar_contagens(
 ):
     contagens = ContagemEstoqueService.listar(db, skip, limit)
 
-    return [ContagemEstoqueResponse.from_orm(c) for c in contagens]
+    return [ContagemEstoqueResponse.model_validate(c) for c in contagens]
 
 
 @router.get("/contagens/{contagem_id}", response_model=ContagemEstoqueResponse)
@@ -198,7 +198,7 @@ def obter_contagem(
 ):
     try:
         contagem = ContagemEstoqueService.buscar_por_id(db, contagem_id)
-        return ContagemEstoqueResponse.from_orm(contagem)
+        return ContagemEstoqueResponse.model_validate(contagem)
 
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -219,7 +219,7 @@ def registrar_item_contagem(
         item = ContagemEstoqueService.registrar_item(
             db, contagem_id, item_id, dados.quantidade_contada
         )
-        return ItemContagemEstoqueResponse.from_orm(item)
+        return ItemContagemEstoqueResponse.model_validate(item)
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -238,7 +238,7 @@ def finalizar_contagem(
         contagem = ContagemEstoqueService.finalizar(
             db, contagem_id, usuario.id
         )
-        return ContagemEstoqueResponse.from_orm(contagem)
+        return ContagemEstoqueResponse.model_validate(contagem)
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -255,7 +255,7 @@ def cancelar_contagem(
 ):
     try:
         contagem = ContagemEstoqueService.cancelar(db, contagem_id)
-        return ContagemEstoqueResponse.from_orm(contagem)
+        return ContagemEstoqueResponse.model_validate(contagem)
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -1,9 +1,10 @@
 from datetime import date
 from decimal import Decimal
-from pydantic import BaseModel
+
+from app.schemas.base import Schema
 
 
-class ProdutoBase(BaseModel):
+class ProdutoBase(Schema):
     codigo: str
     nome: str
     descricao: str | None = None
@@ -37,7 +38,7 @@ class ProdutoUpdate(ProdutoBase):
     ativo: bool = True
 
 
-class ProdutoResponse(BaseModel):
+class ProdutoResponse(Schema):
     id: int
     loja_id: int | None = None
     # so' vem False na listagem por loja (?loja_id=): produto que so'
@@ -68,20 +69,14 @@ class ProdutoResponse(BaseModel):
     eh_kit: bool = False
     tem_foto: bool = False
 
-    class Config:
-        orm_mode = True
 
-
-class ProdutoFotoCreate(BaseModel):
+class ProdutoFotoCreate(Schema):
     imagem_base64: str
     principal: bool = False
 
 
-class ProdutoFotoResponse(BaseModel):
+class ProdutoFotoResponse(Schema):
     id: int
     produto_id: int
     ordem: int
     principal: bool
-
-    class Config:
-        orm_mode = True

@@ -1,23 +1,23 @@
 from decimal import Decimal
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class SerieMensalItem(BaseModel):
+class SerieMensalItem(Schema):
 
     mes: str
 
     valor: Decimal
 
 
-class VendaDiariaItem(BaseModel):
+class VendaDiariaItem(Schema):
 
     data: str
 
     total: Decimal
 
 
-class DashboardResponse(BaseModel):
+class DashboardResponse(Schema):
 
     vendas_hoje: Decimal
 

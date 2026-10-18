@@ -27,7 +27,7 @@ class ConfiguracaoService:
 
         configuracao = ConfiguracaoService.buscar(db)
 
-        campos = dados.dict(exclude_unset=True, exclude={"logo_base64"})
+        campos = dados.model_dump(exclude_unset=True, exclude={"logo_base64"})
 
         for campo, valor in campos.items():
             setattr(configuracao, campo, valor)

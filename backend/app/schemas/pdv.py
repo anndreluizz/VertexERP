@@ -1,9 +1,9 @@
 from decimal import Decimal
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class ProdutoPDV(BaseModel):
+class ProdutoPDV(Schema):
     id: int
     codigo: str
     codigo_barras: str | None = None

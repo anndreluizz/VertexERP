@@ -1,9 +1,9 @@
 from decimal import Decimal
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class FornecedorCreate(BaseModel):
+class FornecedorCreate(Schema):
     razao_social: str
     nome_fantasia: str | None = None
     cnpj: str
@@ -14,7 +14,7 @@ class FornecedorCreate(BaseModel):
     margem_padrao: Decimal = Decimal("0")
 
 
-class FornecedorUpdate(BaseModel):
+class FornecedorUpdate(Schema):
     razao_social: str
     nome_fantasia: str | None = None
     cnpj: str
@@ -26,17 +26,14 @@ class FornecedorUpdate(BaseModel):
     ativo: bool
 
 
-class FornecedorResponse(BaseModel):
+class FornecedorResponse(Schema):
     id: int
     razao_social: str
-    nome_fantasia: str | None
+    nome_fantasia: str | None = None
     cnpj: str
-    email: str | None
-    telefone: str | None
-    cidade: str | None
-    estado: str | None
+    email: str | None = None
+    telefone: str | None = None
+    cidade: str | None = None
+    estado: str | None = None
     margem_padrao: Decimal
     ativo: bool
-
-    class Config:
-        orm_mode = True

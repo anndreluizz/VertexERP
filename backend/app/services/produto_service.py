@@ -166,7 +166,7 @@ class ProdutoService:
                     "variação."
                 )
 
-        campos = dados.dict(exclude={"foto_base64"})
+        campos = dados.model_dump(exclude={"foto_base64"})
         produto = Produto(**campos)
 
         if dados.foto_base64:
@@ -251,7 +251,7 @@ class ProdutoService:
                     "variação."
                 )
 
-        campos = dados.dict(exclude_unset=True, exclude={"foto_base64"})
+        campos = dados.model_dump(exclude_unset=True, exclude={"foto_base64"})
         novo_estoque = campos.pop("estoque", None)
 
         # mesmo motivo do "estoque" acima: com loja_id resolvido, o

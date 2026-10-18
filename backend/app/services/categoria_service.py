@@ -49,7 +49,7 @@ class CategoriaService:
         if not categoria:
             raise Exception("Categoria não encontrada.")
 
-        campos = dados.dict(exclude_unset=True)
+        campos = dados.model_dump(exclude_unset=True)
 
         # mesma checagem que ja existe em criar() -- sem isso, renomear
         # pra um nome que ja pertence a outra categoria estoura um

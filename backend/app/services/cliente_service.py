@@ -76,7 +76,7 @@ class ClienteService:
         if not cliente:
             raise Exception("Cliente não encontrado.")
 
-        campos = dados.dict(exclude_unset=True, exclude={"foto_base64"})
+        campos = dados.model_dump(exclude_unset=True, exclude={"foto_base64"})
 
         for campo, valor in campos.items():
             setattr(cliente, campo, valor)

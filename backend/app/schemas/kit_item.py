@@ -1,17 +1,15 @@
-from pydantic import BaseModel
+
+from app.schemas.base import Schema
 
 
-class KitItemCreate(BaseModel):
+class KitItemCreate(Schema):
     produto_componente_id: int
     quantidade: int = 1
 
 
-class KitItemResponse(BaseModel):
+class KitItemResponse(Schema):
     id: int
     kit_id: int
     produto_componente_id: int
     produto_componente_nome: str | None = None
     quantidade: int
-
-    class Config:
-        orm_mode = True

@@ -5,7 +5,9 @@ from PySide6.QtWidgets import QMessageBox
 from telas.cadastro_cliente import CadastroClienteDialog
 from telas.ficha_cliente import FichaClienteDialog
 
+from services.caixa_service import entradas_caixa
 from services.cliente_service import listar_clientes, reativar_cliente
+from services.preferencias_service import carregar_loja_id
 from services.loja_service import listar_lojas
 from services.movimento_fiado_service import listar_movimentos
 from services.venda_service import listar_vendas
@@ -86,10 +88,16 @@ def _buscar_dados_clientes(loja_id):
     chamadas sequenciais somam 3x a latencia por chamada; em paralelo
     o tempo total fica perto do da mais lenta das 3."""
 
-    clientes, movimentos_fiado, vendas = em_paralelo(
+    # recebido de fiado e' dinheiro da loja: sai do caixa onde entrou
+    # (Caixa.loja_id). Sem loja no combo, usa a loja deste terminal --
+    # senao a Filial via os recebimentos da Matriz somados aos dela.
+    loja_recebido = loja_id if loja_id is not None else carregar_loja_id()
+
+    clientes, movimentos_fiado, vendas, entradas = em_paralelo(
         (listar_clientes, loja_id),
         (listar_movimentos,),
         (listar_vendas,),
+        (entradas_caixa, None, None, loja_recebido),
     )
 
     movimentos_por_cliente = {}
@@ -117,11 +125,7 @@ def _buscar_dados_clientes(loja_id):
             + float(venda.get("valor_total", 0) or 0)
         )
 
-    recebido_fiado_total = sum(
-        float(m.get("valor", 0) or 0)
-        for m in movimentos_fiado
-        if m.get("tipo") == "PAGAMENTO"
-    )
+    recebido_fiado_total = float(entradas.get("fiado_recebido", 0) or 0)
 
     return (
         clientes,
@@ -1006,7 +1010,7 @@ class Clientes(QWidget):
         self.card_recebido_fiado.definir_valor(
             formatar_moeda(self.recebido_fiado_total)
         )
-        self.card_recebido_fiado.definir_legenda("pagamentos de fiado registrados")
+        self.card_recebido_fiado.definir_legenda("pagamentos de fiado recebidos nesta loja")
         self.card_devendo.definir_valor(str(devendo))
         self.card_devendo.definir_legenda(f"de {total} cadastros")
         self.card_inadimplentes.definir_valor(str(contagem["INADIMPLENTES"]))

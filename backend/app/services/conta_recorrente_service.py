@@ -100,7 +100,7 @@ class ContaRecorrenteService:
         if recorrente is None:
             return None
 
-        for campo, valor in dados.dict(exclude_unset=True).items():
+        for campo, valor in dados.model_dump(exclude_unset=True).items():
             setattr(recorrente, campo, valor.strip() if campo == "descricao" else valor)
 
         db.commit()

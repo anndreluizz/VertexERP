@@ -1,10 +1,10 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class MovimentoCaixaBase(BaseModel):
+class MovimentoCaixaBase(Schema):
     tipo: str
     descricao: str | None = None
     valor: Decimal
@@ -20,6 +20,3 @@ class MovimentoCaixaResponse(MovimentoCaixaBase):
     usuario_id: int
     venda_id: int | None = None
     data: datetime
-
-    class Config:
-        orm_mode = True

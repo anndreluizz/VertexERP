@@ -1,5 +1,6 @@
 alembic==1.18.5
 annotated-doc==0.0.4
+annotated-types==0.8.0
 anyio==4.14.1
 bcrypt==4.0.1
 cachecontrol==0.14.4
@@ -47,7 +48,9 @@ psycopg-binary==3.3.4
 pyasn1==0.6.3
 pyasn1-modules==0.4.2
 pycparser==3.0
-pydantic==1.10.26
+pydantic==2.12.5
+pydantic-settings==2.11.0
+pydantic_core==2.41.5
 Pygments==2.20.0
 pyjwt==2.13.0
 pytest==9.1.1
@@ -59,6 +62,7 @@ rsa==4.9.1
 six==1.17.0
 SQLAlchemy==2.0.51
 starlette==0.50.0
+typing-inspection==0.4.4
 typing_extensions==4.16.0
 tzdata==2026.2
 urllib3==2.7.0

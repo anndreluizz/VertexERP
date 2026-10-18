@@ -52,7 +52,7 @@ def criar_usuario(
         raise HTTPException(status_code=400, detail=str(e))
 
     return ApiResponse.success(
-        data=UserResponse.from_orm(usuario).dict(),
+        data=UserResponse.model_validate(usuario).model_dump(),
         message="Usuário cadastrado com sucesso.",
     )
 
@@ -66,7 +66,7 @@ def listar_usuarios(
 
     return ApiResponse.success(
         data=[
-            UserResponse.from_orm(u).dict()
+            UserResponse.model_validate(u).model_dump()
             for u in usuarios
         ],
         message="Usuários listados com sucesso.",
@@ -86,7 +86,7 @@ def atualizar_usuario(
         raise HTTPException(status_code=400, detail=str(e))
 
     return ApiResponse.success(
-        data=UserResponse.from_orm(atualizado).dict(),
+        data=UserResponse.model_validate(atualizado).model_dump(),
         message="Usuário atualizado com sucesso.",
     )
 

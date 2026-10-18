@@ -67,7 +67,7 @@ class UserService:
                 "Você não pode desativar a própria conta."
             )
 
-        campos = dados.dict(exclude_unset=True)
+        campos = dados.model_dump(exclude_unset=True)
 
         if campos.get("perfil_id") is not None:
             if not db.query(Perfil).filter(

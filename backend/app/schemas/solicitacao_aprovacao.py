@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class SolicitacaoAprovacaoResponse(BaseModel):
+class SolicitacaoAprovacaoResponse(Schema):
     id: int
     tipo: str
     referencia_id: int
@@ -13,6 +13,3 @@ class SolicitacaoAprovacaoResponse(BaseModel):
     aprovador_id: int | None = None
     criado_em: datetime
     resolvido_em: datetime | None = None
-
-    class Config:
-        orm_mode = True

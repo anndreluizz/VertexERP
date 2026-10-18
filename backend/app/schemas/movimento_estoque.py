@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class MovimentoEstoqueBase(BaseModel):
+class MovimentoEstoqueBase(Schema):
     produto_id: int
     tipo: str
     quantidade: int
@@ -19,6 +19,3 @@ class MovimentoEstoqueResponse(MovimentoEstoqueBase):
     usuario_id: int
     transferencia_id: int | None = None
     data: datetime
-
-    class Config:
-        orm_mode = True

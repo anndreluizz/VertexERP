@@ -1,16 +1,14 @@
-from pydantic import BaseModel
+
+from app.schemas.base import Schema
 
 
-class DeviceTokenCreate(BaseModel):
+class DeviceTokenCreate(Schema):
     token: str
     plataforma: str = "ANDROID"
 
 
-class DeviceTokenResponse(BaseModel):
+class DeviceTokenResponse(Schema):
     id: int
     usuario_id: int
     token: str
     plataforma: str
-
-    class Config:
-        orm_mode = True

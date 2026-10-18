@@ -1,14 +1,14 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class OfxImportarRequest(BaseModel):
+class OfxImportarRequest(Schema):
     ofx_conteudo: str
 
 
-class TransacaoPreview(BaseModel):
+class TransacaoPreview(Schema):
     fitid: str
     data: date
     descricao: str
@@ -17,7 +17,7 @@ class TransacaoPreview(BaseModel):
     ja_importada: bool
 
 
-class OfxPreviewResponse(BaseModel):
+class OfxPreviewResponse(Schema):
     banco: str | None = None
     conta: str | None = None
     transacoes: list[TransacaoPreview]
@@ -25,11 +25,11 @@ class OfxPreviewResponse(BaseModel):
     total_ja_importadas: int
 
 
-class OfxImportarResultado(BaseModel):
+class OfxImportarResultado(Schema):
     total_importadas: int
 
 
-class TransacaoBancariaResponse(BaseModel):
+class TransacaoBancariaResponse(Schema):
     id: int
     loja_id: int | None = None
     fitid: str
@@ -43,15 +43,12 @@ class TransacaoBancariaResponse(BaseModel):
     conciliado_em: datetime | None = None
     conciliado_por_nome: str | None = None
 
-    class Config:
-        orm_mode = True
 
-
-class ConciliarRequest(BaseModel):
+class ConciliarRequest(Schema):
     conta_pagar_id: int | None = None
 
 
-class CandidatoConciliacao(BaseModel):
+class CandidatoConciliacao(Schema):
     tipo: str  # PAGAR
     id: int
     descricao: str

@@ -57,7 +57,7 @@ def criar(
             loja_id=resolver_loja_id(db, usuario, loja_id),
         )
 
-        return ContaPagarResponse.from_orm(conta)
+        return ContaPagarResponse.model_validate(conta)
 
     except Exception as e:
 
@@ -91,7 +91,7 @@ def listar_parcelamento(
     usuario=Depends(get_current_user),
 ):
     return [
-        ContaPagarResponse.from_orm(c)
+        ContaPagarResponse.model_validate(c)
         for c in ContaPagarService.listar_parcelamento(db, parcelamento_id)
     ]
 
@@ -131,7 +131,7 @@ def criar_parcelado(
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
-    return [ContaPagarResponse.from_orm(c) for c in contas]
+    return [ContaPagarResponse.model_validate(c) for c in contas]
 
 
 @router.get("/", response_model=list[ContaPagarResponse])
@@ -147,7 +147,7 @@ def listar(
     contas = ContaPagarService.listar(db, skip, limit, loja_id=loja_id)
 
     return [
-        ContaPagarResponse.from_orm(c)
+        ContaPagarResponse.model_validate(c)
         for c in contas
     ]
 
@@ -166,7 +166,7 @@ def listar_pendentes(
     contas = ContaPagarService.listar_pendentes(db, loja_id)
 
     return [
-        ContaPagarResponse.from_orm(c)
+        ContaPagarResponse.model_validate(c)
         for c in contas
     ]
 
@@ -183,7 +183,7 @@ def listar_pagas(
     contas = ContaPagarService.listar_pagas(db)
 
     return [
-        ContaPagarResponse.from_orm(c)
+        ContaPagarResponse.model_validate(c)
         for c in contas
     ]
 
@@ -208,7 +208,7 @@ def atualizar(
             usuario_id=usuario.id,
         )
 
-        return ContaPagarResponse.from_orm(conta)
+        return ContaPagarResponse.model_validate(conta)
 
     except Exception as e:
 
@@ -340,7 +340,7 @@ def pagar(
             dispositivo=dados.dispositivo,
         )
 
-        return ContaPagarResponse.from_orm(conta)
+        return ContaPagarResponse.model_validate(conta)
 
     except Exception as e:
 
@@ -373,7 +373,7 @@ def trocar_comprovante(
             dispositivo=dados.dispositivo,
         )
 
-        return ContaPagarResponse.from_orm(conta)
+        return ContaPagarResponse.model_validate(conta)
 
     except Exception as e:
 
@@ -436,7 +436,7 @@ def cancelar(
                 db, conta_id,
                 usuario_id=usuario.id, dispositivo=dispositivo,
             )
-            return ContaPagarResponse.from_orm(conta)
+            return ContaPagarResponse.model_validate(conta)
 
         AprovacaoService.solicitar(
             db,

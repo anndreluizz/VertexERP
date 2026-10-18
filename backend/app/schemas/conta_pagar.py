@@ -1,10 +1,12 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, condecimal, conint, constr
+from pydantic import condecimal, conint, constr
+
+from app.schemas.base import Schema
 
 
-class ContaPagarBase(BaseModel):
+class ContaPagarBase(Schema):
     data_vencimento: datetime
     valor: Decimal
     descricao: str | None = None
@@ -29,7 +31,7 @@ class ContaPagarCreate(ContaPagarBase):
     documento_tipo: str | None = None
 
 
-class ContaPagarUpdate(BaseModel):
+class ContaPagarUpdate(Schema):
     data_vencimento: datetime | None = None
     valor: Decimal | None = None
     descricao: str | None = None
@@ -47,31 +49,26 @@ class ContaPagarUpdate(BaseModel):
     documento_tipo: str | None = None
 
 
-class ContaPagarResponse(BaseModel):
+class ContaPagarResponse(Schema):
     id: int
 
     data_emissao: datetime
 
     data_vencimento: datetime
 
-    data_pagamento: datetime | None
-
+    data_pagamento: datetime | None = None
     valor: Decimal
 
-    descricao: str | None
-
-    categoria: str | None
-
+    descricao: str | None = None
+    categoria: str | None = None
     centro_custo: str | None = None
 
     plano_conta_id: int | None = None
 
     plano_conta_nome: str | None = None
 
-    observacao: str | None
-
-    numero_boleto: str | None
-
+    observacao: str | None = None
+    numero_boleto: str | None = None
     pix: str | None = None
 
     status: str
@@ -100,9 +97,6 @@ class ContaPagarResponse(BaseModel):
 
     parcela_total: int | None = None
 
-    class Config:
-        orm_mode = True
-
 
 class ContaPagarParceladaCreate(ContaPagarCreate):
     """Boleto parcelado: 'valor' e o valor de UMA parcela e
@@ -115,7 +109,7 @@ class ContaPagarParceladaCreate(ContaPagarCreate):
     vencimentos: list[date] | None = None
 
 
-class ContaRecorrenteCreate(BaseModel):
+class ContaRecorrenteCreate(Schema):
     descricao: constr(min_length=1, max_length=110)
     valor: condecimal(gt=0, decimal_places=2)
     # o dia deste vencimento vira o dia de todo mes
@@ -137,7 +131,7 @@ class ContaRecorrenteCreate(BaseModel):
     documento_tipo: str | None = None
 
 
-class ContaRecorrenteUpdate(BaseModel):
+class ContaRecorrenteUpdate(Schema):
     descricao: constr(min_length=1, max_length=110) | None = None
     valor: condecimal(gt=0, decimal_places=2) | None = None
     dia_vencimento: conint(ge=1, le=31) | None = None
@@ -146,7 +140,7 @@ class ContaRecorrenteUpdate(BaseModel):
     centro_custo: str | None = None
 
 
-class ContaRecorrenteResponse(BaseModel):
+class ContaRecorrenteResponse(Schema):
     id: int
     descricao: str
     valor: Decimal
@@ -158,11 +152,8 @@ class ContaRecorrenteResponse(BaseModel):
     ultima_competencia: date | None = None
     fim_competencia: date | None = None
 
-    class Config:
-        orm_mode = True
 
-
-class PagarContaSchema(BaseModel):
+class PagarContaSchema(Schema):
     # como o pagamento foi feito -- PIX/TRANSFERENCIA/DINHEIRO/CARTAO/
     # BOLETO, mesmos valores de Venda.forma_pagamento.
     forma_pagamento: str | None = None
@@ -178,7 +169,7 @@ class PagarContaSchema(BaseModel):
     dispositivo: str | None = None
 
 
-class TrocarComprovanteSchema(BaseModel):
+class TrocarComprovanteSchema(Schema):
     # troca o comprovante de uma despesa ja paga -- diferente do
     # PagarContaSchema porque aqui o comprovante e obrigatorio (nao faz
     # sentido "trocar" por nada).
@@ -188,7 +179,7 @@ class TrocarComprovanteSchema(BaseModel):
     dispositivo: str | None = None
 
 
-class ContaPagarEventoResponse(BaseModel):
+class ContaPagarEventoResponse(Schema):
     id: int
     tipo: str
     usuario_id: int | None = None
@@ -197,25 +188,22 @@ class ContaPagarEventoResponse(BaseModel):
     detalhes: str | None = None
     data: datetime
 
-    class Config:
-        orm_mode = True
 
-
-class LerBoletoRequest(BaseModel):
+class LerBoletoRequest(Schema):
     """Um dos dois: o código (linha digitável/código de barras, bipado
     ou digitado) ou o PDF do boleto em base64."""
     codigo: str | None = None
     pdf_base64: str | None = None
 
 
-class BoletoJaLancado(BaseModel):
+class BoletoJaLancado(Schema):
     id: int
     descricao: str | None = None
     status: str
     valor: Decimal
 
 
-class ParcelaSugerida(BaseModel):
+class ParcelaSugerida(Schema):
     id: int
     descricao: str | None = None
     parcela_numero: int | None = None
@@ -224,7 +212,7 @@ class ParcelaSugerida(BaseModel):
     data_vencimento: datetime
 
 
-class LerBoletoResponse(BaseModel):
+class LerBoletoResponse(Schema):
     tipo: str | None = None
     linha_digitavel: str | None = None
     codigo_barras: str | None = None

@@ -240,7 +240,7 @@ def revogar_sessao(
 def me(
     usuario=Depends(get_current_user),
 ):
-    return UserResponse.from_orm(usuario)
+    return UserResponse.model_validate(usuario)
 
 
 @router.put("/senha")

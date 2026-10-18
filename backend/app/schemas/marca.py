@@ -1,26 +1,23 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class MarcaCreate(BaseModel):
+class MarcaCreate(Schema):
     nome: str
     descricao: Optional[str] = None
 
 
-class MarcaUpdate(BaseModel):
+class MarcaUpdate(Schema):
     nome: Optional[str] = None
     descricao: Optional[str] = None
     ativo: Optional[bool] = None
 
 
-class MarcaResponse(BaseModel):
+class MarcaResponse(Schema):
     id: int
     nome: str
-    descricao: Optional[str]
+    descricao: Optional[str] = None
     ativo: bool
     criado_em: datetime
-
-    class Config:
-        orm_mode = True

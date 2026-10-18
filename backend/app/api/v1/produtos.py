@@ -245,7 +245,7 @@ def _exigir_permissao_se_mudar_preco(db, usuario, produto_id, dados):
     if atual is None:
         return  # a rota ja devolve 404
 
-    enviados = dados.dict(exclude_unset=True)
+    enviados = dados.model_dump(exclude_unset=True)
 
     mudou_preco = any(
         campo in enviados and enviados[campo] != getattr(atual, campo)

@@ -49,7 +49,7 @@ def criar(
             resolver_loja_id(db, usuario, loja_id),
         )
 
-        return CompraResponse.from_orm(compra)
+        return CompraResponse.model_validate(compra)
 
     except Exception as e:
 
@@ -75,7 +75,7 @@ def importar_nfe_confirmar(
             resolver_loja_id(db, usuario, loja_id),
         )
 
-        return CompraResponse.from_orm(compra)
+        return CompraResponse.model_validate(compra)
 
     except Exception as e:
 
@@ -96,7 +96,7 @@ def listar(
     compras = CompraService.listar(db, skip, limit)
 
     return [
-        CompraResponse.from_orm(c)
+        CompraResponse.model_validate(c)
         for c in compras
     ]
 
@@ -120,7 +120,7 @@ def buscar(
             detail="Compra não encontrada.",
         )
 
-    return CompraResponse.from_orm(compra)
+    return CompraResponse.model_validate(compra)
 
 
 @router.delete("/{compra_id}")

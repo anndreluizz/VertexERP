@@ -1,20 +1,18 @@
-from pydantic import BaseModel
+
+from app.schemas.base import Schema
 
 
-class PerfilCreate(BaseModel):
+class PerfilCreate(Schema):
     nome: str
     permissoes: list[str] = []
 
 
-class PerfilUpdate(BaseModel):
+class PerfilUpdate(Schema):
     nome: str
     permissoes: list[str] = []
 
 
-class PerfilResponse(BaseModel):
+class PerfilResponse(Schema):
     id: int
     nome: str
     permissoes: list[str]
-
-    class Config:
-        orm_mode = True

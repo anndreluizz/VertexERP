@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class LogAuditoriaResponse(BaseModel):
+class LogAuditoriaResponse(Schema):
     id: int
     usuario_id: int | None = None
     usuario_nome: str | None = None
@@ -11,6 +11,3 @@ class LogAuditoriaResponse(BaseModel):
     detalhes: str | None = None
     ip: str | None = None
     data: datetime
-
-    class Config:
-        orm_mode = True

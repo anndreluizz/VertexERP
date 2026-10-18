@@ -1,42 +1,40 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class KpiValor(BaseModel):
+class KpiValor(Schema):
     atual: Decimal
     anterior: Decimal
-    variacao_pct: float | None
-
-
-class VendaPorDia(BaseModel):
+    variacao_pct: float | None = None
+class VendaPorDia(Schema):
     data: str
     total: Decimal
 
 
-class ProdutoMaisVendido(BaseModel):
+class ProdutoMaisVendido(Schema):
     produto: str
     quantidade: int
     total: Decimal
 
 
-class FormaPagamentoTotal(BaseModel):
+class FormaPagamentoTotal(Schema):
     forma_pagamento: str
     quantidade: int
     total: Decimal
 
 
-class VendaResumo(BaseModel):
+class VendaResumo(Schema):
     id: int
     data: datetime
-    cliente: str | None
+    cliente: str | None = None
     valor_total: Decimal
     forma_pagamento: str
     status: str
 
 
-class ComparativoLojaItem(BaseModel):
+class ComparativoLojaItem(Schema):
     loja_id: int
     loja_nome: str
     receita_total: Decimal
@@ -47,14 +45,14 @@ class ComparativoLojaItem(BaseModel):
     custo_incompleto: bool = False
 
 
-class FunilVendasResponse(BaseModel):
+class FunilVendasResponse(Schema):
     suspensas_agora: int
     finalizadas: int
     canceladas: int
     taxa_cancelamento: Decimal
 
 
-class MargemCategoriaItem(BaseModel):
+class MargemCategoriaItem(Schema):
     categoria: str
     receita: Decimal
     lucro: Decimal
@@ -63,51 +61,49 @@ class MargemCategoriaItem(BaseModel):
     custo_incompleto: bool = False
 
 
-class EstoqueCategoriaItem(BaseModel):
+class EstoqueCategoriaItem(Schema):
     categoria: str
     quantidade: int
     valor: Decimal
 
 
-class VendaDiaSemanaItem(BaseModel):
+class VendaDiaSemanaItem(Schema):
     dia_semana: str
     quantidade: int
     total: Decimal
 
 
-class VendaDiaSemanaHoraItem(BaseModel):
+class VendaDiaSemanaHoraItem(Schema):
     dia_semana: str
     hora: int
     quantidade: int
     total: Decimal
 
 
-class GastoCompraMensalItem(BaseModel):
+class GastoCompraMensalItem(Schema):
     mes: str
     total: Decimal
 
 
-class RankingFornecedorItem(BaseModel):
+class RankingFornecedorItem(Schema):
     fornecedor_id: int
     nome: str
     quantidade_compras: int
     total: Decimal
 
 
-class PrazoFornecedorItem(BaseModel):
+class PrazoFornecedorItem(Schema):
     fornecedor_id: int
     nome: str
     prazo_medio_dias: float
     quantidade_parcelas: int
 
 
-class CategoriaSemVendaItem(BaseModel):
+class CategoriaSemVendaItem(Schema):
     categoria: str
-    ultima_venda: datetime | None
-    dias_sem_venda: int | None
-
-
-class CurvaAbcItem(BaseModel):
+    ultima_venda: datetime | None = None
+    dias_sem_venda: int | None = None
+class CurvaAbcItem(Schema):
     produto_id: int
     produto: str
     quantidade: int
@@ -117,7 +113,7 @@ class CurvaAbcItem(BaseModel):
     classe: str
 
 
-class ComparativoEstoqueLojaItem(BaseModel):
+class ComparativoEstoqueLojaItem(Schema):
     loja_id: int
     loja_nome: str
     quantidade_total: int
@@ -125,7 +121,7 @@ class ComparativoEstoqueLojaItem(BaseModel):
     produtos_abaixo_minimo: int
 
 
-class SugestaoReposicaoItem(BaseModel):
+class SugestaoReposicaoItem(Schema):
     produto_id: int
     produto: str
     quantidade_atual: int
@@ -133,7 +129,7 @@ class SugestaoReposicaoItem(BaseModel):
     quantidade_sugerida: int
 
 
-class RelatorioVendasResponse(BaseModel):
+class RelatorioVendasResponse(Schema):
     receita_total: KpiValor
     lucro: KpiValor
     quantidade_vendas: KpiValor

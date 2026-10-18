@@ -2,11 +2,12 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import Field
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import exigir_permissao, loja_para_leitura
 from app.database.session import SessionLocal
+from app.schemas.base import Schema
 from app.services.bi_service import BiService
 from app.services.log_auditoria_service import LogAuditoriaService
 
@@ -40,7 +41,7 @@ def resumo(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-class DinheiroGuardado(BaseModel):
+class DinheiroGuardado(Schema):
     valor: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
 
 

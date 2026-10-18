@@ -1,29 +1,25 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
-
+from app.schemas.base import Schema
 from app.enums.forma_pagamento import FormaPagamento
 
 
-class ItemCompraCreate(BaseModel):
+class ItemCompraCreate(Schema):
     produto_id: int
     quantidade: int
     valor_unitario: Decimal
 
 
-class ItemCompraResponse(BaseModel):
+class ItemCompraResponse(Schema):
     id: int
     produto_id: int
     quantidade: int
     valor_unitario: Decimal
     subtotal: Decimal
 
-    class Config:
-        orm_mode = True
 
-
-class CompraCreate(BaseModel):
+class CompraCreate(Schema):
 
     fornecedor_id: int
 
@@ -38,7 +34,7 @@ class CompraCreate(BaseModel):
     itens: list[ItemCompraCreate]
 
 
-class CompraResponse(BaseModel):
+class CompraResponse(Schema):
 
     id: int
 
@@ -48,17 +44,11 @@ class CompraResponse(BaseModel):
 
     valor_total: Decimal
 
-    observacao: str | None
-
+    observacao: str | None = None
     status: str
 
     forma_pagamento: str
 
-    data_vencimento: datetime | None
-
-    cancelado_em: datetime | None
-
+    data_vencimento: datetime | None = None
+    cancelado_em: datetime | None = None
     itens: list[ItemCompraResponse]
-
-    class Config:
-        orm_mode = True

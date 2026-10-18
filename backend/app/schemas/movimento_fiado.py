@@ -1,10 +1,10 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class MovimentoFiadoBase(BaseModel):
+class MovimentoFiadoBase(Schema):
     cliente_id: int
     venda_id: int | None = None
     tipo: str
@@ -22,7 +22,7 @@ class MovimentoFiadoCreate(MovimentoFiadoBase):
     registrar_venda: bool = False
 
 
-class MovimentoFiadoUpdate(BaseModel):
+class MovimentoFiadoUpdate(Schema):
     # correcao de um lancamento errado -- so valor/descricao, o resto
     # (tipo, cliente, forma de pagamento) nao muda depois de criado.
     valor: Decimal | None = None
@@ -34,16 +34,13 @@ class MovimentoFiadoResponse(MovimentoFiadoBase):
     usuario_id: int
     data: datetime
 
-    class Config:
-        orm_mode = True
 
-
-class SaldoFiadoResponse(BaseModel):
+class SaldoFiadoResponse(Schema):
     cliente_id: int
     saldo: Decimal
 
 
-class FichaFiadoResponse(BaseModel):
+class FichaFiadoResponse(Schema):
     """Visão completa do fiado de um cliente -- saldo já calculado +
     histórico de movimentos, tudo numa chamada só (evita a tela de
     ficha do cliente ter que buscar saldo e movimentos separado)."""
@@ -53,18 +50,15 @@ class FichaFiadoResponse(BaseModel):
     saldo_devedor: Decimal
     movimentos: list[MovimentoFiadoResponse]
 
-    class Config:
-        orm_mode = True
 
-
-class RegistrarPagamentoFiadoRequest(BaseModel):
+class RegistrarPagamentoFiadoRequest(Schema):
     cliente_id: int
     valor: Decimal
     descricao: str | None = None
     data: datetime | None = None
 
 
-class RegistrarCompraFiadoRequest(BaseModel):
+class RegistrarCompraFiadoRequest(Schema):
     cliente_id: int
     valor: Decimal
     descricao: str | None = None

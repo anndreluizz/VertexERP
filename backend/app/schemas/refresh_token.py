@@ -1,17 +1,14 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from app.schemas.base import Schema
 
 
-class RefreshRequest(BaseModel):
+class RefreshRequest(Schema):
     refresh_token: str
 
 
-class SessaoResponse(BaseModel):
+class SessaoResponse(Schema):
     id: int
-    dispositivo: str | None
+    dispositivo: str | None = None
     criado_em: datetime
     ultimo_uso_em: datetime
-
-    class Config:
-        orm_mode = True

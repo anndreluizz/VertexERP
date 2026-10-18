@@ -9,7 +9,7 @@ from services.cliente_service import listar_clientes, reativar_cliente
 from services.loja_service import listar_lojas
 from services.movimento_fiado_service import listar_movimentos
 from services.venda_service import listar_vendas
-from services import cliente_analise
+from services import api, cliente_analise
 
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QShortcut, QKeySequence, QPainter, QColor
@@ -662,7 +662,12 @@ class Clientes(QWidget):
             resumo_layout.addWidget(card, 0, coluna)
             resumo_layout.setColumnStretch(coluna, 1)
 
-        layout.addLayout(resumo_layout)
+        # Vendedor ve o saldo de cada cliente, nao o total da loja
+        if api.usuario_tem_permissao("financeiro.ver"):
+            layout.addLayout(resumo_layout)
+        else:
+            for coluna in range(resumo_layout.count()):
+                resumo_layout.itemAt(coluna).widget().hide()
 
         # ======================
         # BUSCA + FILTRO

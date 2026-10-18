@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/providers.dart';
+
 import '../../core/privacidade.dart';
 import '../../theme/componentes.dart';
 import '../../theme/lista_agrupada.dart';
@@ -77,10 +79,14 @@ class _ClientesScreenState extends ConsumerState<ClientesScreen> {
           children: [
             CabecalhoTela(
               titulo: 'Clientes',
-              subtitulo: dadosAsync.hasValue
+              // Vendedor ve o saldo de cada cliente, nao o total da loja
+              subtitulo: !dadosAsync.hasValue
+                  ? null
+                  : (ref.watch(sessaoControllerProvider).usuario?.financeiro ??
+                        true)
                   ? '${todos.length} cadastrados · '
                         '${moedaTela(totalFiado)} no fiado'
-                  : null,
+                  : '${todos.length} cadastrados',
               acao: BotaoIcone(
                 icone: Icons.sort_rounded,
                 dica: 'Ordenar: ${_ordem.rotulo}',

@@ -23,7 +23,7 @@ MESES_SERIE = 6
 
 # o que o Vendedor (sem financeiro.ver) recebe zerado no resumo
 _CHAVES_FINANCEIRAS = (
-    "compras_hoje", "contas_receber", "total_fiado_devedor", "contas_pagar",
+    "compras_hoje", "saldo_caixa", "contas_receber", "total_fiado_devedor", "contas_pagar",
     "contas_vencidas_qtd", "contas_vencidas_valor",
     "contas_vencendo_hoje_qtd", "contas_vencendo_hoje_valor",
     "contas_pagas_hoje_qtd", "contas_pagas_hoje_valor",

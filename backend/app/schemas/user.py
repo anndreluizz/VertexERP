@@ -22,6 +22,8 @@ class UserUpdate(BaseModel):
     admin: bool | None = None
     dois_fatores_ativo: bool | None = None
     perfil_id: int | None = None
+    # loja de origem: preso a ela (ver resolver_loja_id); None = todas
+    loja_id: int | None = None
 
 
 class UserAdminUpdate(BaseModel):

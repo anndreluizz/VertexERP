@@ -32,7 +32,7 @@ ARQUIVO_LOG = "atualizacao_log.txt"
 PASTA_ATUALIZACOES = "atualizacoes"
 
 ESPERA_INICIAL_SEGUNDOS = 5 * 60
-INTERVALO_SEGUNDOS = 6 * 60 * 60
+INTERVALO_SEGUNDOS = 60 * 60
 
 # CREATE_NO_WINDOW, nao DETACHED_PROCESS: powershell sem console nenhum
 # (DETACHED) sai na hora com codigo 0 sem rodar o script

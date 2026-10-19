@@ -45,6 +45,18 @@ def get_db():
         db.close()
 
 
+def _venda_visivel(db, usuario, venda_id):
+    """A venda, se o usuario pode ve-la -- vendedor (sem financeiro.ver)
+    so' as proprias, igual a listagem. Senao 404 (nem confirma que existe)."""
+    venda = VendaService.buscar(db, venda_id)
+    if venda and (
+        venda.usuario_id == usuario.id
+        or usuario_tem_permissao(db, usuario, "financeiro.ver")
+    ):
+        return venda
+    raise HTTPException(status_code=404, detail="Venda não encontrada")
+
+
 @router.get("/", response_model=list[VendaResponse])
 def listar(
     skip: int = Query(0, ge=0),
@@ -96,15 +108,7 @@ def buscar(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    venda = VendaService.buscar(db, venda_id)
-
-    if not venda:
-        raise HTTPException(
-            status_code=404,
-            detail="Venda não encontrada"
-        )
-
-    return venda
+    return _venda_visivel(db, usuario, venda_id)
 
 
 @router.post("/", response_model=VendaResponse, status_code=201)
@@ -169,6 +173,7 @@ def listar_devolucoes(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    _venda_visivel(db, usuario, venda_id)
     return DevolucaoService.listar_da_venda(db, venda_id)
 
 
@@ -230,6 +235,7 @@ def obter_comprovante(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    _venda_visivel(db, usuario, venda_id)
     try:
         return VendaService.montar_comprovante(db, venda_id)
     except Exception as e:
@@ -245,6 +251,7 @@ def listar_envios_comprovante(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    _venda_visivel(db, usuario, venda_id)
     envios = ComprovanteEnvioService.listar_por_venda(db, venda_id)
 
     return [
@@ -269,10 +276,7 @@ def enviar_comprovante_whatsapp(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    venda = VendaService.buscar(db, venda_id)
-
-    if not venda:
-        raise HTTPException(status_code=404, detail="Venda não encontrada.")
+    venda = _venda_visivel(db, usuario, venda_id)
 
     cliente = (
         db.query(Cliente).filter(Cliente.id == venda.cliente_id).first()
@@ -312,10 +316,7 @@ def enviar_comprovante_email(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
-    venda = VendaService.buscar(db, venda_id)
-
-    if not venda:
-        raise HTTPException(status_code=404, detail="Venda não encontrada.")
+    venda = _venda_visivel(db, usuario, venda_id)
 
     cliente = (
         db.query(Cliente).filter(Cliente.id == venda.cliente_id).first()

@@ -31,3 +31,12 @@ def test_versao_local(tmp_path):
     assert at.versao_local(str(tmp_path)) == "0"
     (tmp_path / "versao.txt").write_text("2026.10.15.11\n", encoding="utf-8")
     assert at.versao_local(str(tmp_path)) == "2026.10.15.11"
+
+
+def test_script_da_troca_nao_roda_dentro_da_pasta_trocada(tmp_path, monkeypatch):
+    # com cwd herdado dentro de VertexERP-Frontend o Rename-Item falha ("em uso")
+    chamada = {}
+    monkeypatch.setattr(at, "raiz_terminal", lambda: str(tmp_path))
+    monkeypatch.setattr(at.subprocess, "Popen", lambda *a, **kw: chamada.update(kw))
+    at.iniciar_troca("trocar.ps1", "nova", "2026.10.19.28")
+    assert chamada["cwd"] and not chamada["cwd"].startswith(str(tmp_path))

@@ -245,6 +245,10 @@ class Dashboard(QWidget):
         # Estoque, Caixa) + a linha de ações rápidas, que repetia parte
         # deles ("Nova venda" = "Abrir PDV"). Juntos ocupavam ~280px
         # antes do primeiro número da tela.
+        # Vendedor (sem financeiro.ver): o backend ja' manda so' as vendas
+        # e o caixa dele -- aqui so' muda o rotulo e tira lucro/despesa
+        # (antes das acoes rapidas, que tambem usam)
+        self._financeiro = usuario_tem_permissao("financeiro.ver")
         self.layout_principal.addWidget(self._construir_acoes_rapidas())
 
         # ======================
@@ -257,9 +261,6 @@ class Dashboard(QWidget):
         for coluna in range(4):
             self.grid_kpi.setColumnStretch(coluna, 1)
 
-        # Vendedor (sem financeiro.ver): o backend ja' manda so' as vendas
-        # e o caixa dele -- aqui so' muda o rotulo e tira lucro/despesa
-        self._financeiro = usuario_tem_permissao("financeiro.ver")
         self.kpi_faturamento = CardKPI(
             "Faturamento Hoje" if self._financeiro else "Minhas vendas hoje",
             "dollar-sign", tokens.PRIMARIA, destaque=True

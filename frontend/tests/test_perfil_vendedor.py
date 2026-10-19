@@ -59,3 +59,13 @@ def test_tela_caixa_do_vendedor_esconde_saldo_e_conferencia(_qapp, monkeypatch):
     assert tela.lbl_total_previsto.isHidden()
     assert tela.bt_caixas_anteriores.isHidden()
     assert not tela.bt_sangria.isHidden() and not tela.bt_suprimento.isHidden()
+
+
+def test_dashboard_abre_para_admin_e_vendedor(_qapp, monkeypatch):
+    # 19/10: _financeiro era lido antes de existir e o programa nao abria
+    from telas.dashboard import Dashboard
+
+    monkeypatch.setattr(Dashboard, "carregar", lambda self: None)
+    for info in ({"admin": True}, {"admin": False, "permissoes": []}):
+        monkeypatch.setattr(api, "_INFO_USUARIO_CACHE", info)
+        Dashboard(usuario_id=1)

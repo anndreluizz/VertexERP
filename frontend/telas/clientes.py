@@ -93,12 +93,13 @@ def _buscar_dados_clientes(loja_id):
     # senao a Filial via os recebimentos da Matriz somados aos dela.
     loja_recebido = loja_id if loja_id is not None else carregar_loja_id()
 
-    clientes, movimentos_fiado, vendas, entradas = em_paralelo(
-        (listar_clientes, loja_id),
-        (listar_movimentos,),
-        (listar_vendas,),
-        (entradas_caixa, None, None, loja_recebido),
-    )
+    # vendedor nao ve o card (nem pode: /caixa/entradas e' 403 pra ele,
+    # e o 403 derrubava a tela inteira de Clientes)
+    chamadas = [(listar_clientes, loja_id), (listar_movimentos,), (listar_vendas,)]
+    if api.usuario_tem_permissao("financeiro.ver"):
+        chamadas.append((entradas_caixa, None, None, loja_recebido))
+    clientes, movimentos_fiado, vendas, *resto = em_paralelo(*chamadas)
+    entradas = resto[0] if resto else {}
 
     movimentos_por_cliente = {}
     for mov in movimentos_fiado:

@@ -294,3 +294,29 @@ def test_lista_paginada_ordena_pelo_id_no_mesmo_vencimento(client, auth_headers)
     ]
 
     assert [c["id"] for pagina in paginas for c in pagina] == sorted(ids)
+
+
+def test_aviso_diario_inclui_boleto_que_vence_hoje(db, monkeypatch):
+    # 19/10: o boleto do dia nao avisava (so' vencidas e amanha)
+    from datetime import datetime, timedelta
+
+    from app.models.conta_pagar import ContaPagar
+    from app.services import aviso_vencimento_service
+    from app.services.notificacao_service import NotificacaoService
+
+    agora = datetime.now()
+    for dias, valor in ((-1, 10), (0, 796.25), (1, 30)):
+        db.add(ContaPagar(descricao="Boleto", valor=valor, data_vencimento=agora + timedelta(days=dias)))
+    db.commit()
+
+    avisos = {}
+    monkeypatch.setattr(
+        NotificacaoService, "enviar_para_admins",
+        lambda db, titulo, corpo, **kw: avisos.update({titulo: corpo}),
+    )
+
+    aviso_vencimento_service.verificar_vencimentos_e_notificar(db)
+
+    assert avisos["Contas vencendo hoje"] == "1 conta(s) vencendo hoje — R$ 796,25"
+    assert avisos["Contas vencidas"] == "1 conta(s) vencida(s) — R$ 10,00"
+    assert avisos["Contas vencendo amanhã"] == "1 conta(s) vencendo amanhã — R$ 30,00"

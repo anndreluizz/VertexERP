@@ -129,3 +129,14 @@ def test_vendedor_nao_ve_resumo_do_caixa_de_outro(client, db, caixa_aberto, auth
     rota = f"/caixa/{caixa_aberto.id}/resumo"
     assert client.get(rota, headers=auth_headers_comum).status_code == 404
     assert client.get(rota, headers=auth_headers).status_code == 200
+
+
+def test_vendedor_nao_abre_venda_de_outro_pelo_id(client, db, usuario, usuario_comum, auth_headers_comum, auth_headers):
+    _venda(db, usuario.id, 100)
+    _venda(db, usuario_comum.id, 30)
+    da_loja, minha = [v.id for v in db.query(Venda).order_by(Venda.id)]
+
+    for sufixo in ("", "/comprovante", "/comprovante-envios", "/devolucoes"):
+        assert client.get(f"/vendas/{da_loja}{sufixo}", headers=auth_headers_comum).status_code == 404
+        assert client.get(f"/vendas/{minha}{sufixo}", headers=auth_headers_comum).status_code == 200
+        assert client.get(f"/vendas/{da_loja}{sufixo}", headers=auth_headers).status_code == 200

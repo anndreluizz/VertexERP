@@ -158,3 +158,22 @@ def test_resumo_separa_fiado_por_forma(client, auth_headers, cliente, caixa_aber
     saldo_inicial = float(caixa_aberto.saldo_inicial)
     assert float(resumo["total_previsto"]) == saldo_inicial + 10.0
     assert float(resumo["total_geral"]) == saldo_inicial + 60.0
+
+
+def test_abrir_e_fechar_caixa_avisa_tambem_quem_fez(client, auth_headers, usuario, monkeypatch):
+    # 19/10: o dono abre/fecha no PC e quer o aviso (com o valor) no celular
+    from app.services.notificacao_service import NotificacaoService
+
+    enviados = []
+    monkeypatch.setattr(
+        NotificacaoService, "enviar",
+        lambda tokens, titulo, corpo, dados=None: enviados.append((titulo, corpo)),
+    )
+
+    client.post("/caixa/abrir", json={"saldo_inicial": 100}, headers=auth_headers)
+    client.post("/caixa/fechar", json={}, headers=auth_headers)
+
+    notificacoes = client.get("/notificacoes/?skip=0&limit=10", headers=auth_headers).json()
+    titulos = [n["titulo"] for n in notificacoes]
+    assert "Caixa aberto" in titulos and "Caixa fechado" in titulos
+    assert "100" in enviados[0][1]

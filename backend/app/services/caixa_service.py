@@ -48,7 +48,6 @@ class CaixaService:
             "Caixa aberto",
             f"{operador.nome if operador else 'Um operador'} abriu um "
             f"caixa com R$ {dados.saldo_inicial:.2f} de troco inicial.",
-            excluir_usuario_id=usuario_id,
         )
 
         return novo
@@ -95,7 +94,6 @@ class CaixaService:
             "Caixa fechado",
             f"{operador.nome if operador else 'Um operador'} fechou o "
             f"caixa com R$ {caixa.saldo_final:.2f} em caixa.",
-            excluir_usuario_id=usuario_id,
         )
 
         return caixa

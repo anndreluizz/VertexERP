@@ -29,7 +29,7 @@ def _moeda(valor: float) -> str:
 
 def verificar_vencimentos_e_notificar(db) -> None:
     """Um push resumido (nao um por despesa, pra nao floodar o
-    gerente) quando ha contas vencidas ou vencendo amanha. Pensada pra
+    gerente) quando ha contas vencidas, vencendo hoje ou amanha. Pensada pra
     rodar uma vez por dia (ver iniciar_verificacao_diaria)."""
 
     # contas fixas do mes: cria aqui tambem, pra elas entrarem no aviso
@@ -41,45 +41,29 @@ def verificar_vencimentos_e_notificar(db) -> None:
     hoje = date.today()
     amanha = hoje + timedelta(days=1)
 
-    vencidas_qtd, vencidas_valor = (
-        db.query(
-            func.count(ContaPagar.id),
-            func.coalesce(func.sum(ContaPagar.valor), 0),
-        )
-        .filter(
-            ContaPagar.status == StatusContaPagar.PENDENTE.value,
-            func.date(ContaPagar.data_vencimento) < hoje,
-        )
-        .one()
-    )
+    dia = func.date(ContaPagar.data_vencimento)
+    avisos = [
+        (dia < hoje, "Contas vencidas", "vencida(s)"),
+        (dia == hoje, "Contas vencendo hoje", "vencendo hoje"),
+        (dia == amanha, "Contas vencendo amanhã", "vencendo amanhã"),
+    ]
 
-    if vencidas_qtd:
-        NotificacaoService.enviar_para_admins(
-            db,
-            "Contas vencidas",
-            f"{vencidas_qtd} conta(s) vencida(s) — "
-            f"{_moeda(float(vencidas_valor))}",
+    for filtro, titulo, texto in avisos:
+        qtd, valor = (
+            db.query(
+                func.count(ContaPagar.id),
+                func.coalesce(func.sum(ContaPagar.valor), 0),
+            )
+            .filter(ContaPagar.status == StatusContaPagar.PENDENTE.value, filtro)
+            .one()
         )
 
-    vencendo_qtd, vencendo_valor = (
-        db.query(
-            func.count(ContaPagar.id),
-            func.coalesce(func.sum(ContaPagar.valor), 0),
-        )
-        .filter(
-            ContaPagar.status == StatusContaPagar.PENDENTE.value,
-            func.date(ContaPagar.data_vencimento) == amanha,
-        )
-        .one()
-    )
-
-    if vencendo_qtd:
-        NotificacaoService.enviar_para_admins(
-            db,
-            "Contas vencendo amanhã",
-            f"{vencendo_qtd} conta(s) vencendo amanhã — "
-            f"{_moeda(float(vencendo_valor))}",
-        )
+        if qtd:
+            NotificacaoService.enviar_para_admins(
+                db,
+                titulo,
+                f"{qtd} conta(s) {texto} — {_moeda(float(valor))}",
+            )
 
     # luz e parecidas: valor copiado do mes anterior que ninguem confirmou
     a_confirmar = (

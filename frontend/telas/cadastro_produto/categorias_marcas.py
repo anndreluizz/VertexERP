@@ -42,6 +42,7 @@ class CategoriasMarcasMixin:
         rodar_em_thread(
             self,
             listar_categorias,
+            True,
             ao_sucesso=self._ao_carregar_categorias_sucesso,
         )
 

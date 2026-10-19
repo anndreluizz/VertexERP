@@ -27,8 +27,8 @@ class CategoriaService:
         return CategoriaRepository.criar(db, nova_categoria)
 
     @staticmethod
-    def listar(db: Session, skip: int = 0, limit: int = 100):
-        return CategoriaRepository.listar(db, skip, limit)
+    def listar(db: Session, skip: int = 0, limit: int = 100, recentes: bool = False):
+        return CategoriaRepository.listar(db, skip, limit, recentes)
 
     @staticmethod
     def buscar_por_id(db: Session, categoria_id: int):

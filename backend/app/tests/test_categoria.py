@@ -88,3 +88,27 @@ def test_excluir_categoria(client, auth_headers):
     listagem = client.get("/categorias/", headers=auth_headers)
 
     assert listagem.json() == []
+
+
+def test_recentes_poe_a_ultima_categoria_usada_primeiro(client, auth_headers, db):
+    from app.models.produto import Produto
+
+    for nome in ("Bolsas", "Calcados", "Roupas", "Nunca usada"):
+        client.post("/categorias/", json={"nome": nome}, headers=auth_headers)
+
+    def cadastrar(codigo, categoria):
+        db.add(Produto(codigo=codigo, nome=codigo, categoria=categoria, unidade="UN",
+                       preco_custo=1, preco_venda=2, estoque=0, estoque_minimo=0, ativo=True))
+        db.commit()
+
+    def ordem(query=""):
+        return [c["nome"] for c in client.get(f"/categorias/{query}", headers=auth_headers).json()]
+
+    cadastrar("A1", "Roupas")
+    cadastrar("A2", "CALCADOS")  # o celular manda em maiusculas
+    assert ordem("?recentes=true")[:2] == ["Calcados", "Roupas"]
+
+    cadastrar("A3", "Roupas")  # alterna conforme o uso
+    assert ordem("?recentes=true")[:2] == ["Roupas", "Calcados"]
+    assert ordem("?recentes=true")[-1] == "Nunca usada"
+    assert ordem() == ["Bolsas", "Calcados", "Roupas", "Nunca usada"]  # sem o parametro, igual antes

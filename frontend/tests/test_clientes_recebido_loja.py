@@ -1,8 +1,10 @@
 """Clientes: card "Recebido de fiado" so' da loja (combo ou terminal)."""
+from services import api
 from telas import clientes
 
 
-def _rodar(monkeypatch, loja_combo, loja_terminal):
+def _rodar(monkeypatch, loja_combo, loja_terminal, info={"admin": True}):
+    monkeypatch.setattr(api, "_INFO_USUARIO_CACHE", info)
     pedidos = []
 
     def entradas(inicio, fim, loja_id):
@@ -18,7 +20,7 @@ def _rodar(monkeypatch, loja_combo, loja_terminal):
     monkeypatch.setattr(clientes, "carregar_loja_id", lambda: loja_terminal)
 
     recebido = clientes._buscar_dados_clientes(loja_combo)[3]
-    return recebido, pedidos[0]
+    return recebido, (pedidos[0] if pedidos else None)
 
 
 def test_sem_combo_usa_loja_do_terminal(monkeypatch):
@@ -27,3 +29,8 @@ def test_sem_combo_usa_loja_do_terminal(monkeypatch):
 
 def test_combo_escolhido_prevalece(monkeypatch):
     assert _rodar(monkeypatch, 1, 2) == (30.0, 1)
+
+
+def test_vendedor_carrega_sem_pedir_as_entradas_do_caixa(monkeypatch):
+    # 19/10: /caixa/entradas e' 403 pro vendedor e derrubava a tela
+    assert _rodar(monkeypatch, None, 2, {"admin": False, "permissoes": []}) == (0.0, None)

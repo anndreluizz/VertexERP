@@ -93,12 +93,13 @@ def _buscar_dados_clientes(loja_id):
     # senao a Filial via os recebimentos da Matriz somados aos dela.
     loja_recebido = loja_id if loja_id is not None else carregar_loja_id()
 
-    clientes, movimentos_fiado, vendas, entradas = em_paralelo(
-        (listar_clientes, loja_id),
-        (listar_movimentos,),
-        (listar_vendas,),
-        (entradas_caixa, None, None, loja_recebido),
-    )
+    # vendedor nao ve o card (nem pode: /caixa/entradas e' 403 pra ele,
+    # e o 403 derrubava a tela inteira de Clientes)
+    chamadas = [(listar_clientes, loja_id), (listar_movimentos,), (listar_vendas,)]
+    if api.usuario_tem_permissao("financeiro.ver"):
+        chamadas.append((entradas_caixa, None, None, loja_recebido))
+    clientes, movimentos_fiado, vendas, *resto = em_paralelo(*chamadas)
+    entradas = resto[0] if resto else {}
 
     movimentos_por_cliente = {}
     for mov in movimentos_fiado:
@@ -771,7 +772,23 @@ class Clientes(QWidget):
         """)
         barra_ordenacao.addWidget(self.lbl_contagem)
 
-        layout.addLayout(barra_ordenacao)
+        # 8 filtros com contagem de 3 digitos passam de 1600px e a linha
+        # nao quebra: sem rolagem ela empurrava a janela pra fora da tela
+        faixa_filtros = QWidget()
+        faixa_filtros.setStyleSheet("background:transparent;")
+        barra_ordenacao.setContentsMargins(0, 0, 0, 0)
+        faixa_filtros.setLayout(barra_ordenacao)
+        rolagem_filtros = QScrollArea()
+        rolagem_filtros.setWidget(faixa_filtros)
+        rolagem_filtros.setWidgetResizable(True)
+        rolagem_filtros.setFrameShape(QFrame.NoFrame)
+        rolagem_filtros.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        rolagem_filtros.setStyleSheet("QScrollArea { border:none; background:transparent; }")
+        rolagem_filtros.setFixedHeight(
+            faixa_filtros.sizeHint().height()
+            + rolagem_filtros.horizontalScrollBar().sizeHint().height()
+        )
+        layout.addWidget(rolagem_filtros)
 
         # ======================
         # GRID DE CLIENTES

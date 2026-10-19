@@ -1,9 +1,10 @@
 from services.api import get, post, put, delete
 
 
-def listar_categorias():
+def listar_categorias(recentes=False):
 
-    response = get("/categorias/")
+    # recentes: a usada por ultimo primeiro (cadastro de produto)
+    response = get("/categorias/?recentes=true" if recentes else "/categorias/")
 
     if response.status_code != 200:
         return []

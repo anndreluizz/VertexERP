@@ -66,11 +66,12 @@ class _CadastroProdutoScreenState extends ConsumerState<CadastroProdutoScreen> {
       final resposta = await ref
           .read(apiClientProvider)
           .dio
-          .get('/categorias/');
+          .get('/categorias/', queryParameters: {'recentes': true});
+      // a usada por ultimo primeiro (ordem vem do servidor)
       final nomes = [
         for (final c in resposta.data as List<dynamic>)
           if (c['ativo'] == true) c['nome'] as String,
-      ]..sort();
+      ];
       if (mounted) setState(() => _categorias = nomes);
     } catch (_) {
       // sem a lista ainda da' pra digitar a categoria

@@ -38,10 +38,11 @@ def criar_categoria(
 
 @router.get("/", response_model=list[CategoriaResponse])
 def listar_categorias(
+    recentes: bool = False,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user)
 ):
-    return CategoriaService.listar(db)
+    return CategoriaService.listar(db, recentes=recentes)
 
 
 @router.get("/{categoria_id}", response_model=CategoriaResponse)

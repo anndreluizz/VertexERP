@@ -144,4 +144,7 @@ def iniciar_troca(script, destino, versao):
         ],
         creationflags=CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP,
         close_fds=True,
+        # fora da pasta do Vertex: herdando ela, o proprio script a deixa
+        # "em uso" e o Rename-Item da troca falha sempre
+        cwd=tempfile.gettempdir(),
     )

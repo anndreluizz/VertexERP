@@ -11,6 +11,7 @@ import '../../theme/vertex_colors.dart';
 import '../financeiro/escolher_anexo.dart';
 import '../financeiro/financeiro_provider.dart' show AnexoEscolhido;
 import 'estoque_provider.dart';
+import 'somar_estoque.dart';
 
 /// Novo produto pelo celular: o essencial do cartao "Principal" do
 /// Desktop (codigo, nome, categoria, precos, estoque) + foto. Codigo
@@ -34,6 +35,7 @@ class _CadastroProdutoScreenState extends ConsumerState<CadastroProdutoScreen> {
   List<String> _categorias = const [];
   AnexoEscolhido? _foto;
   bool _enviando = false;
+  String? _conferido;
 
   Map<String, dynamic>? get _comLoja {
     final lojaId = ref.read(lojaFiltroProvider);
@@ -96,7 +98,9 @@ class _CadastroProdutoScreenState extends ConsumerState<CadastroProdutoScreen> {
   /// de barras -- a mesma busca do Desktop).
   Future<void> _conferirCodigo() async {
     final codigo = _codigo.text.trim();
-    if (codigo.isEmpty) return;
+    // Enter e sair do campo chegam juntos: confere cada codigo uma vez
+    if (codigo.isEmpty || codigo == _conferido) return;
+    _conferido = codigo;
 
     final Map<String, dynamic> produto;
     try {
@@ -110,53 +114,29 @@ class _CadastroProdutoScreenState extends ConsumerState<CadastroProdutoScreen> {
       produto = resposta.data as Map<String, dynamic>;
     } on DioException catch (e) {
       // servidor respondeu "nao achei" = produto novo, segue o cadastro
-      if (e.response == null && mounted) {
-        _avisar('Sem conexão com o servidor para conferir o código.');
+      if (e.response == null) {
+        _conferido = null; // sem conexao: tenta de novo na proxima
+        if (mounted) {
+          _avisar('Sem conexão com o servidor para conferir o código.');
+        }
       }
       return;
     }
     if (!mounted) return;
 
-    final quantidade = await showDialog<int>(
-      context: context,
-      builder: (_) => _SomarEstoqueDialog(produto: produto),
+    await somarAoEstoque(
+      context,
+      ref,
+      id: produto['id'] as int,
+      nome: produto['nome'] as String,
+      codigo: produto['codigo'] as String,
+      estoque: produto['estoque'] as int,
+      titulo: 'Produto já cadastrado',
+      motivo: 'Entrada pelo cadastro de produto (app)',
     );
     if (!mounted) return;
-
-    if (quantidade != null) {
-      try {
-        await ref
-            .read(apiClientProvider)
-            .dio
-            .post(
-              '/estoque/movimentos',
-              queryParameters: _comLoja,
-              data: {
-                'produto_id': produto['id'],
-                'tipo': 'ENTRADA',
-                'quantidade': quantidade,
-                'motivo': 'Entrada pelo cadastro de produto (app)',
-              },
-            );
-        ref.invalidate(produtosProvider);
-        if (mounted) {
-          _avisar(
-            '+$quantidade em ${produto['nome']} '
-            '(agora ${(produto['estoque'] as int) + quantidade}).',
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          _avisar(
-            mensagemDeErro(
-              e,
-              fallback: 'Não foi possível adicionar ao estoque.',
-            ),
-          );
-        }
-      }
-    }
     _codigo.clear();
+    _conferido = null;
   }
 
   /// "12,50" e "1.234,50" (teclado BR) e "12.50" (teclado US).
@@ -233,16 +213,23 @@ class _CadastroProdutoScreenState extends ConsumerState<CadastroProdutoScreen> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            TextField(
-              controller: _codigo,
-              textInputAction: TextInputAction.next,
-              onSubmitted: (_) => _conferirCodigo(),
-              decoration: _campo('Código de barras').copyWith(
-                helperText: 'Vazio = o sistema gera um código interno',
-                suffixIcon: IconButton(
-                  tooltip: 'Ler com a câmera',
-                  icon: const Icon(Icons.qr_code_scanner),
-                  onPressed: _lerCodigo,
+            Focus(
+              // quem digita o codigo e vai direto pro nome nao aperta
+              // Enter: confere ao sair do campo tambem
+              onFocusChange: (focado) {
+                if (!focado) _conferirCodigo();
+              },
+              child: TextField(
+                controller: _codigo,
+                textInputAction: TextInputAction.next,
+                onSubmitted: (_) => _conferirCodigo(),
+                decoration: _campo('Código de barras').copyWith(
+                  helperText: 'Vazio = o sistema gera um código interno',
+                  suffixIcon: IconButton(
+                    tooltip: 'Ler com a câmera',
+                    icon: const Icon(Icons.qr_code_scanner),
+                    onPressed: _lerCodigo,
+                  ),
                 ),
               ),
             ),
@@ -325,64 +312,6 @@ class _CadastroProdutoScreenState extends ConsumerState<CadastroProdutoScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _SomarEstoqueDialog extends StatefulWidget {
-  const _SomarEstoqueDialog({required this.produto});
-
-  final Map<String, dynamic> produto;
-
-  @override
-  State<_SomarEstoqueDialog> createState() => _SomarEstoqueDialogState();
-}
-
-class _SomarEstoqueDialogState extends State<_SomarEstoqueDialog> {
-  final _quantidade = TextEditingController(text: '1');
-
-  @override
-  void dispose() {
-    _quantidade.dispose();
-    super.dispose();
-  }
-
-  void _confirmar() {
-    final n = int.tryParse(_quantidade.text.trim());
-    if (n != null && n > 0) Navigator.of(context).pop(n);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = widget.produto;
-    return AlertDialog(
-      title: const Text('Produto já cadastrado'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${p['nome']} (código ${p['codigo']}, '
-            'estoque atual ${p['estoque']}).\n\n'
-            'Quantas unidades adicionar ao estoque?',
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _quantidade,
-            autofocus: true,
-            keyboardType: TextInputType.number,
-            onSubmitted: (_) => _confirmar(),
-            decoration: const InputDecoration(border: OutlineInputBorder()),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(onPressed: _confirmar, child: const Text('Adicionar')),
-      ],
     );
   }
 }

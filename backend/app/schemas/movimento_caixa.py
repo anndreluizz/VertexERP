@@ -19,4 +19,5 @@ class MovimentoCaixaResponse(MovimentoCaixaBase):
     caixa_id: int
     usuario_id: int
     venda_id: int | None = None
+    forma_pagamento: str | None = None
     data: datetime

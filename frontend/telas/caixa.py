@@ -39,6 +39,7 @@ from design.privacidade import botao_olho, privacidade
 from design.widgets import Badge, BotaoSecundario, BotaoSucesso
 from services.worker import rodar_em_thread, em_paralelo
 from services import api
+from telas.relatorios import NOMES_FORMA_PAGAMENTO
 from utils.formatacao import formatar_moeda
 
 
@@ -48,6 +49,9 @@ _INFO_TIPO_MOVIMENTO = {
     "SANGRIA": ("Sangria", "erro"),
     "RECEBIMENTO_FIADO": ("Recebimento fiado", "sucesso"),
     "ESTORNO": ("Estorno", "alerta"),
+    # venda/estorno no fiado (forma PRAZO) nao mexem no dinheiro do caixa
+    "VENDA_FIADO": ("Venda fiado", "neutro"),
+    "ESTORNO_FIADO": ("Fiado cancelado", "neutro"),
     "PAGAMENTO": ("Conta paga", "erro"),
 }
 
@@ -84,11 +88,33 @@ def _texto_abertura(texto):
     return f"Aberto em {dt.strftime('%d/%m')} às {hora}"
 
 
+_TIPOS_SO_FIADO = ("VENDA_FIADO", "ESTORNO_FIADO")
+
+
+def _tipo_exibido(mov):
+    tipo = mov.get("tipo", "")
+    if mov.get("forma_pagamento") == "PRAZO" and tipo in ("VENDA", "ESTORNO"):
+        return tipo + "_FIADO"
+    return tipo
+
+
+def _descricao_movimento(mov, tipo_exibido):
+    descricao = mov.get("descricao") or ""
+    # "Estorno da venda #146" -> "Venda #146 cancelada": liga o estorno a' venda
+    if descricao.startswith("Estorno da venda "):
+        descricao = f"Venda {descricao[len('Estorno da venda '):]} cancelada"
+    if tipo_exibido in _TIPOS_SO_FIADO:
+        descricao += " · não mexe no dinheiro do caixa"
+    return descricao
+
+
 def _cor_valor_movimento(tipo):
     if tipo in ("SUPRIMENTO", "VENDA", "RECEBIMENTO_FIADO"):
         return tokens.SECUNDARIA_HOVER
     if tipo in ("SANGRIA", "ESTORNO"):
         return tokens.ERRO
+    if tipo in _TIPOS_SO_FIADO:
+        return tokens.TEXTO_SECUNDARIO
     return tokens.TEXTO
 
 
@@ -442,17 +468,18 @@ class Caixa(QWidget):
         col_historico.addLayout(historico_cabecalho)
 
         self.tabela_movimentos = QTableWidget()
-        self.tabela_movimentos.setColumnCount(4)
+        self.tabela_movimentos.setColumnCount(5)
         self.tabela_movimentos.setHorizontalHeaderLabels(
-            ["Data e hora", "Tipo", "Valor", "Descrição"]
+            ["Data e hora", "Tipo", "Forma", "Valor", "Descrição"]
         )
         cab = self.tabela_movimentos.horizontalHeader()
         cab.setSectionResizeMode(QHeaderView.Interactive)
-        cab.setSectionResizeMode(3, QHeaderView.Stretch)
+        cab.setSectionResizeMode(4, QHeaderView.Stretch)
         cab.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.tabela_movimentos.setColumnWidth(0, 140)
-        self.tabela_movimentos.setColumnWidth(1, 160)
-        self.tabela_movimentos.setColumnWidth(2, 130)
+        self.tabela_movimentos.setColumnWidth(1, 180)
+        self.tabela_movimentos.setColumnWidth(2, 100)
+        self.tabela_movimentos.setColumnWidth(3, 130)
         self.tabela_movimentos.verticalHeader().setVisible(False)
         self.tabela_movimentos.verticalHeader().setDefaultSectionSize(44)
         self.tabela_movimentos.setAlternatingRowColors(True)
@@ -728,13 +755,18 @@ class Caixa(QWidget):
             reverse=True,
         )
 
+        # zera antes: setCellWidget() por cima de celula que ja' tinha
+        # widget deixava o valor antigo desenhado por baixo do novo
+        self.tabela_movimentos.setRowCount(0)
         self.tabela_movimentos.setRowCount(len(movimentos))
         self.tabela_movimentos.setVisible(bool(movimentos))
         self.lbl_sem_movimentos.setVisible(not movimentos)
 
         for linha, mov in enumerate(movimentos):
 
-            tipo = mov.get("tipo", "")
+            tipo = _tipo_exibido(mov)
+            forma = mov.get("forma_pagamento")
+            nome_forma = "Fiado" if forma == "PRAZO" else NOMES_FORMA_PAGAMENTO.get(forma, forma or "—")
 
             self.tabela_movimentos.setItem(
                 linha,
@@ -746,16 +778,18 @@ class Caixa(QWidget):
                 linha, 1, _pill_tipo_movimento(tipo)
             )
 
+            self.tabela_movimentos.setItem(linha, 2, QTableWidgetItem(nome_forma))
+
             self.tabela_movimentos.setCellWidget(
                 linha,
-                2,
+                3,
                 _celula_valor_movimento(tipo, formatar_moeda(mov.get("valor", 0))),
             )
 
             self.tabela_movimentos.setItem(
                 linha,
-                3,
-                QTableWidgetItem(mov.get("descricao") or ""),
+                4,
+                QTableWidgetItem(_descricao_movimento(mov, tipo)),
             )
 
     # ======================================

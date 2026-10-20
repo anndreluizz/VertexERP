@@ -21,10 +21,11 @@ from telas.relatorios.comum import _buscar_dados_relatorio_geral
 from telas.relatorios.estoque import EstoqueMixin
 from telas.relatorios.financeiro import FinanceiroMixin
 from telas.relatorios.indicadores import IndicadoresMixin
+from telas.relatorios.mes_a_mes import MesAMesMixin
 from telas.relatorios.widgets import _AlinhaNumeros
 
 
-class Relatorios(FinanceiroMixin, CaixaMixin, EstoqueMixin, IndicadoresMixin, QWidget):
+class Relatorios(FinanceiroMixin, CaixaMixin, EstoqueMixin, IndicadoresMixin, MesAMesMixin, QWidget):
 
     voltar = Signal()
 
@@ -126,6 +127,7 @@ class Relatorios(FinanceiroMixin, CaixaMixin, EstoqueMixin, IndicadoresMixin, QW
         self.bt_aba_caixa = self._botao_aba("Caixa", "wallet")
         self.bt_aba_estoque = self._botao_aba("Estoque", "package")
         self.bt_aba_indicadores = self._botao_aba("Indicadores", "bar-chart-2")
+        self.bt_aba_mes_a_mes = self._botao_aba("Mês a mês", "calendar")
 
         self.bt_aba_financeiro.clicked.connect(
             lambda: self._selecionar_aba(0)
@@ -139,11 +141,15 @@ class Relatorios(FinanceiroMixin, CaixaMixin, EstoqueMixin, IndicadoresMixin, QW
         self.bt_aba_indicadores.clicked.connect(
             lambda: self._selecionar_aba(3)
         )
+        self.bt_aba_mes_a_mes.clicked.connect(
+            lambda: self._selecionar_aba(4)
+        )
 
         abas_layout.addWidget(self.bt_aba_financeiro)
         abas_layout.addWidget(self.bt_aba_caixa)
         abas_layout.addWidget(self.bt_aba_estoque)
         abas_layout.addWidget(self.bt_aba_indicadores)
+        abas_layout.addWidget(self.bt_aba_mes_a_mes)
 
         linha_abas = QHBoxLayout()
         linha_abas.addWidget(barra_abas)
@@ -155,6 +161,7 @@ class Relatorios(FinanceiroMixin, CaixaMixin, EstoqueMixin, IndicadoresMixin, QW
             self.bt_aba_caixa,
             self.bt_aba_estoque,
             self.bt_aba_indicadores,
+            self.bt_aba_mes_a_mes,
         ]
 
         # ======================
@@ -165,11 +172,13 @@ class Relatorios(FinanceiroMixin, CaixaMixin, EstoqueMixin, IndicadoresMixin, QW
         self.pagina_caixa = self._criar_pagina_caixa()
         self.pagina_estoque = self._criar_pagina_estoque()
         self.pagina_indicadores = self._criar_pagina_indicadores()
+        self.pagina_mes_a_mes = self._criar_pagina_mes_a_mes()
 
         layout.addWidget(self.pagina_financeiro)
         layout.addWidget(self.pagina_caixa)
         layout.addWidget(self.pagina_estoque)
         layout.addWidget(self.pagina_indicadores)
+        layout.addWidget(self.pagina_mes_a_mes)
 
         self._selecionar_aba(0)
 
@@ -229,6 +238,7 @@ class Relatorios(FinanceiroMixin, CaixaMixin, EstoqueMixin, IndicadoresMixin, QW
             self.pagina_caixa,
             self.pagina_estoque,
             self.pagina_indicadores,
+            self.pagina_mes_a_mes,
         ]
 
         for i, botao in enumerate(self.botoes_aba):
@@ -244,6 +254,9 @@ class Relatorios(FinanceiroMixin, CaixaMixin, EstoqueMixin, IndicadoresMixin, QW
 
         if indice == 3 and not self._indicadores_carregados:
             self._atualizar_indicadores()
+
+        if indice == 4 and not self._mes_a_mes_carregado:
+            self._atualizar_mes_a_mes()
 
         # por ora so' a aba Centro Financeiro tem um relatorio pra
         # imprimir de verdade (ver imprimir_relatorio_financeiro) --

@@ -1,3 +1,4 @@
+from calendar import monthrange
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
@@ -15,6 +16,7 @@ from app.models.compra import Compra
 from app.models.fornecedor import Fornecedor
 from app.models.conta_pagar import ContaPagar
 from app.models.devolucao import Devolucao, ItemDevolucao
+from app.services.caixa_service import CaixaService
 from app.services.venda_service import _parcelas_pagamento
 
 
@@ -138,6 +140,39 @@ class RelatorioService:
     # ==================================================
     # COMPARATIVO ENTRE LOJAS (matriz x filial etc.)
     # ==================================================
+
+    @staticmethod
+    def mes_a_mes(db: Session, ano: int, loja_id: int | None = None):
+        """Quadro do ano, um item por mes (ate o mes atual): as mesmas
+        contas do Relatorios > Financeiro (_kpis) e do Relatorios > Caixa
+        (CaixaService.entradas), pra os numeros baterem com essas telas."""
+        hoje = date.today()
+        ultimo = 12 if ano < hoje.year else (hoje.month if ano == hoje.year else 0)
+        meses = []
+        for mes in range(1, ultimo + 1):
+            inicio = date(ano, mes, 1)
+            fim = date(ano, mes, monthrange(ano, mes)[1])
+            k = RelatorioService._kpis(
+                db, datetime.combine(inicio, time.min),
+                datetime.combine(fim, time.min) + timedelta(days=1),
+                loja_id=loja_id,
+            )
+            e = CaixaService.entradas(db, inicio, fim, loja_id)
+            meses.append({
+                "mes": mes,
+                "faturamento": k["receita_total"],
+                "quantidade_vendas": k["quantidade_vendas"],
+                "ticket_medio": k["ticket_medio"],
+                "lucro": k["lucro"],
+                "custo_incompleto": k["custo_incompleto"],
+                "entrou": e["total"],
+                "vendido_fiado": e["vendas_prazo"],
+                "fiado_recebido": e["fiado_recebido"],
+                "contas_pagas": e["contas_pagas"],
+                "sangrias": e["sangrias"],
+                "sobrou": e["sobrou"],
+            })
+        return meses
 
     @staticmethod
     def comparativo_lojas(

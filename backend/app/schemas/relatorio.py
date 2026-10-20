@@ -80,6 +80,22 @@ class VendaDiaSemanaHoraItem(Schema):
     total: Decimal
 
 
+class MesAMesItem(Schema):
+    """Um mes do quadro "Mes a mes" (Relatorios)."""
+    mes: int
+    faturamento: Decimal
+    quantidade_vendas: int
+    ticket_medio: Decimal
+    lucro: Decimal
+    custo_incompleto: bool
+    entrou: Decimal
+    vendido_fiado: Decimal
+    fiado_recebido: Decimal
+    contas_pagas: Decimal
+    sangrias: Decimal
+    sobrou: Decimal
+
+
 class GastoCompraMensalItem(Schema):
     mes: str
     total: Decimal

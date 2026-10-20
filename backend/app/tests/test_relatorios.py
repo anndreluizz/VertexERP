@@ -390,3 +390,33 @@ def test_funil_vendas_fora_do_periodo_nao_conta(client, auth_headers, db, produt
     dados = response.json()
     assert dados["finalizadas"] == 0
     assert dados["canceladas"] == 0
+
+
+def test_mes_a_mes_separa_cada_mes_do_ano(client, auth_headers, db, caixa_aberto, usuario):
+    from datetime import date, datetime
+    from app.models.conta_pagar import ContaPagar
+    from app.models.movimento_caixa import MovimentoCaixa
+
+    for tipo, forma, valor, data in [
+        ("VENDA", "DINHEIRO", 100, datetime(2025, 3, 10, 9)),
+        ("VENDA", "PRAZO", 50, datetime(2025, 7, 1, 9)),
+        ("VENDA", "PIX", 40, datetime(2025, 12, 31, 23, 30)),  # ultimo minuto do ano
+    ]:
+        db.add(MovimentoCaixa(caixa_id=caixa_aberto.id, usuario_id=usuario.id, tipo=tipo,
+                              forma_pagamento=forma, valor=valor, data=data))
+    db.add(ContaPagar(descricao="Luz", valor=30, status="PAGO",
+                      data_pagamento=datetime(2025, 3, 15), data_vencimento=datetime(2025, 3, 15)))
+    db.commit()
+
+    meses = client.get("/relatorios/mes-a-mes?ano=2025", headers=auth_headers).json()
+    assert [m["mes"] for m in meses] == list(range(1, 13))
+    marco, julho, dezembro = meses[2], meses[6], meses[11]
+    assert (float(marco["entrou"]), float(marco["contas_pagas"]), float(marco["sobrou"])) == (100.0, 30.0, 70.0)
+    assert float(julho["vendido_fiado"]) == 50.0 and float(julho["entrou"]) == 0.0
+    assert float(dezembro["entrou"]) == 40.0
+    assert float(meses[0]["entrou"]) == 0.0
+
+    # ano atual: so' ate o mes de hoje; ano futuro: nada
+    hoje = date.today()
+    assert len(client.get(f"/relatorios/mes-a-mes?ano={hoje.year}", headers=auth_headers).json()) == hoje.month
+    assert client.get(f"/relatorios/mes-a-mes?ano={hoje.year + 1}", headers=auth_headers).json() == []

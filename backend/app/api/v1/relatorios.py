@@ -14,6 +14,7 @@ from app.schemas.relatorio import (
     FunilVendasResponse,
     GastoCompraMensalItem,
     MargemCategoriaItem,
+    MesAMesItem,
     PrazoFornecedorItem,
     RankingFornecedorItem,
     RelatorioVendasResponse,
@@ -71,6 +72,17 @@ def relatorio_vendas(
         top_produtos_limite=top_produtos_limite,
         top_produtos_ordenar_por=top_produtos_ordenar_por,
     )
+
+
+@router.get("/mes-a-mes", response_model=list[MesAMesItem])
+def mes_a_mes(
+    ano: int = Query(..., ge=2000, le=2100),
+    loja_id: int | None = None,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    loja_id = loja_para_leitura(usuario, loja_id)
+    return RelatorioService.mes_a_mes(db, ano, loja_id)
 
 
 @router.get("/comparativo-lojas", response_model=list[ComparativoLojaItem])

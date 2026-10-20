@@ -38,6 +38,7 @@ from design.icons import icone, icone_pixmap
 from design.privacidade import privacidade
 from design.widgets import Badge, BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
 from utils.formatacao import formatar_moeda
+from utils.periodo import intervalo_mes, meses_recentes, meses_seguintes
 from utils.pix import texto_pra_copiar
 
 
@@ -512,6 +513,9 @@ class ContasPagar(QWidget):
         self.combo_periodo = QComboBox()
         for chave, rotulo in self.FILTROS_PERIODO:
             self.combo_periodo.addItem(rotulo, chave)
+            if chave == "MES":  # meses fechados logo depois do "Este mes"
+                for mes in meses_seguintes() + meses_recentes()[1:]:
+                    self.combo_periodo.addItem(mes, mes)
         self.combo_periodo.setMinimumHeight(40)
         self.combo_periodo.setCursor(Qt.PointingHandCursor)
         self.combo_periodo.setStyleSheet(estilo_combo)
@@ -835,6 +839,10 @@ class ContasPagar(QWidget):
 
         if self.filtro_periodo == "ANO":
             return venc.year == hoje.year
+
+        mes = intervalo_mes(self.filtro_periodo)  # "Novembro/2026"
+        if mes:
+            return mes[0] <= venc <= mes[1]
 
         return True
 

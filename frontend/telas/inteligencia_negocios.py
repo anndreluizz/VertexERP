@@ -24,6 +24,7 @@ from services.bi_service import informar_dinheiro_guardado, resumo
 from services.loja_service import listar_lojas
 from services.worker import rodar_em_thread
 from utils.formatacao import formatar_moeda
+from utils.periodo import intervalo_mes, meses_anteriores
 
 PERIODOS = [
     "Hoje",
@@ -56,7 +57,7 @@ def datas_do_periodo(nome, hoje):
     if nome == "Mês anterior":
         fim = hoje.replace(day=1) - timedelta(days=1)
         return fim.replace(day=1), fim
-    return None
+    return intervalo_mes(nome)  # "Agosto/2026"; personalizado -> None
 
 
 def _buscar(data_inicio, data_fim, loja_id):
@@ -135,7 +136,7 @@ class InteligenciaNegocios(QWidget):
         filtros.setSpacing(10)
 
         self.combo_periodo = QComboBox()
-        self.combo_periodo.addItems(PERIODOS)
+        self.combo_periodo.addItems(PERIODOS[:-1] + meses_anteriores() + PERIODOS[-1:])
         self.combo_periodo.setCurrentText("Mês atual")
         self.combo_periodo.setStyleSheet(estilo_campo)
         self.combo_periodo.currentTextChanged.connect(self._ao_mudar_periodo)

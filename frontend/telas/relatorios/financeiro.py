@@ -21,6 +21,7 @@ from design import tokens
 from design.charts import GraficoArea, GraficoPizza
 from design.widgets import CardKPI
 from utils.formatacao import formatar_moeda
+from utils.periodo import intervalo_mes, meses_anteriores
 from utils.documento_html import (
     ESTILO_BODY,
     bloco_total,
@@ -52,7 +53,7 @@ class FinanceiroMixin:
         filtro_layout = QHBoxLayout()
 
         self.combo_periodo = QComboBox()
-        self.combo_periodo.addItems(self.PERIODOS)
+        self.combo_periodo.addItems(self._periodos_com_meses())
         self.combo_periodo.setCurrentText("Este mês")
         self.combo_periodo.setMinimumHeight(38)
         self.combo_periodo.setCursor(Qt.PointingHandCursor)
@@ -179,6 +180,10 @@ class FinanceiroMixin:
 
         return self._calcular_periodo(self.combo_periodo)
 
+    def _periodos_com_meses(self):
+        # meses fechados antes do "Tudo" (que fica por ultimo)
+        return self.PERIODOS[:-1] + meses_anteriores() + self.PERIODOS[-1:]
+
     def _calcular_periodo(self, combo):
         """Mesma logica de _periodo_selecionado, parametrizada pelo
         combo -- usado tambem pelo combo de periodo da Curva ABC, que
@@ -186,6 +191,10 @@ class FinanceiroMixin:
 
         periodo = combo.currentText()
         hoje = datetime.now().date()
+
+        mes = intervalo_mes(periodo)  # "Agosto/2026"
+        if mes:
+            return mes
 
         if periodo == "Hoje":
             return hoje, hoje

@@ -37,6 +37,10 @@ class Usuario {
   /// Financeiro nem Relatorios (o backend tambem barra).
   bool get financeiro => admin || permissoes.contains('financeiro.ver');
 
+  /// Entrada de estoque pelo app (POST /estoque/movimentos).
+  bool get podeAjustarEstoque =>
+      admin || permissoes.contains('estoque.ajustar');
+
   String get cargo => admin
       ? 'Administrador'
       : financeiro

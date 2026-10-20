@@ -107,4 +107,16 @@ void main() {
     expect(produto['preco_venda'], 1234.5);
     expect(produto['codigo_barras'], '111');
   });
+
+  testWidgets('codigo digitado sem Enter confere ao ir pro nome', (
+    tester,
+  ) async {
+    await _abrir(tester);
+
+    await tester.enterText(find.byType(TextField).first, '789');
+    await tester.tap(find.widgetWithText(TextField, 'Nome'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Produto já cadastrado'), findsOneWidget);
+  });
 }

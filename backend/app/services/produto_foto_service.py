@@ -1,11 +1,10 @@
-import base64
-
 from sqlalchemy.orm import Session
 
 from app.models.produto_foto import ProdutoFoto
 from app.repositories.produto_foto_repository import ProdutoFotoRepository
 from app.repositories.produto_repository import ProdutoRepository
 from app.schemas.produto import ProdutoFotoCreate
+from app.utils.imagem import decodificar_foto
 
 
 class ProdutoFotoService:
@@ -38,7 +37,7 @@ class ProdutoFotoService:
 
         foto = ProdutoFoto(
             produto_id=produto_id,
-            imagem=base64.b64decode(dados.imagem_base64),
+            imagem=decodificar_foto(dados.imagem_base64),
             ordem=ProdutoFotoRepository.maior_ordem(db, produto_id) + 1,
             principal=eh_principal,
         )

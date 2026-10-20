@@ -1,5 +1,3 @@
-import base64
-
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -14,6 +12,7 @@ from app.repositories.historico_preco_repository import (
     HistoricoPrecoRepository,
 )
 from app.schemas.produto import ProdutoCreate, ProdutoUpdate
+from app.utils.imagem import decodificar_foto
 
 
 def _sincronizar_foto_principal(db: Session, produto: Produto, imagem: bytes):
@@ -170,7 +169,7 @@ class ProdutoService:
         produto = Produto(**campos)
 
         if dados.foto_base64:
-            produto.foto = base64.b64decode(dados.foto_base64)
+            produto.foto = decodificar_foto(dados.foto_base64)
 
         produto = ProdutoRepository.criar(db, produto)
 
@@ -319,7 +318,7 @@ class ProdutoService:
                 produto.estoque_minimo = novo_estoque_minimo
 
         if dados.foto_base64:
-            produto.foto = base64.b64decode(dados.foto_base64)
+            produto.foto = decodificar_foto(dados.foto_base64)
             _sincronizar_foto_principal(db, produto, produto.foto)
 
         # so' registra historico quando o preco de fato mudou -- editar

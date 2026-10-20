@@ -1,4 +1,3 @@
-import base64
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -10,6 +9,7 @@ from app.schemas.cliente import ClienteCreate
 from app.repositories.cliente_repository import ClienteRepository
 from app.repositories.movimento_fiado_repository import MovimentoFiadoRepository
 from app.services.notificacao_service import NotificacaoService
+from app.utils.imagem import decodificar_foto
 
 
 class ClienteService:
@@ -43,7 +43,7 @@ class ClienteService:
         )
 
         if dados.foto_base64:
-            novo_cliente.foto = base64.b64decode(dados.foto_base64)
+            novo_cliente.foto = decodificar_foto(dados.foto_base64)
 
         cliente = ClienteRepository.criar(db, novo_cliente)
 
@@ -82,7 +82,7 @@ class ClienteService:
             setattr(cliente, campo, valor)
 
         if dados.foto_base64:
-            cliente.foto = base64.b64decode(dados.foto_base64)
+            cliente.foto = decodificar_foto(dados.foto_base64)
 
         return ClienteRepository.atualizar(db, cliente)
 

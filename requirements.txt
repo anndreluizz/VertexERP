@@ -54,6 +54,7 @@ pydantic_core==2.41.5
 Pygments==2.20.0
 pyjwt==2.13.0
 pytest==9.1.1
+pillow==12.3.0
 pypdf==5.1.0
 python-dotenv==1.2.2
 python-jose==3.5.0

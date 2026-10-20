@@ -33,3 +33,43 @@ def test_contas_a_pagar_filtra_pelo_mes_do_vencimento():
     dentro = ContasPagar._dentro_do_periodo
     assert dentro(tela, {"data_vencimento": "2026-11-30"})
     assert not dentro(tela, {"data_vencimento": "2026-12-01"})
+
+
+class _Card:
+    def __init__(self):
+        self.titulo = self.valor = self.legenda = None
+
+    def definir_titulo(self, t):
+        self.titulo = t
+
+    def definir_valor(self, v):
+        self.valor = v
+
+    def definir_legenda(self, l):
+        self.legenda = l
+
+
+def test_cards_de_contas_a_pagar_seguem_o_mes_escolhido():
+    from types import SimpleNamespace
+    from telas.contas_pagar import ContasPagar
+
+    proximo = meses_seguintes(quantos=1)[0]  # ex.: "Novembro/2026"
+    inicio, fim = intervalo_mes(proximo)
+    cards = [_Card() for _ in range(4)]
+    tela = SimpleNamespace(filtro_periodo=proximo, _cards_kpi=cards, card_aberto=cards[0],
+                           card_vencidas=cards[1], card_proximos_7=cards[2], card_pago=cards[3])
+    contas = [
+        {"status": "PENDENTE", "valor": 100, "data_vencimento": inicio.isoformat()},
+        {"status": "PAGO", "valor": 40, "data_vencimento": inicio.isoformat(), "data_pagamento": fim.isoformat()},
+        {"status": "PENDENTE", "valor": 999, "data_vencimento": "2020-01-01"},  # outro mes
+    ]
+    pago_em = lambda c: date.fromisoformat(c["data_pagamento"]) if c.get("data_pagamento") else None
+    ContasPagar._cards_do_mes(tela, contas, pago_em)
+
+    nome = proximo.split("/")[0].lower()
+    assert [c.titulo for c in cards] == [f"Vence em {nome}", f"Atrasadas em {nome}", f"Falta pagar em {nome}", f"Pago em {nome}"]
+    assert [c.valor for c in cards] == ["R$ 140,00", "R$ 0,00", "R$ 100,00", "R$ 40,00"]
+
+    tela.filtro_periodo = "TODOS"  # sem mes: titulos de sempre
+    ContasPagar._cards_do_mes(tela, contas, pago_em)
+    assert cards[2].titulo == "Próximos 7 dias"

@@ -138,7 +138,7 @@ class Produtos(QWidget):
         self.ordenacao = "RECENTES"
         self.botoes_categoria = {}
         self.botoes_status = {}
-        self._cache_fotos = {}
+        self._cache_fotos = {}  # id -> miniatura 42px (ou None)
         self._carregando = False
         self._pode_excluir_produto = api.usuario_tem_permissao("produtos.excluir")
 
@@ -272,7 +272,12 @@ class Produtos(QWidget):
 
         self.pesquisa = CampoTexto("Buscar por nome, código ou código de barras...")
         self.pesquisa.setMinimumWidth(260)
-        self.pesquisa.textChanged.connect(self.filtrar_produtos)
+        # o leitor de codigo de barras "digita" 13 caracteres seguidos:
+        # filtrar a cada um remontava a tabela inteira 13 vezes. Espera
+        # a digitacao parar (ou o Enter, que o leitor manda no fim).
+        self._timer_busca = QTimer(self, singleShot=True, interval=250)
+        self._timer_busca.timeout.connect(self.filtrar_produtos)
+        self.pesquisa.textChanged.connect(self._timer_busca.start)
         barra.addWidget(self.pesquisa, stretch=1)
 
         # categoria em lista (e não uma fileira de botões): loja com 20,
@@ -484,9 +489,7 @@ class Produtos(QWidget):
         # EVENTOS
         # ==========================================
 
-        self.pesquisa.returnPressed.connect(
-            self.filtrar_produtos
-        )
+        self.pesquisa.returnPressed.connect(self._buscar_agora)
 
         self.tabela.doubleClicked.connect(
             lambda index: self.editar_produto()
@@ -790,6 +793,10 @@ class Produtos(QWidget):
     # ==========================================
     # FILTRAR PRODUTOS
     # ==========================================
+
+    def _buscar_agora(self):
+        self._timer_busca.stop()
+        self.filtrar_produtos()
 
     def filtrar_produtos(self):
 
@@ -1155,7 +1162,7 @@ class Produtos(QWidget):
         pixmap = self._obter_pixmap_produto(produto)
 
         if pixmap:
-            lbl.setPixmap(self._pixmap_arredondado(pixmap, 42, raio=10))
+            lbl.setPixmap(pixmap)
         else:
             # sem foto: inicial do nome com a cor do Avatar (mesma
             # paleta da lista de clientes), em vez do mesmo ícone de
@@ -1178,6 +1185,11 @@ class Produtos(QWidget):
         lay.setAlignment(Qt.AlignCenter)
         lay.addWidget(lbl)
         return celula
+
+    def _miniatura(self, pixmap):
+        # o cache guarda ja' a miniatura da tabela: reduzir a foto
+        # inteira a cada remontagem da tabela era o que pesava
+        return self._pixmap_arredondado(pixmap, 42, raio=10)
 
     def _pixmap_arredondado(self, pixmap, tamanho, raio=10):
 
@@ -1224,6 +1236,7 @@ class Produtos(QWidget):
             if foto_bytes:
                 pixmap = QPixmap()
                 pixmap.loadFromData(foto_bytes)
+                pixmap = self._miniatura(pixmap)
 
         self._cache_fotos[produto_id] = pixmap
 
@@ -1263,7 +1276,7 @@ class Produtos(QWidget):
             if tela.imagem_bytes:
                 pixmap = QPixmap()
                 pixmap.loadFromData(tela.imagem_bytes)
-                self._cache_fotos[produto_criado["id"]] = pixmap
+                self._cache_fotos[produto_criado["id"]] = self._miniatura(pixmap)
 
             sucesso = ProdutoCriadoDialog(
                 produto_criado,
@@ -1348,7 +1361,7 @@ class Produtos(QWidget):
             if tela.imagem_bytes:
                 pixmap = QPixmap()
                 pixmap.loadFromData(tela.imagem_bytes)
-                self._cache_fotos[produto["id"]] = pixmap
+                self._cache_fotos[produto["id"]] = self._miniatura(pixmap)
 
             QMessageBox.information(
                 self,

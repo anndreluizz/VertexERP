@@ -178,6 +178,9 @@ class ItemResultadoCliente(QWidget):
         layout.addLayout(col_fiado)
 
 
+MAX_RESULTADOS = 30
+
+
 class SelecionarClienteDialog(DialogoPadrao):
     """Busca de cliente do PDV (F2) e do crediário no pagamento. Mostra
     a situação do fiado de cada um -- quem está devendo, atrasado ou sem
@@ -320,7 +323,9 @@ class SelecionarClienteDialog(DialogoPadrao):
 
         self.lista.clear()
 
-        for cliente in clientes:
+        # cada linha e' um widget caro (400 levavam ~2,5 s a cada letra);
+        # quem nao esta' entre os primeiros, o caixa acha digitando mais
+        for cliente in clientes[:MAX_RESULTADOS]:
             widget = ItemResultadoCliente(cliente)
             item = QListWidgetItem()
             item.setSizeHint(widget.sizeHint())
@@ -336,6 +341,10 @@ class SelecionarClienteDialog(DialogoPadrao):
             self.lbl_contador.setText(f"{len(clientes)} DE {total} CLIENTES")
         else:
             self.lbl_contador.setText(f"{total} CLIENTES  ·  QUEM MOVIMENTOU POR ÚLTIMO PRIMEIRO")
+        if len(clientes) > MAX_RESULTADOS:
+            self.lbl_contador.setText(
+                self.lbl_contador.text() + f"  ·  MOSTRANDO {MAX_RESULTADOS}, DIGITE MAIS PRA ACHAR"
+            )
 
         vazio = self.lista.count() == 0
         self.lista.setVisible(not vazio)

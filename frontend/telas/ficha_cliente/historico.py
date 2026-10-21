@@ -604,9 +604,15 @@ class HistoricoMixin:
                 item.get("produto_id"), "Produto removido"
             )
             quantidade = item.get("quantidade", 1)
-            partes.append(f"{nome} x{quantidade}")
+            # um produto por linha, com o valor dele (o total da compra
+            # ja' aparece a direita)
+            subtotal = item.get("subtotal")
+            if subtotal is None:
+                partes.append(f"{nome} x{quantidade}")
+            else:
+                partes.append(f"{nome} x{quantidade} — {formatar_moeda(float(subtotal))}")
 
-        return ", ".join(partes) if partes else descricao
+        return "\n".join(partes) if partes else descricao
 
     @staticmethod
     def _e_estorno(mov):

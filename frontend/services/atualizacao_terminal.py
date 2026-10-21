@@ -110,10 +110,11 @@ function Log($t) { Add-Content $Log "$(Get-Date -Format s) [terminal $Versao] $t
 function Remover($c) { if (Test-Path $c) { [IO.Directory]::Delete("\\?\" + (Resolve-Path $c).ProviderPath, $true) } }
 try {
     Log "inicio"
-    for ($i = 0; $i -lt 60 -and (Get-Process -Id $ProcessoId -ErrorAction SilentlyContinue); $i++) { Start-Sleep 1 }
-    Stop-Process -Id $ProcessoId -Force -ErrorAction SilentlyContinue
-    Start-Sleep 2
     $atual = Join-Path $Raiz "VertexERP-Frontend"
+    for ($i = 0; $i -lt 60 -and (Get-Process -Id $ProcessoId -ErrorAction SilentlyContinue); $i++) { Start-Sleep 1 }
+    # fecha tambem as outras janelas do Vertex abertas nessa pasta, senao elas travam a troca
+    Get-Process | Where-Object { $_.Path -like "$atual\*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep 2
     $antes = "$atual" + "_antes_atualizacao"
     Remover $antes
     Rename-Item $atual (Split-Path $antes -Leaf)

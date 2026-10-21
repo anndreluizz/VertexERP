@@ -315,9 +315,15 @@ class ClienteLinha(QFrame):
         col_valor.addWidget(Badge(texto_status, variante), 0, Qt.AlignRight)
         layout.addWidget(col_valor_w)
 
+        self._ativo = None
         self.definir_selecionado(False)
 
     def definir_selecionado(self, ativo):
+
+        # roda pra todas as linhas a cada busca; setStyleSheet e' caro
+        if ativo == self._ativo:
+            return
+        self._ativo = ativo
 
         fundo = tokens.PRIMARIA_CLARA if ativo else "transparent"
         borda = tokens.PRIMARIA if ativo else "transparent"
@@ -564,6 +570,7 @@ class Clientes(QWidget):
         self.movimentos_por_cliente = {}
         self._selecionado_id = None
         self._linhas = {}
+        self._ordem_grid = []
         self.filtro_status = "TODOS"
         self._carregando = False
         self.ordenacao = "MOVIMENTO_RECENTE"
@@ -903,7 +910,7 @@ class Clientes(QWidget):
         self.area_lista.setVisible(True)
         self._definir_controles_carregando(True)
 
-        self._linhas = {}
+        self._descartar_linhas()
         cartoes_esqueleto(self.grid_layout, n=7, colunas=1, altura=58)
         self.lbl_contagem.setText("Carregando...")
 
@@ -968,6 +975,13 @@ class Clientes(QWidget):
             widget = item.widget()
             if widget:
                 widget.deleteLater()
+        self._descartar_linhas()
+
+    def _descartar_linhas(self):
+        for linha in self._linhas.values():
+            linha.deleteLater()
+        self._linhas = {}
+        self._ordem_grid = []
 
     # ==========================================
     # CARDS DE RESUMO
@@ -1085,6 +1099,8 @@ class Clientes(QWidget):
 
         self.prazo_inadimplencia = self.combo_prazo.currentData()
 
+        # o selo de status de cada linha depende do prazo
+        self._descartar_linhas()
         self.atualizar_cards_resumo()
         self.filtrar_clientes()
 
@@ -1235,27 +1251,39 @@ class Clientes(QWidget):
 
     def preencher_grid(self, clientes):
 
-        while self.grid_layout.count():
-            item = self.grid_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.hide()
-                widget.deleteLater()
+        # as linhas sao montadas uma vez por carga (montar 400 a cada
+        # letra digitada levava ~2,5 s): a busca so' esconde/mostra as
+        # que ja' existem e so' remonta o layout se a ordem mudar
+        ids = [c["id"] for c in clientes]
+        mostrar = set(ids)
 
-        self._linhas = {}
+        if [cid for cid in self._ordem_grid if cid in mostrar] != ids:
 
-        for indice, cliente in enumerate(clientes):
+            while self.grid_layout.count():
+                widget = self.grid_layout.takeAt(0).widget()
+                # esqueleto do carregamento (as linhas ficam guardadas)
+                if widget is not None and not isinstance(widget, ClienteLinha):
+                    widget.deleteLater()
 
-            linha = ClienteLinha(
-                cliente,
-                self.agregados_por_cliente.get(cliente["id"]),
-                self.prazo_inadimplencia,
-            )
-            linha.selecionado.connect(self.selecionar_cliente)
-            linha.abrir.connect(self.ver_ficha)
+            for indice, cliente in enumerate(clientes):
 
-            self._linhas[cliente["id"]] = linha
-            self.grid_layout.addWidget(linha, indice, 0)
+                linha = self._linhas.get(cliente["id"])
+                if linha is None:
+                    linha = ClienteLinha(
+                        cliente,
+                        self.agregados_por_cliente.get(cliente["id"]),
+                        self.prazo_inadimplencia,
+                    )
+                    linha.selecionado.connect(self.selecionar_cliente)
+                    linha.abrir.connect(self.ver_ficha)
+                    self._linhas[cliente["id"]] = linha
+
+                self.grid_layout.addWidget(linha, indice, 0)
+
+            self._ordem_grid = ids
+
+        for cid, linha in self._linhas.items():
+            linha.setVisible(cid in mostrar)
 
         self.area_lista.setVisible(len(clientes) > 0)
         self.lbl_vazio.setVisible(len(clientes) == 0)

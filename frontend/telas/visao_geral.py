@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
+    QComboBox,
 )
 
 from services.api import configuracoes
@@ -45,6 +46,7 @@ from telas.relatorios import (
 )
 from design import tokens
 from utils.formatacao import formatar_moeda
+from utils.periodo import intervalo_mes, meses_anteriores
 
 
 def _parse_data(texto):
@@ -404,6 +406,16 @@ class VisaoGeral(QWidget):
             self.botoes_periodo[periodo] = botao
             filtro_layout.addWidget(botao)
 
+        # meses fechados mais antigos ("Agosto/2026"...)
+        self.combo_outro_mes = QComboBox()
+        self.combo_outro_mes.addItem("Outro mês…")
+        self.combo_outro_mes.addItems(meses_anteriores())
+        self.combo_outro_mes.setMinimumHeight(34)
+        self.combo_outro_mes.currentIndexChanged.connect(
+            lambda i: i > 0 and self._selecionar_periodo(self.combo_outro_mes.currentText())
+        )
+        filtro_layout.addWidget(self.combo_outro_mes)
+
         filtro_layout.addStretch()
 
         conteudo_layout.addLayout(filtro_layout)
@@ -539,6 +551,10 @@ class VisaoGeral(QWidget):
 
         for nome, botao in self.botoes_periodo.items():
             botao.setChecked(nome == periodo)
+        if periodo in self.botoes_periodo:
+            self.combo_outro_mes.blockSignals(True)
+            self.combo_outro_mes.setCurrentIndex(0)
+            self.combo_outro_mes.blockSignals(False)
 
         self._atualizar_tudo()
 
@@ -557,7 +573,7 @@ class VisaoGeral(QWidget):
             fim = hoje.replace(day=1) - timedelta(days=1)
             return fim.replace(day=1), fim
 
-        return hoje, hoje
+        return intervalo_mes(periodo) or (hoje, hoje)
 
     def _periodo_anterior_equivalente(self, inicio, fim):
 

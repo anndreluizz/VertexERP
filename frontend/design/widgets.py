@@ -124,7 +124,7 @@ class CardKPI(Card):
         """)
         badge_icone.setPixmap(icone_pixmap(icone_nome, cor=cor_icone, tamanho=18))
 
-        lbl_titulo = QLabel(titulo)
+        self.lbl_titulo = lbl_titulo = QLabel(titulo)
         lbl_titulo.setWordWrap(True)
         lbl_titulo.setStyleSheet(f"""
             background:transparent; color:{cor_titulo};
@@ -203,6 +203,9 @@ class CardKPI(Card):
         # legenda pode trazer valor (ex.: "total pago: R$ ...")
         privacidade.definir_texto(self.lbl_variacao, f'<span style="color:{cor};">{texto}</span>')
         self.lbl_variacao.show()
+
+    def definir_titulo(self, texto):
+        self.lbl_titulo.setText(texto)
 
     def definir_valor(self, texto):
         # o fade sutil da um "respiro" visual toda vez que o numero

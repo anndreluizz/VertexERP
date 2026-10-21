@@ -82,7 +82,7 @@ class EstoqueMixin:
         filtro_abc.setSpacing(8)
 
         self.combo_periodo_abc = QComboBox()
-        self.combo_periodo_abc.addItems(self.PERIODOS)
+        self.combo_periodo_abc.addItems(self._periodos_com_meses())
         self.combo_periodo_abc.setCurrentText("Este mês")
         self.combo_periodo_abc.setMinimumHeight(36)
         self.combo_periodo_abc.setCursor(Qt.PointingHandCursor)

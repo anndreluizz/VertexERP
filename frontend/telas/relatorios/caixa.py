@@ -40,7 +40,7 @@ class CaixaMixin:
         cabecalho_caixa.addStretch()
 
         self.combo_periodo_caixa = QComboBox()
-        self.combo_periodo_caixa.addItems(self.PERIODOS)
+        self.combo_periodo_caixa.addItems(self._periodos_com_meses())
         self.combo_periodo_caixa.setCurrentText("Este mês")
         self.combo_periodo_caixa.setMinimumHeight(34)
         self.combo_periodo_caixa.setCursor(Qt.PointingHandCursor)

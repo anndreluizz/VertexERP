@@ -32,6 +32,7 @@ from services.loja_service import listar_lojas
 from services.worker import em_paralelo, rodar_em_thread
 from telas.devolucao_dialog import DevolucaoDialog
 from utils.formatacao import NOMES_FORMA, formatar_moeda
+from utils.periodo import intervalo_mes, meses_recentes
 from widgets.tables.standard_table import StandardTable
 
 _NOMES_FORMA = NOMES_FORMA
@@ -208,6 +209,14 @@ class Vendas(QWidget):
             bt.clicked.connect(lambda _=False, d=dias: self._periodo_rapido(d))
             filtros.addWidget(bt)
 
+        # mes fechado: preenche as datas de/ate
+        self.combo_mes = QComboBox()
+        self.combo_mes.setMinimumHeight(38)
+        self.combo_mes.addItem("Mês…")
+        self.combo_mes.addItems(meses_recentes())
+        self.combo_mes.currentTextChanged.connect(self._escolher_mes)
+        filtros.addWidget(self.combo_mes)
+
         filtros.addSpacing(12)
 
         self.data_inicio = QDateEdit()
@@ -323,12 +332,24 @@ class Vendas(QWidget):
     # ======================================
 
     def _periodo_rapido(self, dias, carregar=True):
+        if hasattr(self, "combo_mes"):  # botao rapido: o mes escolhido deixa de valer
+            self.combo_mes.blockSignals(True)
+            self.combo_mes.setCurrentIndex(0)
+            self.combo_mes.blockSignals(False)
         hoje = date.today()
         self.data_fim.setDate(QDate(hoje.year, hoje.month, hoje.day))
         inicio = hoje - timedelta(days=dias)
         self.data_inicio.setDate(QDate(inicio.year, inicio.month, inicio.day))
         if carregar:
             self.carregar()
+
+    def _escolher_mes(self, rotulo):
+        mes = intervalo_mes(rotulo)
+        if not mes:
+            return
+        for campo, dia in ((self.data_inicio, mes[0]), (self.data_fim, mes[1])):
+            campo.setDate(QDate(dia.year, dia.month, dia.day))
+        self.carregar()
 
     def _periodo(self):
         inicio = self.data_inicio.date().toPython()

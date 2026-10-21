@@ -261,3 +261,21 @@ def sugestao_reposicao(loja_id=None, skip=0, limit=100):
         )
 
     return response.json()
+
+
+def mes_a_mes(ano, loja_id=None):
+
+    params = {"ano": ano}
+
+    if loja_id is not None:
+        params["loja_id"] = loja_id
+
+    response = get(f"/relatorios/mes-a-mes?{urlencode(params)}")
+
+    if response.status_code != 200:
+        raise Exception(
+            f"Falha ao carregar o mês a mês "
+            f"(HTTP {response.status_code}): {response.text}"
+        )
+
+    return response.json()

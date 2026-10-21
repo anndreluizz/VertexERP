@@ -135,7 +135,7 @@ class IndicadoresMixin:
         filtro_layout.setSpacing(8)
 
         self.combo_periodo_indicadores = QComboBox()
-        self.combo_periodo_indicadores.addItems(self.PERIODOS)
+        self.combo_periodo_indicadores.addItems(self._periodos_com_meses())
         self.combo_periodo_indicadores.setCurrentText("Este mês")
         self.combo_periodo_indicadores.setMinimumHeight(36)
         self.combo_periodo_indicadores.setCursor(Qt.PointingHandCursor)

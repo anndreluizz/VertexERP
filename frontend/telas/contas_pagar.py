@@ -38,6 +38,7 @@ from design.icons import icone, icone_pixmap
 from design.privacidade import privacidade
 from design.widgets import Badge, BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
 from utils.formatacao import formatar_moeda
+from utils.periodo import intervalo_mes, meses_recentes, meses_seguintes, rotulo_mes
 from utils.pix import texto_pra_copiar
 
 
@@ -472,6 +473,7 @@ class ContasPagar(QWidget):
         self.card_vencidas = CardKPI("Vencidas", "alert-triangle", tokens.ERRO)
         self.card_proximos_7 = CardKPI("Próximos 7 dias", "calendar", tokens.ALERTA)
         self.card_pago = CardKPI("Pago no mês", "check", tokens.SECUNDARIA)
+        self._cards_kpi = (self.card_aberto, self.card_vencidas, self.card_proximos_7, self.card_pago)
 
         for coluna, card in enumerate((
             self.card_aberto, self.card_vencidas, self.card_proximos_7, self.card_pago,
@@ -512,6 +514,9 @@ class ContasPagar(QWidget):
         self.combo_periodo = QComboBox()
         for chave, rotulo in self.FILTROS_PERIODO:
             self.combo_periodo.addItem(rotulo, chave)
+            if chave == "MES":  # meses fechados logo depois do "Este mes"
+                for mes in meses_seguintes() + meses_recentes()[1:]:
+                    self.combo_periodo.addItem(mes, mes)
         self.combo_periodo.setMinimumHeight(40)
         self.combo_periodo.setCursor(Qt.PointingHandCursor)
         self.combo_periodo.setStyleSheet(estilo_combo)
@@ -792,6 +797,8 @@ class ContasPagar(QWidget):
         self.card_pago.definir_valor(formatar_moeda(pago_mes))
         self.card_pago.definir_legenda(f"total pago: {formatar_moeda(total_pago)}")
 
+        self._cards_do_mes(contas_validas, _data_pagamento)
+
         contagem = {
             "TODAS": len(contas_validas),
             "VENCIDA": len(vencidas_lista),
@@ -800,6 +807,47 @@ class ContasPagar(QWidget):
         }
         for chave, botao in self.botoes_status.items():
             botao.setText(f"{botao.property('rotulo')}  {contagem.get(chave, 0)}")
+
+    def _cards_do_mes(self, contas_validas, data_pagamento):
+        """Com um mes escolhido no filtro ("Este mes" ou "Novembro/2026"),
+        os cards contam so' aquele mes; sem mes, ficam os de sempre
+        (ja' preenchidos em _atualizar_kpis)."""
+        hoje = date.today()
+        if self.filtro_periodo == "MES":
+            mes = (hoje.replace(day=1), intervalo_mes(rotulo_mes(hoje))[1])
+            nome = "no mês"
+        else:
+            mes = intervalo_mes(self.filtro_periodo)
+            nome = f"em {self.filtro_periodo.split('/')[0].lower()}" if mes else ""
+        titulos = ("A pagar", "Vencidas", "Próximos 7 dias", "Pago no mês")
+        if not mes:
+            for card, titulo in zip(self._cards_kpi, titulos):
+                card.definir_titulo(titulo)
+            return
+
+        def no_mes(d):
+            return d is not None and mes[0] <= d <= mes[1]
+
+        vencem = [c for c in contas_validas if no_mes(_vencimento(c))]
+        atrasadas = [c for c in vencem if _status_real(c) == "VENCIDA"]
+        falta = [c for c in vencem if _status_real(c) == "PENDENTE"]
+        pagas = [c for c in contas_validas if c.get("status") == "PAGO" and no_mes(data_pagamento(c))]
+
+        def soma(lista):
+            return sum(float(c.get("valor", 0)) for c in lista)
+
+        def qtd(lista):
+            return f"{len(lista)} conta{'s' if len(lista) != 1 else ''}"
+
+        for card, titulo, lista in (
+            (self.card_aberto, f"Vence {nome}", vencem),
+            (self.card_vencidas, f"Atrasadas {nome}", atrasadas),
+            (self.card_proximos_7, f"Falta pagar {nome}", falta),
+            (self.card_pago, f"Pago {nome}", pagas),
+        ):
+            card.definir_titulo(titulo)
+            card.definir_valor(formatar_moeda(soma(lista)))
+            card.definir_legenda(qtd(lista))
 
     def _filtrar_status(self, filtro):
 
@@ -810,6 +858,7 @@ class ContasPagar(QWidget):
     def _filtrar_periodo(self, filtro):
 
         self.filtro_periodo = filtro
+        self._atualizar_kpis()
         self._renderizar_lista()
 
     def _dentro_do_periodo(self, conta):
@@ -835,6 +884,10 @@ class ContasPagar(QWidget):
 
         if self.filtro_periodo == "ANO":
             return venc.year == hoje.year
+
+        mes = intervalo_mes(self.filtro_periodo)  # "Novembro/2026"
+        if mes:
+            return mes[0] <= venc <= mes[1]
 
         return True
 

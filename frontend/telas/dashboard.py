@@ -35,6 +35,7 @@ from services import preferencias_service
 
 from telas.relatorios import NOMES_FORMA_PAGAMENTO, CORES_FORMA_PAGAMENTO
 from utils.formatacao import formatar_moeda
+from utils.periodo import intervalo_mes, meses_recentes
 
 
 DIAS_SEMANA_ABREV = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
@@ -697,7 +698,7 @@ class Dashboard(QWidget):
     def _construir_combo_periodo(self, ao_mudar, padrao="Hoje"):
 
         combo = QComboBox()
-        combo.addItems([rotulo for rotulo, _dias in OPCOES_PERIODO])
+        combo.addItems([rotulo for rotulo, _dias in OPCOES_PERIODO] + meses_recentes())
         combo.setCurrentText(padrao)
         combo.setCursor(Qt.PointingHandCursor)
         combo.setStyleSheet(f"""
@@ -956,6 +957,13 @@ class Dashboard(QWidget):
             self.secao_pagamentos.corpo.addWidget(linha)
 
     def _filtrar_por_periodo(self, rotulo_periodo):
+
+        mes = intervalo_mes(rotulo_periodo)  # "Agosto/2026"
+        if mes:
+            return [
+                v for v in self._vendas_finalizadas
+                if mes[0] <= (_parse_data(v.get("data")) or datetime.min).date() <= mes[1]
+            ]
 
         dias = dict(OPCOES_PERIODO).get(rotulo_periodo, 30)
         hoje = datetime.now().date()

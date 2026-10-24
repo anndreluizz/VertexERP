@@ -24,3 +24,14 @@ def test_hover_apaga_ao_sair_mesmo_com_item_ativo():
         anterior.setChecked(False)
 
         assert anterior.getOpacidadeFundo() == 0.0
+
+
+def test_hover_anima_o_fundo_de_verdade():
+    # opacidadeFundo era `property` do Python: o QPropertyAnimation nao
+    # achava a propriedade e o hover nunca acendia (so' aviso no log do Qt)
+    with mock.patch("design.sidebar.movimento_reduzido", return_value=False):
+        item = ItemMenuLateral("home", "PDV")
+        item.enterEvent(QEnterEvent(QPointF(), QPointF(), QPointF()))
+        item._anim.setCurrentTime(item._anim.duration())
+
+        assert item.getOpacidadeFundo() == 1.0

@@ -51,6 +51,13 @@ def _pacote(raiz, versao):
         shutil.make_archive(base, "zip", root_dir=raiz, base_dir="VertexERP-Frontend")
         os.remove(temporario)
         os.replace(base + ".zip", destino)
+        # so' a versao atual interessa: cada release deixava ~63 MB pra tras
+        for nome in os.listdir(pasta):
+            if nome.startswith("terminal_") and nome.endswith(".zip") and nome != os.path.basename(destino):
+                try:
+                    os.remove(os.path.join(pasta, nome))
+                except OSError:
+                    pass  # terminal ainda baixando esse; sai na proxima versao
     return destino
 
 

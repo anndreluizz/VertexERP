@@ -16,6 +16,12 @@ if getattr(sys, "frozen", False):
     log_file = open(_CAMINHO_LOG_CRASH, "a", encoding="utf-8", buffering=1)
     sys.stdout = log_file
     sys.stderr = log_file
+
+    # crash nativo (0xc0000409 / abort do Qt) mata o processo antes do
+    # excepthook: faulthandler ainda grava a pilha Python de cada thread
+    # nesse momento -- antes, so' sobrava o Visualizador de Eventos.
+    import faulthandler
+    faulthandler.enable(log_file, all_threads=True)
 else:
     _CAMINHO_LOG_CRASH = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "frontend_log.txt"
@@ -52,7 +58,17 @@ def _instalar_handler_de_crash():
 
 _instalar_handler_de_crash()
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QtMsgType, QTimer, qInstallMessageHandler
+
+# No Windows o Qt manda aviso/erro fatal pro OutputDebugString, nao pro
+# stderr: "QThread: Destroyed while thread is still running" nunca
+# chegava no frontend_log.txt. Debug/info ficam de fora (barulho).
+def _mensagem_qt(tipo, _contexto, mensagem):
+    if tipo not in (QtMsgType.QtDebugMsg, QtMsgType.QtInfoMsg):
+        print(f"[{datetime.now().isoformat(timespec='seconds')}] Qt {tipo.name}: {mensagem}", file=sys.stderr, flush=True)
+
+
+qInstallMessageHandler(_mensagem_qt)
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from requests.exceptions import RequestException

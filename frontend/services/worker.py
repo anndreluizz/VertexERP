@@ -23,7 +23,12 @@ PRECISAM ser métodos vinculados a um QObject -- ver nota no fim):
 
 from concurrent.futures import ThreadPoolExecutor
 
-from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtCore import QCoreApplication, QObject, QThread, Signal
+
+# Toda QThread em andamento fica presa aqui ate terminar, independente
+# da tela que pediu: ver nota em rodar_em_thread sobre fechar a tela
+# no meio da busca.
+_EM_ANDAMENTO = set()
 
 
 def em_paralelo(*chamadas):
@@ -75,18 +80,23 @@ class _Worker(QObject):
 
 
 class _Limpeza(QObject):
-    """Vive na thread da GUI (filha do parent), entao o Qt entrega
-    thread.finished pra ela em fila, fora da worker thread."""
+    """Vive na thread da GUI (filha do QApplication, que dura o app
+    inteiro -- nao da tela, que pode ja ter sido fechada), entao o Qt
+    entrega thread.finished pra ela em fila, fora da worker thread."""
 
-    def __init__(self, parent, thread):
-        super().__init__(parent)
+    def __init__(self, dono, thread):
+        super().__init__(QCoreApplication.instance())
+        self._dono = dono
         self._thread = thread
 
     def limpar(self):
-        ativas = getattr(self.parent(), "_threads_ativas", [])
+        # _threads_ativas e' atributo Python do wrapper: ler funciona
+        # mesmo se o widget C++ ja foi destruido.
+        ativas = getattr(self._dono, "_threads_ativas", [])
         if self._thread in ativas:
             ativas.remove(self._thread)
-        self._thread = None
+        _EM_ANDAMENTO.discard(self._thread)
+        self._dono = self._thread = None
         self.deleteLater()
 
 
@@ -135,7 +145,12 @@ def rodar_em_thread(
                 f"de rodar_em_thread."
             )
 
-    thread = QThread(parent)
+    # SEM parent: QThread filha da tela era destruida junto quando o
+    # usuario fechava a tela no meio da busca, e destruir QThread
+    # rodando aborta o processo (0xc0000409, sem log -- 2 vezes na loja
+    # em 23/10). Quem segura a thread viva e' _EM_ANDAMENTO; os
+    # callbacks da tela fechada o Qt desliga sozinho.
+    thread = QThread()
     worker = _Worker(func, args, kwargs)
     worker.moveToThread(thread)
 
@@ -166,6 +181,7 @@ def rodar_em_thread(
     if not hasattr(parent, "_threads_ativas"):
         parent._threads_ativas = []
     parent._threads_ativas.append(thread)
+    _EM_ANDAMENTO.add(thread)
 
     # tira da lista quando termina -- pela thread da GUI. Antes era uma
     # funcao solta ligada em thread.finished, que roda NA worker thread:

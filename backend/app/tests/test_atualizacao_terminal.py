@@ -39,6 +39,18 @@ def test_versao_e_pacote_do_terminal(client, auth_headers, tmp_path, monkeypatch
     assert (tmp_path / "atualizacoes" / "terminal_2026.10.15.11.zip").exists()
 
 
+def test_pacote_novo_apaga_os_das_versoes_antigas(client, auth_headers, tmp_path, monkeypatch):
+    _instalacao(tmp_path, monkeypatch)
+    pasta = tmp_path / "atualizacoes"
+    pasta.mkdir()
+    (pasta / "terminal_2026.10.14.0.zip").write_bytes(b"velho")
+    (pasta / "antes_2026.10.14.0.sql").write_text("backup")
+
+    assert client.get("/atualizacao/terminal/pacote", headers=auth_headers).status_code == 200
+
+    assert sorted(p.name for p in pasta.iterdir()) == ["antes_2026.10.14.0.sql", "terminal_2026.10.15.11.zip"]
+
+
 def test_precisa_estar_logado(client, tmp_path, monkeypatch):
     _instalacao(tmp_path, monkeypatch)
     assert client.get("/atualizacao/terminal").status_code in (401, 403)

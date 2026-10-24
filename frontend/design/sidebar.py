@@ -1,4 +1,4 @@
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import Property, QEasingCurve, QPropertyAnimation, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter
 from PySide6.QtWidgets import (
     QFrame,
@@ -54,7 +54,8 @@ class ItemMenuLateral(QPushButton):
         self._opacidade_fundo = valor
         self.update()
 
-    opacidadeFundo = property(getOpacidadeFundo, setOpacidadeFundo)
+    # Property do Qt (nao a do Python): o QPropertyAnimation so' enxerga essa
+    opacidadeFundo = Property(float, getOpacidadeFundo, setOpacidadeFundo)
 
     # o hover anima sempre, inclusive com o item ativo: o paintEvent já
     # ignora _opacidade_fundo quando isChecked(). Antes, sair com o mouse

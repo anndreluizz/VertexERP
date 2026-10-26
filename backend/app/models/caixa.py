@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy.orm import relationship
@@ -82,3 +82,11 @@ class Caixa(Base):
         back_populates="caixa",
         cascade="all, delete-orphan"
     )
+
+    @property
+    def vencido(self) -> bool:
+        # regra da loja: caixa nao pode ficar aberto mais de 24h
+        return (
+            self.status == "ABERTO"
+            and datetime.now() - self.data_abertura > timedelta(hours=24)
+        )

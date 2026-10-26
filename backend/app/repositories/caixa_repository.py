@@ -18,6 +18,7 @@ class CaixaRepository:
         usuario_id: int,
         loja_id: int | None = None,
         para_atualizar: bool = False,
+        aceitar_vencido: bool = False,
     ):
         # loja_id filtra o caixa aberto pela loja alem do usuario -- sem
         # isso, um admin com caixa aberto na Matriz nao conseguiria abrir
@@ -39,7 +40,18 @@ class CaixaRepository:
         if para_atualizar:
             query = query.with_for_update()
 
-        return query.first()
+        caixa = query.first()
+
+        # caixa aberto ha mais de 24h nao opera (venda, sangria,
+        # recebimento...): tem que fechar e abrir outro. So trava quem
+        # vai mexer no saldo; fechar e ajuste de fiado passam aceitar_vencido
+        if caixa and para_atualizar and not aceitar_vencido and caixa.vencido:
+            raise Exception(
+                "Este caixa está aberto há mais de 24 horas. Feche o caixa "
+                "e abra um novo para continuar."
+            )
+
+        return caixa
 
     @staticmethod
     def atualizar(db: Session, caixa: Caixa):

@@ -588,7 +588,19 @@ class PrincipalWindow(QMainWindow):
 
     def ir_para_pdv(self):
 
-        if caixa_aberto() is not None:
+        info = caixa_aberto()
+
+        if info and info.get("vencido"):
+            QMessageBox.warning(
+                self,
+                "Caixa vencido",
+                "Este caixa está aberto há mais de 24 horas. Feche o caixa "
+                "e abra um novo para voltar a vender.",
+            )
+            self._exibir_pagina("caixa", self.caixa)
+            return
+
+        if info is not None:
             self._exibir_pagina("pdv", self.pdv)
             return
 

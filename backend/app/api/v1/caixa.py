@@ -46,6 +46,7 @@ def caixa_to_response(caixa):
         valor_guardado=caixa.valor_guardado,
         valor_retirado=caixa.valor_retirado,
         usuario_id=caixa.usuario_id,
+        vencido=caixa.vencido,
     )
 
 

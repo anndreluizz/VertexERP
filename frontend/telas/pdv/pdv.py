@@ -236,6 +236,15 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
             """)
             return
 
+        if info.get("vencido"):
+            self.badge_caixa.setText("Caixa aberto há +24h — feche o caixa")
+            self.badge_caixa.setStyleSheet(f"""
+                background: {tokens.ERRO_CLARO}; color: {tokens.ERRO_HOVER};
+                border-radius: {tokens.RADIUS_PILL}px; font-size: {tokens.TAMANHO_XS}px;
+                font-weight: 600; padding: 3px 10px;
+            """)
+            return
+
         abertura = _parse_data(info.get("data_abertura"))
         hora_texto = abertura.strftime("%H:%M") if abertura else "—"
 

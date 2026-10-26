@@ -60,7 +60,7 @@ def _ajustar_caixa_por_correcao(
 
     if not caixa:
         caixa = CaixaRepository.buscar_aberto(
-            db, usuario_id, para_atualizar=True
+            db, usuario_id, para_atualizar=True, aceitar_vencido=True
         )
 
     if not caixa:

@@ -177,3 +177,39 @@ def test_abrir_e_fechar_caixa_avisa_tambem_quem_fez(client, auth_headers, usuari
     titulos = [n["titulo"] for n in notificacoes]
     assert "Caixa aberto" in titulos and "Caixa fechado" in titulos
     assert "100" in enviados[0][1]
+
+
+def test_caixa_aberto_mais_de_24h_bloqueia_operacao_mas_deixa_fechar(
+    client, auth_headers, db, caixa_aberto
+):
+    from datetime import datetime, timedelta
+
+    caixa_aberto.data_abertura = datetime.now() - timedelta(hours=25)
+    db.commit()
+
+    sangria = client.post(
+        "/movimentos-caixa/",
+        json={"tipo": "SANGRIA", "descricao": "Sangria", "valor": 10.0},
+        headers=auth_headers,
+    )
+    assert sangria.status_code == 400
+    assert "24 horas" in sangria.json()["detail"]
+
+    fechar = client.post("/caixa/fechar", json={}, headers=auth_headers)
+    assert fechar.status_code == 200
+
+    from app.models.notificacao import Notificacao
+
+    corpos = [n.corpo for n in db.query(Notificacao).filter(Notificacao.titulo == "Caixa fechado")]
+    assert any("mais de 24 horas" in c for c in corpos)
+
+
+def test_caixa_aberto_informa_vencido(client, auth_headers, db, caixa_aberto):
+    from datetime import datetime, timedelta
+
+    assert client.get("/caixa/aberto", headers=auth_headers).json()["vencido"] is False
+
+    caixa_aberto.data_abertura = datetime.now() - timedelta(hours=25)
+    db.commit()
+
+    assert client.get("/caixa/aberto", headers=auth_headers).json()["vencido"] is True

@@ -8,6 +8,7 @@ class Caixa {
     required this.saldoFinal,
     required this.status,
     required this.usuarioId,
+    this.vencido = false,
   });
 
   factory Caixa.fromJson(Map<String, dynamic> json) {
@@ -24,6 +25,8 @@ class Caixa {
       // pro lado seguro (false), nunca mostra como aberto por engano.
       status: json['status'] as String? ?? 'DESCONHECIDO',
       usuarioId: json['usuario_id'] as int?,
+      // aberto ha mais de 24h (regra do servidor): so' deixa fechar
+      vencido: json['vencido'] as bool? ?? false,
     );
   }
 
@@ -34,6 +37,7 @@ class Caixa {
   final double saldoFinal;
   final String status;
   final int? usuarioId;
+  final bool vencido;
 
   bool get aberto => status == 'ABERTO';
 

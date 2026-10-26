@@ -122,7 +122,9 @@ class _LinhaCaixa extends StatelessWidget {
             width: 8,
             height: 8,
             decoration: BoxDecoration(
-              color: caixa.aberto
+              color: caixa.vencido
+                  ? VertexColors.erro
+                  : caixa.aberto
                   ? VertexColors.sucesso
                   : VertexColors.bordaForte,
               shape: BoxShape.circle,
@@ -141,6 +143,7 @@ class _LinhaCaixa extends StatelessWidget {
                 Text(
                   caixa.aberto
                       ? 'Aberto há ${_formatarDuracao(caixa.tempoAberto)}'
+                            '${caixa.vencido ? ' · passou de 24h, precisa fechar' : ''}'
                       : 'Fechado ${rotuloDia(caixa.dataFechamento!).toLowerCase()}'
                             ' às ${formatarDataHora(caixa.dataFechamento!).substring(11)}',
                   style: tema.bodySmall,

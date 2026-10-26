@@ -35,6 +35,7 @@ class CaixaResponse(Schema):
     valor_retirado: Decimal | None = None
     usuario_id: int | None = None
     usuario_nome: str | None = None  # so' no /historico
+    vencido: bool = False  # aberto ha mais de 24h: so' deixa fechar
 
 
 class ResumoCaixaResponse(Schema):

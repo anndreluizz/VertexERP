@@ -64,11 +64,14 @@ class CaixaService:
     ):
 
         caixa = CaixaRepository.buscar_aberto(
-            db, usuario_id, loja_id, para_atualizar=True
+            db, usuario_id, loja_id, para_atualizar=True, aceitar_vencido=True
         )
 
         if not caixa:
             raise Exception("Nenhum caixa aberto.")
+
+        # guardado antes de fechar (depois do status FECHADO vira False)
+        estava_vencido = caixa.vencido
 
         saiu = (valor_guardado or 0) + (valor_retirado or 0)
         disponivel = valor_contado if valor_contado is not None else caixa.saldo_final
@@ -93,7 +96,8 @@ class CaixaService:
             db,
             "Caixa fechado",
             f"{operador.nome if operador else 'Um operador'} fechou o "
-            f"caixa com R$ {caixa.saldo_final:.2f} em caixa.",
+            f"caixa com R$ {caixa.saldo_final:.2f} em caixa."
+            + (" Ele estava aberto há mais de 24 horas." if estava_vencido else ""),
         )
 
         return caixa

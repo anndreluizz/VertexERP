@@ -16,6 +16,7 @@ from design import tokens
 from design.widgets import BotaoSecundario, CardKPI
 from utils.formatacao import formatar_moeda
 from widgets.dialogs.message_dialog import Mensagem
+from .comum import NOMES_FORMA_PAGAMENTO
 
 
 class CaixaMixin:
@@ -84,7 +85,7 @@ class CaixaMixin:
         self.card_entrou_total = CardKPI("Total que entrou", "dollar-sign", tokens.PRIMARIA, destaque=True)
         self.card_contas_pagas = CardKPI("Contas pagas", "file-text", tokens.ERRO)
         self.card_sangrias = CardKPI("Sangrias", "arrow-down", tokens.ERRO)
-        self.card_sobrou = CardKPI("Sobrou", "wallet", tokens.SECUNDARIA, destaque=True)
+        self.card_sobrou = CardKPI("Resultado do período", "wallet", tokens.SECUNDARIA, destaque=True)
         for card in (
             self.card_entrou_total, self.card_contas_pagas, self.card_sangrias, self.card_sobrou,
         ):
@@ -185,26 +186,33 @@ class CaixaMixin:
             card.definir_valor(formatar_moeda(valor(chave)))
             card.definir_legenda(f"{valor(chave) / total * 100:.0f}% do total" if total else "—")
         self.card_contas_pagas.definir_valor(formatar_moeda(valor("contas_pagas")))
-        self.card_contas_pagas.definir_legenda("contas a pagar quitadas")
+        por_forma = dados.get("contas_pagas_por_forma") or {}
+        self.card_contas_pagas.definir_legenda(" · ".join(
+            f"{formatar_moeda(float(v))} {NOMES_FORMA_PAGAMENTO.get(f, f.capitalize()).lower()}"
+            for f, v in sorted(por_forma.items(), key=lambda fv: -float(fv[1]))
+        ) or "contas a pagar quitadas")
         self.card_sangrias.definir_valor(formatar_moeda(valor("sangrias")))
         self.card_sangrias.definir_legenda("retiradas do caixa")
         sobrou = valor("sobrou")
         self.card_sobrou.definir_valor(("− " if sobrou < 0 else "") + formatar_moeda(abs(sobrou)))
         # so' desconta o que foi lancado no sistema: despesas pagas fora
         # dele (ou antes das contas a pagar existirem) nao saem daqui
-        self.card_sobrou.definir_legenda("entrou − contas − sangrias · só o lançado no sistema")
+        self.card_sobrou.definir_legenda(
+            "gastou mais do que entrou" if sobrou < 0 else "entrou − contas − sangrias"
+        )
         self.card_sobrou.setToolTip(
-            "Não é o dinheiro que a loja tem: só desconta as contas pagas e as "
-            "sangrias lançadas no sistema. Despesas pagas por fora (ou antes de "
-            "serem cadastradas) não saem daqui."
+            "Entrou no período menos o que saiu (contas pagas e sangrias). "
+            "Negativo quer dizer que o período gastou mais do que entrou -- as "
+            "contas foram pagas com dinheiro guardado de antes. Não é o dinheiro "
+            "que a loja tem: esse está no BI, em \"Dinheiro guardado\"."
         )
         self.card_entrou_fiado.definir_valor(formatar_moeda(valor("fiado_recebido")))
         self.card_entrou_fiado.definir_legenda("já somado no dinheiro, PIX e cartão")
 
         nota = (
             "Soma as vendas (menos estornos) e o fiado que os clientes pagaram, de todos os caixas. "
-            "Troco inicial e suprimentos não entram. \"Sobrou\" não é o dinheiro em "
-            "mãos: despesas pagas fora do sistema não são descontadas."
+            "Troco inicial e suprimentos não entram. O resultado não é o dinheiro em "
+            "mãos (esse está no BI, em \"Dinheiro guardado\")."
         )
         if valor("outros") >= 0.01:
             nota += f" Outras formas: {formatar_moeda(valor('outros'))}."

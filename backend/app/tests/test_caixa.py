@@ -105,17 +105,20 @@ def test_entradas_soma_o_que_entrou_de_verdade(client, auth_headers, db, caixa_a
             forma_pagamento=forma, valor=valor, data=data,
         ))
     from app.models.conta_pagar import ContaPagar
-    for status, valor, pago_em in [
-        ("PAGO", 70, hoje), ("PAGO", 500, hoje - timedelta(days=40)), ("PENDENTE", 300, None),
+    for status, valor, pago_em, forma in [
+        ("PAGO", 50, hoje, "DINHEIRO"), ("PAGO", 20, hoje, "TRANSFERENCIA"),
+        ("PAGO", 500, hoje - timedelta(days=40), "DINHEIRO"), ("PENDENTE", 300, None, None),
     ]:
         db.add(ContaPagar(
             descricao="Luz", valor=valor, status=status, data_pagamento=pago_em,
-            data_vencimento=hoje,
+            data_vencimento=hoje, forma_pagamento=forma,
         ))
     db.commit()
 
     dia = hoje.date().isoformat()
     dados = client.get(f"/caixa/entradas?inicio={dia}&fim={dia}", headers=auth_headers).json()
+    por_forma = dados.pop("contas_pagas_por_forma")
+    assert {k: float(v) for k, v in por_forma.items()} == {"DINHEIRO": 50.0, "TRANSFERENCIA": 20.0}
     assert {k: float(v) for k, v in dados.items()} == {
         "dinheiro": 140.0, "pix": 100.0, "cartao": 350.0, "outros": 0.0,
         "fiado_recebido": 400.0, "total": 590.0, "sangrias": 25.0, "vendas_prazo": 80.0,

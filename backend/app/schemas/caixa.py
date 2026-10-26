@@ -69,4 +69,5 @@ class EntradasCaixaResponse(Schema):
     sangrias: Decimal
     vendas_prazo: Decimal
     contas_pagas: Decimal
+    contas_pagas_por_forma: dict[str, Decimal] = {}
     sobrou: Decimal  # total - contas_pagas - sangrias

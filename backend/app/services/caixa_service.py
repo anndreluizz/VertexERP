@@ -168,8 +168,9 @@ class CaixaService:
         # PAGAMENTO pras pagas em dinheiro, mas esse tipo nao entra na
         # soma acima -- entao nao conta duas vezes
         contas = (
-            db.query(func.coalesce(func.sum(ContaPagar.valor), 0))
+            db.query(ContaPagar.forma_pagamento, func.sum(ContaPagar.valor))
             .filter(ContaPagar.status == StatusContaPagar.PAGO.value)
+            .group_by(ContaPagar.forma_pagamento)
         )
         if inicio:
             contas = contas.filter(ContaPagar.data_pagamento >= inicio)
@@ -177,7 +178,11 @@ class CaixaService:
             contas = contas.filter(ContaPagar.data_pagamento < fim + timedelta(days=1))
         if loja_id is not None:
             contas = contas.filter(ContaPagar.loja_id == loja_id)
-        contas_pagas = contas.scalar() or zero
+        # por forma: mostra que boa parte sai do dinheiro guardado, nao do mes
+        contas_por_forma = {
+            (forma or "OUTROS"): valor for forma, valor in contas.all()
+        }
+        contas_pagas = sum(contas_por_forma.values(), zero)
 
         # retirada dos socios no fechamento e' o mesmo que sangria pro dono
         retiradas = db.query(func.coalesce(func.sum(Caixa.valor_retirado), 0))
@@ -197,6 +202,7 @@ class CaixaService:
             "sangrias": sangrias,
             "vendas_prazo": vendas_prazo,
             "contas_pagas": contas_pagas,
+            "contas_pagas_por_forma": contas_por_forma,
             "sobrou": total - contas_pagas - sangrias,
         }
 

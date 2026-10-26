@@ -29,7 +29,7 @@ LINHAS = [
     ("Fiado recebido", "fiado_recebido", "soma"),
     ("Contas pagas", "contas_pagas", "soma"),
     ("Sangrias e retiradas", "sangrias", "soma"),
-    ("Sobrou", "sobrou", "soma"),
+    ("Resultado do mês", "sobrou", "soma"),
 ]
 
 
@@ -149,9 +149,9 @@ class MesAMesMixin:
             for coluna, texto in enumerate(textos, start=1):
                 celula = QTableWidgetItem(texto)
                 ultima = coluna == len(textos)
-                if rotulo == "Sobrou" or ultima:
+                if rotulo == "Resultado do mês" or ultima:
                     celula.setFont(negrito)
-                if rotulo == "Sobrou" and "-" in texto:
+                if rotulo == "Resultado do mês" and "-" in texto:
                     celula.setForeground(QColor(tokens.ERRO))
                 tabela.setItem(linha, coluna, celula)
         # 12 meses + total: cada coluna do tamanho do valor, sem quebrar

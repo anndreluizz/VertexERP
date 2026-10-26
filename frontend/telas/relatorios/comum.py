@@ -28,6 +28,8 @@ NOMES_FORMA_PAGAMENTO = {
     "CREDITO": "Crédito",
     "BOLETO": "Boleto",
     "PRAZO": "Crediário",
+    "CARTAO": "Cartão",
+    "TRANSFERENCIA": "Transferência",
 }
 
 

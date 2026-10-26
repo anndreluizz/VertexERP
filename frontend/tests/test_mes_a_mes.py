@@ -14,7 +14,7 @@ def test_total_soma_e_ticket_medio_do_ano():
     assert quadro["Nº de vendas"] == ["2", "2", "4"]
     assert quadro["Ticket médio"][-1] == "R$ 100,00"  # 400 / 4, nao a media dos tickets
     assert quadro["Lucro bruto"] == ["R$ 40,00", "R$ 60,00", "R$ 100,00"]
-    assert quadro["Sobrou"] == ["R$ -10,00", "R$ 50,00", "R$ 40,00"]
+    assert quadro["Resultado do mês"] == ["R$ -10,00", "R$ 50,00", "R$ 40,00"]
 
 
 def test_lucro_sem_custo_vira_traco():

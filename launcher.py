@@ -420,6 +420,31 @@ def iniciar_backend():
     # ERP por vez, e confiar numa checagem de porta cria corrida: um
     # processo antigo ainda liberando a porta pode enganar essa checagem
     # e deixar o launcher sem nenhum backend de verdade rodando.
+    # Ate 3 tentativas: logo depois de uma atualizacao o backend ja
+    # morreu sozinho na primeira subida (crash 0xc0000005 no ntdll,
+    # 26/10 -- arquivos recem-trocados, antivirus escaneando) e abriu
+    # normal na segunda. So' tenta de novo quando o processo MORREU;
+    # se so' demorou os 15 minutos, desiste como antes.
+    for _ in range(3):
+        processo = _subir_backend_uma_vez()
+
+        if processo.poll() is None:
+            # vivo: ou respondeu, ou estourou os 15 minutos
+            if backend_pronto():
+                return processo
+            break
+
+        time.sleep(5)
+
+    # Não travou, mas não subiu — não adianta abrir o frontend pra só
+    # mostrar "Servidor Offline". Mata o que tentou subir e desiste.
+    encerrar_processo(BACKEND_EXE)
+    return None
+
+
+def _subir_backend_uma_vez():
+    """Sobe o backend e espera ele responder, morrer ou estourar o tempo
+    -- devolve o processo nos tres casos."""
     processo = subprocess.Popen(
         [BACKEND_EXE],
         cwd=BASE_DIR,
@@ -446,10 +471,7 @@ def iniciar_backend():
 
         time.sleep(1)
 
-    # Não travou, mas não subiu — não adianta abrir o frontend pra só
-    # mostrar "Servidor Offline". Mata o que tentou subir e desiste.
-    encerrar_processo(BACKEND_EXE)
-    return None
+    return processo
 
 
 def iniciar_frontend():

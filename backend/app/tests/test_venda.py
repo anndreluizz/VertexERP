@@ -42,7 +42,7 @@ def test_criar_venda_com_estoque_insuficiente(
             "itens": [
                 {
                     "produto_id": produto.id,
-                    "quantidade": produto.estoque + 1,
+                    "quantidade": int(produto.estoque) + 1,
                     "valor_unitario": "20.00",
                 }
             ],

@@ -12,7 +12,7 @@ class ItemVenda {
     return ItemVenda(
       id: json['id'] as int,
       produtoId: json['produto_id'] as int,
-      quantidade: json['quantidade'] as int,
+      quantidade: json['quantidade'] as num,
       valorUnitario: (json['valor_unitario'] as num).toDouble(),
       subtotal: (json['subtotal'] as num).toDouble(),
     );
@@ -20,7 +20,7 @@ class ItemVenda {
 
   final int id;
   final int produtoId;
-  final int quantidade;
+  final num quantidade;
   final double valorUnitario;
   final double subtotal;
 }

@@ -32,6 +32,11 @@ class BuscaExternaMixin:
 
         self.modo_venda = valor
 
+        # KG/L: estoque 12,500; UN: inteiro
+        casas = 3 if valor in ("KG", "L") else 0
+        self.estoque.setDecimals(casas)
+        self.estoque_minimo.setDecimals(casas)
+
         for chave, botao in self.botoes_modo.items():
 
             selecionado = chave == valor

@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
-    QSpinBox,
+    QDoubleSpinBox,
     QTableWidgetItem,
     QVBoxLayout,
 )
@@ -16,7 +16,7 @@ from design import tokens
 from design.widgets import BotaoPrimario, BotaoSecundario, CampoTexto
 from services.venda_service import registrar_devolucao
 from services.worker import rodar_em_thread
-from utils.formatacao import formatar_moeda
+from utils.formatacao import eh_fracionado, formatar_moeda, formatar_quantidade
 from widgets.tables.standard_table import StandardTable
 
 # (forma, rótulo) -- PRAZO só aparece quando a venda tem cliente
@@ -107,13 +107,19 @@ class DevolucaoDialog(QDialog):
             self.tabela.setItem(
                 linha, 0, QTableWidgetItem(item.get("produto_nome") or f"#{item['produto_id']}")
             )
-            self.tabela.setItem(linha, 1, QTableWidgetItem(str(item["quantidade"])))
+            unidade = item.get("unidade")
             self.tabela.setItem(
-                linha, 2, QTableWidgetItem(str(item["quantidade"] - restante))
+                linha, 1, QTableWidgetItem(formatar_quantidade(item["quantidade"], unidade))
+            )
+            self.tabela.setItem(
+                linha, 2,
+                QTableWidgetItem(formatar_quantidade(item["quantidade"] - restante, unidade)),
             )
 
-            spin = QSpinBox()
-            spin.setRange(0, max(restante, 0))
+            # KG/L devolve 0,200 de 0,347; UN so' inteiro
+            spin = QDoubleSpinBox()
+            spin.setDecimals(3 if eh_fracionado(unidade) else 0)
+            spin.setRange(0, max(round(restante, 3), 0))
             spin.setEnabled(restante > 0)
             spin.valueChanged.connect(self._atualizar_total)
             self.tabela.setCellWidget(linha, 3, spin)
@@ -177,7 +183,7 @@ class DevolucaoDialog(QDialog):
 
     def _itens_escolhidos(self):
         return [
-            {"item_venda_id": item["id"], "quantidade": spin.value()}
+            {"item_venda_id": item["id"], "quantidade": round(spin.value(), 3)}
             for (item, _restante), spin in zip(self._itens, self.spins)
             if spin.value() > 0
         ]

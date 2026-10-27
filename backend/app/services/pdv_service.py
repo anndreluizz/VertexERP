@@ -5,7 +5,7 @@ from app.models.produto import Produto
 from app.repositories.estoque_loja_repository import EstoqueLojaRepository
 
 
-def _para_dict(produto: Produto, estoque: int):
+def _para_dict(produto: Produto, estoque):
     return {
         "id": produto.id,
         "codigo": produto.codigo,
@@ -15,6 +15,7 @@ def _para_dict(produto: Produto, estoque: int):
         "estoque": estoque,
         "tem_foto": produto.tem_foto,
         "favorito": produto.favorito,
+        "unidade": produto.unidade or "UN",
     }
 
 

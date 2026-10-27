@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from app.schemas.base import Schema
+from app.schemas.base import Quantidade, Schema
 
 
 class ImportarCsvRequest(Schema):
@@ -15,8 +15,8 @@ class ItemImportacaoPreview(Schema):
     codigo_barras: str | None = None
     preco_custo: Decimal
     preco_venda: Decimal
-    estoque: int
-    estoque_minimo: int
+    estoque: Quantidade
+    estoque_minimo: Quantidade
     unidade: str
     produto_id: int | None = None  # preenchido = vai ATUALIZAR, nao criar
     erro: str | None = None
@@ -36,8 +36,8 @@ class ItemImportacaoConfirmar(Schema):
     codigo_barras: str | None = None
     preco_custo: Decimal
     preco_venda: Decimal
-    estoque: int
-    estoque_minimo: int
+    estoque: Quantidade
+    estoque_minimo: Quantidade
     unidade: str
     produto_id: int | None = None
 

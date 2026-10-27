@@ -1,18 +1,18 @@
 from datetime import datetime
 
-from app.schemas.base import Schema
+from app.schemas.base import Quantidade, Schema
 
 
 class ItemContagemEstoqueResponse(Schema):
     id: int
     produto_id: int
     produto_nome: str | None = None
-    quantidade_sistema: int
-    quantidade_contada: int | None = None
+    quantidade_sistema: Quantidade
+    quantidade_contada: Quantidade | None = None
 
 
 class ItemContagemEstoqueUpdate(Schema):
-    quantidade_contada: int
+    quantidade_contada: Quantidade
 
 
 class ContagemEstoqueCreate(Schema):

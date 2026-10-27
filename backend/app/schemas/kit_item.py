@@ -1,10 +1,10 @@
 
-from app.schemas.base import Schema
+from app.schemas.base import Quantidade, Schema
 
 
 class KitItemCreate(Schema):
     produto_componente_id: int
-    quantidade: int = 1
+    quantidade: Quantidade = 1
 
 
 class KitItemResponse(Schema):
@@ -12,4 +12,4 @@ class KitItemResponse(Schema):
     kit_id: int
     produto_componente_id: int
     produto_componente_nome: str | None = None
-    quantidade: int
+    quantidade: Quantidade

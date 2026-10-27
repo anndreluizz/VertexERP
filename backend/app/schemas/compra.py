@@ -1,20 +1,20 @@
 from datetime import datetime
 from decimal import Decimal
 
-from app.schemas.base import Schema
+from app.schemas.base import Quantidade, Schema
 from app.enums.forma_pagamento import FormaPagamento
 
 
 class ItemCompraCreate(Schema):
     produto_id: int
-    quantidade: int
+    quantidade: Quantidade
     valor_unitario: Decimal
 
 
 class ItemCompraResponse(Schema):
     id: int
     produto_id: int
-    quantidade: int
+    quantidade: Quantidade
     valor_unitario: Decimal
     subtotal: Decimal
 

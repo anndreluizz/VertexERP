@@ -18,8 +18,8 @@ class Produto {
       nome: json['nome'] as String,
       categoria: json['categoria'] as String?,
       precoVenda: (json['preco_venda'] as num).toDouble(),
-      estoque: json['estoque'] as int,
-      estoqueMinimo: json['estoque_minimo'] as int,
+      estoque: json['estoque'] as num,
+      estoqueMinimo: json['estoque_minimo'] as num,
       ativo: json['ativo'] as bool,
     );
   }
@@ -29,8 +29,8 @@ class Produto {
   final String nome;
   final String? categoria;
   final double precoVenda;
-  final int estoque;
-  final int estoqueMinimo;
+  final num estoque;
+  final num estoqueMinimo;
   final bool ativo;
 
   bool get semEstoque => estoque <= 0;

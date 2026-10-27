@@ -148,13 +148,13 @@ class Produto(Base):
         nullable=True,
     )
 
-    estoque: Mapped[int] = mapped_column(
-        Integer,
+    estoque: Mapped[Decimal] = mapped_column(
+        Numeric(12, 3),
         default=0
     )
 
-    estoque_minimo: Mapped[int] = mapped_column(
-        Integer,
+    estoque_minimo: Mapped[Decimal] = mapped_column(
+        Numeric(12, 3),
         default=0
     )
 

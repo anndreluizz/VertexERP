@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Integer, Numeric
+from sqlalchemy import ForeignKey, Numeric
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -25,8 +25,8 @@ class ItemCompra(Base):
         index=True,
     )
 
-    quantidade: Mapped[int] = mapped_column(
-        Integer,
+    quantidade: Mapped[Decimal] = mapped_column(
+        Numeric(12, 3),
     )
 
     valor_unitario: Mapped[Decimal] = mapped_column(

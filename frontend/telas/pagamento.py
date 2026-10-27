@@ -26,7 +26,7 @@ from services.api import configuracoes
 from services.pix_utils import montar_payload_pix
 from services.worker import rodar_em_thread
 from telas.selecionar_cliente import SelecionarClienteDialog
-from utils.formatacao import formatar_moeda
+from utils.formatacao import formatar_moeda, subtotal_item
 
 # rotulo exibido, valor enviado pra API, icone (lucide) do botao -- a
 # ordem aqui e' a tecla de atalho (1 = Dinheiro, 2 = Debito...)
@@ -125,7 +125,7 @@ class PagamentoWindow(QDialog):
 
         self.total = round(total, 2)
         self.itens = itens or []
-        self.subtotal = sum(item["preco"] * item["quantidade"] for item in self.itens)
+        self.subtotal = sum(subtotal_item(item["preco"], item["quantidade"]) for item in self.itens)
         self.desconto = desconto or 0.0
         self.acrescimo = acrescimo or 0.0
         self.cliente_id = cliente_id

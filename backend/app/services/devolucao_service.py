@@ -3,6 +3,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.utils.quantidade import formatar_quantidade
 from app.enums.status_venda import StatusVenda
 from app.models.devolucao import Devolucao, ItemDevolucao
 from app.models.movimento_caixa import MovimentoCaixa
@@ -37,7 +38,7 @@ def quantidades_devolvidas(db: Session, venda_id: int) -> dict[int, int]:
         .all()
     )
 
-    return {item_id: int(qtd) for item_id, qtd in linhas}
+    return {item_id: qtd for item_id, qtd in linhas}
 
 
 def valor_devolvido(db: Session, venda_id: int) -> Decimal:
@@ -140,7 +141,7 @@ class DevolucaoService:
             if pedido.quantidade > restante:
                 nome = item.produto.nome if item.produto else f"#{item.produto_id}"
                 raise Exception(
-                    f"{nome}: só restam {restante} unidade(s) para devolver."
+                    f"{nome}: só restam {formatar_quantidade(restante, item.produto.unidade if item.produto else None)} para devolver."
                 )
 
             valor = (

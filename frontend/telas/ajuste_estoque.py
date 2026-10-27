@@ -340,7 +340,8 @@ class AjusteEstoque(QWidget):
             return
 
         try:
-            quantidade = int(self.quantidade.text())
+            # 12,5 (kg) ou 3 (un.)
+            quantidade = round(float(self.quantidade.text().strip().replace(",", ".")), 3)
             if quantidade <= 0:
                 raise ValueError
 

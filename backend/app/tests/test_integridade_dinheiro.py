@@ -229,8 +229,8 @@ def _payload_produto(produto, **mudancas):
         "categoria": produto.categoria,
         "preco_custo": str(produto.preco_custo),
         "preco_venda": str(produto.preco_venda),
-        "estoque": produto.estoque,
-        "estoque_minimo": produto.estoque_minimo,
+        "estoque": int(produto.estoque),
+        "estoque_minimo": int(produto.estoque_minimo),
         "ativo": True,
     }
     dados.update(mudancas)

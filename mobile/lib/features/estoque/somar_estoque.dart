@@ -15,7 +15,7 @@ Future<void> somarAoEstoque(
   required int id,
   required String nome,
   required String codigo,
-  required int estoque,
+  required num estoque,
   required String titulo,
   required String motivo,
 }) async {

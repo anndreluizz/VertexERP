@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from app.schemas.base import Schema
+from app.schemas.base import Quantidade, Schema
 
 
 class ProdutoPDV(Schema):
@@ -9,6 +9,7 @@ class ProdutoPDV(Schema):
     codigo_barras: str | None = None
     nome: str
     preco: Decimal
-    estoque: int
+    estoque: Quantidade
     tem_foto: bool = False
     favorito: bool = False
+    unidade: str = "UN"

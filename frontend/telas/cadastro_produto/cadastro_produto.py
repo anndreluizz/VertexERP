@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPlainTextEdit,
     QComboBox,
-    QSpinBox,
+    QDoubleSpinBox,
     QPushButton,
     QCheckBox,
     QGridLayout,
@@ -33,7 +33,7 @@ from design.responsive import tamanho_fixo_seguro
 from design.widgets import (
     Badge, BotaoSecundario, BotaoSucesso, CabecalhoDialogo,
 )
-from utils.formatacao import formatar_moeda
+from utils.formatacao import formatar_moeda, formatar_quantidade
 from utils.maiusculas import forcar_maiusculas
 from telas.cadastro_produto.busca_externa import BuscaExternaMixin
 from telas.cadastro_produto.categorias_marcas import CategoriasMarcasMixin
@@ -214,18 +214,21 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
         self.preco_venda = self._dinheiro()
         self.preco_custo = self._dinheiro()
 
-        self.estoque = QSpinBox()
+        # decimais (0 ou 3) seguem a unidade, ver selecionar_modo
+        self.estoque = QDoubleSpinBox()
+        self.estoque.setDecimals(0)
         self.estoque.setMaximum(999999)
         self.estoque.setMinimumHeight(44)
-        self.estoque.setStyleSheet(self._estilo_input("QSpinBox"))
+        self.estoque.setStyleSheet(self._estilo_input("QDoubleSpinBox"))
 
-        self.estoque_minimo = QSpinBox()
+        self.estoque_minimo = QDoubleSpinBox()
+        self.estoque_minimo.setDecimals(0)
         self.estoque_minimo.setMaximum(999999)
         self.estoque_minimo.setMinimumHeight(44)
         self.estoque_minimo.setToolTip(
             "Quando o estoque atingir o mínimo, o produto aparece no alerta de estoque."
         )
-        self.estoque_minimo.setStyleSheet(self._estilo_input("QSpinBox"))
+        self.estoque_minimo.setStyleSheet(self._estilo_input("QDoubleSpinBox"))
 
         # UN/KG/L -- define a unidade do produto
         seletor_modo = QWidget()
@@ -624,13 +627,15 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
         self.badge_resumo_promo.setVisible(promo)
         self.lbl_resumo_custo.setText(formatar_moeda(custo) if custo > 0 else "—")
 
-        unidade = {"UN": "un", "KG": "kg", "L": "L"}.get(self.modo_venda, "un")
         estoque = self.estoque.value()
         minimo = self.estoque_minimo.value()
         cor_estoque = tokens.ERRO if estoque <= 0 else (
             tokens.ALERTA if minimo and estoque <= minimo else tokens.TEXTO
         )
-        self.lbl_resumo_estoque.setText(f"{estoque} {unidade}")
+        texto_estoque = formatar_quantidade(estoque, self.modo_venda)
+        self.lbl_resumo_estoque.setText(
+            texto_estoque if self.modo_venda in ("KG", "L") else f"{texto_estoque} un"
+        )
         self.lbl_resumo_estoque.setStyleSheet(f"""
             background:transparent; color:{cor_estoque};
             font-size:{tokens.TAMANHO_SM}px; font-weight:700;
@@ -814,11 +819,11 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
         )
 
         self.estoque.setValue(
-            self.produto["estoque"]
+            float(self.produto["estoque"] or 0)
         )
 
         self.estoque_minimo.setValue(
-            self.produto.get("estoque_minimo", 0)
+            float(self.produto.get("estoque_minimo") or 0)
         )
 
         self.favorito.setChecked(self.produto.get("favorito", False))

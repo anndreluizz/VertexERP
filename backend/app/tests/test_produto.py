@@ -42,8 +42,8 @@ def test_atualizar_produto(client, auth_headers, produto):
             "categoria": produto.categoria,
             "preco_custo": str(produto.preco_custo),
             "preco_venda": str(produto.preco_venda),
-            "estoque": produto.estoque,
-            "estoque_minimo": produto.estoque_minimo,
+            "estoque": int(produto.estoque),
+            "estoque_minimo": int(produto.estoque_minimo),
             "ativo": True,
         },
         headers=auth_headers,
@@ -95,8 +95,8 @@ def test_atualizar_preco_registra_historico(client, auth_headers, produto):
             "categoria": produto.categoria,
             "preco_custo": "12.00",
             "preco_venda": "25.00",
-            "estoque": produto.estoque,
-            "estoque_minimo": produto.estoque_minimo,
+            "estoque": int(produto.estoque),
+            "estoque_minimo": int(produto.estoque_minimo),
             "ativo": True,
         },
         headers=auth_headers,
@@ -126,8 +126,8 @@ def test_atualizar_sem_mudar_preco_nao_gera_historico(
             "categoria": produto.categoria,
             "preco_custo": str(produto.preco_custo),
             "preco_venda": str(produto.preco_venda),
-            "estoque": produto.estoque,
-            "estoque_minimo": produto.estoque_minimo,
+            "estoque": int(produto.estoque),
+            "estoque_minimo": int(produto.estoque_minimo),
             "ativo": True,
         },
         headers=auth_headers,
@@ -156,8 +156,8 @@ def test_preco_promocional_vigente_vira_preco_efetivo(
             "preco_promocional": "15.00",
             "promocao_inicio": str(date.today() - timedelta(days=1)),
             "promocao_fim": str(date.today() + timedelta(days=1)),
-            "estoque": produto.estoque,
-            "estoque_minimo": produto.estoque_minimo,
+            "estoque": int(produto.estoque),
+            "estoque_minimo": int(produto.estoque_minimo),
             "ativo": True,
         },
         headers=auth_headers,
@@ -185,8 +185,8 @@ def test_preco_promocional_fora_da_vigencia_nao_conta(
             "preco_promocional": "15.00",
             "promocao_inicio": str(date.today() + timedelta(days=5)),
             "promocao_fim": str(date.today() + timedelta(days=10)),
-            "estoque": produto.estoque,
-            "estoque_minimo": produto.estoque_minimo,
+            "estoque": int(produto.estoque),
+            "estoque_minimo": int(produto.estoque_minimo),
             "ativo": True,
         },
         headers=auth_headers,
@@ -212,7 +212,7 @@ def test_estoque_minimo_e_por_loja_com_fallback_pro_global(
     db.add_all([loja_a, loja_b])
     db.commit()
 
-    minimo_global_original = produto.estoque_minimo
+    minimo_global_original = int(produto.estoque_minimo)
 
     response = client.put(
         f"/produtos/{produto.id}?loja_id={loja_a.id}",

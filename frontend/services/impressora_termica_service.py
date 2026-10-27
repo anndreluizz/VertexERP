@@ -27,7 +27,7 @@ from datetime import datetime
 from io import BytesIO
 from urllib.parse import quote
 
-from utils.formatacao import formatar_moeda, linhas_resumo_caixa, nome_forma
+from utils.formatacao import eh_fracionado, formatar_moeda, formatar_quantidade, linhas_resumo_caixa, nome_forma
 
 # ==================================================
 # COMANDOS ESC/POS
@@ -346,7 +346,8 @@ def gerar_comandos_comprovante(dados, config_loja, logo_bytes=None, largura_pape
     partes.append(_linha())
 
     for item in dados["itens"]:
-        linha_item = f"{item['quantidade']}x  {item['nome']}"
+        qtd = formatar_quantidade(item["quantidade"], item.get("unidade"))
+        linha_item = f"{qtd}{'' if eh_fracionado(item.get('unidade')) else 'x'}  {item['nome']}"
         partes.append(
             _linha_dupla_coluna(linha_item, _moeda(item["subtotal"]), largura)
         )

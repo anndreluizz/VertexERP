@@ -6,7 +6,7 @@ import {
 } from "@/lib/catalogo";
 import { CardProduto, Foto } from "./CardProduto";
 import { DetalheProduto } from "./DetalheProduto";
-import { FiltroLiquido, Tilt, useRevelar, useRolagem, VideoExpansivo } from "./Efeitos";
+import { FiltroLiquido, Tilt, useRevelar } from "./Efeitos";
 import { Icone, iconeDaCategoria } from "./Icone";
 
 type Estado = { tipo: "carregando" } | { tipo: "erro" } | { tipo: "ok"; catalogo: Catalogo };
@@ -108,7 +108,6 @@ export function Vitrine() {
     gravarUrl({ categoria, termo, produto: null });
   };
 
-  useRolagem();
   useRevelar(`${estado.tipo}|${categoria}|${termo}|${resultado.length}`);
 
   const zapLoja = linkWhatsApp();
@@ -202,12 +201,19 @@ export function Vitrine() {
           </div>
         </section>
 
-        <VideoExpansivo
-          video={config.video}
-          titulo={`Venha conhecer a ${nomeLoja}`}
-          lojas={lojas}
-          horario={config.horario}
-        />
+        <section className="faixa-entrega" aria-label="Entrega">
+          <div className="contido faixa-entrega-linha">
+            <div>
+              <h2>Fazemos entrega para toda Tonantins</h2>
+              <p>Escolha aqui na vitrine, chame no WhatsApp e receba em casa.</p>
+            </div>
+            {zapLoja && (
+              <a className="botao botao-claro" href={zapLoja} target="_blank" rel="noopener noreferrer">
+                <Icone nome="conversa" tamanho={18} /> Pedir pelo WhatsApp
+              </a>
+            )}
+          </div>
+        </section>
 
         {estado.tipo === "carregando" && <Esqueleto />}
 
@@ -221,6 +227,15 @@ export function Vitrine() {
 
         {catalogo && (
           <>
+            {prateleiras.map((s) => (
+              <section key={s.id} id={s.id} className="contido secao">
+                <h2 className="titulo-secao" data-revelar>{s.titulo}</h2>
+                <div className="prateleira">
+                  {s.itens.slice(0, 8).map((p, i) => <CardProduto key={p.id} produto={p} abrir={abrir} indice={i} />)}
+                </div>
+              </section>
+            ))}
+
             {catalogo.categorias.length > 0 && (
               <section id="categorias" className="contido secao">
                 <h2 className="titulo-secao" data-revelar>Categorias</h2>
@@ -236,15 +251,6 @@ export function Vitrine() {
                 </div>
               </section>
             )}
-
-            {prateleiras.map((s) => (
-              <section key={s.id} id={s.id} className="contido secao">
-                <h2 className="titulo-secao" data-revelar>{s.titulo}</h2>
-                <div className="prateleira">
-                  {s.itens.slice(0, 8).map((p, i) => <CardProduto key={p.id} produto={p} abrir={abrir} indice={i} />)}
-                </div>
-              </section>
-            ))}
 
             <section id="catalogo" className="contido secao">
               <div className="catalogo-topo">

@@ -46,8 +46,6 @@ export const config = {
     const [nome, ...resto] = l.split(":");
     return resto.length ? { nome: nome.trim(), endereco: resto.join(":").trim() } : { nome: "", endereco: l };
   }),
-  // video da loja (mp4 leve, em public/) na secao que expande; vazio = foto de destaque
-  video: process.env.NEXT_PUBLIC_VIDEO ? noSite(process.env.NEXT_PUBLIC_VIDEO) : "",
   avisos: (process.env.NEXT_PUBLIC_AVISOS || "").split("|").map((a) => a.trim()).filter(Boolean),
 };
 

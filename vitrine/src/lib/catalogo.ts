@@ -69,14 +69,31 @@ export const real = (v: number) => moeda.format(v);
 export const semAcento = (t: string) =>
   t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
+// pagina de cada produto (p/<slug>/, gerada por scripts/publicar_vitrine.py)
+// so' com as tags de previa: o WhatsApp mostra a foto do produto na conversa
+const SITE = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "");
+export const linkProduto = (p: Produto) => (SITE ? `${SITE}/p/${p.slug}/` : "");
+
+const zap = (texto: string) => `https://wa.me/${config.whatsapp}?text=${encodeURIComponent(texto)}`;
+
 export function linkWhatsApp(produto?: Produto): string | null {
   if (!config.whatsapp) return null;
-  const texto = produto
-    ? produto.disponibilidade === "esgotado"
-      ? `Olá! Vi na vitrine o produto ${produto.nome} (cód. ${produto.codigo}). Vai chegar de novo?`
-      : `Olá! Vi na vitrine o produto ${produto.nome} (cód. ${produto.codigo}). Ainda está disponível?`
-    : "Olá! Vim pela vitrine da loja.";
-  return `https://wa.me/${config.whatsapp}?text=${encodeURIComponent(texto)}`;
+  if (!produto) return zap("Olá! Vim pela vitrine da loja.");
+  const pergunta = produto.disponibilidade === "esgotado" ? "Vai chegar de novo?" : "Ainda está disponível?";
+  return zap(
+    `Olá! Vi na vitrine o produto ${produto.nome} (cód. ${produto.codigo}), ${real(produto.preco)}. ${pergunta}\n${linkProduto(produto)}`.trim(),
+  );
+}
+
+export function linkPedido(itens: { produto: Produto; qtd: number }[]): string | null {
+  if (!config.whatsapp || !itens.length) return null;
+  const total = itens.reduce((s, i) => s + i.produto.preco * i.qtd, 0);
+  const linhas = itens.map(
+    ({ produto, qtd }) => `${qtd}x ${produto.nome} (cód. ${produto.codigo}): ${real(produto.preco * qtd)}\n${linkProduto(produto)}`.trim(),
+  );
+  return zap(
+    `Olá! Quero fazer este pedido pela vitrine:\n\n${linhas.join("\n\n")}\n\nTotal: ${real(total)}\n\nAguardo a confirmação da loja.`,
+  );
 }
 
 export function busca(produtos: Produto[], termo: string, categoria: string | null): Produto[] {

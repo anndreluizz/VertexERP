@@ -3,6 +3,7 @@ from telas.pdv import PDV
 from telas.vendas import Vendas
 from telas.caixa import Caixa
 from telas.produtos import Produtos
+from telas.vitrine import Vitrine
 from telas.ajuste_estoque import AjusteEstoque
 from telas.transferencia_estoque import TransferenciaEstoque
 from telas.contagem_estoque import ContagemEstoque
@@ -124,6 +125,7 @@ PERMISSAO_TELA = {
     "ajuste_estoque": "estoque.ajustar",
     "transferencia_estoque": "estoque.ajustar",
     "contagem_estoque": "estoque.ajustar",
+    "vitrine": "financeiro.ver",  # decide o que o publico ve no site
     "fornecedores": "financeiro.ver",
     "contas_pagar": "financeiro.ver",
     "conciliacao_bancaria": "financeiro.ver",
@@ -150,6 +152,7 @@ ITENS_MENU = [
     ("pdv", "shopping-cart", "PDV"),
     ("vendas", "file-text", "Vendas"),
     ("produtos", "package", "Produtos"),
+    ("vitrine", "globe", "Vitrine"),
     ("ajuste_estoque", "refresh-cw", "Ajuste de Estoque"),
     ("transferencia_estoque", "store", "Transferência entre Lojas"),
     ("contagem_estoque", "check", "Contagem de Inventário"),
@@ -250,6 +253,7 @@ class PrincipalWindow(QMainWindow):
         self.pdv = PDV()
         self.vendas = Vendas()
         self.produtos = Produtos()
+        self.vitrine = Vitrine()
         self.ajuste_estoque = AjusteEstoque()
         self.transferencia_estoque = TransferenciaEstoque()
         self.contagem_estoque = ContagemEstoque()
@@ -276,6 +280,7 @@ class PrincipalWindow(QMainWindow):
         self.paginas.addWidget(self.pdv)
         self.paginas.addWidget(self.vendas)
         self.paginas.addWidget(self.produtos)
+        self.paginas.addWidget(self.vitrine)
         self.paginas.addWidget(self.ajuste_estoque)
         self.paginas.addWidget(self.transferencia_estoque)
         self.paginas.addWidget(self.contagem_estoque)
@@ -312,6 +317,10 @@ class PrincipalWindow(QMainWindow):
         )
 
         self.produtos.voltar.connect(
+            lambda: self._exibir_pagina("dashboard", self.dashboard)
+        )
+
+        self.vitrine.voltar.connect(
             lambda: self._exibir_pagina("dashboard", self.dashboard)
         )
 
@@ -455,6 +464,8 @@ class PrincipalWindow(QMainWindow):
             self.clientes.carregar()
         elif chave == "vendas":
             self.vendas.carregar()
+        elif chave == "vitrine":
+            self.vitrine.carregar()
         elif chave == "fornecedores":
             self.fornecedores.carregar()
         elif chave == "ajuste_estoque":
@@ -487,6 +498,7 @@ class PrincipalWindow(QMainWindow):
         paginas = {
             "dashboard": self.dashboard,
             "produtos": self.produtos,
+            "vitrine": self.vitrine,
             "vendas": self.vendas,
             "ajuste_estoque": self.ajuste_estoque,
             "transferencia_estoque": self.transferencia_estoque,

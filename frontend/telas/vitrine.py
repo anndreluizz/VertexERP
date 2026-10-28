@@ -321,8 +321,18 @@ class Vitrine(QWidget):
         self.lbl_vazio.show()
 
     def preencher_tabela(self):
+        # com ~1000 produtos, trocar item por item com as colunas em
+        # ResizeToContents recalculava a largura a cada celula (O(n²)) e
+        # o Vertex parava de responder depois de marcar um produto.
+        # Esvazia, preenche sem redesenhar e mede as colunas uma vez so'.
+        cab = self.tabela.horizontalHeader()
+        rolagem = self.tabela.verticalScrollBar().value()
+        self.tabela.setUpdatesEnabled(False)
         self.tabela.blockSignals(True)
+        cab.setSectionResizeMode(QHeaderView.Interactive)
+        self.tabela.setRowCount(0)
         self.tabela.setRowCount(len(self.exibidos))
+        icone_alerta = icone("alert-triangle", cor=tokens.ALERTA_TEXTO, tamanho=14)
         for linha, p in enumerate(self.exibidos):
             self.tabela.setItem(linha, COL_PRODUTO, QTableWidgetItem(f"{p['nome']}   ({p['codigo']})"))
             self.tabela.setItem(linha, COL_CATEGORIA, QTableWidgetItem(p.get("categoria") or ""))
@@ -347,9 +357,16 @@ class Vitrine(QWidget):
             aviso = QTableWidgetItem(", ".join(faltando).capitalize())
             if faltando:
                 aviso.setForeground(QColor(tokens.ALERTA_TEXTO))
-                aviso.setIcon(icone("alert-triangle", cor=tokens.ALERTA_TEXTO, tamanho=14))
+                aviso.setIcon(icone_alerta)
             self.tabela.setItem(linha, COL_AVISO, aviso)
+        for coluna in range(self.tabela.columnCount()):
+            if coluna != COL_PRODUTO:
+                self.tabela.resizeColumnToContents(coluna)
+        cab.setSectionResizeMode(COL_PRODUTO, QHeaderView.Stretch)
         self.tabela.blockSignals(False)
+        self.tabela.setUpdatesEnabled(True)
+        # marcar um produto nao joga a lista de volta pro topo
+        self.tabela.verticalScrollBar().setValue(rolagem)
 
     # ======================
     # LIGAR / DESLIGAR NO SITE

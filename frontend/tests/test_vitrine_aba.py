@@ -71,3 +71,22 @@ def test_alterar_varios_tira_destaque_junto(monkeypatch):
     monkeypatch.setattr(modulo, "atualizar_produto", lambda pid, dados: enviados.append(dados) or Resposta())
     assert alterar_varios([dict(NO_SITE, vitrine_destaque=True)], False) == []
     assert enviados[0]["vitrine_publicar"] is False and enviados[0]["vitrine_destaque"] is False
+
+
+def test_marcar_com_mil_produtos_nao_trava(_qapp, monkeypatch):
+    """Na loja (~1000 produtos) marcar um item travava o Vertex: refazer a
+    tabela com colunas em ResizeToContents era O(n²)."""
+    import time
+
+    monkeypatch.setattr(modulo, "rodar_em_thread", lambda *a, **k: None)
+    tela = Vitrine()
+    tela._ao_carregar([dict(FORA, id=i, codigo=f"{i:04d}", nome=f"PRODUTO {i}") for i in range(1000)])
+    tela.selecionar_filtro("TODOS")
+    tela.tabela.item(5, COL_SITE).setCheckState(Qt.Checked)
+
+    class Ok:
+        status_code = 200
+    inicio = time.perf_counter()
+    tela._ao_salvar(Ok())
+    assert time.perf_counter() - inicio < 3
+    assert tela.exibidos[5]["vitrine_publicar"] is True

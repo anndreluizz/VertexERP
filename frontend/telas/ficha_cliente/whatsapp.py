@@ -18,12 +18,67 @@ from services.movimento_fiado_service import (
 from services.cliente_service import (
     enviar_whatsapp_texto,
 )
-from services import cliente_analise
 from services import comprovante_service
 from utils.formatacao import formatar_moeda
 from design.widgets import (
     BotaoSecundario,
 )
+
+
+def _dia(mov):
+    data = str(mov.get("data", ""))[:10]
+    try:
+        return datetime.strptime(data, "%Y-%m-%d").strftime("%d/%m/%Y")
+    except ValueError:
+        return data
+
+
+def montar_extrato_whatsapp(nome_cliente, nome_loja, movimentos, descrever, saldo):
+    """movimentos: do mais novo pro mais antigo (como a ficha guarda).
+    descrever(mov): produtos da compra, um por linha (ver historico.py)."""
+
+    def estorno(mov):
+        return (mov.get("descricao") or "").startswith("Estorno")
+
+    compras = []
+    ultimo_pagamento = None
+    for mov in movimentos:
+        if estorno(mov):
+            continue
+        if mov.get("tipo") == "PAGAMENTO":
+            ultimo_pagamento = mov
+            break
+        if mov.get("tipo") == "COMPRA":
+            compras.append(mov)
+    compras.reverse()  # mais antiga primeiro, como num extrato
+
+    linhas = [f"Olá, {nome_cliente}! Tudo bem?", "", f"Segue o seu extrato na {nome_loja}.", ""]
+    if ultimo_pagamento:
+        valor = formatar_moeda(float(ultimo_pagamento.get("valor", 0) or 0))
+        linhas += [f"Último pagamento: {valor} em {_dia(ultimo_pagamento)}", ""]
+        titulo = "COMPRAS DEPOIS DO ÚLTIMO PAGAMENTO"
+    else:
+        titulo = "COMPRAS"
+
+    if compras:
+        linhas += [titulo, ""]
+        for mov in compras:
+            linhas.append(_dia(mov))
+            linhas += [f"• {item}" for item in (descrever(mov) or "Compra").splitlines()]
+            linhas += [f"Total: {formatar_moeda(float(mov.get('valor', 0) or 0))}", ""]
+        total = sum(float(mov.get("valor", 0) or 0) for mov in compras)
+        linhas.append(f"Total das compras: {formatar_moeda(total)}")
+    else:
+        linhas.append("Nenhuma compra depois do último pagamento.")
+
+    linhas += [
+        f"Saldo atual em aberto: {formatar_moeda(saldo)}",
+        "",
+        "Caso queira conferir alguma compra ou pagamento, é só nos chamar.",
+        "",
+        f"Equipe {nome_loja}",
+    ]
+    return "\n".join(linhas)
 
 
 class WhatsAppMixin:
@@ -215,38 +270,17 @@ class WhatsAppMixin:
         )
 
     def enviar_extrato_whatsapp(self):
-        """'Extrato Completo' -- resumo financeiro curto (total
-        comprado, total pago, saldo em aberto), não mais o extrato
-        movimento a movimento -- mensagem mais direta pro WhatsApp."""
-
-        saldo = saldo_cliente(self.cliente["id"])
-
-        agr = cliente_analise.calcular_agregados(
-            self.cliente, [mov for mov, _ in reversed(self._movimentos)]
-        )
-
-        total_pago = sum(
-            float(mov.get("valor", 0) or 0)
-            for mov, _ in self._movimentos
-            if mov.get("tipo") == "PAGAMENTO"
-        )
+        """Extrato pro WhatsApp: cada compra com data, produtos e preco.
+        Depois de um pagamento, so' as compras feitas depois dele."""
 
         nome_loja = api.configuracoes().get("nome_loja") or "Vertex ERP"
-        hoje = datetime.now().strftime("%d/%m/%Y")
-
-        texto = (
-            f"Olá, {self.cliente.get('nome', '')}! Tudo bem?\n\n"
-            f"Segue o resumo atualizado do seu cadastro na {nome_loja}:\n\n"
-            f"EXTRATO FINANCEIRO\n\n"
-            f"Total de compras: {formatar_moeda(agr['total_comprado'])}\n"
-            f"Total já pago: {formatar_moeda(total_pago)}\n"
-            f"Saldo atual em aberto: {formatar_moeda(saldo)}\n\n"
-            f"Última atualização: {hoje}\n\n"
-            f"Caso queira conferir alguma compra ou pagamento, é só nos "
-            f"chamar. Será um prazer ajudar!\n\n"
-            f"Equipe {nome_loja}"
+        texto = montar_extrato_whatsapp(
+            self.cliente.get("nome", ""),
+            nome_loja,
+            [mov for mov, _ in self._movimentos],
+            self._descricao_com_itens,
+            saldo_cliente(self.cliente["id"]),
         )
-
         self._enviar_texto_whatsapp(texto, "Extrato Completo")
 
     def enviar_cobranca_whatsapp(self):

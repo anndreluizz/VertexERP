@@ -333,16 +333,22 @@ class Vitrine(QWidget):
         # parcial: codigo/nome sao exigidos pelo schema, o resto fica como
         # esta' (exclude_unset no backend, igual ao favorito do F1)
         dados = {"codigo": p["codigo"], "nome": p["nome"], "vitrine_publicar": publicar, "vitrine_destaque": destaque}
+        # callbacks precisam ser metodos (rodar_em_thread recusa lambda);
+        # o contexto da marcacao fica guardado aqui ate' a resposta
+        self._salvando = (p, dados)
+        self.tabela.setEnabled(False)  # uma marcacao por vez
         rodar_em_thread(
             self,
             atualizar_produto,
             p["id"],
             dados,
-            ao_sucesso=lambda r, p=p, d=dados: self._ao_salvar(r, p, d),
-            ao_erro=lambda erro: self._ao_falhar(str(erro)),
+            ao_sucesso=self._ao_salvar,
+            ao_erro=self._ao_falhar,
         )
 
-    def _ao_salvar(self, response, produto, dados):
+    def _ao_salvar(self, response):
+        produto, dados = self._salvando
+        self.tabela.setEnabled(True)
         if response.status_code != 200:
             try:
                 erro = response.json()["detail"]
@@ -355,6 +361,7 @@ class Vitrine(QWidget):
         self.filtrar()
 
     def _ao_falhar(self, erro):
+        self.tabela.setEnabled(True)
         QMessageBox.critical(self, "Erro", f"Não foi possível alterar a vitrine.\n{erro}")
         self.filtrar()  # volta a marcacao pro que esta' salvo
 
@@ -374,8 +381,11 @@ class Vitrine(QWidget):
             self.exibidos[linha]["id"],
             tela.dados,
             ao_sucesso=self._ao_editar,
-            ao_erro=lambda erro: QMessageBox.critical(self, "Erro", str(erro)),
+            ao_erro=self._ao_erro_editar,
         )
+
+    def _ao_erro_editar(self, erro):
+        QMessageBox.critical(self, "Erro", str(erro))
 
     def _ao_editar(self, response):
         if response.status_code != 200:

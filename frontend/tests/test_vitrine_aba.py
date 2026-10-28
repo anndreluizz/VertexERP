@@ -21,7 +21,11 @@ def test_filtros_e_pendencias():
 
 def test_marcar_manda_so_campos_da_vitrine(_qapp, monkeypatch):
     chamadas = []
-    monkeypatch.setattr(modulo, "rodar_em_thread", lambda _p, _f, pid, dados, **_k: chamadas.append((pid, dados)))
+    def falso(_parent, _func, pid, dados, ao_sucesso=None, ao_erro=None, **_k):
+        # mesma regra do rodar_em_thread real: lambda roda fora da GUI thread
+        assert hasattr(ao_sucesso, "__self__") and hasattr(ao_erro, "__self__")
+        chamadas.append((pid, dados))
+    monkeypatch.setattr(modulo, "rodar_em_thread", falso)
     tela = Vitrine()
     tela._ao_carregar([dict(NO_SITE), dict(FORA)])
     assert [p["id"] for p in tela.exibidos] == [1]  # abre em "No site"
@@ -29,6 +33,7 @@ def test_marcar_manda_so_campos_da_vitrine(_qapp, monkeypatch):
     tela.tabela.item(0, COL_DESTAQUE).setCheckState(Qt.Checked)
     assert chamadas[-1] == (1, {"codigo": "0001", "nome": "Perfume", "vitrine_publicar": True, "vitrine_destaque": True})
 
+    tela.tabela.setEnabled(True)  # resposta do servidor nao vem no teste
     # tirar do site leva o destaque junto
     tela.exibidos[0]["vitrine_destaque"] = True
     tela.tabela.item(0, COL_SITE).setCheckState(Qt.Unchecked)

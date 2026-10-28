@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BASE, busca, carregarCatalogo, Catalogo, config, linkWhatsApp, NOME_PADRAO, Produto,
 } from "@/lib/catalogo";
-import { CardProduto, Foto } from "./CardProduto";
+import { CardProduto } from "./CardProduto";
 import { DetalheProduto } from "./DetalheProduto";
 import { FiltroLiquido, Tilt, useRevelar } from "./Efeitos";
 import { Icone, iconeDaCategoria } from "./Icone";
@@ -33,6 +33,26 @@ const formatarData = (iso: string) =>
 
 const formatarTelefone = (d: string) =>
   d.replace(/^55(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3");
+
+// fotos reais da loja em public/loja/, recortadas sem pessoas
+const FOTOS_CAPA = [
+  ["mochilas", "Mochilas e roupas"],
+  ["tenis", "Parede de tênis e sandálias"],
+  ["blusas", "Arara de blusas"],
+] as const;
+
+// [arquivo, legenda, formato no mosaico]; a ordem fecha a grade sem buraco
+// (4 colunas no computador, 2 no celular)
+const FOTOS_LOJA = [
+  ["perfumes", "Perfumes e presentes", "larga"],
+  ["jeans", "Calças e bermudas", "alta"],
+  ["brinquedos", "Brinquedos", "alta"],
+  ["perfumes-2", "Kits de presente", "larga"],
+  ["cremes", "Cremes e cuidados", "larga"],
+  ["sandalias", "Chinelos", "alta"],
+  ["infantil", "Moda infantil", "alta"],
+  ["calcados", "Calçados", "larga"],
+] as const;
 
 export function Vitrine() {
   const [estado, setEstado] = useState<Estado>({ tipo: "carregando" });
@@ -83,12 +103,6 @@ export function Vitrine() {
       // prateleira com todos os produtos so' repete o catalogo logo abaixo
     ].filter((s) => s.itens.length > 0 && s.itens.length < produtos.length);
   }, [produtos, catalogo]);
-
-  const vitrineHero = useMemo(() => {
-    const comFoto = produtos.filter((p) => p.fotos.length && p.disponibilidade !== "esgotado");
-    const destaques = comFoto.filter((p) => p.destaque);
-    return (destaques.length >= 3 ? destaques : [...destaques, ...comFoto.filter((p) => !p.destaque)]).slice(0, 3);
-  }, [produtos]);
 
   const filtrar = (cat: string | null, novoTermo = termo) => {
     setCategoria(cat);
@@ -158,6 +172,7 @@ export function Vitrine() {
               <a key={s.id} href={`#${s.id}`} onClick={() => setMenuAberto(false)}>{s.titulo}</a>
             ))}
             <a href="#catalogo" onClick={() => setMenuAberto(false)}>Todos os produtos</a>
+            <a href="#loja" onClick={() => setMenuAberto(false)}>A loja</a>
             <a href="#contato" onClick={() => setMenuAberto(false)}>Contato</a>
           </div>
         </nav>
@@ -182,28 +197,16 @@ export function Vitrine() {
               </p>
               <a className="botao botao-destaque" href="#catalogo">Ver produtos <Icone nome="seta" tamanho={18} /></a>
             </div>
-            {config.capa ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img className="hero-capa" src={config.capa} alt={`Dentro da loja ${nomeLoja}`} fetchPriority="high" />
-            ) : (
-            <div className="hero-colagem" aria-hidden={vitrineHero.length === 0}>
-              {vitrineHero.length > 0
-                ? vitrineHero.map((p, i) => (
-                  <div key={p.id} className={`colagem-camada colagem-${i}`}>
-                    <Tilt className="colagem-item" forca={6}>
-                      <button type="button" onClick={() => abrir(p)} aria-label={`Ver ${p.nome}`}>
-                        <Foto produto={p} prioridade={i === 0} />
-                      </button>
-                    </Tilt>
-                  </div>
-                ))
-                : (["roupa", "perfume", "calcado"] as const).map((n, i) => (
-                  <div key={n} className={`colagem-camada colagem-${i}`}>
-                    <div className="colagem-item colagem-vazia"><Icone nome={n} tamanho={56} /></div>
-                  </div>
-                ))}
+            <div className="hero-colagem">
+              {FOTOS_CAPA.map(([arquivo, legenda], i) => (
+                <div key={arquivo} className={`colagem-camada colagem-${i}`}>
+                  <Tilt className="colagem-item" forca={6}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`${BASE}/loja/${arquivo}.jpg`} alt={legenda} fetchPriority={i === 0 ? "high" : "auto"} />
+                  </Tilt>
+                </div>
+              ))}
             </div>
-            )}
           </div>
         </section>
 
@@ -280,6 +283,20 @@ export function Vitrine() {
             </section>
           </>
         )}
+
+        <section id="loja" className="contido secao">
+          <h2 className="titulo-secao">Conheça a loja</h2>
+          <p className="secao-sub">Fotos da nossa loja em Tonantins. Venha ver de perto ou peça pelo WhatsApp.</p>
+          <div className="galeria">
+            {FOTOS_LOJA.map(([arquivo, legenda, formato]) => (
+              <figure key={arquivo} className={formato ? `galeria-${formato}` : undefined}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`${BASE}/loja/${arquivo}.jpg`} alt={legenda} loading="lazy" decoding="async" />
+                <figcaption>{legenda}</figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
       </main>
 
       <footer id="contato" className="rodape">

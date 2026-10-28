@@ -41,6 +41,8 @@ export const config = {
   whatsapp: (process.env.NEXT_PUBLIC_WHATSAPP || "").replace(/\D/g, ""),
   instagram: (process.env.NEXT_PUBLIC_INSTAGRAM || "").replace(/^@/, ""),
   horario: process.env.NEXT_PUBLIC_HORARIO || "",
+  // imagem do cabecalho (em public/); vazio = colagem com fotos dos produtos
+  capa: process.env.NEXT_PUBLIC_CAPA ? noSite(process.env.NEXT_PUBLIC_CAPA) : "",
   // "Matriz: Rua X, Bairro, Cidade|Filial: Rua Y, ..." (nome antes dos dois-pontos)
   lojas: (process.env.NEXT_PUBLIC_LOJAS || "").split("|").map((l) => l.trim()).filter(Boolean).map((l) => {
     const [nome, ...resto] = l.split(":");

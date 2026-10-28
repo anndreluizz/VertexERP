@@ -83,6 +83,7 @@ button { font: inherit; color: inherit; }
 .hero p { font-size: 18px; color: var(--suave); max-width: 46ch; }
 
 .hero-colagem { position: relative; aspect-ratio: 1; max-width: 100%; }
+.hero-capa { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 20px; box-shadow: 0 24px 60px rgb(31 59 45 / 18%); }
 .colagem-camada { position: absolute; }
 .colagem-0 { inset: 4% 22% 14% 4%; z-index: 1; }
 .colagem-1 { inset: 0 0 58% 58%; z-index: 2; }

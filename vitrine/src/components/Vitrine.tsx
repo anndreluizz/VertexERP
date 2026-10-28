@@ -80,7 +80,8 @@ export function Vitrine() {
         id: "mais-vendidos", titulo: "Mais vendidos",
         itens: (catalogo?.mais_vendidos ?? []).map((id) => porId.get(id)).filter((p): p is Produto => !!p),
       },
-    ].filter((s) => s.itens.length > 0);
+      // prateleira com todos os produtos so' repete o catalogo logo abaixo
+    ].filter((s) => s.itens.length > 0 && s.itens.length < produtos.length);
   }, [produtos, catalogo]);
 
   const vitrineHero = useMemo(() => {
@@ -181,6 +182,10 @@ export function Vitrine() {
               </p>
               <a className="botao botao-destaque" href="#catalogo">Ver produtos <Icone nome="seta" tamanho={18} /></a>
             </div>
+            {config.capa ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="hero-capa" src={config.capa} alt="" fetchPriority="high" />
+            ) : (
             <div className="hero-colagem" aria-hidden={vitrineHero.length === 0}>
               {vitrineHero.length > 0
                 ? vitrineHero.map((p, i) => (
@@ -198,6 +203,7 @@ export function Vitrine() {
                   </div>
                 ))}
             </div>
+            )}
           </div>
         </section>
 

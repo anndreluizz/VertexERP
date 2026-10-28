@@ -281,7 +281,7 @@ export function Vitrine() {
           <div className="contido faixa-entrega-linha">
             <div>
               <h2>Fazemos entrega para toda Tonantins</h2>
-              <p>Escolha aqui na vitrine, chame no WhatsApp e receba em casa.</p>
+              <p>Entrega grátis, a partir de 10 minutos. Pagamento no Pix, cartão ou dinheiro.</p>
             </div>
             {zapLoja && (
               <a className="botao botao-claro" href={zapLoja} target="_blank" rel="noopener noreferrer">

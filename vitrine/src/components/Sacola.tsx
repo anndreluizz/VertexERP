@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { linkPedido, Produto, real } from "@/lib/catalogo";
+import { limitePedido, linkPedido, Produto, real } from "@/lib/catalogo";
 import { Foto } from "./CardProduto";
 import { Icone } from "./Icone";
 
@@ -56,13 +56,17 @@ export function Sacola({ aberta, itens, produtos, mudar, fechar }: {
                     <strong>{produto.nome}</strong>
                     <small>Cód. {produto.codigo} · {real(produto.preco)}</small>
                     {produto.disponibilidade === "esgotado" && <small className="sacola-esgotado">Esgotado</small>}
+                    {qtd > limitePedido(produto) && produto.disponibilidade !== "esgotado" && (
+                      <small className="sacola-esgotado">Só {limitePedido(produto)} disponível(is)</small>
+                    )}
                   </span>
                   <span className="sacola-qtd">
                     <button type="button" aria-label={`Tirar um ${produto.nome}`} onClick={() => mudar(produto.slug, qtd - 1)}>
                       <Icone nome="menos" tamanho={16} />
                     </button>
                     <span aria-live="polite">{qtd}</span>
-                    <button type="button" aria-label={`Pôr mais um ${produto.nome}`} onClick={() => mudar(produto.slug, qtd + 1)}>
+                    <button type="button" aria-label={`Pôr mais um ${produto.nome}`} onClick={() => mudar(produto.slug, qtd + 1)}
+                      disabled={qtd >= limitePedido(produto)}>
                       <Icone nome="mais" tamanho={16} />
                     </button>
                   </span>

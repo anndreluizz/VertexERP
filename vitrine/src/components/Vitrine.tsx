@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  BASE, busca, carregarCatalogo, Catalogo, config, linkWhatsApp, NOME_PADRAO, Produto,
+  BASE, busca, carregarCatalogo, Catalogo, config, limitePedido, linkWhatsApp, NOME_PADRAO, Produto,
 } from "@/lib/catalogo";
 import { CardProduto } from "./CardProduto";
 import { DetalheProduto } from "./DetalheProduto";
@@ -73,7 +73,10 @@ export function Vitrine() {
     } catch { /* sem storage */ }
   }, []);
 
-  const mudarSacola = (slug: string, qtd: number) => {
+  const mudarSacola = (slug: string, pedida: number) => {
+    // nunca mais que o estoque (limite vem do Vertex; ver max_pedido)
+    const produto = produtos.find((p) => p.slug === slug);
+    const qtd = produto ? Math.min(pedida, limitePedido(produto)) : pedida;
     setSacola((atual) => {
       const nova = qtd > 0
         ? (atual.some((i) => i.slug === slug)

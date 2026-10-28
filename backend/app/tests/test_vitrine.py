@@ -53,6 +53,19 @@ def test_nao_expoe_custo_nem_estoque(client, db):
     assert "preco_custo" not in item
     assert "estoque" not in item
     assert item["disponibilidade"] == "disponivel"
+    assert item["max_pedido"] == 3
+
+
+def test_max_pedido_limitado_e_ultima_unidade(client, db):
+    _produto(db, "V1", estoque=500)
+    _produto(db, "V2", estoque=1)
+    _produto(db, "V3", estoque=0)
+
+    itens = {i["codigo"]: i for i in client.get("/vitrine/").json()["produtos"]}
+
+    assert itens["V1"]["max_pedido"] == 10  # estoque grande nao vaza
+    assert itens["V2"]["max_pedido"] == 1
+    assert itens["V3"]["max_pedido"] == 0
 
 
 def test_promocao_valendo_mostra_preco_anterior(client, db):

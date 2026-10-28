@@ -26,6 +26,9 @@ export function Selos({ produto }: { produto: Produto }) {
       {desconto > 0 && <span className="selo selo-oferta">-{desconto}%</span>}
       {produto.novidade && <span className="selo selo-novo">Novidade</span>}
       {produto.disponibilidade === "esgotado" && <span className="selo selo-esgotado">Esgotado</span>}
+      {produto.disponibilidade === "disponivel" && produto.max_pedido === 1 && (
+        <span className="selo selo-ultima">Última unidade</span>
+      )}
     </div>
   );
 }

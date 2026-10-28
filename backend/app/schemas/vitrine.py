@@ -6,6 +6,7 @@ from app.schemas.base import Schema
 
 # Tudo aqui e' PUBLICO (site da loja, sem login) -- nunca colocar custo,
 # estoque exato, fornecedor ou qualquer dado interno nesses schemas.
+# (max_pedido mostra no maximo LIMITE_PEDIDO: estoque grande nao vaza.)
 
 
 class VitrineProduto(Schema):
@@ -25,6 +26,9 @@ class VitrineProduto(Schema):
     promocao_fim: date | None = None
     # "disponivel" | "esgotado" | "consulte" (kit: estoque e' dos componentes)
     disponibilidade: str
+    # quantas unidades a sacola do site aceita: estoque, ate' LIMITE_PEDIDO
+    # (ver vitrine_service); 1 = ultima unidade. Kit/sem estoque = 0
+    max_pedido: int = 0
     destaque: bool = False
     novidade: bool = False
     fotos: list[str] = []

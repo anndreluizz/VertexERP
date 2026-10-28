@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { linkWhatsApp, Produto, ROTULO_DISPONIBILIDADE } from "@/lib/catalogo";
+import { limitePedido, linkWhatsApp, Produto, ROTULO_DISPONIBILIDADE } from "@/lib/catalogo";
 import { Foto, Preco, Selos } from "./CardProduto";
 import { Icone } from "./Icone";
 
@@ -75,9 +75,15 @@ export function DetalheProduto({ produto, atualizadoEm, fechar, porNaSacola, naS
               <span>{TEXTO_DISPONIBILIDADE[produto.disponibilidade]}</span>
             </div>
             {produto.disponibilidade !== "esgotado" && (
-              <button type="button" className="botao botao-verde botao-largo" onClick={() => porNaSacola(produto)}>
-                <Icone nome="sacola" /> {naSacola ? `Na sacola (${naSacola}) · pôr mais um` : "Pôr na sacola"}
-              </button>
+              naSacola >= limitePedido(produto) ? (
+                <p className="aviso-limite">
+                  {naSacola === 1 ? "A única unidade já está na sua sacola." : `As ${naSacola} unidades disponíveis já estão na sua sacola.`}
+                </p>
+              ) : (
+                <button type="button" className="botao botao-verde botao-largo" onClick={() => porNaSacola(produto)}>
+                  <Icone nome="sacola" /> {naSacola ? `Na sacola (${naSacola}) · pôr mais um` : "Pôr na sacola"}
+                </button>
+              )
             )}
             {zap ? (
               <a className="botao botao-zap" href={zap} target="_blank" rel="noopener noreferrer">

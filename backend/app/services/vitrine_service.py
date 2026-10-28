@@ -26,6 +26,16 @@ def disponibilidade(produto: Produto) -> str:
     return "disponivel" if (produto.estoque or 0) > 0 else "esgotado"
 
 
+# acima disso o site so' sabe que "tem bastante" (estoque exato nao e' publico)
+LIMITE_PEDIDO = 10
+
+
+def max_pedido(produto: Produto) -> int:
+    if produto.eh_kit:
+        return LIMITE_PEDIDO  # estoque e' dos componentes: a loja confirma
+    return max(0, min(int(produto.estoque or 0), LIMITE_PEDIDO))
+
+
 class VitrineService:
 
     @staticmethod
@@ -52,6 +62,7 @@ class VitrineService:
                 "preco_anterior": p.preco_venda if p.em_promocao else None,
                 "promocao_fim": p.promocao_fim if p.em_promocao else None,
                 "disponibilidade": disponibilidade(p),
+                "max_pedido": max_pedido(p),
                 "destaque": p.vitrine_destaque,
                 "novidade": bool(p.criado_em and p.criado_em >= agora - timedelta(days=DIAS_NOVIDADE)),
                 "fotos": [f"/vitrine/fotos/{f.id}" for f in fotos],

@@ -18,6 +18,8 @@ export interface Produto {
   preco_anterior: number | null;
   promocao_fim: string | null;
   disponibilidade: Disponibilidade;
+  // quantas a sacola aceita (estoque, ate' 10); ausente em snapshot antigo
+  max_pedido?: number;
   destaque: boolean;
   novidade: boolean;
   fotos: string[];
@@ -95,6 +97,9 @@ export function linkPedido(itens: { produto: Produto; qtd: number }[]): string |
     `Olá! Quero fazer este pedido pela vitrine:\n\n${linhas.join("\n\n")}\n\nTotal: ${real(total)}\n\nAguardo a confirmação da loja.`,
   );
 }
+
+// limite da sacola: sem o campo (Vertex antigo) nao limita
+export const limitePedido = (p: Produto) => p.max_pedido ?? Infinity;
 
 export function busca(produtos: Produto[], termo: string, categoria: string | null): Produto[] {
   const q = semAcento(termo.trim());

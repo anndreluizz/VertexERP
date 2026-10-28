@@ -349,3 +349,6 @@ section.estado-msg { margin-block: 48px; }
 .sacola-total { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--linha); padding-top: 12px; }
 .sacola-total strong { font-size: 24px; color: var(--verde); }
 .sacola-nota { font-size: 13px; color: var(--suave); }
+.selo-ultima { background: var(--ouro); color: var(--branco); }
+.aviso-limite { font-size: 14px; color: var(--suave); text-align: center; padding: 10px; border-radius: 10px; background: var(--bege); }
+.sacola-qtd button:disabled { opacity: .35; cursor: not-allowed; }

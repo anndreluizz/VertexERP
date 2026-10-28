@@ -9,6 +9,9 @@ class Produto {
     required this.estoque,
     required this.estoqueMinimo,
     required this.ativo,
+    this.vitrinePublicar = false,
+    this.vitrineDestaque = false,
+    this.temFoto = false,
   });
 
   factory Produto.fromJson(Map<String, dynamic> json) {
@@ -21,6 +24,9 @@ class Produto {
       estoque: json['estoque'] as int,
       estoqueMinimo: json['estoque_minimo'] as int,
       ativo: json['ativo'] as bool,
+      vitrinePublicar: json['vitrine_publicar'] as bool? ?? false,
+      vitrineDestaque: json['vitrine_destaque'] as bool? ?? false,
+      temFoto: json['tem_foto'] as bool? ?? false,
     );
   }
 
@@ -32,6 +38,11 @@ class Produto {
   final int estoque;
   final int estoqueMinimo;
   final bool ativo;
+
+  /// Site da loja (vitrine virtual): aparece la' e esta' em destaque.
+  final bool vitrinePublicar;
+  final bool vitrineDestaque;
+  final bool temFoto;
 
   bool get semEstoque => estoque <= 0;
   bool get estoqueBaixo => !semEstoque && estoque <= estoqueMinimo;

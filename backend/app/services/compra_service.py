@@ -107,9 +107,11 @@ class CompraService:
 
             compra.valor_total = valor_total
 
-            if (
-                compra.forma_pagamento
-                == FormaPagamento.PRAZO.value
+            # boleto tambem fica pra pagar depois: sem isso a compra no
+            # boleto nao aparecia em Contas a Pagar
+            if compra.forma_pagamento in (
+                FormaPagamento.PRAZO.value,
+                FormaPagamento.BOLETO.value,
             ):
 
                 ContaPagarService.criar_compra_prazo(

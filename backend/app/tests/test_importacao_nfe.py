@@ -251,3 +251,35 @@ def test_confirmar_produto_inexistente_da_erro(client, auth_headers, fornecedor)
     )
 
     assert response.status_code == 400
+
+
+def test_confirmar_no_boleto_gera_parcelas_mensais_e_categoria(client, auth_headers, db):
+    """Pedido da Ultra Jeans: 'Boleto' nao gerava Contas a Pagar e o
+    produto novo vinha sem categoria."""
+    from app.models.conta_pagar import ContaPagar
+    from app.models.produto import Produto
+
+    response = client.post(
+        "/compras/importar-nfe",
+        json={
+            "fornecedor_novo": {"razao_social": "Ultra Teste Ltda", "cnpj": "37852542000100"},
+            "forma_pagamento": "BOLETO",
+            "data_vencimento": "2026-12-05T00:00:00",
+            "numero_parcelas": 4,
+            "categoria": "ROUPA",
+            "itens": [{
+                "produto_id": None, "codigo": "UJ096204", "descricao": "MEIA COXA",
+                "quantidade": 5, "custo": "105.00", "preco_venda": "189.90",
+            }],
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    compra_id = response.json()["id"]
+    contas = (db.query(ContaPagar).filter(ContaPagar.compra_id == compra_id)
+              .order_by(ContaPagar.data_vencimento).all())
+    assert [c.data_vencimento.strftime("%d/%m/%Y") for c in contas] == [
+        "05/12/2026", "05/01/2027", "05/02/2027", "05/03/2027"]
+    assert sum(float(c.valor) for c in contas) == 525.0
+    assert db.query(Produto).filter(Produto.codigo == "UJ096204").first().categoria == "ROUPA"

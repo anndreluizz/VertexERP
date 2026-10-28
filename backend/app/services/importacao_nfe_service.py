@@ -93,7 +93,7 @@ class ImportacaoNfeService:
         loja_id: int | None = None,
     ):
         """Transacional: fornecedor + produtos novos/atualizados + compra
-        + itens + (se PRAZO) conta a pagar. Qualquer erro no meio -> sobe
+        + itens + (se PRAZO/BOLETO) contas a pagar. Qualquer erro no meio -> sobe
         a excecao (o handler global vira 400); CompraService.criar/
         MovimentoEstoqueService.criar ja fazem seus proprios commits
         pontuais, mesmo padrao usado no resto do backend -- nao ha rollback
@@ -136,7 +136,7 @@ class ImportacaoNfeService:
                         codigo=item.codigo,
                         codigo_barras=item.codigo_barras,
                         nome=item.descricao,
-                        categoria=None,
+                        categoria=dados.categoria or None,
                         preco_custo=item.custo,
                         preco_venda=item.preco_venda,
                         estoque=0,

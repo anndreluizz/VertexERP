@@ -12,8 +12,9 @@ const TEXTO_DISPONIBILIDADE = {
 };
 
 // <dialog> nativo: Esc fecha, foco fica preso dentro, fundo inerte.
-export function DetalheProduto({ produto, atualizadoEm, fechar }: {
+export function DetalheProduto({ produto, atualizadoEm, fechar, porNaSacola, naSacola }: {
   produto: Produto | null; atualizadoEm: string; fechar: () => void;
+  porNaSacola: (p: Produto) => void; naSacola: number;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [foto, setFoto] = useState(0);
@@ -73,6 +74,11 @@ export function DetalheProduto({ produto, atualizadoEm, fechar }: {
               <strong>{ROTULO_DISPONIBILIDADE[produto.disponibilidade]}</strong>
               <span>{TEXTO_DISPONIBILIDADE[produto.disponibilidade]}</span>
             </div>
+            {produto.disponibilidade !== "esgotado" && (
+              <button type="button" className="botao botao-verde botao-largo" onClick={() => porNaSacola(produto)}>
+                <Icone nome="sacola" /> {naSacola ? `Na sacola (${naSacola}) · pôr mais um` : "Pôr na sacola"}
+              </button>
+            )}
             {zap ? (
               <a className="botao botao-zap" href={zap} target="_blank" rel="noopener noreferrer">
                 <Icone nome="conversa" /> Consultar pelo WhatsApp

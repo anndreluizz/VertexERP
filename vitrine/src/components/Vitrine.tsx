@@ -8,6 +8,7 @@ import { CardProduto } from "./CardProduto";
 import { DetalheProduto } from "./DetalheProduto";
 import { FiltroLiquido, Tilt, useRevelar } from "./Efeitos";
 import { Icone, iconeDaCategoria } from "./Icone";
+import { ItemSacola, Sacola } from "./Sacola";
 
 type Estado = { tipo: "carregando" } | { tipo: "erro" } | { tipo: "ok"; catalogo: Catalogo };
 
@@ -60,6 +61,30 @@ export function Vitrine() {
   const [termo, setTermo] = useState("");
   const [slugAberto, setSlugAberto] = useState<string | null>(null);
   const [menuAberto, setMenuAberto] = useState(false);
+  const [sacola, setSacola] = useState<ItemSacola[]>([]);
+  const [sacolaAberta, setSacolaAberta] = useState(false);
+
+  // sacola fica no navegador do cliente (sobrevive a recarregar a pagina);
+  // storage pode estar bloqueado (aba anonima): ai' vale so' na visita
+  useEffect(() => {
+    try {
+      const salva = JSON.parse(localStorage.getItem("sacola") || "[]");
+      if (Array.isArray(salva)) setSacola(salva.filter((i) => i && typeof i.slug === "string" && i.qtd > 0));
+    } catch { /* sem storage */ }
+  }, []);
+
+  const mudarSacola = (slug: string, qtd: number) => {
+    setSacola((atual) => {
+      const nova = qtd > 0
+        ? (atual.some((i) => i.slug === slug)
+          ? atual.map((i) => (i.slug === slug ? { slug, qtd } : i))
+          : [...atual, { slug, qtd }])
+        : atual.filter((i) => i.slug !== slug);
+      try { localStorage.setItem("sacola", JSON.stringify(nova)); } catch { /* sem storage */ }
+      return nova;
+    });
+  };
+  const qtdNaSacola = (slug: string) => sacola.find((i) => i.slug === slug)?.qtd ?? 0;
 
   const carregar = useCallback(() => {
     setEstado({ tipo: "carregando" });
@@ -152,6 +177,11 @@ export function Vitrine() {
           </form>
 
           <div className="cabecalho-acoes">
+            <button type="button" className="icone-botao icone-sacola" onClick={() => setSacolaAberta(true)}
+              aria-label={`Abrir sacola, ${sacola.reduce((s, i) => s + i.qtd, 0)} item(ns)`}>
+              <Icone nome="sacola" />
+              {sacola.length > 0 && <span className="contador">{sacola.reduce((s, i) => s + i.qtd, 0)}</span>}
+            </button>
             {zapLoja && (
               <a className="icone-botao icone-zap" href={zapLoja} target="_blank" rel="noopener noreferrer"
                 aria-label="Falar no WhatsApp">
@@ -357,7 +387,11 @@ export function Vitrine() {
       </footer>
 
       <FiltroLiquido />
-      <DetalheProduto produto={aberto} atualizadoEm={atualizadoEm} fechar={fechar} />
+      <DetalheProduto produto={aberto} atualizadoEm={atualizadoEm} fechar={fechar}
+        naSacola={aberto ? qtdNaSacola(aberto.slug) : 0}
+        porNaSacola={(p) => mudarSacola(p.slug, qtdNaSacola(p.slug) + 1)} />
+      <Sacola aberta={sacolaAberta} itens={sacola} produtos={produtos}
+        mudar={mudarSacola} fechar={() => setSacolaAberta(false)} />
     </>
   );
 }

@@ -76,6 +76,7 @@ from app.api.v1 import (
     perfis as perfis_router,
     auditoria as auditoria_router,
     notificacoes as notificacoes_router,
+    vitrine as vitrine_router,
 )
 from app.auth import dependencies as auth_dependencies
 
@@ -108,6 +109,7 @@ MODULOS_COM_GET_DB = [
     perfis_router,
     auditoria_router,
     notificacoes_router,
+    vitrine_router,
     auth_dependencies,
 ]
 

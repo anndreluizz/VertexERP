@@ -25,6 +25,8 @@ class ProdutoBase(Schema):
     estoque_minimo: int = 0
     favorito: bool = False
     eh_kit: bool = False
+    vitrine_publicar: bool = False
+    vitrine_destaque: bool = False
 
     # imagem em base64 (entrada apenas); None mantem a foto atual
     foto_base64: str | None = None
@@ -67,6 +69,8 @@ class ProdutoResponse(Schema):
     ativo: bool
     favorito: bool = False
     eh_kit: bool = False
+    vitrine_publicar: bool = False
+    vitrine_destaque: bool = False
     tem_foto: bool = False
 
 

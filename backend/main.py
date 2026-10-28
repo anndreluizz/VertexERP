@@ -4,6 +4,7 @@ import sys
 from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.pdv import router as pdv_router
@@ -49,6 +50,7 @@ from app.api.v1.aprovacoes import router as aprovacoes_router
 from app.api.v1.lojas import router as lojas_router
 from app.api.v1.fornecedores import router as fornecedores_router
 from app.api.v1.compras import router as compras_router
+from app.api.v1.vitrine import router as vitrine_router
 from app.services.aviso_vencimento_service import iniciar_verificacao_diaria
 from app.services.backup_service import iniciar_aviso_backup
 from app.services.whatsapp_lembrete_service import (
@@ -60,6 +62,16 @@ app = FastAPI(
     description="Sistema ERP Empresarial",
     version="1.0.0"
 )
+
+# site da vitrine (outro dominio) lendo /vitrine direto do navegador --
+# so' liga com VITRINE_ORIGENS no .env, e so' GET (as demais rotas exigem
+# bearer token de qualquer jeito, sem cookie nenhum pra vazar).
+if os.getenv("VITRINE_ORIGENS"):
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[o.strip() for o in os.getenv("VITRINE_ORIGENS").split(",")],
+        allow_methods=["GET"],
+    )
 
 
 @app.get("/")
@@ -117,6 +129,7 @@ app.include_router(aprovacoes_router)
 app.include_router(lojas_router)
 app.include_router(fornecedores_router)
 app.include_router(compras_router)
+app.include_router(vitrine_router)
 
 # Quando empacotado com PyInstaller (--onefile), __file__ aponta pra dentro
 # da pasta temporária de extração (sys._MEIPASS) — certo pra achar arquivos

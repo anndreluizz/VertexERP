@@ -347,6 +347,28 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
         self._alternar_promocao(False)
         esquerda.addWidget(cartao_promo)
 
+        # ---------- Vitrine (site da loja) ----------
+
+        cartao_vitrine, corpo_vitrine = self._construir_cartao_secao(
+            "Vitrine virtual",
+            "Mostra o produto no site da loja (nome, preço, fotos e se "
+            "tem estoque -- nunca o custo).",
+            "store", tokens.SUCESSO,
+        )
+
+        self.vitrine_publicar_check = QCheckBox("Mostrar na vitrine")
+        self.vitrine_destaque_check = QCheckBox("Destaque (banner e seção Destaques)")
+        for check in (self.vitrine_publicar_check, self.vitrine_destaque_check):
+            check.setStyleSheet(
+                f"background:transparent; color:{tokens.TEXTO}; "
+                f"font-weight:600; font-size:{tokens.TAMANHO_SM}px;"
+            )
+            corpo_vitrine.addWidget(check)
+        self.vitrine_destaque_check.setEnabled(False)
+        self.vitrine_publicar_check.toggled.connect(self.vitrine_destaque_check.setEnabled)
+
+        esquerda.addWidget(cartao_vitrine)
+
         # ---------- Kit / Combo ----------
 
         cartao_kit, corpo_kit = self._construir_cartao_secao(
@@ -825,6 +847,9 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
 
         self.eh_kit_check.setChecked(self.produto.get("eh_kit", False))
 
+        self.vitrine_publicar_check.setChecked(self.produto.get("vitrine_publicar", False))
+        self.vitrine_destaque_check.setChecked(self.produto.get("vitrine_destaque", False))
+
         preco_promocional = self.produto.get("preco_promocional")
         self.em_promocao_check.setChecked(preco_promocional is not None)
 
@@ -978,4 +1003,11 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
             "favorito": self.favorito.isChecked(),
 
             "eh_kit": self.eh_kit_check.isChecked(),
+
+            "vitrine_publicar": self.vitrine_publicar_check.isChecked(),
+
+            "vitrine_destaque": (
+                self.vitrine_publicar_check.isChecked()
+                and self.vitrine_destaque_check.isChecked()
+            ),
         }

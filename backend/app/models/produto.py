@@ -193,6 +193,21 @@ class Produto(Base):
         server_default="false",
     )
 
+    # vitrine virtual (site da loja, ver app/api/v1/vitrine.py): so'
+    # aparece la' produto ativo com vitrine_publicar=True; destaque
+    # escolhe o que vai no banner/secao "Destaques".
+    vitrine_publicar: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+    )
+
+    vitrine_destaque: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+    )
+
     @property
     def tem_foto(self) -> bool:
         return self.foto is not None

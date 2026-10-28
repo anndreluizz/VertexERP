@@ -12,7 +12,11 @@ export const metadata: Metadata = {
   metadataBase: process.env.NEXT_PUBLIC_SITE_URL ? new URL(process.env.NEXT_PUBLIC_SITE_URL) : undefined,
   title: "3.L.A Variedades | Vitrine virtual",
   description: descricao,
-  openGraph: { title: "3.L.A Variedades", description: descricao, type: "website", locale: "pt_BR" },
+  openGraph: {
+    title: "3.L.A Variedades", description: descricao, type: "website", locale: "pt_BR",
+    // previa do link no WhatsApp; caminho relativo para cair dentro do basePath
+    images: [{ url: "previa.png", width: 1200, height: 630, alt: "3.L.A Variedades em Tonantins-AM" }],
+  },
 };
 
 export const viewport: Viewport = { themeColor: "#1f3b2d", width: "device-width", initialScale: 1 };

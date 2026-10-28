@@ -104,10 +104,10 @@ button { font: inherit; color: inherit; }
   background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgb(255 255 255 / 35%), transparent 55%); }
 .tilt:hover::after { opacity: 1; }
 
-/* ---------- faixa de entrega (estatica, sem animacao) ---------- */
-.faixa-entrega { background: var(--verde); color: var(--bege); }
+/* ---------- faixa de entrega (topo do rodape) ---------- */
+.faixa-entrega { border-bottom: 1px solid rgb(244 238 227 / 15%); }
 .faixa-entrega-linha { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px 40px; padding-block: 36px; }
-.faixa-entrega h2 { font-size: clamp(28px, 4vw, 42px); color: var(--bege); }
+.rodape .faixa-entrega h2 { font-family: var(--fonte-titulo), serif; font-weight: 600; letter-spacing: 0; text-transform: none; margin-bottom: 0; font-size: clamp(28px, 4vw, 42px); color: var(--bege); }
 .faixa-entrega p { margin-top: 6px; color: rgb(244 238 227 / 80%); }
 .botao-claro { background: var(--bege); color: var(--verde); }
 .botao-claro svg { color: var(--zap); }

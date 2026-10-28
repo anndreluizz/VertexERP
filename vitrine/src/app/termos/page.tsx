@@ -19,7 +19,7 @@ export default function Termos() {
       <p>
         O site mostra os produtos da loja para consulta. Não há venda nem pagamento pelo site.
         O pedido e a entrega ou retirada são combinados pelo WhatsApp ou na loja. A entrega em Tonantins não tem taxa.
-        O pagamento é feito na entrega ou na loja, no Pix, cartão ou dinheiro.
+        Pagamento no Pix, pelo WhatsApp, ou em dinheiro ou cartão na entrega ou na loja.
       </p>
 
       <h2>Preços e disponibilidade</h2>

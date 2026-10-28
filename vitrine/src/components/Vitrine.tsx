@@ -34,6 +34,14 @@ const formatarData = (iso: string) =>
 const formatarTelefone = (d: string) =>
   d.replace(/^55(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3");
 
+// fotos reais da loja em public/loja/ (sem pessoas)
+const FOTOS_LOJA = [
+  ["calcados", "Tênis e sandálias"],
+  ["sandalias", "Chinelos"],
+  ["brinquedos", "Brinquedos"],
+  ["infantil", "Moda infantil"],
+] as const;
+
 export function Vitrine() {
   const [estado, setEstado] = useState<Estado>({ tipo: "carregando" });
   const [categoria, setCategoria] = useState<string | null>(null);
@@ -158,6 +166,7 @@ export function Vitrine() {
               <a key={s.id} href={`#${s.id}`} onClick={() => setMenuAberto(false)}>{s.titulo}</a>
             ))}
             <a href="#catalogo" onClick={() => setMenuAberto(false)}>Todos os produtos</a>
+            <a href="#loja" onClick={() => setMenuAberto(false)}>A loja</a>
             <a href="#contato" onClick={() => setMenuAberto(false)}>Contato</a>
           </div>
         </nav>
@@ -280,6 +289,19 @@ export function Vitrine() {
             </section>
           </>
         )}
+
+        <section id="loja" className="contido secao">
+          <h2 className="titulo-secao">Conheça a loja</h2>
+          <div className="galeria">
+            {FOTOS_LOJA.map(([arquivo, legenda]) => (
+              <figure key={arquivo}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`${BASE}/loja/${arquivo}.jpg`} alt={legenda} width={600} height={800} loading="lazy" />
+                <figcaption>{legenda}</figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
       </main>
 
       <footer id="contato" className="rodape">

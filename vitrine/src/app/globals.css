@@ -137,6 +137,10 @@ button { font: inherit; color: inherit; }
 
 .prateleira { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(200px, calc((100% - 3 * 18px) / 4)); gap: 18px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 12px; scrollbar-width: thin; }
 .prateleira > * { scroll-snap-align: start; }
+.galeria { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.galeria figure { margin: 0; }
+.galeria img { width: 100%; height: auto; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 14px; display: block; }
+.galeria figcaption { margin-top: 8px; font-size: 14px; color: var(--suave); }
 .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; }
 
 /* ---------- card minimalista ---------- */
@@ -291,6 +295,7 @@ section.estado-msg { margin-block: 48px; }
   .menu-linha { flex-direction: column; gap: 4px; padding-block: 8px 14px; }
   .menu-linha a { padding-block: 10px; font-size: 16px; }
   .grade { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .galeria { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .prateleira { grid-auto-columns: minmax(160px, 46%); gap: 12px; }
   .categorias { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
   .card-vidro { left: 8px; bottom: 8px; max-width: calc(100% - 16px); padding: 6px 10px; border-radius: 10px; }

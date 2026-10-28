@@ -8,6 +8,7 @@ import '../aprovacoes/aprovacoes_provider.dart';
 import '../aprovacoes/aprovacoes_screen.dart';
 import '../caixas/caixas_screen.dart';
 import '../estoque/estoque_screen.dart';
+import '../estoque/vitrine_screen.dart';
 import '../notificacoes/notificacoes_provider.dart';
 import '../notificacoes/notificacoes_screen.dart';
 import '../relatorios/relatorios_screen.dart';
@@ -51,6 +52,14 @@ class MaisScreen extends ConsumerWidget {
                 subtitulo: 'Produtos críticos e sem estoque',
                 aoTocar: () => _abrir(context, const EstoqueScreen()),
               ),
+              // decide o que o publico ve no site: gerente/admin (igual ao Desktop)
+              if (sessao.usuario?.financeiro ?? true)
+                _ItemMenu(
+                  icone: Icons.storefront_outlined,
+                  titulo: 'Vitrine',
+                  subtitulo: 'Produtos do site, destaque e foto',
+                  aoTocar: () => _abrir(context, const VitrineScreen()),
+                ),
               // historico de caixas tem valores: so' financeiro
               if (sessao.usuario?.financeiro ?? true)
                 _ItemMenu(

@@ -83,7 +83,6 @@ button { font: inherit; color: inherit; }
 .hero p { font-size: 18px; color: var(--suave); max-width: 46ch; }
 
 .hero-colagem { position: relative; aspect-ratio: 1; max-width: 100%; }
-.hero-capa { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 20px; box-shadow: 0 24px 60px rgb(31 59 45 / 18%); }
 .colagem-camada { position: absolute; }
 .colagem-0 { inset: 4% 22% 14% 4%; z-index: 1; }
 .colagem-1 { inset: 0 0 58% 58%; z-index: 2; }
@@ -93,7 +92,7 @@ button { font: inherit; color: inherit; }
 .colagem-2 .colagem-item { animation-delay: .3s; border: 6px solid var(--branco); }
 .colagem-item button { display: block; width: 100%; height: 100%; padding: 0; border: 0; cursor: pointer; background: none; }
 /* foto inteira com respiro (contain), nunca cortada/ampliada */
-.colagem-item img { width: 100%; height: 100%; object-fit: contain; padding: 8%; background: var(--branco); transition: transform .8s cubic-bezier(.2,.7,.2,1); }
+.colagem-item img { width: 100%; height: 100%; object-fit: cover; background: var(--bege-2); transition: transform .8s cubic-bezier(.2,.7,.2,1); }
 .colagem-item:hover img { transform: scale(1.03); }
 .colagem-vazia { display: grid; place-items: center; color: var(--ouro); background: linear-gradient(160deg, var(--branco), var(--bege-2)); }
 .colagem-0 .colagem-vazia { background: var(--verde); color: var(--ouro-claro); }
@@ -137,10 +136,17 @@ button { font: inherit; color: inherit; }
 
 .prateleira { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(200px, calc((100% - 3 * 18px) / 4)); gap: 18px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 12px; scrollbar-width: thin; }
 .prateleira > * { scroll-snap-align: start; }
-.galeria { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
-.galeria figure { margin: 0; }
-.galeria img { width: 100%; height: auto; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 14px; display: block; }
-.galeria figcaption { margin-top: 8px; font-size: 14px; color: var(--suave); }
+/* mosaico: alta = 1x2, larga = 2x1 */
+.secao-sub { margin: -10px 0 22px; color: var(--suave); max-width: 60ch; }
+.galeria { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 230px; grid-auto-flow: dense; gap: 14px; }
+.galeria figure { position: relative; margin: 0; overflow: hidden; border-radius: 16px; background: var(--bege-2); }
+.galeria img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .6s ease; }
+.galeria figure:hover img { transform: scale(1.03); }
+.galeria figcaption { position: absolute; left: 12px; bottom: 12px; padding: 6px 10px; border-radius: 6px; background: rgb(255 255 255 / 92%); color: var(--verde); font-size: 13px; font-weight: 700; }
+.galeria-alta { grid-row: span 2; }
+.galeria-larga { grid-column: span 2; }
+/* fotos de prateleira: o melhor fica no alto (embaixo e' espelho) */
+.galeria-larga img { object-position: 50% 12%; }
 .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; }
 
 /* ---------- card minimalista ---------- */
@@ -295,7 +301,7 @@ section.estado-msg { margin-block: 48px; }
   .menu-linha { flex-direction: column; gap: 4px; padding-block: 8px 14px; }
   .menu-linha a { padding-block: 10px; font-size: 16px; }
   .grade { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  .galeria { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .galeria { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 170px; gap: 10px; }
   .prateleira { grid-auto-columns: minmax(160px, 46%); gap: 12px; }
   .categorias { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
   .card-vidro { left: 8px; bottom: 8px; max-width: calc(100% - 16px); padding: 6px 10px; border-radius: 10px; }

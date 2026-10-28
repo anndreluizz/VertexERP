@@ -29,21 +29,6 @@ export function useRevelar(chave: unknown) {
   }, [chave]);
 }
 
-/** --rolagem (px) no <html>, atualizado 1x por quadro: parallax via CSS. */
-export function useRolagem() {
-  useEffect(() => {
-    let quadro = 0;
-    const atualizar = () => {
-      quadro = 0;
-      document.documentElement.style.setProperty("--rolagem", String(Math.round(window.scrollY)));
-    };
-    const aoRolar = () => { if (!quadro) quadro = requestAnimationFrame(atualizar); };
-    atualizar();
-    window.addEventListener("scroll", aoRolar, { passive: true });
-    return () => { window.removeEventListener("scroll", aoRolar); cancelAnimationFrame(quadro); };
-  }, []);
-}
-
 /** Inclina o conteudo em 3D seguindo o mouse (so' mouse; toque nao). */
 export function Tilt({ children, className = "", forca = 10 }: {
   children: React.ReactNode; className?: string; forca?: number;
@@ -83,55 +68,5 @@ export function FiltroLiquido() {
         <feDisplacementMap in="SourceGraphic" in2="ruido" scale={18} xChannelSelector="R" yChannelSelector="G" />
       </filter>
     </svg>
-  );
-}
-
-/** Quadro que cresce de um cartao arredondado ate' a tela inteira
- *  enquanto a secao rola (--p de 0 a 1, posicao sticky). Com video da
- *  loja, mostra o video; sem, um painel verde liso com os enderecos. */
-export function VideoExpansivo({ video, titulo, lojas, horario }: {
-  video: string; titulo: string; lojas: { nome: string; endereco: string }[]; horario: string;
-}) {
-  const ref = useRef<HTMLElement>(null);
-  useEffect(() => {
-    let quadro = 0;
-    const calcular = () => {
-      quadro = 0;
-      const el = ref.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      const percurso = Math.max(1, r.height - window.innerHeight);
-      el.style.setProperty("--p", Math.min(1, Math.max(0, -r.top / percurso)).toFixed(3));
-    };
-    const pedir = () => { if (!quadro) quadro = requestAnimationFrame(calcular); };
-    calcular();
-    window.addEventListener("scroll", pedir, { passive: true });
-    window.addEventListener("resize", pedir);
-    return () => {
-      window.removeEventListener("scroll", pedir);
-      window.removeEventListener("resize", pedir);
-      cancelAnimationFrame(quadro);
-    };
-  }, []);
-
-  return (
-    <section ref={ref} className={`expansivo${video ? "" : " expansivo-sem-video"}`} aria-label={titulo}>
-      <div className="expansivo-fixo">
-        <div className="expansivo-moldura">
-          {video && <video src={video} autoPlay muted loop playsInline preload="metadata" />}
-          <div className="expansivo-texto">
-            <h2>{titulo}</h2>
-            {lojas.length > 0 && (
-              <ul className="expansivo-lojas">
-                {lojas.map((l) => (
-                  <li key={l.endereco}>{l.nome && <strong>{l.nome}</strong>}{l.endereco}</li>
-                ))}
-              </ul>
-            )}
-            {horario && <p>{horario}</p>}
-          </div>
-        </div>
-      </div>
-    </section>
   );
 }

@@ -201,19 +201,6 @@ export function Vitrine() {
           </div>
         </section>
 
-        <section className="faixa-entrega" aria-label="Entrega">
-          <div className="contido faixa-entrega-linha">
-            <div>
-              <h2>Fazemos entrega para toda Tonantins</h2>
-              <p>Escolha aqui na vitrine, chame no WhatsApp e receba em casa.</p>
-            </div>
-            {zapLoja && (
-              <a className="botao botao-claro" href={zapLoja} target="_blank" rel="noopener noreferrer">
-                <Icone nome="conversa" tamanho={18} /> Pedir pelo WhatsApp
-              </a>
-            )}
-          </div>
-        </section>
 
         {estado.tipo === "carregando" && <Esqueleto />}
 
@@ -290,6 +277,19 @@ export function Vitrine() {
       </main>
 
       <footer id="contato" className="rodape">
+        <div className="faixa-entrega">
+          <div className="contido faixa-entrega-linha">
+            <div>
+              <h2>Fazemos entrega para toda Tonantins</h2>
+              <p>Entrega grátis, a partir de 10 minutos. Pix pelo WhatsApp; dinheiro ou cartão na entrega.</p>
+            </div>
+            {zapLoja && (
+              <a className="botao botao-claro" href={zapLoja} target="_blank" rel="noopener noreferrer">
+                <Icone nome="conversa" tamanho={18} /> Pedir pelo WhatsApp
+              </a>
+            )}
+          </div>
+        </div>
         <div className="contido rodape-grade">
           <div>
             <img className="rodape-logo" src={`${BASE}/marca/logo-branca.png`} alt={nomeLoja} width={140} height={150} loading="lazy" />

@@ -18,7 +18,8 @@ export default function Termos() {
       <h2>O que é a vitrine</h2>
       <p>
         O site mostra os produtos da loja para consulta. Não há venda nem pagamento pelo site.
-        O pedido, o pagamento e a entrega ou retirada são combinados pelo WhatsApp ou na loja.
+        O pedido e a entrega ou retirada são combinados pelo WhatsApp ou na loja. A entrega em Tonantins não tem taxa.
+        Pagamento no Pix, pelo WhatsApp, ou em dinheiro ou cartão na entrega ou na loja.
       </p>
 
       <h2>Preços e disponibilidade</h2>

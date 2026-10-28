@@ -41,7 +41,11 @@ export const config = {
   whatsapp: (process.env.NEXT_PUBLIC_WHATSAPP || "").replace(/\D/g, ""),
   instagram: (process.env.NEXT_PUBLIC_INSTAGRAM || "").replace(/^@/, ""),
   horario: process.env.NEXT_PUBLIC_HORARIO || "",
-  endereco: process.env.NEXT_PUBLIC_ENDERECO || "",
+  // "Matriz: Rua X, Bairro, Cidade|Filial: Rua Y, ..." (nome antes dos dois-pontos)
+  lojas: (process.env.NEXT_PUBLIC_LOJAS || "").split("|").map((l) => l.trim()).filter(Boolean).map((l) => {
+    const [nome, ...resto] = l.split(":");
+    return resto.length ? { nome: nome.trim(), endereco: resto.join(":").trim() } : { nome: "", endereco: l };
+  }),
   // video da loja (mp4 leve, em public/) na secao que expande; vazio = foto de destaque
   video: process.env.NEXT_PUBLIC_VIDEO ? noSite(process.env.NEXT_PUBLIC_VIDEO) : "",
   avisos: (process.env.NEXT_PUBLIC_AVISOS || "").split("|").map((a) => a.trim()).filter(Boolean),

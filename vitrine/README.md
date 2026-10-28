@@ -47,7 +47,7 @@ python scripts/exportar_vitrine.py --api https://127.0.0.1:8000
 ## Configuração (`.env.local`)
 
 `NEXT_PUBLIC_WHATSAPP` (DDI + DDD + número, só dígitos), `NEXT_PUBLIC_INSTAGRAM`,
-`NEXT_PUBLIC_HORARIO`, `NEXT_PUBLIC_ENDERECO`, `NEXT_PUBLIC_AVISOS` (separados por `|`) e `NEXT_PUBLIC_SITE_URL`.
+`NEXT_PUBLIC_HORARIO`, `NEXT_PUBLIC_LOJAS` (`Matriz: endereço|Filial: endereço`), `NEXT_PUBLIC_AVISOS` (separados por `|`) e `NEXT_PUBLIC_SITE_URL`.
 Os dados reais da loja ficam em `.env` (versionado, só informação pública); `.env.local` sobrepõe em dev.
 A logo fica em `public/marca/` (recortada da arte da loja, versões verde e branca). Sem WhatsApp configurado, os botões não aparecem. **Nada secreto vai aqui:** tudo é público.
 

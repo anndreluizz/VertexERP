@@ -10,6 +10,7 @@ Roda no PC da loja: le' o Vertex local (exportar_vitrine.py), grava em
 """
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -53,7 +54,14 @@ def main() -> int:
 
     if opcoes.site:
         atualizar_site(opcoes.clone)
-    catalogo = exportar(opcoes.api, opcoes.clone / "dados")
+    try:
+        catalogo = exportar(opcoes.api, opcoes.clone / "dados")
+    except OSError as erro:
+        if not opcoes.site:
+            raise
+        # mudanca so' no visual: publica o site com os dados do ultimo envio
+        print(f"Vertex fora do ar ({erro}); mantendo os dados do ultimo envio.")
+        catalogo = json.loads((opcoes.clone / "dados" / "vitrine.json").read_text(encoding="utf-8"))
 
     rodar("git", "add", "-A", cwd=opcoes.clone)
     if not rodar("git", "status", "--porcelain", cwd=opcoes.clone).strip():

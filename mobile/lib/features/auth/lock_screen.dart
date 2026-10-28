@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
@@ -53,7 +54,8 @@ class _LockScreenState extends ConsumerState<LockScreen> {
     });
 
     try {
-      final suportado = await _auth.isDeviceSupported();
+      // navegador nao tem biometria: segue como aparelho sem trava
+      final suportado = !kIsWeb && await _auth.isDeviceSupported();
 
       if (!suportado) {
         // Aparelho sem nenhuma trava configurada (raro) — nao faz

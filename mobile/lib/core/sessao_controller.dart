@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/usuario.dart';
@@ -62,7 +63,8 @@ class SessaoController extends StateNotifier<SessaoState> {
   String? _refreshToken;
 
   Future<void> _iniciar() async {
-    final endereco = await _storage.lerServidor();
+    // versao web: o servidor e' quem entregou a pagina (/app no Vertex)
+    final endereco = kIsWeb ? Uri.base.origin : await _storage.lerServidor();
 
     if (endereco == null || endereco.isEmpty) {
       state = const SessaoState(status: StatusSessao.semServidor);

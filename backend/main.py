@@ -6,6 +6,7 @@ from alembic.config import Config
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.pdv import router as pdv_router
 from app.api.v1.contas_pagar import router as contas_pagar_router
@@ -130,6 +131,18 @@ app.include_router(lojas_router)
 app.include_router(fornecedores_router)
 app.include_router(compras_router)
 app.include_router(vitrine_router)
+
+# Versao web do app do celular (iPhone pelo Safari, via Tailscale HTTPS):
+# build do Flutter servido em /app, mesma origem da API. Empacotado vai
+# em app_web/ ao lado do exe (ver .github/workflows/release.yml); em dev,
+# mobile/build/web depois de `flutter build web --base-href /app/`.
+APP_WEB_DIR = (
+    os.path.join(os.path.dirname(sys.executable), "app_web")
+    if getattr(sys, "frozen", False)
+    else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "mobile", "build", "web")
+)
+if os.path.isdir(APP_WEB_DIR):
+    app.mount("/app", StaticFiles(directory=APP_WEB_DIR, html=True), name="app_web")
 
 # Quando empacotado com PyInstaller (--onefile), __file__ aponta pra dentro
 # da pasta temporária de extração (sys._MEIPASS) — certo pra achar arquivos

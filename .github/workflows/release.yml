@@ -46,6 +46,19 @@ jobs:
           pip install -r frontend/requirements.txt
           pip install pyinstaller==6.22.3
 
+      # versao web do app do celular (iPhone), servida pelo backend em /app
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.0"
+          channel: stable
+
+      - name: Build web do app do celular
+        working-directory: mobile
+        run: |
+          flutter pub get
+          flutter build web --release --base-href /app/
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
       - name: Versao
         id: versao
         shell: bash
@@ -71,6 +84,7 @@ jobs:
           New-Item -ItemType Directory -Force "$pacote\kit" | Out-Null
           Copy-Item dist\VertexERP.exe $pacote
           Copy-Item backend\dist\VertexERP-Backend $pacote -Recurse
+          Copy-Item mobile\build\web "$pacote\VertexERP-Backend\app_web" -Recurse
           Copy-Item frontend\dist\VertexERP-Frontend $pacote -Recurse
           Copy-Item scripts\atualizar.ps1, scripts\restaurar_backup.ps1, scripts\proteger_banco.ps1 $pacote
           Copy-Item scripts\kit\* "$pacote\kit"

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'tls_confianca.dart';
 
@@ -36,11 +37,15 @@ class FalhaCertificado {
 
 class ApiClient {
   ApiClient() : _dio = Dio(), _tls = TlsConfianca() {
-    (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
-      final client = HttpClient();
-      client.badCertificateCallback = _validarCertificado;
-      return client;
-    };
+    // no navegador (versao web, iPhone) quem valida o HTTPS e' o proprio
+    // navegador, com o certificado de verdade do Tailscale -- sem TOFU
+    if (!kIsWeb) {
+      (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
+        final client = HttpClient();
+        client.badCertificateCallback = _validarCertificado;
+        return client;
+      };
+    }
 
     _dio.interceptors.add(
       InterceptorsWrapper(
@@ -162,7 +167,8 @@ class ApiClient {
 
     final uri = Uri.parse(endereco);
 
-    if (uri.hasPort) {
+    // web: o endereco e' o da propria pagina (porta 443 do Tailscale)
+    if (uri.hasPort || kIsWeb) {
       return endereco;
     }
 
@@ -198,6 +204,18 @@ class ApiClient {
   Future<bool> testarConexao(String enderecoBruto) async {
     final endereco = normalizarEndereco(enderecoBruto);
     final uri = Uri.parse(endereco);
+
+    if (kIsWeb) {
+      final dioWeb = Dio();
+      try {
+        final resposta = await dioWeb.get(endereco);
+        return resposta.statusCode == 200;
+      } catch (_) {
+        return false;
+      } finally {
+        dioWeb.close();
+      }
+    }
 
     await _tls.prepararConfianca(uri.host, uri.port);
 

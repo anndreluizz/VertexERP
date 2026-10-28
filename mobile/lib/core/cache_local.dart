@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -38,6 +39,7 @@ class CacheLocal {
   }
 
   static Future<void> salvar(String chave, String valorJson) async {
+    if (kIsWeb) return; // sqflite nao roda no navegador; web fica sem cache
     final db = await _abrir();
 
     await db.insert('cache', {
@@ -49,6 +51,7 @@ class CacheLocal {
 
   /// Retorna (valorJson, atualizadoEm), ou null se nunca foi guardado.
   static Future<(String, DateTime)?> ler(String chave) async {
+    if (kIsWeb) return null;
     final db = await _abrir();
 
     final linhas = await db.query(

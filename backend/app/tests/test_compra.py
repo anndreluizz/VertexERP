@@ -193,7 +193,8 @@ def test_compra_prazo_com_parcelas_divide_o_valor(
     assert valores[2] == 33.34
 
     vencimentos = [c["data_vencimento"][:10] for c in da_compra]
-    assert vencimentos == ["2026-12-01", "2026-12-31", "2027-01-30"]
+    # mesmo dia todo mes, como boleto de fornecedor
+    assert vencimentos == ["2026-12-01", "2027-01-01", "2027-02-01"]
 
 
 def test_cancelar_compra_requer_admin(client, auth_headers_comum, fornecedor, produto):

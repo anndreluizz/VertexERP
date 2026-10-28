@@ -71,4 +71,6 @@ class ImportarNFeConfirmarRequest(Schema):
     data_vencimento: datetime | None = None
     numero_parcelas: int = 1
     observacao: str | None = None
+    # categoria dos produtos que a nota cria (os ja cadastrados ficam como estao)
+    categoria: str | None = None
     itens: list[ItemImportacaoRequest]

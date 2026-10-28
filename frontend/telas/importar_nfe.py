@@ -4,6 +4,7 @@ from PySide6.QtCore import QDate, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDateEdit,
     QDoubleSpinBox,
     QFileDialog,
@@ -28,6 +29,7 @@ from design.widgets import (
     titulo_secao,
 )
 from services.fornecedor_service import importar_nfe_preview
+from services.categoria_service import listar_categorias
 from services.compra_service import importar_nfe_confirmar
 from services.worker import rodar_em_thread
 from utils.formatacao import formatar_moeda
@@ -372,9 +374,19 @@ class ImportarNFeDialog(DialogoPadrao):
         self.numero_parcelas.setMinimumHeight(42)
         self.numero_parcelas.setStyleSheet(estilo_campo)
         self.numero_parcelas.setToolTip(
-            "Cada parcela vence 30 dias após a anterior, a partir da "
-            "data de vencimento informada."
+            "Uma parcela por mês, no mesmo dia do 1º vencimento "
+            "(igual aos boletos do fornecedor)."
         )
+
+        # categoria dos produtos que a nota cria; vazio = sem categoria
+        self.categoria = QComboBox()
+        self.categoria.setEditable(True)
+        self.categoria.setMinimumHeight(42)
+        self.categoria.setMinimumWidth(160)
+        self.categoria.addItem("")
+        self.categoria.lineEdit().setPlaceholderText("Ex.: ROUPA")
+        self.categoria.setStyleSheet(estilo_campo.replace("QDateEdit, QSpinBox", "QComboBox"))
+        rodar_em_thread(self, listar_categorias, ao_sucesso=self._ao_carregar_categorias)
 
         self.bloco_vencimento = campo_rotulado("1º vencimento", self.data_vencimento)
         self.bloco_parcelas = campo_rotulado("Parcelas", self.numero_parcelas)
@@ -385,6 +397,7 @@ class ImportarNFeDialog(DialogoPadrao):
         linha_pag.setSpacing(16)
         linha_pag.addWidget(self.bloco_vencimento)
         linha_pag.addWidget(self.bloco_parcelas)
+        linha_pag.addWidget(campo_rotulado("Categoria dos produtos novos", self.categoria))
         linha_pag.addWidget(campo_rotulado("Observação (opcional)", self.observacao), 1)
         layout.addLayout(linha_pag)
 
@@ -455,8 +468,14 @@ class ImportarNFeDialog(DialogoPadrao):
 
         self._ao_mudar_forma_pagamento(forma)
 
+    def _ao_carregar_categorias(self, categorias):
+        for c in categorias:
+            if c.get("ativo", True) and c.get("nome"):
+                self.categoria.addItem(c["nome"])
+
     def _ao_mudar_forma_pagamento(self, forma):
-        a_prazo = forma == "PRAZO"
+        # boleto tambem gera as parcelas em Contas a Pagar
+        a_prazo = forma in ("PRAZO", "BOLETO")
         self.bloco_vencimento.setVisible(a_prazo)
         self.bloco_parcelas.setVisible(a_prazo)
 
@@ -778,6 +797,16 @@ class ImportarNFeDialog(DialogoPadrao):
             f"•  o estoque de todos os itens será somado\n"
             f"•  {precos_alterados} produto(s) já cadastrado(s) terão o preço de venda alterado"
         )
+        categoria = self.categoria.currentText().strip()
+        if novos:
+            resumo += f"\n•  categoria dos novos: {categoria or 'nenhuma'}"
+        if self.forma_pagamento in ("PRAZO", "BOLETO"):
+            n = self.numero_parcelas.value()
+            resumo += (
+                f"\n•  {n} parcela(s) em Contas a Pagar, a 1ª em "
+                f"{self.data_vencimento.date().toString('dd/MM/yyyy')}"
+                + (" e as outras no mesmo dia dos meses seguintes" if n > 1 else "")
+            )
         if abaixo_do_custo:
             resumo += (
                 f"\n\nATENÇÃO: {len(abaixo_do_custo)} item(ns) vendendo a preço de "
@@ -797,7 +826,10 @@ class ImportarNFeDialog(DialogoPadrao):
         if observacao:
             payload["observacao"] = observacao
 
-        if self.forma_pagamento == "PRAZO":
+        if categoria:
+            payload["categoria"] = categoria
+
+        if self.forma_pagamento in ("PRAZO", "BOLETO"):
             payload["data_vencimento"] = self.data_vencimento.date().toString(
                 "yyyy-MM-dd"
             )

@@ -258,8 +258,8 @@ class ContaPagarService:
         ficaria sem nenhum rastro em Contas a Pagar. numero_parcelas > 1
         divide compra.valor_total em N contas iguais (o resto de
         arredondamento fica na ULTIMA parcela, nao na primeira -- evita
-        centavo sumindo/sobrando sem explicacao), uma a cada 30 dias a
-        partir de compra.data_vencimento."""
+        centavo sumindo/sobrando sem explicacao), no mesmo dia dos meses
+        seguintes a partir de compra.data_vencimento."""
 
         if compra.fornecedor_id is None:
             raise Exception(
@@ -299,8 +299,15 @@ class ContaPagarService:
                 fornecedor_id=compra.fornecedor_id,
                 compra_id=compra.id,
                 data_emissao=datetime.now(),
-                data_vencimento=compra.data_vencimento
-                + timedelta(days=30 * indice),
+                # mesmo dia nos meses seguintes, como os boletos do
+                # fornecedor (antes era de 30 em 30 dias e escorregava)
+                data_vencimento=datetime.combine(
+                    vencimento_no_mes(
+                        somar_meses(primeiro_dia(compra.data_vencimento.date()), indice),
+                        compra.data_vencimento.day,
+                    ),
+                    compra.data_vencimento.time(),
+                ),
                 data_pagamento=None,
                 valor=valor,
                 descricao=descricao,

@@ -36,7 +36,7 @@ const formatarTelefone = (d: string) =>
 
 // fotos reais da loja em public/loja/, recortadas sem pessoas
 const FOTOS_CAPA = [
-  ["mochilas", "Mochilas e roupas"],
+  ["loja", "Dentro da loja"],
   ["tenis", "Parede de tênis e sandálias"],
   ["blusas", "Arara de blusas"],
 ] as const;

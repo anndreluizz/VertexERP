@@ -33,7 +33,7 @@ FILTROS = [
     ("Todos os produtos", "TODOS"),
 ]
 
-COL_PRODUTO, COL_CATEGORIA, COL_PRECO, COL_SITE, COL_DESTAQUE, COL_AVISO = range(6)
+COL_PRODUTO, COL_CATEGORIA, COL_PRECO, COL_ESTOQUE, COL_SITE, COL_DESTAQUE, COL_AVISO = range(7)
 
 
 def pendencias(produto):
@@ -43,7 +43,27 @@ def pendencias(produto):
         faltando.append("sem foto")
     if not produto.get("categoria"):
         faltando.append("sem categoria")
+    if (produto.get("estoque") or 0) <= 0:
+        faltando.append("sem estoque (aparece esgotado)")
     return faltando
+
+
+def alterar_varios(produtos, publicar):
+    """Poe/tira varios do site de uma vez (roda na worker thread).
+    Devolve os nomes que falharam."""
+    falhas = []
+    for p in produtos:
+        dados = {
+            "codigo": p["codigo"], "nome": p["nome"], "vitrine_publicar": publicar,
+            "vitrine_destaque": bool(p.get("vitrine_destaque")) and publicar,
+        }
+        try:
+            ok = atualizar_produto(p["id"], dados).status_code == 200
+        except Exception:
+            ok = False
+        if not ok:
+            falhas.append(p["nome"])
+    return falhas
 
 
 def passa_filtro(produto, filtro, termo=""):
@@ -141,8 +161,8 @@ class Vitrine(QWidget):
         layout.addLayout(barra)
 
         self.tabela = QTableWidget()
-        self.tabela.setColumnCount(6)
-        self.tabela.setHorizontalHeaderLabels(["Produto", "Categoria", "Preço", "No site", "Destaque", "Aviso"])
+        self.tabela.setColumnCount(7)
+        self.tabela.setHorizontalHeaderLabels(["Produto", "Categoria", "Preço", "Estoque", "No site", "Destaque", "Aviso"])
         cab = self.tabela.horizontalHeader()
         cab.setSectionResizeMode(QHeaderView.ResizeToContents)
         cab.setSectionResizeMode(COL_PRODUTO, QHeaderView.Stretch)
@@ -152,7 +172,8 @@ class Vitrine(QWidget):
         self.tabela.setShowGrid(False)
         self.tabela.setAlternatingRowColors(True)
         self.tabela.setSelectionBehavior(QTableWidget.SelectRows)
-        self.tabela.setSelectionMode(QTableWidget.SingleSelection)
+        # varias linhas (Ctrl/Shift) para por ou tirar do site de uma vez
+        self.tabela.setSelectionMode(QTableWidget.ExtendedSelection)
         self.tabela.setEditTriggers(QTableWidget.NoEditTriggers)
         self.tabela.setStyleSheet(f"""
             QTableWidget {{
@@ -172,6 +193,7 @@ class Vitrine(QWidget):
             }}
         """)
         self.tabela.itemChanged.connect(self._ao_marcar)
+        self.tabela.itemSelectionChanged.connect(self._atualizar_botoes_lote)
         self.tabela.doubleClicked.connect(
             lambda index: self.editar(index.row()) if index.column() not in (COL_SITE, COL_DESTAQUE) else None
         )
@@ -190,20 +212,28 @@ class Vitrine(QWidget):
         layout.addWidget(self.lbl_vazio, stretch=1)
 
         rodape = QHBoxLayout()
-        dicas = QLabel("Duplo clique abre o cadastro do produto (foto, categoria, preço)")
+        dicas = QLabel("Duplo clique abre o cadastro  ·  Ctrl ou Shift seleciona vários")
         dicas.setStyleSheet(f"background:transparent; color:{tokens.TEXTO_TERCIARIO}; font-size:{tokens.TAMANHO_XS}px;")
         self.lbl_resumo = QLabel("")
         self.lbl_resumo.setStyleSheet(f"background:transparent; color:{tokens.TEXTO_TERCIARIO}; font-size:{tokens.TAMANHO_SM}px;")
         self.bt_atualizar = BotaoSecundario("Atualizar", icone_nome="refresh-cw")
         self.bt_atualizar.clicked.connect(self.carregar)
+        self.bt_por = BotaoSecundario("Pôr no site", icone_nome="eye")
+        self.bt_por.clicked.connect(self.por_selecionados)
+        self.bt_tirar = BotaoSecundario("Tirar do site", icone_nome="eye-off")
+        self.bt_tirar.clicked.connect(self.tirar_selecionados)
         rodape.addWidget(dicas)
         rodape.addStretch()
+        rodape.addWidget(self.bt_por)
+        rodape.addWidget(self.bt_tirar)
+        rodape.addSpacing(12)
         rodape.addWidget(self.lbl_resumo)
         rodape.addSpacing(12)
         rodape.addWidget(self.bt_atualizar)
         layout.addLayout(rodape)
 
         self._marcar_filtro(self.filtro)
+        self._atualizar_botoes_lote()
 
     # ======================
     # CARREGAMENTO
@@ -299,6 +329,9 @@ class Vitrine(QWidget):
             preco = QTableWidgetItem(formatar_moeda(p.get("preco_efetivo", p.get("preco_venda"))))
             preco.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.tabela.setItem(linha, COL_PRECO, preco)
+            estoque = QTableWidgetItem(str(p.get("estoque") or 0))
+            estoque.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.tabela.setItem(linha, COL_ESTOQUE, estoque)
 
             for coluna, campo in ((COL_SITE, "vitrine_publicar"), (COL_DESTAQUE, "vitrine_destaque")):
                 item = QTableWidgetItem()
@@ -364,6 +397,52 @@ class Vitrine(QWidget):
         self.tabela.setEnabled(True)
         QMessageBox.critical(self, "Erro", f"Não foi possível alterar a vitrine.\n{erro}")
         self.filtrar()  # volta a marcacao pro que esta' salvo
+
+    # ======================
+    # VARIOS DE UMA VEZ
+    # ======================
+
+    def selecionados(self):
+        linhas = sorted({i.row() for i in self.tabela.selectedIndexes()})
+        return [self.exibidos[linha] for linha in linhas if linha < len(self.exibidos)]
+
+    def _atualizar_botoes_lote(self):
+        sel = self.selecionados()
+        self.bt_por.setEnabled(any(not p.get("vitrine_publicar") for p in sel))
+        self.bt_tirar.setEnabled(any(p.get("vitrine_publicar") for p in sel))
+
+    def por_selecionados(self):
+        self._alterar_selecionados(True)
+
+    def tirar_selecionados(self):
+        self._alterar_selecionados(False)
+
+    def _alterar_selecionados(self, publicar):
+        alvo = [p for p in self.selecionados() if bool(p.get("vitrine_publicar")) != publicar]
+        if not alvo:
+            return
+        self.tabela.setEnabled(False)
+        self.bt_por.setEnabled(False)
+        self.bt_tirar.setEnabled(False)
+        self.lbl_resumo.setText(f"Salvando {len(alvo)} produto(s)...")
+        rodar_em_thread(
+            self, alterar_varios, alvo, publicar,
+            ao_sucesso=self._ao_lote, ao_erro=self._ao_falhar_lote,
+        )
+
+    def _ao_lote(self, falhas):
+        self.tabela.setEnabled(True)
+        if falhas:
+            QMessageBox.warning(
+                self, "Vitrine",
+                "Não foi possível alterar:\n" + "\n".join(f"  {n}" for n in falhas[:10]),
+            )
+        self.carregar()
+
+    def _ao_falhar_lote(self, erro):
+        self.tabela.setEnabled(True)
+        QMessageBox.critical(self, "Erro", f"Não foi possível alterar a vitrine.\n{erro}")
+        self.carregar()
 
     # ======================
     # EDITAR (foto, categoria, preco)

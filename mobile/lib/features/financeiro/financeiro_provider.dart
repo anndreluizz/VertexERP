@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:share_plus/share_plus.dart';
@@ -14,7 +15,8 @@ import '../../models/conta_pagar_evento.dart';
 /// Nome de plataforma pra anexar nos eventos de auditoria (ver
 /// ContaPagarEvento no backend) -- so um rotulo, nao muda nenhuma
 /// regra de negocio.
-String get _dispositivo => Platform.isAndroid ? 'Android' : 'iOS';
+String get _dispositivo =>
+    kIsWeb ? 'Web' : (Platform.isAndroid ? 'Android' : 'iOS');
 
 /// Um arquivo escolhido no aparelho (comprovante/boleto) antes de ser
 /// enviado -- ja carregado em memoria, pra so precisar base64-encodar
@@ -218,7 +220,29 @@ class FinanceiroActions {
     }
   }
 
+  /// Navegador nao tem pasta temporaria nem "abrir com": baixa os bytes
+  /// e entrega pro compartilhar do sistema (no iPhone abre a folha de
+  /// compartilhamento, que tambem tem "Salvar em Arquivos" e visualizar).
+  Future<String?> _compartilharNaWeb(String endpoint, String nomeArquivo) async {
+    try {
+      final api = _ref.read(apiClientProvider);
+      final resposta = await api.dio.get<List<int>>(
+        endpoint,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      await SharePlus.instance.share(
+        ShareParams(files: [
+          XFile.fromData(Uint8List.fromList(resposta.data!), name: nomeArquivo),
+        ]),
+      );
+      return null;
+    } catch (e) {
+      return mensagemDeErro(e, fallback: 'Não foi possível baixar o arquivo.');
+    }
+  }
+
   Future<String?> _baixarEAbrir(String endpoint, String nomeArquivo) async {
+    if (kIsWeb) return _compartilharNaWeb(endpoint, nomeArquivo);
     final (:caminho, :erro) = await _baixar(endpoint, nomeArquivo);
     if (erro != null) return erro;
 
@@ -235,6 +259,7 @@ class FinanceiroActions {
     String endpoint,
     String nomeArquivo,
   ) async {
+    if (kIsWeb) return _compartilharNaWeb(endpoint, nomeArquivo);
     final (:caminho, :erro) = await _baixar(endpoint, nomeArquivo);
     if (erro != null) return erro;
 

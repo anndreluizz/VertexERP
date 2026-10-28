@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -82,7 +83,8 @@ class VigiaNotificacoes {
   int? _ultimoId;
 
   Future<void> iniciar() async {
-    if (_timer != null) return;
+    // navegador: o plugin de notificacao local nao existe na web
+    if (_timer != null || kIsWeb) return;
 
     await _plugin.initialize(
       settings: const InitializationSettings(

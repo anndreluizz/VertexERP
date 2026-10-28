@@ -111,7 +111,9 @@ export function Vitrine() {
   useRevelar(`${estado.tipo}|${categoria}|${termo}|${resultado.length}`);
 
   const zapLoja = linkWhatsApp();
-  const endereco = config.endereco || catalogo?.loja.endereco;
+  const lojas = config.lojas.length
+    ? config.lojas
+    : catalogo?.loja.endereco ? [{ nome: "", endereco: catalogo.loja.endereco }] : [];
 
   return (
     <>
@@ -168,7 +170,9 @@ export function Vitrine() {
         <section className="hero">
           <div className="contido hero-grade">
             <div className="hero-texto">
-              <span className="sobretitulo">{endereco || "Tonantins, Amazonas"}</span>
+              <span className="sobretitulo">
+                {lojas.length > 1 ? `${lojas.map((l) => l.nome).join(" e ")} em Tonantins-AM` : lojas[0]?.endereco || "Tonantins-AM"}
+              </span>
               <h1>Roupas, calçados, perfumes e brinquedos da {nomeLoja}</h1>
               <p>
                 Veja o preço e se tem na loja. Para comprar, chame no WhatsApp
@@ -199,9 +203,9 @@ export function Vitrine() {
 
         <VideoExpansivo
           video={config.video}
-          foto={vitrineHero[0]?.fotos[0] ?? null}
           titulo={`Venha conhecer a ${nomeLoja}`}
-          texto={[endereco, config.horario].filter(Boolean).join(" · ") || "Atendimento e pedidos pelo WhatsApp"}
+          lojas={lojas}
+          horario={config.horario}
         />
 
         {estado.tipo === "carregando" && <Esqueleto />}
@@ -282,7 +286,12 @@ export function Vitrine() {
         <div className="contido rodape-grade">
           <div>
             <img className="rodape-logo" src={`${BASE}/marca/logo-branca.png`} alt={nomeLoja} width={140} height={150} loading="lazy" />
-            {endereco && <p className="rodape-linha"><Icone nome="local" tamanho={18} /> {endereco}</p>}
+            {lojas.map((l) => (
+              <p key={l.endereco} className="rodape-linha">
+                <Icone nome="local" tamanho={18} />
+                <span>{l.nome && <strong>{l.nome}<br /></strong>}{l.endereco}</span>
+              </p>
+            ))}
             {config.horario && <p className="rodape-linha"><Icone nome="relogio" tamanho={18} /> {config.horario}</p>}
           </div>
           <div hidden={!zapLoja && !config.instagram}>

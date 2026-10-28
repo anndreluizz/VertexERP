@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { BASE } from "@/lib/catalogo";
 
 // Efeitos visuais sem biblioteca. Todos desligam com
 // prefers-reduced-motion (ver globals.css) e nenhum esconde conteudo
@@ -87,10 +86,11 @@ export function FiltroLiquido() {
   );
 }
 
-/** Midia que cresce de um cartao arredondado ate' a tela inteira
- *  enquanto a secao rola (--p de 0 a 1, posicao sticky). */
-export function VideoExpansivo({ video, foto, titulo, texto }: {
-  video: string; foto: string | null; titulo: string; texto: string;
+/** Quadro que cresce de um cartao arredondado ate' a tela inteira
+ *  enquanto a secao rola (--p de 0 a 1, posicao sticky). Com video da
+ *  loja, mostra o video; sem, um painel verde liso com os enderecos. */
+export function VideoExpansivo({ video, titulo, lojas, horario }: {
+  video: string; titulo: string; lojas: { nome: string; endereco: string }[]; horario: string;
 }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -115,19 +115,20 @@ export function VideoExpansivo({ video, foto, titulo, texto }: {
   }, []);
 
   return (
-    <section ref={ref} className="expansivo" aria-label={titulo}>
+    <section ref={ref} className={`expansivo${video ? "" : " expansivo-sem-video"}`} aria-label={titulo}>
       <div className="expansivo-fixo">
         <div className="expansivo-moldura">
-          {video ? (
-            <video src={video} poster={foto ?? undefined} autoPlay muted loop playsInline preload="metadata" />
-          ) : foto ? (
-            <img src={foto} alt="" loading="lazy" decoding="async" />
-          ) : (
-            <div className="expansivo-liquido"><img src={`${BASE}/marca/logo-branca.png`} alt="" width={220} height={235} /></div>
-          )}
+          {video && <video src={video} autoPlay muted loop playsInline preload="metadata" />}
           <div className="expansivo-texto">
             <h2>{titulo}</h2>
-            <p>{texto}</p>
+            {lojas.length > 0 && (
+              <ul className="expansivo-lojas">
+                {lojas.map((l) => (
+                  <li key={l.endereco}>{l.nome && <strong>{l.nome}</strong>}{l.endereco}</li>
+                ))}
+              </ul>
+            )}
+            {horario && <p>{horario}</p>}
           </div>
         </div>
       </div>

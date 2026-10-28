@@ -40,7 +40,7 @@ export function ContatoLoja() {
   return (
     <ul>
       {config.whatsapp && <li>WhatsApp: {telefone}</li>}
-      {config.endereco && <li>Endereço: {config.endereco}</li>}
+      {config.lojas.map((l) => <li key={l.endereco}>{l.nome || "Endereço"}: {l.endereco}</li>)}
       {config.horario && <li>Atendimento: {config.horario}</li>}
     </ul>
   );

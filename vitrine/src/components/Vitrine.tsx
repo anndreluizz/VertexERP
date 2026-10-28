@@ -184,7 +184,7 @@ export function Vitrine() {
             </div>
             {config.capa ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img className="hero-capa" src={config.capa} alt="" fetchPriority="high" />
+              <img className="hero-capa" src={config.capa} alt={`Dentro da loja ${nomeLoja}`} fetchPriority="high" />
             ) : (
             <div className="hero-colagem" aria-hidden={vitrineHero.length === 0}>
               {vitrineHero.length > 0

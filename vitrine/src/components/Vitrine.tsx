@@ -63,7 +63,8 @@ export function Vitrine() {
 
   const catalogo = estado.tipo === "ok" ? estado.catalogo : null;
   const produtos = catalogo?.produtos ?? [];
-  const nomeLoja = catalogo?.loja.nome || NOME_PADRAO;
+  // nome da marca fixo: o do Vertex (Configuracoes) vem em maiusculas
+  const nomeLoja = NOME_PADRAO;
   const atualizadoEm = catalogo ? formatarData(catalogo.gerado_em) : "";
 
   const resultado = useMemo(() => busca(produtos, termo, categoria), [produtos, termo, categoria]);

@@ -170,7 +170,7 @@ button { font: inherit; color: inherit; }
 
 /* preco em vidro, por cima da foto */
 .card-vidro { position: absolute; z-index: 1; left: 12px; bottom: 12px; max-width: calc(100% - 24px); padding: 8px 14px; border-radius: 14px;
-  background: rgb(255 253 249 / 45%); backdrop-filter: blur(12px) saturate(1.5); -webkit-backdrop-filter: blur(12px) saturate(1.5);
+  background: rgb(255 253 249 / 78%); backdrop-filter: blur(12px) saturate(1.5); -webkit-backdrop-filter: blur(12px) saturate(1.5);
   border: 1px solid rgb(255 255 255 / 65%); box-shadow: 0 8px 24px -10px rgb(31 59 45 / 35%); transition: transform .5s cubic-bezier(.2,.7,.2,1), opacity .4s; }
 .card-vidro .preco { margin: 0; }
 .card-vidro .preco strong { font-size: 20px; }

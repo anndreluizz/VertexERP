@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QPageSize
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -11,12 +11,14 @@ from PySide6.QtWidgets import (
 )
 
 from services.caixa_service import entradas_caixa, historico_caixa
+from services.comprovante_service import salvar_pdf
 from services.worker import rodar_em_thread
 from design import tokens
 from design.widgets import BotaoSecundario, CardKPI
 from utils.formatacao import formatar_moeda
 from widgets.dialogs.message_dialog import Mensagem
 from .comum import NOMES_FORMA_PAGAMENTO
+from .pdf_caixas import buscar_dados, montar_html
 
 
 class CaixaMixin:
@@ -74,6 +76,12 @@ class CaixaMixin:
         self.bt_caixas_anteriores.setToolTip("Ver vendas e recebimentos de cada caixa e reimprimir o fechamento")
         self.bt_caixas_anteriores.clicked.connect(lambda: self.abrir_caixas_anteriores())
         cabecalho_caixa.addWidget(self.bt_caixas_anteriores)
+
+        self.bt_pdf_caixas = BotaoSecundario("Relatório em PDF", icone_nome="file-text")
+        self.bt_pdf_caixas.setMinimumHeight(34)
+        self.bt_pdf_caixas.setToolTip("Todos os caixas do período: vendas com os itens, recebimentos e conferência")
+        self.bt_pdf_caixas.clicked.connect(self._gerar_pdf_caixas)
+        cabecalho_caixa.addWidget(self.bt_pdf_caixas)
 
         layout.addLayout(cabecalho_caixa)
 
@@ -160,6 +168,38 @@ class CaixaMixin:
     def abrir_caixas_anteriores(self, caixa_id=None):
         from telas.caixas_anteriores import CaixasAnterioresDialog
         CaixasAnterioresDialog(parent=self, caixa_id=caixa_id).exec()
+
+    def _gerar_pdf_caixas(self):
+        inicio, fim = self._calcular_periodo(self.combo_periodo_caixa)
+        self.bt_pdf_caixas.setEnabled(False)
+        self.bt_pdf_caixas.setText("Gerando...")
+        rodar_em_thread(
+            self, buscar_dados, inicio, fim or datetime.now().date(),
+            self.combo_loja_caixa.currentData(),
+            ao_sucesso=self._ao_gerar_pdf_caixas,
+            ao_erro=self._ao_erro_pdf_caixas,
+            ao_finalizar=self._ao_finalizar_pdf_caixas,
+        )
+
+    def _ao_erro_pdf_caixas(self, erro):
+        Mensagem.erro(self, f"Não foi possível gerar o relatório.\n{erro}")
+
+    def _ao_finalizar_pdf_caixas(self):
+        self.bt_pdf_caixas.setEnabled(True)
+        self.bt_pdf_caixas.setText("Relatório em PDF")
+
+    def _ao_gerar_pdf_caixas(self, dados):
+        if not dados["detalhes"]:
+            Mensagem.aviso(self, "Nenhum caixa aberto nesse período.")
+            return
+        periodo = self.combo_periodo_caixa.currentText()
+        nome = dados["config"].get("nome_loja") or "Vertex ERP"
+        if self.combo_loja_caixa.currentData() is not None:
+            nome += f" · {self.combo_loja_caixa.currentText()}"
+        salvar_pdf(
+            montar_html(dados, nome, periodo), self,
+            f"caixas {periodo.replace('/', '-')}.pdf", QPageSize.A4,
+        )
 
     def _atualizar_entradas(self):
         inicio, fim = self._calcular_periodo(self.combo_periodo_caixa)

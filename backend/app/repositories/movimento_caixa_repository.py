@@ -19,6 +19,7 @@ class MovimentoCaixaRepository:
         skip: int = 0,
         limit: int = 100,
         loja_id: int | None = None,
+        data_inicio=None,
     ):
         # MovimentoCaixa nao tem loja_id proprio -- so' da pra saber a
         # loja de um movimento pela loja do caixa que o gerou, entao o
@@ -29,6 +30,9 @@ class MovimentoCaixaRepository:
             query = query.join(
                 Caixa, MovimentoCaixa.caixa_id == Caixa.id
             ).filter(Caixa.loja_id == loja_id)
+
+        if data_inicio is not None:
+            query = query.filter(MovimentoCaixa.data >= data_inicio)
 
         return (
             query

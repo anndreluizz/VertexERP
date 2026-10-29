@@ -36,7 +36,7 @@ def _buscar_dados_visao_geral():
         (listar_vendas, loja_id, None, inicio_historico()),
         (listar_produtos,),
         (listar_contas_pagar, loja_id),
-        (listar_movimentacoes, loja_id),
+        (listar_movimentacoes, loja_id, inicio_historico()),
     )
 
 from telas.relatorios import (

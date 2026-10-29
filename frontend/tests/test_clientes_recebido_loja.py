@@ -15,11 +15,10 @@ def _rodar(monkeypatch, loja_combo, loja_terminal, info={"admin": True}):
     monkeypatch.setattr(clientes, "listar_movimentos", lambda: [
         {"cliente_id": 1, "tipo": "PAGAMENTO", "valor": 999},
     ])
-    monkeypatch.setattr(clientes, "listar_vendas", lambda: [])
     monkeypatch.setattr(clientes, "entradas_caixa", entradas)
     monkeypatch.setattr(clientes, "carregar_loja_id", lambda: loja_terminal)
 
-    recebido = clientes._buscar_dados_clientes(loja_combo)[3]
+    recebido = clientes._buscar_dados_clientes(loja_combo)[2]
     return recebido, (pedidos[0] if pedidos else None)
 
 

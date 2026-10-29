@@ -12,7 +12,7 @@ def _clientes(n):
 
 def test_tela_clientes_busca_reaproveita_as_linhas(monkeypatch):
     w = Clientes()
-    w._ao_carregar_sucesso((_clientes(40), {}, {}, 0.0, {}))
+    w._ao_carregar_sucesso((_clientes(40), {}, 0.0, {}))
     montadas = []
     original = tela.ClienteLinha
     monkeypatch.setattr(tela, "ClienteLinha", lambda *a: montadas.append(1) or original(*a))

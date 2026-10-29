@@ -1,3 +1,4 @@
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -54,11 +55,12 @@ def listar_movimentos(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     loja_id: int | None = None,
+    data_inicio: date | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
     loja_id = loja_para_leitura(usuario, loja_id)
-    movimentos = MovimentoCaixaService.listar(db, skip, limit, loja_id)
+    movimentos = MovimentoCaixaService.listar(db, skip, limit, loja_id, data_inicio)
 
     return [
         MovimentoCaixaResponse.model_validate(m)

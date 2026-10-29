@@ -383,6 +383,11 @@ class Produtos(QWidget):
 
         self.tabela.setAlternatingRowColors(True)
 
+        # os widgets das celulas (foto, badges, acoes) so' sao criados nas
+        # linhas que aparecem: rolar ou aumentar a janela monta as demais
+        self.tabela.verticalScrollBar().valueChanged.connect(self._montar_visiveis)
+        self.tabela.verticalScrollBar().rangeChanged.connect(self._montar_visiveis)
+
         self.tabela.setSelectionBehavior(
             QTableWidget.SelectRows
         )
@@ -918,18 +923,18 @@ class Produtos(QWidget):
         self.tabela.setRowCount(0)
         self.tabela.setRowCount(len(produtos))
 
+        # com ~1000 produtos, criar ~5000 widgets (e baixar todas as fotos)
+        # de uma vez congelava o Vertex: o Windows mostrava "nao esta
+        # respondendo" e quem fechava derrubava o programa. Aqui so' entram
+        # os textos; os widgets vem em _montar_visiveis.
+        self._linhas_montadas = set()
+
         for linha, produto in enumerate(produtos):
 
             item_check = QTableWidgetItem()
             item_check.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
             item_check.setCheckState(Qt.Unchecked)
             self.tabela.setItem(linha, 0, item_check)
-
-            self.tabela.setCellWidget(
-                linha,
-                1,
-                self._criar_widget_foto(produto)
-            )
 
             codigo_exibido = (
                 produto.get("codigo_barras")
@@ -950,27 +955,6 @@ class Produtos(QWidget):
             item_nome.setFont(fonte_nome)
             self.tabela.setItem(linha, 3, item_nome)
 
-            self.tabela.setCellWidget(
-                linha, 4, self._badge_centralizado(
-                    produto.get("categoria") or "—", "info"
-                )
-            )
-
-            estoque = produto["estoque"]
-            estoque_minimo = produto.get("estoque_minimo", 0)
-
-            if estoque <= 0:
-                variante_estoque = "erro"
-            elif estoque <= estoque_minimo:
-                variante_estoque = "alerta"
-            else:
-                variante_estoque = "sucesso"
-
-            self.tabela.setCellWidget(
-                linha, 5,
-                self._badge_centralizado(str(estoque), variante_estoque)
-            )
-
             item_preco = QTableWidgetItem(formatar_moeda(produto["preco_venda"]))
             item_preco.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             fonte_preco = item_preco.font()
@@ -978,22 +962,69 @@ class Produtos(QWidget):
             item_preco.setFont(fonte_preco)
             self.tabela.setItem(linha, 6, item_preco)
 
-            ativo = produto.get("ativo", True)
-            self.tabela.setCellWidget(
-                linha, 7,
-                self._badge_centralizado(
-                    "Ativo" if ativo else "Inativo",
-                    "sucesso" if ativo else "neutro",
-                )
-            )
-
-            self.tabela.setCellWidget(
-                linha, 8, self._widget_acoes(produto)
-            )
-
         self.tabela.blockSignals(False)
 
+        self._montar_visiveis()
+
         self._atualizar_texto_selecionados()
+
+    def _montar_visiveis(self, *_):
+
+        produtos = getattr(self, "produtos_exibidos", [])
+        if not produtos:
+            return
+
+        altura_linha = self.tabela.verticalHeader().defaultSectionSize()
+        primeira = max(self.tabela.rowAt(0), 0)
+        # janela ainda sem altura (antes do show): monta uma tela cheia
+        cabem = max(self.tabela.viewport().height() // altura_linha, 20)
+
+        for linha in range(primeira, min(primeira + cabem + 5, len(produtos))):
+            if linha not in self._linhas_montadas:
+                self._linhas_montadas.add(linha)
+                self._montar_linha(linha, produtos[linha])
+
+    def _montar_linha(self, linha, produto):
+
+        self.tabela.setCellWidget(
+            linha,
+            1,
+            self._criar_widget_foto(produto)
+        )
+
+        self.tabela.setCellWidget(
+            linha, 4, self._badge_centralizado(
+                produto.get("categoria") or "—", "info"
+            )
+        )
+
+        estoque = produto["estoque"]
+        estoque_minimo = produto.get("estoque_minimo", 0)
+
+        if estoque <= 0:
+            variante_estoque = "erro"
+        elif estoque <= estoque_minimo:
+            variante_estoque = "alerta"
+        else:
+            variante_estoque = "sucesso"
+
+        self.tabela.setCellWidget(
+            linha, 5,
+            self._badge_centralizado(str(estoque), variante_estoque)
+        )
+
+        ativo = produto.get("ativo", True)
+        self.tabela.setCellWidget(
+            linha, 7,
+            self._badge_centralizado(
+                "Ativo" if ativo else "Inativo",
+                "sucesso" if ativo else "neutro",
+            )
+        )
+
+        self.tabela.setCellWidget(
+            linha, 8, self._widget_acoes(produto)
+        )
 
     def _badge_centralizado(self, texto, variante):
 

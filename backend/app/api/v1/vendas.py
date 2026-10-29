@@ -65,6 +65,7 @@ def listar(
     data_inicio: date | None = None,
     data_fim: date | None = None,
     usuario_id: int | None = None,
+    cliente_id: int | None = None,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
@@ -73,7 +74,7 @@ def listar(
     if not usuario_tem_permissao(db, usuario, "financeiro.ver"):
         usuario_id = usuario.id
     return VendaService.listar(
-        db, skip, limit, loja_id, data_inicio, data_fim, usuario_id
+        db, skip, limit, loja_id, data_inicio, data_fim, usuario_id, cliente_id
     )
 
 

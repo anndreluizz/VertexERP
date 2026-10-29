@@ -44,10 +44,21 @@ PASSO A PASSO
    Pronto: celulares e caixas voltam a conectar sozinhos.
    (Se nao der pra trocar o IP: em cada celular/caixa, troque o
     endereco do servidor pelo IP novo que o Tailscale mostrar.)
+   - iPhone (o Vertex abre pelo navegador em https://eren.tail9994ec.ts.net/app):
+       c) no mesmo menu "...", "Edit machine name" e coloque  eren
+       d) no PC novo, abra o PowerShell e rode:
+            tailscale serve --bg https+insecure://localhost:58734
 
 4. Confira no Vertex se as ultimas vendas e o caixa estao la. O que foi
    lancado depois do ultimo backup (ver o nome do arquivo restaurado)
    precisa ser lancado de novo.
+
+5. O QUE FICA PRA DEPOIS (a loja ja' funciona sem isso):
+   - Site da loja (anndreluizz.github.io/3la-variedades): continua no ar,
+     mas para de atualizar precos e fotos ate o desenvolvedor configurar
+     a publicacao no PC novo (tarefa "VertexERP Vitrine").
+   - Backup extra das 20h (tarefa "VertexERP Backup Diario"): o Vertex
+     ja' faz backup sozinho de hora em hora; esse e' so' um a mais.
 
 
 IMPORTANTE

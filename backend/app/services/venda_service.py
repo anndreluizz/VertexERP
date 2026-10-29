@@ -174,9 +174,10 @@ class VendaService:
         data_inicio=None,
         data_fim=None,
         usuario_id: int | None = None,
+        cliente_id: int | None = None,
     ):
         return VendaRepository.listar(
-            db, skip, limit, loja_id, data_inicio, data_fim, usuario_id
+            db, skip, limit, loja_id, data_inicio, data_fim, usuario_id, cliente_id
         )
 
     @staticmethod

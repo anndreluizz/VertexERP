@@ -87,3 +87,17 @@ def test_movimentos_caixa_respeita_paginacao(
     ).json()
 
     assert len(pagina) == 1
+
+
+def test_movimentos_caixa_filtra_por_data_inicio(client, auth_headers, db, usuario, caixa_aberto):
+    from datetime import datetime
+    from app.models.movimento_caixa import MovimentoCaixa
+
+    for data in (datetime(2025, 1, 10), datetime(2026, 10, 10)):
+        db.add(MovimentoCaixa(caixa_id=caixa_aberto.id, usuario_id=usuario.id, tipo="SANGRIA",
+                              valor=5, descricao="x", data=data))
+    db.commit()
+
+    r = client.get("/movimentos-caixa/?data_inicio=2026-01-01", headers=auth_headers)
+    assert r.status_code == 200
+    assert [m["data"][:10] for m in r.json()] == ["2026-10-10"]

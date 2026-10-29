@@ -103,7 +103,7 @@ def resumo_caixa_por_id(caixa_id):
 _TAMANHO_PAGINA = 500
 
 
-def listar_movimentacoes(loja_id=None):
+def listar_movimentacoes(loja_id=None, desde=None):
     """Busca TODAS as movimentações de caixa, varrendo as páginas por
     baixo dos panos -- essa lista alimenta cálculos agregados (Visão
     Geral), então não pode truncar silenciosamente no limite padrão
@@ -118,6 +118,8 @@ def listar_movimentacoes(loja_id=None):
         endpoint = f"/movimentos-caixa/?skip={skip}&limit={_TAMANHO_PAGINA}"
         if loja_id is not None:
             endpoint += f"&loja_id={loja_id}"
+        if desde is not None:
+            endpoint += f"&data_inicio={desde.isoformat()}"
 
         response = get(endpoint)
 

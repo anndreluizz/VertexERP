@@ -22,7 +22,7 @@ def _dados():
     for c in clientes:
         agrs[c["id"]] = cliente_analise.calcular_agregados(c, movs[c["id"]])
         c["saldo_fiado"] = agrs[c["id"]]["saldo_devedor"]
-    return clientes, agrs, {}, 0.0, movs
+    return clientes, agrs, 0.0, movs
 
 
 def test_aba_negativados_separada():

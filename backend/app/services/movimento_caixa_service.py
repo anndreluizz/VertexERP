@@ -93,8 +93,9 @@ class MovimentoCaixaService:
         skip: int = 0,
         limit: int = 100,
         loja_id: int | None = None,
+        data_inicio=None,
     ):
-        return MovimentoCaixaRepository.listar(db, skip, limit, loja_id)
+        return MovimentoCaixaRepository.listar(db, skip, limit, loja_id, data_inicio)
 
     @staticmethod
     def listar_por_caixa(

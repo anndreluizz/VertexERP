@@ -10,7 +10,6 @@ from services.cliente_service import listar_clientes, reativar_cliente
 from services.preferencias_service import carregar_loja_id
 from services.loja_service import listar_lojas
 from services.movimento_fiado_service import listar_movimentos
-from services.venda_service import listar_vendas
 from services import api, cliente_analise
 
 from PySide6.QtCore import Qt, Signal, QTimer
@@ -95,10 +94,10 @@ def _buscar_dados_clientes(loja_id):
 
     # vendedor nao ve o card (nem pode: /caixa/entradas e' 403 pra ele,
     # e o 403 derrubava a tela inteira de Clientes)
-    chamadas = [(listar_clientes, loja_id), (listar_movimentos,), (listar_vendas,)]
+    chamadas = [(listar_clientes, loja_id), (listar_movimentos,)]
     if api.usuario_tem_permissao("financeiro.ver"):
         chamadas.append((entradas_caixa, None, None, loja_recebido))
-    clientes, movimentos_fiado, vendas, *resto = em_paralelo(*chamadas)
+    clientes, movimentos_fiado, *resto = em_paralelo(*chamadas)
     entradas = resto[0] if resto else {}
 
     movimentos_por_cliente = {}
@@ -116,22 +115,11 @@ def _buscar_dados_clientes(loja_id):
         agregados_por_cliente[cliente["id"]] = agr
         cliente["saldo_fiado"] = agr["saldo_devedor"]
 
-    vendas_por_cliente = {}
-    for venda in vendas:
-        cid = venda.get("cliente_id")
-        if cid is None:
-            continue
-        vendas_por_cliente[cid] = (
-            vendas_por_cliente.get(cid, 0)
-            + float(venda.get("valor_total", 0) or 0)
-        )
-
     recebido_fiado_total = float(entradas.get("fiado_recebido", 0) or 0)
 
     return (
         clientes,
         agregados_por_cliente,
-        vendas_por_cliente,
         recebido_fiado_total,
         movimentos_por_cliente,
     )
@@ -565,7 +553,6 @@ class Clientes(QWidget):
 
         self.clientes = []
         self._clientes_filtrados = []
-        self.vendas_por_cliente = {}
         self.agregados_por_cliente = {}
         self.movimentos_por_cliente = {}
         self._selecionado_id = None
@@ -945,7 +932,6 @@ class Clientes(QWidget):
             (
                 self.clientes,
                 self.agregados_por_cliente,
-                self.vendas_por_cliente,
                 self.recebido_fiado_total,
                 self.movimentos_por_cliente,
             ) = dados

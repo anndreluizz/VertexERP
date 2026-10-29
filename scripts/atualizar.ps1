@@ -137,6 +137,9 @@ try {
         throw "O backup do banco falhou -- nada foi alterado."
     }
     Log "backup: $backup"
+    # so' os 3 ultimos (~40 MB cada); o backup diario do OneDrive guarda o resto
+    Get-ChildItem $pastaBackup -Filter "antes_*.sql" | Sort-Object LastWriteTime -Descending |
+        Select-Object -Skip 3 | Remove-Item -Force -ErrorAction SilentlyContinue
 
     Parar-Vertex
 

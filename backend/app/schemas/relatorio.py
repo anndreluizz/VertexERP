@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from app.schemas.base import Schema
+from app.schemas.base import Quantidade, Schema
 
 
 class KpiValor(Schema):
@@ -15,7 +15,7 @@ class VendaPorDia(Schema):
 
 class ProdutoMaisVendido(Schema):
     produto: str
-    quantidade: int
+    quantidade: Quantidade
     total: Decimal
 
 
@@ -57,13 +57,13 @@ class MargemCategoriaItem(Schema):
     receita: Decimal
     lucro: Decimal
     margem_pct: Decimal
-    quantidade: int
+    quantidade: Quantidade
     custo_incompleto: bool = False
 
 
 class EstoqueCategoriaItem(Schema):
     categoria: str
-    quantidade: int
+    quantidade: Quantidade
     valor: Decimal
 
 
@@ -122,7 +122,7 @@ class CategoriaSemVendaItem(Schema):
 class CurvaAbcItem(Schema):
     produto_id: int
     produto: str
-    quantidade: int
+    quantidade: Quantidade
     total: Decimal
     percentual: float
     percentual_acumulado: float
@@ -132,7 +132,7 @@ class CurvaAbcItem(Schema):
 class ComparativoEstoqueLojaItem(Schema):
     loja_id: int
     loja_nome: str
-    quantidade_total: int
+    quantidade_total: Quantidade
     valor_em_estoque: Decimal
     produtos_abaixo_minimo: int
 
@@ -140,9 +140,9 @@ class ComparativoEstoqueLojaItem(Schema):
 class SugestaoReposicaoItem(Schema):
     produto_id: int
     produto: str
-    quantidade_atual: int
-    estoque_minimo: int
-    quantidade_sugerida: int
+    quantidade_atual: Quantidade
+    estoque_minimo: Quantidade
+    quantidade_sugerida: Quantidade
 
 
 class RelatorioVendasResponse(Schema):

@@ -51,7 +51,7 @@ def test_ajuste_saida_com_estoque_insuficiente(client, auth_headers, produto):
         json={
             "produto_id": produto.id,
             "tipo": "SAIDA",
-            "quantidade": produto.estoque + 1,
+            "quantidade": int(produto.estoque) + 1,
             "motivo": "Quebra",
         },
         headers=auth_headers,

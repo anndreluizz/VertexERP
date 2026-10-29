@@ -58,7 +58,7 @@ def test_parsear_nfe_extrai_fornecedor_e_itens():
 
     item2 = extraida.itens[1]
     assert item2.codigo_barras is None  # "SEM GTIN" vira None
-    assert item2.quantidade == 3  # 3.4 arredonda pra 3 (ROUND_HALF_UP)
+    assert item2.quantidade == Decimal("3.400")  # fracionado (kg) mantem 3 casas
 
 
 _XML_SEM_WRAPPER_PROC = """<?xml version="1.0" encoding="UTF-8"?>

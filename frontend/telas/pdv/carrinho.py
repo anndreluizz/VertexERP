@@ -12,8 +12,8 @@ from PySide6.QtWidgets import (
 )
 from design import tokens
 from design.icons import icone, icone_pixmap
-from utils.formatacao import formatar_moeda
-from telas.pdv.comum import _CORES_MONOGRAMA, _baixar_foto_com_id, _parse_valor
+from utils.formatacao import eh_fracionado, formatar_moeda, formatar_quantidade, subtotal_item
+from telas.pdv.comum import _CORES_MONOGRAMA, _baixar_foto_com_id, _parse_valor, pedir_peso
 
 
 class CarrinhoMixin:
@@ -31,13 +31,13 @@ class CarrinhoMixin:
         linha_ultimo = None
 
         for linha, item in enumerate(self.itens):
-            subtotal = item["preco"] * item["quantidade"]
+            subtotal = subtotal_item(item["preco"], item["quantidade"])
 
             celulas = [
                 (f"{linha + 1:03d}", Qt.AlignCenter),
                 (item["codigo"], Qt.AlignLeft | Qt.AlignVCenter),
                 (item["nome"], Qt.AlignLeft | Qt.AlignVCenter),
-                (str(item["quantidade"]), Qt.AlignCenter),
+                (formatar_quantidade(item["quantidade"], item.get("unidade")), Qt.AlignCenter),
                 (formatar_moeda(item["preco"]), alinhado_direita),
                 (formatar_moeda(subtotal), alinhado_direita),
             ]
@@ -106,13 +106,19 @@ class CarrinhoMixin:
 
     def _controle_quantidade(self, linha, item):
 
-        lbl = QLabel(str(item["quantidade"]))
+        lbl = QLabel(formatar_quantidade(item["quantidade"], item.get("unidade")))
         lbl.setMinimumWidth(28)
         lbl.setAlignment(Qt.AlignCenter)
         lbl.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO};
             font-size:{tokens.TAMANHO_MD}px; font-weight:700;
         """)
+        if eh_fracionado(item.get("unidade")):
+            return self._celula_centralizada(
+                lbl,
+                self._botao_linha("edit-2", "Alterar peso",
+                                  lambda: self.alterar_quantidade(linha, 0)),
+            )
         return self._celula_centralizada(
             self._botao_linha("minus", "Diminuir quantidade",
                               lambda: self.alterar_quantidade(linha, -1)),
@@ -157,10 +163,10 @@ class CarrinhoMixin:
             font-size:24px; font-weight:800;
         """)
         self.lbl_ultimo_conta.setText(
-            f"{item['quantidade']} × {formatar_moeda(item['preco'])}"
+            f"{formatar_quantidade(item['quantidade'], item.get('unidade'))} × {formatar_moeda(item['preco'])}"
         )
         self.lbl_ultimo_total.setText(
-            formatar_moeda(item["preco"] * item["quantidade"])
+            formatar_moeda(subtotal_item(item["preco"], item["quantidade"]))
         )
 
         foto = self._fotos_cache.get(item["id"])
@@ -244,7 +250,7 @@ class CarrinhoMixin:
 
     def _recalcular_totais(self):
 
-        subtotal = sum(item["preco"] * item["quantidade"] for item in self.itens)
+        subtotal = sum(subtotal_item(item["preco"], item["quantidade"]) for item in self.itens)
 
         self.desconto_valor = _parse_valor(self.campo_desconto.text())
         self.acrescimo_valor = _parse_valor(self.campo_acrescimo.text())
@@ -298,7 +304,15 @@ class CarrinhoMixin:
             return
 
         item = self.itens[linha]
-        nova_quantidade = item["quantidade"] + delta
+
+        if eh_fracionado(item.get("unidade")):
+            # +/- de 1 kg nao faz sentido: pede o peso de novo
+            nova_quantidade = pedir_peso(self, item, item["quantidade"])
+            if nova_quantidade is None:
+                return
+            delta = nova_quantidade - item["quantidade"]
+        else:
+            nova_quantidade = item["quantidade"] + delta
 
         if nova_quantidade <= 0:
             self.remover_item(linha)
@@ -309,7 +323,7 @@ class CarrinhoMixin:
         if delta > 0 and estoque is not None and nova_quantidade > estoque:
             self._mostrar_status_busca(
                 f"Estoque insuficiente de {item['nome']} — "
-                f"disponível: {estoque}.",
+                f"disponível: {formatar_quantidade(estoque, item.get('unidade'))}.",
                 erro=True,
             )
             return

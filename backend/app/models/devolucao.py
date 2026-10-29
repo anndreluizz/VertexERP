@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import DateTime, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -59,7 +59,7 @@ class ItemDevolucao(Base):
 
     produto_id: Mapped[int] = mapped_column(ForeignKey("produtos.id"))
 
-    quantidade: Mapped[int] = mapped_column(Integer)
+    quantidade: Mapped[Decimal] = mapped_column(Numeric(12, 3))
 
     # valor já com a parte proporcional do desconto/acréscimo da venda
     valor: Mapped[Decimal] = mapped_column(Numeric(12, 2))

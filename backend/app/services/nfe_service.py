@@ -20,7 +20,7 @@ class ItemNFeExtraido:
     codigo: str
     descricao: str
     codigo_barras: str | None
-    quantidade: int
+    quantidade: Decimal
     valor_unitario: Decimal
 
 
@@ -48,12 +48,9 @@ def _texto(elemento, tag: str) -> str | None:
     return filho.text.strip()
 
 
-def _quantidade_inteira(texto: str | None) -> int:
-    """qCom vem como decimal (ex.: "10.0000") -- o sistema so' guarda
-    estoque como Integer (MovimentoEstoque.quantidade, Produto.estoque),
-    entao arredonda pro inteiro mais proximo. Nao e' uma limitacao nova
-    introduzida aqui, e' a mesma que ja existe em qualquer ajuste manual
-    de estoque hoje."""
+def _quantidade(texto: str | None) -> Decimal:
+    """qCom vem como decimal (ex.: "10.0000", "2.3500" kg) -- guarda
+    com 3 casas, igual Produto.estoque."""
 
     if not texto:
         raise NFeInvalidaError("Item da NF-e sem quantidade (qCom).")
@@ -63,7 +60,7 @@ def _quantidade_inteira(texto: str | None) -> int:
     except InvalidOperation:
         raise NFeInvalidaError(f"Quantidade inválida na NF-e: '{texto}'.")
 
-    return int(decimal.to_integral_value(rounding=ROUND_HALF_UP))
+    return decimal.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
 
 
 def _valor_decimal(texto: str | None, campo: str) -> Decimal:
@@ -98,7 +95,7 @@ def _extrair_item(det) -> ItemNFeExtraido:
         codigo=codigo,
         descricao=descricao,
         codigo_barras=codigo_barras,
-        quantidade=_quantidade_inteira(_texto(prod, "qCom")),
+        quantidade=_quantidade(_texto(prod, "qCom")),
         valor_unitario=_valor_decimal(_texto(prod, "vUnCom"), "vUnCom"),
     )
 

@@ -1,4 +1,5 @@
-from sqlalchemy import ForeignKey, Integer
+from decimal import Decimal
+from sqlalchemy import Numeric, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -25,10 +26,10 @@ class ItemContagemEstoque(Base):
     # aberta -- congelado de proposito, pra a divergencia comparar com o
     # que o sistema dizia ter na hora da contagem, nao com o estoque
     # atual (que pode ter mudado por vendas no meio do processo).
-    quantidade_sistema: Mapped[int] = mapped_column(Integer, nullable=False)
+    quantidade_sistema: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
 
-    quantidade_contada: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
+    quantidade_contada: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 3), nullable=True
     )
 
     contagem = relationship("ContagemEstoque", back_populates="itens")

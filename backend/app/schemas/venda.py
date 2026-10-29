@@ -1,16 +1,16 @@
 from datetime import datetime
 from decimal import Decimal
 from app.enums.forma_pagamento import FormaPagamento
-from pydantic import conint, condecimal, constr
+from pydantic import condecimal, constr
 
-from app.schemas.base import Schema
+from app.schemas.base import Quantidade, QuantidadePositiva, Schema
 
 
 class ItemVendaCreate(Schema):
     produto_id: int
     # quantidade <= 0 passava na checagem de estoque e SOMAVA estoque
     # (devolucao disfarcada de venda, sem passar pelo cancelamento)
-    quantidade: conint(gt=0)
+    quantidade: QuantidadePositiva
     valor_unitario: condecimal(ge=0, decimal_places=2)
 
 
@@ -18,7 +18,8 @@ class ItemVendaResponse(Schema):
     id: int
     produto_id: int
     produto_nome: str | None = None
-    quantidade: int
+    quantidade: Quantidade
+    unidade: str = "UN"
     valor_unitario: Decimal
     subtotal: Decimal
 
@@ -65,9 +66,10 @@ class ItemVendaSuspensaResponse(Schema):
     produto_id: int
     codigo: str | None = None
     nome: str
-    quantidade: int
+    quantidade: Quantidade
     valor_unitario: Decimal
-    estoque: int | None = None
+    estoque: Quantidade | None = None
+    unidade: str | None = "UN"
 
 
 class VendaSuspensaResponse(Schema):
@@ -157,7 +159,8 @@ class ComprovanteEnvioResponse(Schema):
 class ComprovanteItemResponse(Schema):
     produto_id: int
     nome: str
-    quantidade: int
+    quantidade: Quantidade
+    unidade: str | None = "UN"
     valor_unitario: Decimal
     subtotal: Decimal
 

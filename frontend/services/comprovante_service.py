@@ -11,7 +11,7 @@ from PySide6.QtPrintSupport import QPrinter, QPrintDialog
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from services.api import get, post, configuracoes
-from utils.formatacao import formatar_moeda, nome_forma
+from utils.formatacao import formatar_moeda, formatar_quantidade, nome_forma
 from utils.documento_html import (
     ESTILO_BODY,
     bloco_total,
@@ -216,7 +216,7 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
         linha_zebra(
             [
                 item["nome"],
-                item["quantidade"],
+                formatar_quantidade(item["quantidade"], item.get("unidade")),
                 _formatar_moeda(item["valor_unitario"]),
                 _formatar_moeda(item["subtotal"]),
             ],

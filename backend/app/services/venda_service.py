@@ -1,6 +1,7 @@
 import threading
 import traceback
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy.orm import Session
 
@@ -32,6 +33,10 @@ from app.services.notificacao_service import NotificacaoService, nome_do_usuario
 from app.services.cliente_service import ClienteService
 from app.services.configuracao_service import ConfiguracaoService
 from app.services.whatsapp_service import WhatsappService
+from app.utils.quantidade import (
+    formatar_quantidade,
+    quantidade_por_unidade_valida,
+)
 
 
 def _itens_para_baixa_estoque(db: Session, produto: Produto, quantidade: int):
@@ -50,6 +55,18 @@ def _itens_para_baixa_estoque(db: Session, produto: Produto, quantidade: int):
         for item in itens_kit
         if item.componente is not None
     ]
+
+
+def _subtotal(valor_unitario, quantidade) -> Decimal:
+    # 0,347 kg x R$ 39,90 = 13,8453 -> 13,85 (centavo, igual balanca)
+    return (Decimal(valor_unitario) * quantidade).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+
+
+def _qtd_comprovante(quantidade, unidade) -> str:
+    texto = formatar_quantidade(quantidade, unidade)
+    return texto if (unidade or "UN").upper() in ("KG", "L") else f"{texto}x"
 
 
 def _moeda(valor: float) -> str:
@@ -80,15 +97,15 @@ def _enviar_comprovante_whatsapp(db: Session, venda: Venda) -> None:
         return
 
     itens = (
-        db.query(ItemVenda, Produto.nome)
+        db.query(ItemVenda, Produto.nome, Produto.unidade)
         .join(Produto, Produto.id == ItemVenda.produto_id)
         .filter(ItemVenda.venda_id == venda.id)
         .all()
     )
 
     linhas_itens = "\n".join(
-        f"• {item.quantidade}x {nome} — {_moeda(item.subtotal)}"
-        for item, nome in itens
+        f"• {_qtd_comprovante(item.quantidade, unidade)} {nome} — {_moeda(item.subtotal)}"
+        for item, nome, unidade in itens
     )
 
     nome_loja = config.nome_loja or "Vertex ERP"
@@ -284,6 +301,7 @@ class VendaService:
                 "produto_id": item.produto_id,
                 "nome": item.produto.nome if item.produto else "Produto removido",
                 "quantidade": item.quantidade,
+                "unidade": item.produto.unidade if item.produto else "UN",
                 "valor_unitario": item.valor_unitario,
                 "subtotal": item.subtotal,
             }
@@ -433,6 +451,12 @@ class VendaService:
                         "item no carrinho e tente de novo."
                     )
 
+                if not quantidade_por_unidade_valida(item.quantidade, produto.unidade):
+                    raise Exception(
+                        f"{produto.nome} é vendido por unidade: a "
+                        "quantidade não pode ter vírgula."
+                    )
+
                 # checa/baixa o estoque da LOJA que esta vendendo, nao
                 # o agregado entre lojas -- senao a Filial conseguiria
                 # vender um produto que so tem estoque na Matriz (ou
@@ -455,7 +479,7 @@ class VendaService:
                             f"Estoque insuficiente para {produto_baixa.nome}."
                         )
 
-                subtotal = item.valor_unitario * item.quantidade
+                subtotal = _subtotal(item.valor_unitario, item.quantidade)
 
                 item_venda = ItemVenda(
                     venda_id=venda.id,
@@ -605,7 +629,8 @@ class VendaService:
                 db,
                 "Produto acabando",
                 f"{produto.nome} está com estoque baixo "
-                f"({produto.estoque} un.).",
+                f"({formatar_quantidade(produto.estoque, produto.unidade)}"
+                f"{'' if produto.unidade in ('KG', 'L') else ' un.'}).",
             )
 
         if venda.cliente_id and "PRAZO" in (
@@ -670,7 +695,7 @@ class VendaService:
 
         for item in dados.itens:
 
-            subtotal = item.valor_unitario * item.quantidade
+            subtotal = _subtotal(item.valor_unitario, item.quantidade)
 
             ItemVendaRepository.criar(
                 db,
@@ -734,6 +759,7 @@ class VendaService:
                 "quantidade": item.quantidade,
                 "valor_unitario": item.valor_unitario,
                 "estoque": produto.estoque if produto else None,
+                "unidade": produto.unidade if produto else "UN",
             })
 
         return {

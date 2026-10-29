@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from app.schemas.base import Schema
+from app.schemas.base import Quantidade, Schema
 from app.enums.forma_pagamento import FormaPagamento
 
 
@@ -26,7 +26,7 @@ class ItemPreviewResponse(Schema):
     codigo: str
     descricao: str
     codigo_barras: str | None = None
-    quantidade: int
+    quantidade: Quantidade
     custo: Decimal
     produto_id: int | None = None
     preco_atual: Decimal | None = None
@@ -54,7 +54,7 @@ class ItemImportacaoRequest(Schema):
     codigo: str
     descricao: str
     codigo_barras: str | None = None
-    quantidade: int
+    quantidade: Quantidade
     custo: Decimal
     preco_venda: Decimal
     # so' vale pra produto ja cadastrado: sem isso o preco de venda

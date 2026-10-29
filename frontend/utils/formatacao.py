@@ -61,3 +61,33 @@ def linhas_resumo_caixa(resumo):
 
 def nome_forma(codigo):
     return NOMES_FORMA.get(codigo, codigo)
+
+
+def eh_fracionado(unidade):
+    """Produto vendido por peso/volume (aceita 0,350)."""
+
+    return (unidade or "UN").upper() in ("KG", "L")
+
+
+def formatar_quantidade(valor, unidade="UN"):
+    """2 -> "2"; KG -> "0,350 kg"; L -> "1,500 L"."""
+
+    valor = float(valor or 0)
+
+    if eh_fracionado(unidade):
+        sufixo = "kg" if unidade.upper() == "KG" else "L"
+        return f"{valor:.3f}".replace(".", ",") + f" {sufixo}"
+
+    if valor == int(valor):
+        return str(int(valor))
+    return f"{valor:g}".replace(".", ",")
+
+
+def subtotal_item(preco, quantidade):
+    """preco x quantidade arredondado no centavo (meio pra cima), igual
+    o backend grava -- 0,347 kg x 39,90 = 13,85."""
+
+    from decimal import ROUND_HALF_UP, Decimal
+
+    valor = Decimal(str(preco)) * Decimal(str(quantidade))
+    return float(valor.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))

@@ -130,7 +130,7 @@ class _CadastroProdutoScreenState extends ConsumerState<CadastroProdutoScreen> {
       id: produto['id'] as int,
       nome: produto['nome'] as String,
       codigo: produto['codigo'] as String,
-      estoque: produto['estoque'] as int,
+      estoque: produto['estoque'] as num,
       titulo: 'Produto já cadastrado',
       motivo: 'Entrada pelo cadastro de produto (app)',
     );

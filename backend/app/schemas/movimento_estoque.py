@@ -1,12 +1,12 @@
 from datetime import datetime
 
-from app.schemas.base import Schema
+from app.schemas.base import Quantidade, Schema
 
 
 class MovimentoEstoqueBase(Schema):
     produto_id: int
     tipo: str
-    quantidade: int
+    quantidade: Quantidade
     motivo: str | None = None
 
 

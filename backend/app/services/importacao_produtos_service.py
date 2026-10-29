@@ -77,14 +77,14 @@ def _parse_decimal(texto, padrao=Decimal("0")):
         return padrao, f'"{texto}" não é um preço válido'
 
 
-def _parse_int(texto, padrao=0):
+def _parse_quantidade(texto, padrao=0):
     texto = (texto or "").strip()
     if not texto:
         return padrao, None
     try:
-        return int(texto), None
-    except ValueError:
-        return padrao, f'"{texto}" não é um número inteiro válido'
+        return Decimal(texto.replace(",", ".")), None
+    except InvalidOperation:
+        return padrao, f'"{texto}" não é um número válido'
 
 
 class ImportacaoProdutosService:
@@ -127,11 +127,11 @@ class ImportacaoProdutosService:
             if erro_venda:
                 erros.append(erro_venda)
 
-            estoque, erro_estoque = _parse_int(_valor(linha, mapa, "estoque"))
+            estoque, erro_estoque = _parse_quantidade(_valor(linha, mapa, "estoque"))
             if erro_estoque:
                 erros.append(erro_estoque)
 
-            estoque_minimo, erro_minimo = _parse_int(
+            estoque_minimo, erro_minimo = _parse_quantidade(
                 _valor(linha, mapa, "estoque_minimo")
             )
             if erro_minimo:

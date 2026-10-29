@@ -34,13 +34,14 @@ from PySide6.QtWidgets import (
 )
 from design import tokens
 from design.animations import fade_in
-from utils.formatacao import formatar_moeda
+from utils.formatacao import eh_fracionado, formatar_moeda, formatar_quantidade
 from telas.pdv.carrinho import CarrinhoMixin
 from telas.pdv.comum import (
     ATALHOS_PADRAO,
     LARGURA_PAINEL_RESUMO,
     _parse_data,
     _separar_multiplicador,
+    pedir_peso,
 )
 from telas.pdv.layout import LayoutMixin
 from telas.pdv.orcamento import OrcamentoMixin
@@ -324,6 +325,20 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
 
     def adicionar_produto_ao_carrinho(self, produto, quantidade):
 
+        unidade = produto.get("unidade") or "UN"
+
+        if eh_fracionado(unidade):
+            # "0,350*codigo" ja traz o peso; codigo puro abre a janela
+            if not isinstance(quantidade, float):
+                quantidade = pedir_peso(self, produto, quantidade if quantidade > 1 else 0)
+                if quantidade is None:
+                    return False
+        elif isinstance(quantidade, float):
+            self._mostrar_status_busca(
+                f"{produto['nome']} é vendido por unidade — sem vírgula.", erro=True
+            )
+            return False
+
         item_existente = next(
             (item for item in self.itens if item["id"] == produto["id"]),
             None,
@@ -334,26 +349,27 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
 
         # estoque None = dado nao veio junto (nao deveria acontecer,
         # mas nao trava a venda por causa disso - so pula a checagem)
-        if estoque is not None and no_carrinho + quantidade > estoque:
+        if estoque is not None and round(no_carrinho + quantidade, 3) > estoque:
 
             if estoque <= 0:
                 mensagem = f"{produto['nome']} está sem estoque disponível."
             elif no_carrinho > 0:
                 mensagem = (
                     f"Estoque insuficiente de {produto['nome']} — "
-                    f"disponível: {estoque}, já no carrinho: {no_carrinho}."
+                    f"disponível: {formatar_quantidade(estoque, unidade)}, "
+                    f"já no carrinho: {formatar_quantidade(no_carrinho, unidade)}."
                 )
             else:
                 mensagem = (
                     f"Estoque insuficiente de {produto['nome']} — "
-                    f"disponível: {estoque}."
+                    f"disponível: {formatar_quantidade(estoque, unidade)}."
                 )
 
             self._mostrar_status_busca(mensagem, erro=True)
             return False
 
         if item_existente:
-            item_existente["quantidade"] += quantidade
+            item_existente["quantidade"] = round(item_existente["quantidade"] + quantidade, 3)
         else:
             self.itens.append(
                 {
@@ -362,6 +378,7 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
                     "nome": produto["nome"],
                     "preco": float(produto["preco"]),
                     "quantidade": quantidade,
+                    "unidade": unidade,
                     "estoque": estoque,
                     "tem_foto": produto.get("tem_foto", False),
                 }

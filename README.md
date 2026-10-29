@@ -2,8 +2,6 @@
 
 **Sistema de gestão completo para o varejo brasileiro — em produção numa loja real, com matriz e filial.**
 
-[English version](README.en.md)
-
 PDV, estoque multi-loja, fiado, caixa, contas a pagar e a receber, conciliação bancária e relatórios, num app desktop para o balcão e num app Android para acompanhar a loja de qualquer lugar.
 
 ![CI](https://github.com/anndreluizz/VertexERP/actions/workflows/ci.yml/badge.svg)

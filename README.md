@@ -2,6 +2,8 @@
 
 **Sistema de gestão completo para o varejo brasileiro — em produção numa loja real, com matriz e filial.**
 
+[English version](README.en.md)
+
 PDV, estoque multi-loja, fiado, caixa, contas a pagar e a receber, conciliação bancária e relatórios, num app desktop para o balcão e num app Android para acompanhar a loja de qualquer lugar.
 
 ![CI](https://github.com/anndreluizz/VertexERP/actions/workflows/ci.yml/badge.svg)
@@ -81,14 +83,14 @@ Vendas do dia, caixas abertos, fiado, contas a pagar com código do boleto e Pix
                                                 └───────────────────────────┘
 ```
 
-- **Backend:** FastAPI, SQLAlchemy 2, Alembic (49 migrações) e Pydantic, em camadas de rotas, serviços e repositórios. Autenticação JWT com refresh token e permissões por perfil.
+- **Backend:** FastAPI, SQLAlchemy 2, Alembic (53 migrações) e Pydantic, em camadas de rotas, serviços e repositórios. Autenticação JWT com refresh token e permissões por perfil.
 - **Desktop:** PySide6 (Qt) com design system próprio (tokens de cor e tipografia, tema claro e escuro) e chamadas à API em threads, para a interface nunca travar.
 - **App:** Flutter com Riverpod e Dio, cache local para uso sem conexão, notificações via Firebase Cloud Messaging e certificado do servidor fixado no primeiro acesso (TOFU).
 - **Instalação na loja:** um launcher sobe um PostgreSQL portátil e a API, reinicia o backend se ele cair (watchdog) e faz o backup automático. O PC do balcão funciona como servidor para a filial e para o app.
 
 ## Qualidade
 
-- **Cerca de 700 testes automatizados:** ~450 no backend (pytest com PostgreSQL real), ~200 no desktop (pytest com Qt offscreen) e testes de unidade e visuais (golden) no app.
+- **Cerca de 850 testes automatizados:** ~500 no backend (pytest com PostgreSQL real), ~300 no desktop (pytest com Qt offscreen) e ~50 de unidade e visuais (golden) no app.
 - **CI no GitHub Actions** a cada push: migrações do banco vazio até a última versão, as três suítes de teste e a análise estática do Flutter.
 - Toda mudança no banco da loja é precedida de backup, e as migrações preservam os dados existentes.
 

@@ -379,7 +379,7 @@ def gerar_pdf_bytes(html):
             os.remove(caminho_temp)
 
 
-def salvar_pdf(html, parent, nome_sugerido="comprovante.pdf"):
+def salvar_pdf(html, parent, nome_sugerido="comprovante.pdf", pagina=QPageSize.A5):
 
     caminho, _ = QFileDialog.getSaveFileName(
         parent,
@@ -397,14 +397,14 @@ def salvar_pdf(html, parent, nome_sugerido="comprovante.pdf"):
     printer = QPrinter(QPrinter.HighResolution)
     printer.setOutputFormat(QPrinter.PdfFormat)
     printer.setOutputFileName(caminho)
-    printer.setPageSize(QPageSize(QPageSize.A5))
+    printer.setPageSize(QPageSize(pagina))
 
     montar_documento(html).print_(printer)
 
     QMessageBox.information(
         parent,
         "Sucesso",
-        "Comprovante salvo em PDF com sucesso.",
+        "PDF salvo com sucesso.",
     )
 
     return True

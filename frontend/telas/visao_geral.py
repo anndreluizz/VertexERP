@@ -33,7 +33,7 @@ def _buscar_dados_visao_geral():
     As 4 sao independentes, entao disparam em paralelo."""
     loja_id = preferencias_service.carregar_loja_id()
     return em_paralelo(
-        (listar_vendas, loja_id),
+        (listar_vendas, loja_id, None, inicio_historico()),
         (listar_produtos,),
         (listar_contas_pagar, loja_id),
         (listar_movimentacoes, loja_id),
@@ -46,7 +46,7 @@ from telas.relatorios import (
 )
 from design import tokens
 from utils.formatacao import formatar_moeda
-from utils.periodo import intervalo_mes, meses_anteriores
+from utils.periodo import inicio_historico, intervalo_mes, meses_anteriores
 
 
 def _parse_data(texto):

@@ -10,19 +10,20 @@ from services.api import get, post, delete, endpoint_com_loja
 _TAMANHO_PAGINA = 500
 
 
-def listar_vendas(loja_id=None):
+def listar_vendas(loja_id=None, cliente_id=None, desde=None):
     """loja_id=None busca de TODAS as lojas de propósito -- usado pra
     montar o histórico de compras de um cliente (ficha_cliente.py,
     clientes.py), que não é restrito por loja (ver Cliente.loja_id).
     Quem precisa da visão de uma loja só (dashboard.py, visao_geral.py)
-    passa o loja_id do terminal explicitamente."""
+    passa o loja_id do terminal explicitamente. cliente_id/desde (date)
+    filtram no backend -- sem eles a lista cresce com a loja toda."""
 
     vendas = []
     skip = 0
 
     while True:
 
-        lote = listar_vendas_pagina(skip, _TAMANHO_PAGINA, loja_id)
+        lote = listar_vendas_pagina(skip, _TAMANHO_PAGINA, loja_id, cliente_id, desde)
         vendas.extend(lote)
 
         if len(lote) < _TAMANHO_PAGINA:
@@ -33,7 +34,7 @@ def listar_vendas(loja_id=None):
     return vendas
 
 
-def listar_vendas_pagina(skip=0, limit=100, loja_id=None):
+def listar_vendas_pagina(skip=0, limit=100, loja_id=None, cliente_id=None, desde=None):
     """Busca só uma página do histórico (mais recentes primeiro) -- pro
     'Carregar mais' da tela de Vendas, que não precisa (e não quer)
     trazer tudo de uma vez como listar_vendas() acima."""
@@ -41,6 +42,10 @@ def listar_vendas_pagina(skip=0, limit=100, loja_id=None):
     endpoint = f"/vendas/?skip={skip}&limit={limit}"
     if loja_id is not None:
         endpoint += f"&loja_id={loja_id}"
+    if cliente_id is not None:
+        endpoint += f"&cliente_id={cliente_id}"
+    if desde is not None:
+        endpoint += f"&data_inicio={desde.isoformat()}"
 
     response = get(endpoint)
 

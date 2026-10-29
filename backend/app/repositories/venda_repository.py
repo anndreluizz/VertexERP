@@ -16,6 +16,7 @@ class VendaRepository:
         data_inicio=None,
         data_fim=None,
         usuario_id: int | None = None,
+        cliente_id: int | None = None,
     ):
         # mais recente primeiro -- pra "carregar mais" na tela de
         # vendas mostrar o historico atual logo na primeira pagina,
@@ -34,6 +35,9 @@ class VendaRepository:
 
         if usuario_id is not None:
             query = query.filter(Venda.usuario_id == usuario_id)
+
+        if cliente_id is not None:
+            query = query.filter(Venda.cliente_id == cliente_id)
 
         return (
             query

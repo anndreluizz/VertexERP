@@ -54,3 +54,15 @@ def intervalo_mes(rotulo):
         return None
     ano, mes = int(ano), MESES.index(nome) + 1
     return date(ano, mes, 1), date(ano, mes, monthrange(ano, mes)[1])
+
+
+def inicio_historico(hoje=None, meses=15):
+    """1o dia de `meses` meses atras -- o mais longe que Painel e Visao
+    Geral olham (13 meses no combo + o periodo anterior de comparacao).
+    Buscar vendas so' dai pra frente impede a tela de ficar mais lenta
+    a cada mes de loja."""
+    hoje = hoje or date.today()
+    ano, mes = hoje.year, hoje.month - meses
+    while mes <= 0:
+        ano, mes = ano - 1, mes + 12
+    return date(ano, mes, 1)

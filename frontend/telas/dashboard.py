@@ -35,7 +35,7 @@ from services import preferencias_service
 
 from telas.relatorios import NOMES_FORMA_PAGAMENTO, CORES_FORMA_PAGAMENTO
 from utils.formatacao import formatar_moeda
-from utils.periodo import intervalo_mes, meses_recentes
+from utils.periodo import inicio_historico, intervalo_mes, meses_recentes
 
 
 DIAS_SEMANA_ABREV = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
@@ -123,7 +123,7 @@ def _buscar_dados_dashboard():
     usuario, dados, vendas, produtos, contas_pagar, clientes, movimentos_fiado = em_paralelo(
         (me,),
         (dashboard,),
-        (listar_vendas, loja_id),
+        (listar_vendas, loja_id, None, inicio_historico()),
         (listar_produtos,),
         (_com_fallback, listar_contas_pagar, loja_id),
         (_com_fallback, listar_clientes),

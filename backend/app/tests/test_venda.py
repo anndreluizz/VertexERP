@@ -502,3 +502,17 @@ def test_excluir_suspensa_recusa_venda_ja_finalizada(
 
     assert response.status_code == 400
     assert "não está suspensa" in response.json()["detail"]
+
+
+def test_listar_filtra_por_cliente(client, auth_headers, db, usuario, cliente):
+    from datetime import datetime
+    from app.models.venda import Venda
+
+    for cid in (cliente.id, None):
+        db.add(Venda(cliente_id=cid, usuario_id=usuario.id, data=datetime.now(),
+                     valor_total=10, desconto=0, status="FINALIZADA", forma_pagamento="PIX"))
+    db.commit()
+
+    r = client.get(f"/vendas/?cliente_id={cliente.id}", headers=auth_headers)
+    assert r.status_code == 200
+    assert [v["cliente_id"] for v in r.json()] == [cliente.id]

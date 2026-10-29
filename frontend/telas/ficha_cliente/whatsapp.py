@@ -132,10 +132,7 @@ class WhatsAppMixin:
         anexado) -- mesmo padrão de mensagem de texto direta usado nas
         outras duas opções do menu WhatsApp."""
 
-        vendas_cliente = [
-            v for v in listar_vendas()
-            if v.get("cliente_id") == self.cliente["id"]
-        ]
+        vendas_cliente = listar_vendas(cliente_id=self.cliente["id"])
 
         if not vendas_cliente:
             QMessageBox.information(

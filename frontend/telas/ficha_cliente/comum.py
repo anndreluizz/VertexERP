@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
 )
 
 from services import api
-from services.produto_service import listar_produtos
 from services.venda_service import listar_vendas
 from services.movimento_fiado_service import (
     saldo_cliente,
@@ -35,14 +34,16 @@ def _buscar_dados_ficha_cliente(cliente_id):
     """Roda na worker thread -- as 4 chamadas que
     FichaClienteDialog.carregar() precisa, independentes entre si,
     disparadas em paralelo."""
-    saldo, vendas, produtos, movimentos = em_paralelo(
+    saldo, vendas, movimentos = em_paralelo(
         (saldo_cliente, cliente_id),
-        (listar_vendas,),
-        (listar_produtos,),
+        (listar_vendas, None, cliente_id),
         (listar_movimentos_cliente, cliente_id),
     )
     vendas_por_id = {v["id"]: v for v in vendas}
-    nomes_produto = {p["id"]: p["nome"] for p in produtos}
+    nomes_produto = {
+        i["produto_id"]: i["produto_nome"]
+        for v in vendas for i in v.get("itens") or [] if i.get("produto_nome")
+    }
     return saldo, vendas_por_id, nomes_produto, movimentos
 
 

@@ -181,4 +181,17 @@ _timer_uso.timeout.connect(marcar_uso)
 _timer_uso.start(60 * 1000)
 app.aboutToQuit.connect(marcar_uso)
 
+# Vigia de travamento: a thread principal rearma o alarme a cada 5 s;
+# se ela ficar presa 15 s ("Não está respondendo"), o faulthandler grava
+# a pilha de todas as threads no frontend_log.txt -- antes o Windows so'
+# registrava "Application Hang", sem dizer em que linha a tela parou.
+if getattr(sys, "frozen", False):
+    def _rearmar_vigia():
+        faulthandler.dump_traceback_later(15, file=log_file)
+
+    _rearmar_vigia()
+    _timer_vigia = QTimer()
+    _timer_vigia.timeout.connect(_rearmar_vigia)
+    _timer_vigia.start(5 * 1000)
+
 sys.exit(app.exec())

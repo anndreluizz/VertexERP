@@ -278,3 +278,24 @@ def test_listar_impressoras_windows():
 
     with mock.patch.dict("sys.modules", {"win32print": win32print_falso}):
         assert svc.listar_impressoras_windows() == ["Impressora A", "Impressora B"]
+
+
+def _enviados(config, imprimir):
+    with mock.patch.object(svc, "enviar", return_value=(True, None)) as m:
+        imprimir(config)
+    return m.call_args[0][0]
+
+
+def test_duas_vias_cupom_e_recibo_saem_marcados_e_cortados():
+    cupom = lambda cfg: svc.imprimir_comprovante(DADOS_VENDA, CONFIG_LOJA, None, cfg)
+    recibo = lambda cfg: svc.imprimir_recibo_pagamento(
+        "Carlos Lima", 20.0, "PIX", 50.0, 30.0, "Ana",
+        "2026-09-10T14:30:00", CONFIG_LOJA, cfg,
+    )
+    for imprimir in (cupom, recibo):
+        dados = _enviados({"vias": 2}, imprimir)
+        assert dados.count(svc._cortar_papel()) == 2
+        assert dados.index(b"VIA DO CLIENTE") < dados.index(b"VIA DA LOJA")
+
+        uma = _enviados({}, imprimir)  # config antiga, sem "vias"
+        assert uma.count(svc._cortar_papel()) == 1 and b"VIA " not in uma

@@ -164,6 +164,18 @@ class ImpressoraMixin:
         layout.addWidget(lbl_papel)
         layout.addWidget(self.impressora_largura_papel)
 
+        # ---- vias ----
+
+        lbl_vias = QLabel("VIAS (VENDA E RECIBO DE PAGAMENTO)")
+        lbl_vias.setStyleSheet(lbl_papel.styleSheet())
+        self.impressora_vias = QComboBox()
+        self.impressora_vias.addItem("1 via", 1)
+        self.impressora_vias.addItem("2 vias (cliente + loja)", 2)
+        self.impressora_vias.setMinimumHeight(42)
+        self.impressora_vias.setStyleSheet(self.impressora_largura_papel.styleSheet())
+        layout.addWidget(lbl_vias)
+        layout.addWidget(self.impressora_vias)
+
         linha_botoes = QHBoxLayout()
         linha_botoes.setSpacing(10)
 
@@ -345,6 +357,10 @@ class ImpressoraMixin:
         if indice_papel >= 0:
             self.impressora_largura_papel.setCurrentIndex(indice_papel)
 
+        indice_vias = self.impressora_vias.findData(salvo.get("vias") or 1)
+        if indice_vias >= 0:
+            self.impressora_vias.setCurrentIndex(indice_vias)
+
         self._atualizar_visibilidade_impressora()
 
     def _config_impressora_termica_atual(self):
@@ -356,6 +372,7 @@ class ImpressoraMixin:
             "porta": self.impressora_porta.value(),
             "nome_impressora_windows": self.impressora_usb.currentText().strip() or None,
             "largura_papel": self.impressora_largura_papel.currentData(),
+            "vias": self.impressora_vias.currentData(),
         }
 
     def salvar_impressora_termica(self):

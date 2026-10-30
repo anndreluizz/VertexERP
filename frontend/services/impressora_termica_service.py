@@ -287,7 +287,7 @@ _ROTULOS_TIPO_MOVIMENTO = {
 # ==================================================
 
 
-def gerar_comandos_comprovante(dados, config_loja, logo_bytes=None, largura_papel_mm=80):
+def gerar_comandos_comprovante(dados, config_loja, logo_bytes=None, largura_papel_mm=80, via=None):
 
     largura = _colunas(largura_papel_mm)
     pontos = _pontos(largura_papel_mm)
@@ -322,6 +322,8 @@ def gerar_comandos_comprovante(dados, config_loja, logo_bytes=None, largura_pape
 
     partes.append(_negrito(True))
     partes.append(_linha("COMPROVANTE DE VENDA"))
+    if via:
+        partes.append(_linha(via))
     partes.append(_negrito(False))
 
     partes.append(_divisoria(largura))
@@ -424,7 +426,7 @@ def gerar_comandos_comprovante(dados, config_loja, logo_bytes=None, largura_pape
 
 def gerar_comandos_recibo_pagamento(
     cliente_nome, valor, forma_pagamento, saldo_antes, saldo_depois,
-    responsavel, momento, config_loja, largura_papel_mm=80,
+    responsavel, momento, config_loja, largura_papel_mm=80, via=None,
 ):
 
     largura = _colunas(largura_papel_mm)
@@ -450,6 +452,8 @@ def gerar_comandos_recibo_pagamento(
 
     partes.append(_negrito(True))
     partes.append(_linha("RECIBO DE PAGAMENTO"))
+    if via:
+        partes.append(_linha(via))
     partes.append(_negrito(False))
 
     partes.append(_divisoria(largura))
@@ -922,9 +926,20 @@ def listar_impressoras_windows():
 # ==================================================
 
 
+def _vias(config_impressora):
+    """2 vias (Configuracoes > Impressora): cupom de venda e recibo de
+    pagamento saem duas vezes, cada uma marcada e cortada separada."""
+    if (config_impressora or {}).get("vias") == 2:
+        return ["VIA DO CLIENTE", "VIA DA LOJA"]
+    return [None]
+
+
 def imprimir_comprovante(dados, config_loja, logo_bytes, config_impressora):
     largura_papel_mm = (config_impressora or {}).get("largura_papel") or 80
-    comandos = gerar_comandos_comprovante(dados, config_loja, logo_bytes, largura_papel_mm)
+    comandos = b"".join(
+        gerar_comandos_comprovante(dados, config_loja, logo_bytes, largura_papel_mm, via=via)
+        for via in _vias(config_impressora)
+    )
     return enviar(comandos, config_impressora)
 
 
@@ -933,9 +948,12 @@ def imprimir_recibo_pagamento(
     responsavel, momento, config_loja, config_impressora,
 ):
     largura_papel_mm = (config_impressora or {}).get("largura_papel") or 80
-    comandos = gerar_comandos_recibo_pagamento(
-        cliente_nome, valor, forma_pagamento, saldo_antes, saldo_depois,
-        responsavel, momento, config_loja, largura_papel_mm,
+    comandos = b"".join(
+        gerar_comandos_recibo_pagamento(
+            cliente_nome, valor, forma_pagamento, saldo_antes, saldo_depois,
+            responsavel, momento, config_loja, largura_papel_mm, via=via,
+        )
+        for via in _vias(config_impressora)
     )
     return enviar(comandos, config_impressora)
 

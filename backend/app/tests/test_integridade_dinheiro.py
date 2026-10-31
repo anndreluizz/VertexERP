@@ -415,3 +415,61 @@ def test_correcao_de_recebimento_ajusta_o_caixa_onde_ele_entrou(
     db.refresh(caixa_aberto)
     assert float(caixa_aberto_comum.saldo_final) == 20.0
     assert float(caixa_aberto.saldo_final) == 80.0
+
+
+def test_correcao_da_forma_do_recebimento_move_no_caixa(
+    client, db, auth_headers, cliente, caixa_aberto,
+):
+    """Pagou no PIX, marcaram Dinheiro: trocar a forma tira o valor da
+    gaveta (Dinheiro) e lanca como PIX no mesmo caixa."""
+
+    from app.models.movimento_caixa import MovimentoCaixa
+
+    client.post(
+        "/fiado/compra",
+        json={"cliente_id": cliente.id, "valor": 100.0},
+        headers=auth_headers,
+    )
+    pagamento = client.post(
+        "/fiado/movimentos",
+        json={
+            "cliente_id": cliente.id,
+            "tipo": "PAGAMENTO",
+            "valor": 30.0,
+            "forma_pagamento": "DINHEIRO",
+        },
+        headers=auth_headers,
+    ).json()
+    db.refresh(caixa_aberto)
+    saldo_antes = float(caixa_aberto.saldo_final)
+
+    editar = client.put(
+        f"/fiado/movimentos/{pagamento['id']}",
+        json={"forma_pagamento": "PIX"},
+        headers=auth_headers,
+    )
+    assert editar.status_code == 200, editar.json()
+    assert editar.json()["forma_pagamento"] == "PIX"
+    assert editar.json()["caixa_ajustado"] is True
+
+    db.refresh(caixa_aberto)
+    assert float(caixa_aberto.saldo_final) == saldo_antes - 30.0
+
+    por_forma = {}
+    for m in db.query(MovimentoCaixa).filter_by(
+        caixa_id=caixa_aberto.id, tipo="RECEBIMENTO_FIADO"
+    ):
+        por_forma[m.forma_pagamento] = por_forma.get(m.forma_pagamento, 0) + float(m.valor)
+    assert por_forma == {"DINHEIRO": 0.0, "PIX": 30.0}
+
+    # compra/haver nao tem forma: recusa em vez de inventar caixa
+    compra = client.get(
+        f"/fiado/movimentos/cliente/{cliente.id}", headers=auth_headers
+    ).json()
+    compra = next(m for m in compra if m["tipo"] == "COMPRA")
+    recusa = client.put(
+        f"/fiado/movimentos/{compra['id']}",
+        json={"forma_pagamento": "PIX"},
+        headers=auth_headers,
+    )
+    assert recusa.status_code == 400

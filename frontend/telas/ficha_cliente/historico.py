@@ -28,7 +28,7 @@ from design.widgets import (
     CampoTexto,
     Card,
 )
-from telas.ficha_cliente.comum import NOMES_FORMA_FIADO, _parse_data
+from telas.ficha_cliente.comum import FORMAS_PAGAMENTO, NOMES_FORMA_FIADO, _parse_data
 
 
 class HistoricoMixin:
@@ -99,11 +99,32 @@ class HistoricoMixin:
         if not ok:
             return
 
+        # pagamento que entrou no caixa: deixa corrigir a forma tambem
+        # (pagou no PIX, marcaram Dinheiro)
+        nova_forma = None
+        forma_atual = mov.get("forma_pagamento")
+        if mov.get("tipo") == "PAGAMENTO" and forma_atual:
+            rotulos = [rotulo for rotulo, _ in FORMAS_PAGAMENTO]
+            valores = [valor for _, valor in FORMAS_PAGAMENTO]
+            atual = valores.index(forma_atual) if forma_atual in valores else 0
+            rotulo, ok = QInputDialog.getItem(
+                self,
+                "Corrigir Lançamento",
+                "Forma de pagamento:",
+                rotulos,
+                atual,
+                False,
+            )
+            if not ok:
+                return
+            nova_forma = valores[rotulos.index(rotulo)]
+
         rodar_em_thread(
             self,
             editar_movimento,
             mov["id"],
             valor=novo_valor,
+            forma_pagamento=nova_forma,
             ao_sucesso=self._ao_editar_movimento_sucesso,
             ao_erro=self._ao_movimento_mutacao_erro,
         )

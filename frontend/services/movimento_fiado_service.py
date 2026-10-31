@@ -87,16 +87,17 @@ def lancar_haver(cliente_id, valor, descricao, data=None):
     )
 
 
-def editar_movimento(movimento_id, valor=None, descricao=None):
-    """Corrige um lançamento de fiado errado (valor e/ou descrição).
-    Se era um PAGAMENTO que tinha entrado no caixa, o backend já ajusta
-    a diferença automaticamente no caixa aberto de quem está editando."""
+def editar_movimento(movimento_id, valor=None, descricao=None, forma_pagamento=None):
+    """Corrige um lançamento de fiado errado (valor, descrição e/ou
+    forma de pagamento). Se era um PAGAMENTO que tinha entrado no caixa,
+    o backend já ajusta a diferença automaticamente no caixa."""
 
     return put(
         f"/fiado/movimentos/{movimento_id}",
         {
             "valor": valor,
             "descricao": descricao,
+            "forma_pagamento": forma_pagamento,
         },
     )
 

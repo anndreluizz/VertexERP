@@ -303,7 +303,8 @@ class MovimentoFiadoService:
         dados: MovimentoFiadoUpdate,
         usuario_id: int,
     ) -> tuple:
-        """Corrige um lancamento errado (valor e/ou descricao). Se for
+        """Corrige um lancamento errado (valor, descricao e/ou forma de
+        pagamento). Se for
         um PAGAMENTO que tinha impactado o caixa, a diferenca de valor
         e refletida no caixa onde ele entrou (ou, ja fechado, no de quem
         esta corrigindo) -- devolve
@@ -320,7 +321,17 @@ class MovimentoFiadoService:
         if dados.valor is not None and dados.valor <= 0:
             raise Exception("Informe um valor maior que zero.")
 
+        entrou_no_caixa = (
+            movimento.tipo == "PAGAMENTO" and movimento.forma_pagamento
+        )
+
+        if dados.forma_pagamento and not entrou_no_caixa:
+            raise Exception(
+                "Só dá pra trocar a forma de um pagamento recebido no caixa."
+            )
+
         valor_antigo = movimento.valor
+        forma_antiga = movimento.forma_pagamento
         caixa_ajustado = True
 
         if dados.valor is not None:
@@ -329,24 +340,34 @@ class MovimentoFiadoService:
         if dados.descricao is not None:
             movimento.descricao = dados.descricao
 
-        if (
-            movimento.tipo == "PAGAMENTO"
-            and movimento.forma_pagamento
-            and dados.valor is not None
-            and dados.valor != valor_antigo
-        ):
+        if dados.forma_pagamento:
+            movimento.forma_pagamento = dados.forma_pagamento.upper()
+
+        if entrou_no_caixa:
+            # forma trocada: estorna tudo na forma errada e lanca de novo
+            # na certa (o resumo do caixa separa por forma, e so'
+            # DINHEIRO mexe no saldo da gaveta)
+            if movimento.forma_pagamento != forma_antiga:
+                ajustes = [
+                    (-valor_antigo, forma_antiga),
+                    (movimento.valor, movimento.forma_pagamento),
+                ]
+            else:
+                ajustes = [(movimento.valor - valor_antigo, forma_antiga)]
+
             cliente = ClienteRepository.buscar_por_id(
                 db, movimento.cliente_id
             )
-            caixa_ajustado = _ajustar_caixa_por_correcao(
-                db,
-                usuario_id,
-                cliente.nome if cliente else "cliente",
-                dados.valor - valor_antigo,
-                movimento.forma_pagamento,
-                "Ajuste de fiado",
-                movimento.caixa_id,
-            )
+            for diferenca, forma in ajustes:
+                caixa_ajustado = _ajustar_caixa_por_correcao(
+                    db,
+                    usuario_id,
+                    cliente.nome if cliente else "cliente",
+                    diferenca,
+                    forma,
+                    "Ajuste de fiado",
+                    movimento.caixa_id,
+                ) and caixa_ajustado
 
         movimento = MovimentoFiadoRepository.atualizar(db, movimento)
 

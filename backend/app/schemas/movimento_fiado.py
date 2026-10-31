@@ -23,10 +23,12 @@ class MovimentoFiadoCreate(MovimentoFiadoBase):
 
 
 class MovimentoFiadoUpdate(Schema):
-    # correcao de um lancamento errado -- so valor/descricao, o resto
-    # (tipo, cliente, forma de pagamento) nao muda depois de criado.
+    # correcao de um lancamento errado -- valor/descricao e, num
+    # PAGAMENTO que entrou no caixa, a forma (pagou no PIX, marcaram
+    # Dinheiro). Tipo e cliente nao mudam depois de criado.
     valor: Decimal | None = None
     descricao: str | None = None
+    forma_pagamento: str | None = None
 
 
 class MovimentoFiadoResponse(MovimentoFiadoBase):

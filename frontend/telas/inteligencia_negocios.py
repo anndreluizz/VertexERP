@@ -4,7 +4,7 @@ periodo e loja."""
 
 from datetime import date, datetime, timedelta
 
-from PySide6.QtCore import QDate, Qt
+from PySide6.QtCore import QDate, Qt, QTimer
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
@@ -23,6 +23,7 @@ from design.widgets import Badge, BotaoSecundario, CardKPI, SecaoCard, pedir_tex
 from services.bi_service import informar_dinheiro_guardado, resumo
 from services.loja_service import listar_lojas
 from services.worker import rodar_em_thread
+from telas.ficha_cliente import FichaClienteDialog
 from utils.formatacao import formatar_moeda
 from utils.periodo import intervalo_mes, meses_anteriores
 
@@ -242,6 +243,38 @@ class InteligenciaNegocios(QWidget):
         linha2.addWidget(self.secao_faixas, 2, Qt.AlignTop)
         linha2.addWidget(self.secao_devedores, 3, Qt.AlignTop)
         layout.addLayout(linha2)
+
+        linha3 = QHBoxLayout()
+        linha3.setSpacing(14)
+        self.secao_cobrar = SecaoCard("Quem cobrar essa semana", "message-circle")
+        self.secao_cobrar.corpo.addWidget(_texto(
+            "Atrasados há 30 dias ou mais, sem pagar nada nesse tempo.",
+            tokens.TAMANHO_XS, tokens.TEXTO_TERCIARIO,
+        ))
+        self.tabela_cobrar = tabela_lista(["Cliente", "Deve", "Atraso", ""])
+        self.secao_cobrar.corpo.addWidget(self.tabela_cobrar)
+        self.secao_sumidos = SecaoCard("Clientes que sumiram", "user")
+        self.secao_sumidos.corpo.addWidget(_texto(
+            "Compraram 3 vezes ou mais nos últimos 6 meses e não vêm há 30 dias.",
+            tokens.TAMANHO_XS, tokens.TEXTO_TERCIARIO,
+        ))
+        self.tabela_sumidos = tabela_lista(["Cliente", "Compras", "Última vez", ""])
+        self.secao_sumidos.corpo.addWidget(self.tabela_sumidos)
+        linha3.addWidget(self.secao_cobrar, 1, Qt.AlignTop)
+        linha3.addWidget(self.secao_sumidos, 1, Qt.AlignTop)
+        layout.addLayout(linha3)
+
+        linha4 = QHBoxLayout()
+        linha4.setSpacing(14)
+        self.secao_dias = SecaoCard("Melhores dias", "calendar")
+        self.tabela_dias = tabela_lista(["Dia", "Vendas", "Total"])
+        self.secao_dias.corpo.addWidget(self.tabela_dias)
+        self.secao_horas = SecaoCard("Melhores horários", "bar-chart-2")
+        self.tabela_horas = tabela_lista(["Horário", "Vendas", "Total"])
+        self.secao_horas.corpo.addWidget(self.tabela_horas)
+        linha4.addWidget(self.secao_dias, 1, Qt.AlignTop)
+        linha4.addWidget(self.secao_horas, 1, Qt.AlignTop)
+        layout.addLayout(linha4)
 
         self.secao_produtos = SecaoCard("Mais vendidos", "package")
         self.tabela_produtos = tabela_lista(["Produto", "Quantidade", "Total"])
@@ -503,3 +536,52 @@ class InteligenciaNegocios(QWidget):
             [p["produto"], p["quantidade"], formatar_moeda(p["total"])]
             for p in d["vendas"]["mais_vendidos"]
         ])
+
+        # .get: backend antigo (terminal atualizou antes do servidor) nao manda
+        cobrar = d["fiado"].get("cobrar_essa_semana", [])
+        _preencher(self.tabela_cobrar, [
+            [c["nome"], formatar_moeda(c["saldo"]), f"{c['dias_em_atraso']} dias", ""]
+            for c in cobrar
+        ])
+        self._botoes_whatsapp(self.tabela_cobrar, cobrar, "Cobrar", "enviar_cobranca_whatsapp")
+
+        sumidos = d.get("clientes_sumidos", [])
+        _preencher(self.tabela_sumidos, [
+            [c["nome"], c["compras"], f"há {c['dias_sem_vir']} dias", ""]
+            for c in sumidos
+        ])
+        self._botoes_whatsapp(self.tabela_sumidos, sumidos, "Chamar", "chamar_de_volta_whatsapp")
+
+        dia_hora = d.get("vendas_por_dia_hora", {"dias": [], "horas": []})
+        _preencher(self.tabela_dias, [
+            [l["dia"], l["quantidade"], formatar_moeda(l["total"])]
+            for l in dia_hora["dias"]
+        ])
+        _preencher(self.tabela_horas, [
+            [f"{l['hora']:02d}h às {l['hora'] + 1:02d}h", l["quantidade"],
+             formatar_moeda(l["total"])]
+            for l in dia_hora["horas"]
+        ])
+
+    def _botoes_whatsapp(self, tabela, clientes, texto, acao):
+        tabela.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        coluna = tabela.columnCount() - 1
+        for linha, c in enumerate(clientes):
+            botao = BotaoSecundario(texto)
+            botao.setFixedSize(80, 30)
+            cliente = {"id": c["cliente_id"], "nome": c["nome"], "telefone": c["telefone"]}
+            botao.clicked.connect(lambda _=False, cl=cliente: self._abrir_ficha(cl, acao))
+            celula = QWidget()
+            celula.setStyleSheet("background:transparent;")
+            centro = QHBoxLayout(celula)
+            centro.setContentsMargins(0, 0, 8, 0)
+            centro.addWidget(botao, 0, Qt.AlignCenter)
+            tabela.setCellWidget(linha, coluna, celula)
+
+    def _abrir_ficha(self, cliente, acao):
+        # mesmo fluxo da tela de Clientes: a ficha abre e ja' chama a
+        # mensagem de WhatsApp (cobranca ou "sentimos sua falta")
+        tela = FichaClienteDialog(cliente, parent=self)
+        QTimer.singleShot(0, getattr(tela, acao))
+        tela.exec()
+        self.carregar()

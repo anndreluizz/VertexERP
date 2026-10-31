@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 from services import api
 from services.venda_service import listar_vendas
 from services.movimento_fiado_service import (
+    listar_movimentos_cliente,
     saldo_cliente,
 )
 from services.cliente_service import (
@@ -31,6 +32,25 @@ def _dia(mov):
         return datetime.strptime(data, "%Y-%m-%d").strftime("%d/%m/%Y")
     except ValueError:
         return data
+
+
+def texto_cobranca(nome_cliente, saldo, ultima_compra=None):
+    """Lembrete de saldo -- mesmo texto da planilha de cobranca que a loja
+    ja usa no WhatsApp. Sem chave Pix de proposito (vai so' pra quem pedir)."""
+
+    nome = nome_cliente.split()[0].capitalize() if nome_cliente.strip() else ""
+    linha_compra = f"Última compra: {ultima_compra}\n" if ultima_compra else ""
+
+    return (
+        f"Olá, {nome}! Tudo bem?\n\n"
+        f"Passando só pra lembrar, com carinho, do seu saldo com a gente. "
+        f"Quando puder, é só passar na loja ou pagar no Pix, do jeito que "
+        f"for melhor pra você. Qualquer dúvida sobre os valores, é só "
+        f"chamar que mostramos tudo certinho.\n\n"
+        f"Saldo: {formatar_moeda(saldo)}\n"
+        f"{linha_compra}\n"
+        f"Obrigado pela confiança!"
+    )
 
 
 def montar_extrato_whatsapp(nome_cliente, nome_loja, movimentos, descrever, saldo):
@@ -292,23 +312,18 @@ class WhatsAppMixin:
             )
             return
 
-        nome_loja = api.configuracoes().get("nome_loja") or "Vertex ERP"
+        # busca aqui (e nao self._movimentos): vindo da Inteligencia de
+        # Negocios a ficha ainda pode estar carregando
+        compras = [
+            m for m in listar_movimentos_cliente(self.cliente["id"])
+            if m.get("tipo") == "COMPRA"
+        ]
+        ultima = _dia(max(compras, key=lambda m: str(m.get("data", "")))) if compras else None
 
-        texto = (
-            f"Olá, {self.cliente.get('nome', '')}! Tudo bem?\n\n"
-            f"Estamos passando para lembrar, de forma amigável, que "
-            f"consta em nosso sistema um saldo em aberto referente às "
-            f"suas compras na {nome_loja}.\n\n"
-            f"Saldo pendente: {formatar_moeda(saldo)}\n\n"
-            f"Se o pagamento já foi realizado, por favor, desconsidere "
-            f"esta mensagem. Caso precise conferir o histórico das "
-            f"compras, combinar uma data ou tirar alguma dúvida, "
-            f"estamos à disposição.\n\n"
-            f"Agradecemos a sua atenção e preferência!\n\n"
-            f"Equipe {nome_loja}"
+        self._enviar_texto_whatsapp(
+            texto_cobranca(self.cliente.get("nome", ""), saldo, ultima),
+            "Enviar Cobrança",
         )
-
-        self._enviar_texto_whatsapp(texto, "Enviar Cobrança")
 
     def chamar_de_volta_whatsapp(self):
         """Cliente que comprava sempre e sumiu (Inteligência de Negócios)."""

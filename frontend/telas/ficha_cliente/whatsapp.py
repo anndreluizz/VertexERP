@@ -310,6 +310,21 @@ class WhatsAppMixin:
 
         self._enviar_texto_whatsapp(texto, "Enviar Cobrança")
 
+    def chamar_de_volta_whatsapp(self):
+        """Cliente que comprava sempre e sumiu (Inteligência de Negócios)."""
+
+        nome_loja = api.configuracoes().get("nome_loja") or "Vertex ERP"
+
+        texto = (
+            f"Olá, {self.cliente.get('nome', '')}! Tudo bem?\n\n"
+            f"Sentimos sua falta aqui na {nome_loja}! Chegaram novidades "
+            f"e vai ser um prazer te atender de novo.\n\n"
+            f"Passa aqui pra conferir!\n\n"
+            f"Equipe {nome_loja}"
+        )
+
+        self._enviar_texto_whatsapp(texto, "Chamar de volta")
+
     def agradecer_compra_whatsapp(self):
         # compra: so' o obrigado, sem valor nem saldo (pedido do usuario)
         self._enviar_agradecimento("Muito obrigado pela sua compra!", com_saldo=False)

@@ -32,6 +32,14 @@ HISTORICO_MINIMO_DIAS = 60
 DIAS_PRA_SUGERIR_BAIXA = 365  # sem nenhum movimento (compra ou pagamento)
 # faixas de atraso do fiado (dias desde a compra mais antiga ainda em aberto)
 FAIXAS_ATRASO = [(0, 30), (31, 60), (61, 90), (91, 180), (181, None)]
+DIAS_PRA_COBRAR = 30  # atraso minimo e tempo sem pagar nada
+COBRAR_POR_SEMANA = 10
+# cliente sumido: comprou pelo menos N vezes nos ultimos 180 dias e nao
+# volta ha 30
+SUMIDO_JANELA_DIAS = 180
+SUMIDO_MIN_COMPRAS = 3
+SUMIDO_HA_DIAS = 30
+DIAS_SEMANA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
 
 _ZERO = Decimal("0")
 _EPSILON = Decimal("0.009")
@@ -128,6 +136,8 @@ class BiService:
             },
             "previsao_30_dias": BiService._previsao(db, agora, loja_id, gavetas, contas, guardado),
             "lojas": BiService._lojas(db, inicio, fim, agora) if loja_id is None else [],
+            "clientes_sumidos": BiService._clientes_sumidos(db, agora, loja_id),
+            "vendas_por_dia_hora": BiService._vendas_por_dia_hora(db, inicio, fim, loja_id),
             "avisos": avisos,
             "qualidade_dados": qualidade,
         }
@@ -168,6 +178,76 @@ class BiService:
             ][:10],
             "produtos_sem_venda": BiService._produtos_sem_venda(db, ids),
         }
+
+    @staticmethod
+    def _clientes_sumidos(db, agora, loja_id):
+        """Quem comprava sempre e parou de vir -- pra chamar de volta.
+        Negativado fica de fora (nao pode mais comprar no fiado)."""
+        ultima = func.max(Venda.data)
+        query = (
+            db.query(Cliente, func.count(Venda.id), func.sum(Venda.valor_total), ultima)
+            .join(Venda, Venda.cliente_id == Cliente.id)
+            .filter(
+                Venda.status == "FINALIZADA",
+                Venda.data >= agora - timedelta(days=SUMIDO_JANELA_DIAS),
+                Cliente.negativado.is_not(True),
+            )
+        )
+        if loja_id is not None:
+            query = query.filter(Venda.loja_id == loja_id)
+        query = (
+            query.group_by(Cliente.id)
+            .having(
+                func.count(Venda.id) >= SUMIDO_MIN_COMPRAS,
+                ultima < agora - timedelta(days=SUMIDO_HA_DIAS),
+            )
+            .order_by(func.sum(Venda.valor_total).desc())
+            .limit(10)
+        )
+        return [
+            {
+                "cliente_id": c.id,
+                "nome": c.nome,
+                "telefone": (c.telefone or "").strip(),
+                "compras": compras,
+                "total": total,
+                "ultima_compra": ultima_compra,
+                "dias_sem_vir": (agora.date() - ultima_compra.date()).days,
+            }
+            for c, compras, total, ultima_compra in query.all()
+        ]
+
+    @staticmethod
+    def _vendas_por_dia_hora(db, inicio, fim, loja_id):
+        """Em que dia da semana e horario a loja vende mais, no periodo."""
+        dia = func.extract("dow", Venda.data)
+        hora = func.extract("hour", Venda.data)
+        query = (
+            db.query(dia, hora, func.count(Venda.id), func.sum(Venda.valor_total))
+            .filter(
+                Venda.status == "FINALIZADA",
+                Venda.data >= inicio,
+                Venda.data < fim,
+            )
+            .group_by(dia, hora)
+        )
+        if loja_id is not None:
+            query = query.filter(Venda.loja_id == loja_id)
+
+        dias = [{"dia": nome, "quantidade": 0, "total": _ZERO} for nome in DIAS_SEMANA]
+        horas = {}
+        for d, h, quantidade, total in query.all():
+            dias[int(d)]["quantidade"] += quantidade
+            dias[int(d)]["total"] += total
+            # ponytail: meia-noite = venda lancada depois com data sem
+            # hora (fiado a mao, planilha); fica fora dos horarios
+            if int(h) == 0:
+                continue
+            linha = horas.setdefault(int(h), {"hora": int(h), "quantidade": 0, "total": _ZERO})
+            linha["quantidade"] += quantidade
+            linha["total"] += total
+
+        return {"dias": dias, "horas": [horas[h] for h in sorted(horas)]}
 
     @staticmethod
     def _nome_generico(db):
@@ -254,6 +334,7 @@ class BiService:
             devedores.append({
                 "cliente_id": cliente_id,
                 "nome": cliente.nome if cliente else f"Cliente #{cliente_id}",
+                "telefone": (cliente.telefone or "").strip() if cliente else "",
                 "saldo": saldo,
                 "dias_em_atraso": dias,
                 "ultimo_pagamento": max(pagamentos) if pagamentos else None,
@@ -269,11 +350,22 @@ class BiService:
         devedores.sort(key=lambda d: d["saldo"], reverse=True)
         sugestao_baixa.sort(key=lambda d: d["saldo"], reverse=True)
 
+        # quem cobrar essa semana: atrasado, sem pagar nada ha um tempo
+        # e com telefone pra mandar a mensagem; os que devem mais primeiro
+        sem_pagar_desde = agora - timedelta(days=DIAS_PRA_COBRAR)
+        cobrar = [
+            d for d in devedores
+            if d["tem_telefone"]
+            and d["dias_em_atraso"] >= DIAS_PRA_COBRAR
+            and (d["ultimo_pagamento"] is None or d["ultimo_pagamento"] < sem_pagar_desde)
+        ]
+
         return {
             "saldo_em_aberto": sum((d["saldo"] for d in devedores), _ZERO),
             "clientes_devendo": len(devedores),
             "faixas_atraso": faixas,
             "maiores_devedores": devedores[:15],
+            "cobrar_essa_semana": cobrar[:COBRAR_POR_SEMANA],
             "devedores_sem_telefone": sum(1 for d in devedores if not d["tem_telefone"]),
             "acima_do_limite": sum(
                 1 for d in devedores

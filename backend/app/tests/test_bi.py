@@ -394,3 +394,73 @@ def test_fechamento_nao_tira_mais_do_que_tem_e_retirada_conta_como_sangria(
     hoje = HOJE.isoformat()
     entradas = client.get(f"/caixa/entradas?inicio={hoje}&fim={hoje}", headers=auth_headers).json()
     assert float(entradas["sangrias"]) == 30
+
+
+def test_quem_cobrar_essa_semana(client, auth_headers, db, usuario):
+    """Atrasado 30+ dias, sem pagar nada ha 30 dias e com telefone."""
+    def devedor(nome, telefone, compra_dias, pagou_dias=None):
+        c = Cliente(nome=nome, email=f"{nome}@x.com", telefone=telefone, ativo=True)
+        db.add(c)
+        db.commit()
+        db.add(MovimentoFiado(
+            cliente_id=c.id, usuario_id=usuario.id, tipo="COMPRA", valor=100,
+            data=datetime.now() - timedelta(days=compra_dias),
+        ))
+        if pagou_dias is not None:
+            db.add(MovimentoFiado(
+                cliente_id=c.id, usuario_id=usuario.id, tipo="PAGAMENTO", valor=10,
+                data=datetime.now() - timedelta(days=pagou_dias),
+            ))
+        db.commit()
+
+    devedor("Dora", "1199", 60)                 # cobrar
+    devedor("Edu", "1198", 90, pagou_dias=45)   # cobrar: pagou ha muito
+    devedor("Fabi", "1197", 60, pagou_dias=5)   # pagou essa semana
+    devedor("Gil", None, 60)                    # sem telefone
+    devedor("Hugo", "1196", 10)                 # compra recente
+
+    cobrar = _resumo(client, auth_headers).json()["fiado"]["cobrar_essa_semana"]
+
+    assert [c["nome"] for c in cobrar] == ["Dora", "Edu"]
+    assert cobrar[0]["telefone"] == "1199"
+
+
+def test_clientes_sumidos_e_dia_hora(client, auth_headers, db, produto):
+    matriz, _ = _lojas(db)
+
+    def cliente(nome, negativado=False):
+        c = Cliente(nome=nome, email=f"{nome}@x.com", ativo=True, negativado=negativado)
+        db.add(c)
+        db.commit()
+        return c
+
+    def compra(c, dias_atras, hora=15):
+        quando = datetime.combine(HOJE - timedelta(days=dias_atras), datetime.min.time())
+        db.add(Venda(
+            cliente_id=c.id, valor_total=50, desconto=0, forma_pagamento="DINHEIRO",
+            status="FINALIZADA", data=quando.replace(hour=hora), loja_id=matriz.id,
+        ))
+
+    sumida = cliente("Iara")      # 3 compras, a ultima ha 40 dias
+    for dias in (100, 70, 40):
+        compra(sumida, dias)
+    fiel = cliente("Joao")        # continua vindo
+    for dias in (60, 30, 2):
+        compra(fiel, dias)
+    bloqueada = cliente("Kati", negativado=True)
+    for dias in (100, 70, 40):
+        compra(bloqueada, dias)
+    compra(fiel, 0, hora=10)
+    compra(fiel, 0, hora=0)       # lancada sem hora
+    db.commit()
+
+    dados = _resumo(client, auth_headers).json()
+
+    assert [c["nome"] for c in dados["clientes_sumidos"]] == ["Iara"]
+    assert dados["clientes_sumidos"][0]["compras"] == 3
+    assert dados["clientes_sumidos"][0]["dias_sem_vir"] >= 40
+
+    dia_hora = dados["vendas_por_dia_hora"]
+    hoje = (HOJE.isoweekday() % 7)  # domingo = 0, igual ao Postgres
+    assert dia_hora["dias"][hoje]["quantidade"] == 2
+    assert [h["hora"] for h in dia_hora["horas"]] == [10]

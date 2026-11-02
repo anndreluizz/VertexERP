@@ -841,8 +841,6 @@ def montar_html_fechamento(caixa, resumo, movimentos, valor_contado, observacoes
     <h3 style="text-align:right;">
         Total geral do turno: {formatar_moeda(resumo.get('total_geral', 0))}
     </h3>
-    <p style="color:#666;">Vendas a prazo (fiado lançado, não entra nos totais):
-        {formatar_moeda(resumo.get('vendas_prazo', 0))}</p>
     <h3>Movimentações do Dia</h3>
     <table width="100%" border="1" cellspacing="0" cellpadding="6">
         <tr style="background:#f0f0f0;">
@@ -857,8 +855,10 @@ def montar_html_fechamento(caixa, resumo, movimentos, valor_contado, observacoes
 def imprimir_fechamento(parent, caixa, resumo, movimentos, valor_contado, observacoes,
                         responsavel, fechado_em, config):
     """Termica de 80mm se estiver ativa; senao (ou se falhar e a pessoa
-    quiser) a janela normal do Windows."""
+    quiser) a janela normal do Windows. No papel vai so' o que foi a
+    vista: venda/estorno no crediario (forma PRAZO) fica de fora."""
 
+    movimentos = [m for m in movimentos if m.get("forma_pagamento") != "PRAZO"]
     config_impressora = preferencias_service.carregar_impressora_termica()
 
     if config_impressora and config_impressora.get("ativa"):

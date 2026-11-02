@@ -648,12 +648,8 @@ def gerar_comandos_fechamento_caixa(
     partes.append(_linha("Resumo do Turno"))
     partes.append(_negrito(False))
 
-    # vendas a prazo vao no fim, como nota: nao entram nos totais
-    resumo_linhas = linhas_resumo_caixa(resumo) + [
-        ("Vendas a prazo (fiado)", resumo.get("vendas_prazo", 0)),
-    ]
-
-    for rotulo, valor in resumo_linhas:
+    # crediario (vendas a prazo) nao vai no papel: so' o que foi a vista
+    for rotulo, valor in linhas_resumo_caixa(resumo):
         partes.append(_linha_dupla_coluna(rotulo, _moeda(valor), largura))
 
     total_previsto = float(resumo.get("total_previsto", 0) or 0)

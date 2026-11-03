@@ -1,4 +1,6 @@
-"""Clientes: card "Recebido de fiado" so' da loja (combo ou terminal)."""
+"""Clientes: card "Fiado recebido no mês" so' da loja (combo ou terminal) e so' do mes."""
+from datetime import date
+
 from services import api
 from telas import clientes
 
@@ -33,3 +35,18 @@ def test_combo_escolhido_prevalece(monkeypatch):
 def test_vendedor_carrega_sem_pedir_as_entradas_do_caixa(monkeypatch):
     # 19/10: /caixa/entradas e' 403 pro vendedor e derrubava a tela
     assert _rodar(monkeypatch, None, 2, {"admin": False, "permissoes": []}) == (0.0, None)
+
+
+def test_soma_so_o_mes_corrente(monkeypatch):
+    monkeypatch.setattr(api, "_INFO_USUARIO_CACHE", {"admin": True})
+    periodos = []
+    monkeypatch.setattr(clientes, "listar_clientes", lambda loja_id: [])
+    monkeypatch.setattr(clientes, "listar_movimentos", lambda: [])
+    monkeypatch.setattr(clientes, "entradas_caixa",
+                        lambda inicio, fim, loja_id: periodos.append((inicio, fim)) or {})
+    monkeypatch.setattr(clientes, "carregar_loja_id", lambda: 1)
+
+    clientes._buscar_dados_clientes(None)
+
+    hoje = date.today()
+    assert periodos == [(hoje.replace(day=1), hoje)]

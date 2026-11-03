@@ -1,4 +1,5 @@
 import csv
+from datetime import date
 
 from PySide6.QtWidgets import QMessageBox
 
@@ -34,6 +35,7 @@ from design.icons import icone, icone_pixmap
 from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
 from services.worker import rodar_em_thread, em_paralelo
 from utils.formatacao import formatar_moeda
+from utils.periodo import rotulo_mes
 from widgets.estado_async import PainelErro, cartoes_esqueleto
 
 
@@ -96,7 +98,9 @@ def _buscar_dados_clientes(loja_id):
     # e o 403 derrubava a tela inteira de Clientes)
     chamadas = [(listar_clientes, loja_id), (listar_movimentos,)]
     if api.usuario_tem_permissao("financeiro.ver"):
-        chamadas.append((entradas_caixa, None, None, loja_recebido))
+        # so' o mes corrente (dia 1 ate' hoje): o total desde sempre nao dizia nada
+        hoje = date.today()
+        chamadas.append((entradas_caixa, hoje.replace(day=1), hoje, loja_recebido))
     clientes, movimentos_fiado, *resto = em_paralelo(*chamadas)
     entradas = resto[0] if resto else {}
 
@@ -648,7 +652,7 @@ class Clientes(QWidget):
         self.card_a_receber = CardKPI(
             "Fiado em aberto", "credit-card", tokens.PRIMARIA, destaque=True
         )
-        self.card_recebido_fiado = CardKPI("Recebido de fiado", "wallet", tokens.SECUNDARIA)
+        self.card_recebido_fiado = CardKPI("Fiado recebido no mês", "wallet", tokens.SECUNDARIA)
         self.card_devendo = CardKPI("Clientes devendo", "users", tokens.PRIMARIA)
         self.card_inadimplentes = CardKPI("Inadimplentes", "alert-triangle", tokens.ERRO)
 
@@ -1027,7 +1031,7 @@ class Clientes(QWidget):
         self.card_recebido_fiado.definir_valor(
             formatar_moeda(self.recebido_fiado_total)
         )
-        self.card_recebido_fiado.definir_legenda("pagamentos de fiado recebidos nesta loja")
+        self.card_recebido_fiado.definir_legenda(f"pago em {rotulo_mes(date.today())} nesta loja")
         self.card_devendo.definir_valor(str(devendo))
         self.card_devendo.definir_legenda(f"de {total} cadastros")
         self.card_inadimplentes.definir_valor(str(contagem["INADIMPLENTES"]))

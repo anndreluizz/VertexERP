@@ -367,9 +367,18 @@ class Header(QFrame):
     solicitou_logout = Signal()
     solicitou_trocar_senha = Signal()
 
-    def __init__(self, nome_loja, nome_usuario, cargo, admin=False, parent=None):
+    def __init__(self, nome_loja, nome_usuario, cargo, admin=False, parent=None,
+                 na_barra=False):
+        """na_barra=True (Vertex 2.0): vira so' o bloco da direita da barra
+        azul do topo (olhinho, tema, sino, perfil, aviso de conexao) --
+        titulo, busca e relogio ficam escondidos e as cores sao as da
+        barra escura (ver design/menu_topo.py)."""
 
         super().__init__(parent)
+
+        self._na_barra = na_barra
+        self._cor_icone = tokens.TEXTO_SIDEBAR if na_barra else tokens.TEXTO_SECUNDARIO
+        self._fundo_hover = tokens.SIDEBAR_HOVER if na_barra else tokens.FUNDO
 
         # reflete o tema que ja esta ativo (ver design.tokens.aplicar,
         # chamado no arranque do app) -- sem isso o botao sempre
@@ -382,8 +391,9 @@ class Header(QFrame):
         # o sino continua so um enfeite sem nada pra mostrar
         self._admin = admin
 
-        self.setFixedHeight(64)
-        self.setStyleSheet(f"""
+        self.setFixedHeight(56 if na_barra else 64)
+        self.setStyleSheet(
+            "Header { background: transparent; border: none; }" if na_barra else f"""
             Header {{
                 background: {tokens.CARD};
                 border-bottom: 1px solid {tokens.BORDA};
@@ -391,8 +401,8 @@ class Header(QFrame):
         """)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(24, 0, 20, 0)
-        layout.setSpacing(16)
+        layout.setContentsMargins(*((0, 0, 0, 0) if na_barra else (24, 0, 20, 0)))
+        layout.setSpacing(8 if na_barra else 16)
 
         self.lbl_titulo = QLabel("Início")
         self.lbl_titulo.setStyleSheet(f"""
@@ -402,6 +412,7 @@ class Header(QFrame):
             font-weight: 700;
         """)
         layout.addWidget(self.lbl_titulo)
+        self.lbl_titulo.setVisible(not na_barra)
 
         # ======================
         # STATUS DE CONEXAO -- escondido por padrao (assume online, ver
@@ -463,6 +474,7 @@ class Header(QFrame):
         busca_layout.addWidget(self.campo_busca, stretch=1)
 
         layout.addWidget(busca_container, stretch=1)
+        busca_container.setVisible(not na_barra)
 
         # ======================
         # RELÓGIO
@@ -475,6 +487,7 @@ class Header(QFrame):
             font-size: {tokens.TAMANHO_SM}px;
         """)
         layout.addWidget(self.lbl_relogio)
+        self.lbl_relogio.setVisible(not na_barra)
 
         self._timer_relogio = QTimer(self)
         self._timer_relogio.timeout.connect(self._atualizar_relogio)
@@ -491,6 +504,8 @@ class Header(QFrame):
         self.bt_tema.setToolTip("Alternar tema claro/escuro")
         self.bt_tema.clicked.connect(self._alternar_tema)
         layout.addWidget(self.bt_tema)
+        # na barra azul nao cabe: o tema vai pro menu do perfil
+        self.bt_tema.setVisible(not na_barra)
 
         # olhinho: esconde/mostra os valores em dinheiro (cards, caixa)
         # pra cliente no balcao nao ver -- ver design/privacidade.py
@@ -551,6 +566,7 @@ class Header(QFrame):
         divisor.setFixedSize(1, 32)
         divisor.setStyleSheet(f"background:{tokens.BORDA};")
         layout.addWidget(divisor)
+        divisor.setVisible(not na_barra)
 
         self.bt_perfil = _BlocoClicavel()
         self.bt_perfil.setFixedHeight(44)
@@ -561,7 +577,7 @@ class Header(QFrame):
                 background: transparent;
             }}
             _BlocoClicavel:hover {{
-                background: {tokens.FUNDO};
+                background: {self._fundo_hover};
             }}
         """)
 
@@ -577,13 +593,13 @@ class Header(QFrame):
 
         lbl_nome = QLabel(nome_usuario)
         lbl_nome.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO};
+            background:transparent; color:{"white" if na_barra else tokens.TEXTO};
             font-size:{tokens.TAMANHO_SM}px; font-weight:600;
         """)
 
         lbl_cargo = QLabel(cargo)
         lbl_cargo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            background:transparent; color:{tokens.TEXTO_SIDEBAR if na_barra else tokens.TEXTO_TERCIARIO};
             font-size:{tokens.TAMANHO_XS}px;
         """)
 
@@ -591,6 +607,13 @@ class Header(QFrame):
         col_perfil.addWidget(lbl_cargo)
 
         perfil_layout.addLayout(col_perfil)
+        if na_barra:
+            # so' o avatar na barra (nome e cargo aparecem no menu)
+            lbl_nome.hide()
+            lbl_cargo.hide()
+            perfil_layout.setContentsMargins(4, 0, 4, 0)
+            self.bt_perfil.setToolTip(f"{nome_usuario} · {cargo}")
+        self._nome_usuario, self._cargo = nome_usuario, cargo
 
         self.bt_perfil.clicked.connect(self._abrir_menu_perfil)
 
@@ -604,7 +627,7 @@ class Header(QFrame):
         botao = QPushButton()
         botao.setFixedSize(38, 38)
         botao.setCursor(Qt.PointingHandCursor)
-        botao.setIcon(icone(nome_icone, cor=tokens.TEXTO_SECUNDARIO, tamanho=18))
+        botao.setIcon(icone(nome_icone, cor=self._cor_icone, tamanho=18))
         botao.setIconSize(QSize(18, 18))
         botao.setStyleSheet(f"""
             QPushButton {{
@@ -613,7 +636,7 @@ class Header(QFrame):
                 background: transparent;
             }}
             QPushButton:hover {{
-                background: {tokens.FUNDO};
+                background: {self._fundo_hover};
             }}
         """)
         return botao
@@ -640,7 +663,7 @@ class Header(QFrame):
 
     def _atualizar_olho(self, ocultos):
         self.bt_valores.setIcon(
-            icone("eye-off" if ocultos else "eye", cor=tokens.TEXTO_SECUNDARIO, tamanho=18)
+            icone("eye-off" if ocultos else "eye", cor=self._cor_icone, tamanho=18)
         )
         self.bt_valores.setToolTip("Mostrar valores" if ocultos else "Ocultar valores")
 
@@ -649,7 +672,7 @@ class Header(QFrame):
         self.bt_tema.setIcon(
             icone(
                 "sun" if self._modo_escuro else "moon",
-                cor=tokens.TEXTO_SECUNDARIO,
+                cor=self._cor_icone,
                 tamanho=18,
             )
         )
@@ -859,7 +882,22 @@ class Header(QFrame):
 
     def _abrir_menu_perfil(self):
 
-        popover = _Popover(largura=200)
+        popover = _Popover(largura=230)
+
+        if self._na_barra:
+            quem = QLabel(f"<b>{self._nome_usuario}</b><br>{self._cargo}")
+            quem.setStyleSheet(
+                f"background:transparent; border:none; color:{tokens.TEXTO}; "
+                f"font-size:{tokens.TAMANHO_SM}px; padding:8px 10px;"
+            )
+            popover.layout_corpo.addWidget(quem)
+            item_tema = _ItemMenu(
+                "Tema claro" if self._modo_escuro else "Tema escuro",
+                icone_nome="sun" if self._modo_escuro else "moon",
+            )
+            item_tema.clicked.connect(popover.close)
+            item_tema.clicked.connect(self._alternar_tema)
+            popover.layout_corpo.addWidget(item_tema)
 
         item_senha = _ItemMenu("Trocar Senha", icone_nome="lock")
         item_senha.clicked.connect(popover.close)

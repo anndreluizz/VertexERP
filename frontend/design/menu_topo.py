@@ -115,6 +115,7 @@ class _Painel(_Popover):
 class BarraMenu(QFrame):
 
     item_clicado = Signal(str)
+    busca_pedida = Signal()
 
     def __init__(self, nome_loja, itens_menu, pode_abrir, parent=None):
         """itens_menu/pode_abrir: ITENS_MENU e pode_abrir_tela de
@@ -141,11 +142,17 @@ class BarraMenu(QFrame):
         layout.addWidget(logo)
 
         self.lbl_loja = QLabel(nome_loja)
+        self.lbl_loja.setMinimumWidth(self.lbl_loja.sizeHint().width())
         self.lbl_loja.setStyleSheet(
             f"background: transparent; color: white; font-size: {tokens.TAMANHO_MD}px; "
             "font-weight: 700; margin: 0 14px 0 4px;"
         )
         layout.addWidget(self.lbl_loja)
+        # nao cabe a 1366 px junto com o menu: o nome da loja fica na
+        # barra de titulo da janela (ver PrincipalWindow) e no tooltip
+        self.lbl_loja.hide()
+        logo.setToolTip(nome_loja)
+        self._logo = logo
 
         self.botoes = {}      # rotulo do grupo -> botao
         self._grupo_de = {}   # chave da tela -> rotulo do grupo
@@ -175,7 +182,7 @@ class BarraMenu(QFrame):
                 QPushButton {{
                     background: transparent; color: {tokens.TEXTO_SIDEBAR};
                     border: none; border-radius: {tokens.RADIUS_SM}px;
-                    padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; font-weight: 600;
+                    padding: 0 10px; font-size: {tokens.TAMANHO_MD}px; font-weight: 600;
                 }}
                 QPushButton:hover {{ background: {tokens.SIDEBAR_HOVER}; color: white; }}
                 QPushButton:checked {{ background: {tokens.SIDEBAR_ATIVO}; color: white; }}
@@ -191,8 +198,23 @@ class BarraMenu(QFrame):
 
         layout.addStretch()
 
+        self.bt_busca = QPushButton("  Ctrl K")
+        self.bt_busca.setCursor(Qt.PointingHandCursor)
+        self.bt_busca.setFixedHeight(40)
+        self.bt_busca.setToolTip("Achar cliente, produto ou tela (Ctrl+K)")
+        self.bt_busca.setIcon(icone("search", cor=tokens.TEXTO_SIDEBAR, tamanho=16))
+        self.bt_busca.setStyleSheet(f"""
+            QPushButton {{ background: {tokens.SIDEBAR_HOVER}; color: {tokens.TEXTO_SIDEBAR};
+                           border: none; border-radius: {tokens.RADIUS_SM}px; padding: 0 14px;
+                           font-size: {tokens.TAMANHO_MD}px; text-align: left; }}
+            QPushButton:hover {{ background: {tokens.SIDEBAR_ATIVO}; color: white; }}
+        """)
+        self.bt_busca.clicked.connect(self.busca_pedida)
+        layout.addWidget(self.bt_busca)
+
         if "pdv" in self._grupo_de:
-            self.bt_venda = QPushButton("  Nova venda   F3")
+            self.bt_venda = QPushButton("  Nova venda  F3")
+            self.bt_venda.setMinimumWidth(self.bt_venda.sizeHint().width() + 24)
             self.bt_venda.setCursor(Qt.PointingHandCursor)
             self.bt_venda.setFixedHeight(42)
             self.bt_venda.setIcon(icone("plus", cor="white", tamanho=18))
@@ -204,6 +226,10 @@ class BarraMenu(QFrame):
             """)
             self.bt_venda.clicked.connect(lambda: self.item_clicado.emit("pdv"))
             layout.addWidget(self.bt_venda)
+
+    def anexar(self, widget):
+        """Bloco extra no fim da barra (o Header em modo na_barra)."""
+        self.layout().addWidget(widget)
 
     def _abrir_painel(self, botao, painel):
         # o checked do botao reflete a tela atual, nao o clique
@@ -217,6 +243,10 @@ class BarraMenu(QFrame):
 
     def definir_nome_loja(self, nome_loja):
         self.lbl_loja.setText(nome_loja)
+        self._logo.setToolTip(nome_loja)
+        janela = self.window()
+        if janela is not self:
+            janela.setWindowTitle(f"Vertex ERP · {nome_loja}")
 
     def selecionar(self, chave):
         self._atual = chave

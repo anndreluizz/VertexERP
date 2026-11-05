@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone
+from design.busca_rapida import BuscaRapida
 from design.menu_topo import BarraMenu
 from design.header import Header
 from design.janela import pintar_barra_titulo
@@ -136,6 +137,12 @@ PERMISSAO_TELA = {
 }
 
 
+def _carregar_busca():
+    from services.cliente_service import listar_clientes
+    from services.produto_service import listar_produtos
+    return listar_clientes(), listar_produtos()
+
+
 def pode_abrir_tela(chave):
     permissao = PERMISSAO_TELA.get(chave)
     if permissao is None:
@@ -200,6 +207,7 @@ class PrincipalWindow(QMainWindow):
         cargo = api.cargo_usuario(info_usuario)
 
         nome_loja = config.get("nome_loja") or "Vertex ERP"
+        self.setWindowTitle(f"Vertex ERP · {nome_loja}")
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -229,14 +237,17 @@ class PrincipalWindow(QMainWindow):
         layout_central.setContentsMargins(0, 0, 0, 0)
         layout_central.setSpacing(0)
 
+        # Vertex 2.0: o cabecalho virou o bloco da direita da barra azul
         self.header = Header(
             nome_loja, nome_usuario, cargo,
             admin=info_usuario.get("admin", False),
+            na_barra=True,
         )
         self.header.solicitou_logout.connect(self._fazer_logout)
         self.header.solicitou_trocar_senha.connect(self._abrir_trocar_senha)
         self.header.tema_alternado.connect(self._alternar_tema)
-        layout_central.addWidget(self.header)
+        self.menu.anexar(self.header)
+        self.menu.busca_pedida.connect(self.abrir_busca)
 
         self.faixa_backup = FaixaAvisoBackup()
         self.faixa_backup.ver_backups.connect(self._abrir_aba_backup)
@@ -360,6 +371,9 @@ class PrincipalWindow(QMainWindow):
         self.atalho_pdv = QShortcut(QKeySequence("F3"), self)
         self.atalho_pdv.activated.connect(self.atalho_f3)
 
+        QShortcut(QKeySequence("Ctrl+K"), self).activated.connect(self.abrir_busca)
+        self._cache_busca = ([], [])
+
         # ======================
         # STATUS DE CONEXAO -- checagem leve em segundo plano, so pra
         # acender/apagar o aviso do Header (ver design/header.py); cada
@@ -389,6 +403,39 @@ class PrincipalWindow(QMainWindow):
             QTimer.singleShot(
                 _ATRASO_PRIMEIRA_CHECAGEM_BACKUP_MS, self._checar_backup
             )
+
+    # ======================
+    # BUSCA RAPIDA (Ctrl K)
+    # ======================
+
+    def abrir_busca(self):
+        telas = [(c, t) for c, _, t in ITENS_MENU if pode_abrir_tela(c)]
+        self._busca = BuscaRapida(telas, *self._cache_busca, parent=self)
+        self._busca.escolhido.connect(self._ao_escolher_busca)
+        # lista de clientes/produtos chega em segundo plano; enquanto isso
+        # vale o que veio da ultima vez (ou so' as telas, na primeira)
+        rodar_em_thread(self, _carregar_busca, ao_sucesso=self._ao_dados_busca)
+        self._busca.abrir_sobre(self)
+
+    def _ao_dados_busca(self, dados):
+        self._cache_busca = dados
+        busca = getattr(self, "_busca", None)
+        try:
+            if busca is not None and busca.isVisible():
+                busca.definir_dados(*dados)
+        except RuntimeError:
+            pass  # dialogo ja' fechado e destruido
+
+    def _ao_escolher_busca(self, tipo, alvo):
+        if tipo == "tela":
+            self._navegar(alvo)
+        elif tipo == "cliente":
+            self._exibir_pagina("clientes", self.clientes)
+            QTimer.singleShot(0, lambda: self.clientes._abrir_ficha(alvo))
+        elif tipo == "produto":
+            self._exibir_pagina("produtos", self.produtos)
+            self.produtos.pesquisa.setText(alvo.get("nome", ""))
+            self.produtos.filtrar_produtos()
 
     def _checar_atualizacao_terminal(self):
         rodar_em_thread(

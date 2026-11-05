@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.fonts import fonte
-from design.animations import fade_in
+from design.animations import contar, fade_in
 from design.icons import icone, icone_pixmap
 from design.privacidade import botao_olho, privacidade
 from utils.acessibilidade import movimento_reduzido
@@ -208,14 +208,12 @@ class CardKPI(Card):
         self.lbl_titulo.setText(texto)
 
     def definir_valor(self, texto):
-        # o fade sutil da um "respiro" visual toda vez que o numero
-        # muda (carregamento inicial ou um recarregar/filtro) -- sem
-        # ficar sub/somando digito por digito, que exigiria parsear de
-        # volta pra numero um texto ja formatado (moeda, unidade etc.)
-        # via privacidade: com o olhinho fechado, valor em R$ vira mascara
-        privacidade.definir_texto(self.lbl_valor, texto)
+        # numero (R$, quantidade, %) conta de 0 ate' o valor; o resto
+        # ganha so' o fade. contar() passa pela privacidade: com o
+        # olhinho fechado, valor em R$ continua mascara
         self.bt_olho.setVisible("R$" in (texto or ""))
-        fade_in(self.lbl_valor, duracao=240)
+        if not contar(self.lbl_valor, texto):
+            fade_in(self.lbl_valor, duracao=240)
 
 
 # ==========================================
@@ -1311,7 +1309,16 @@ class PilhaPaginas(QStackedWidget):
         super().__init__(parent)
         self.layout().setSizeConstraint(QLayout.SetNoConstraint)
         self.setStyleSheet("background:transparent;")
-        self.currentChanged.connect(lambda _i: self.updateGeometry())
+        self.currentChanged.connect(self._ao_trocar)
+
+    def _ao_trocar(self, _indice):
+        self.updateGeometry()
+        # troca de tela/etapa com um fade curto (pula com movimento
+        # reduzido). ponytail: efeito de opacidade na pagina inteira;
+        # se pesar no PC fraco da loja, trocar por fade so' no cabecalho
+        atual = self.currentWidget()
+        if atual is not None and atual.isVisible():
+            fade_in(atual, duracao=170)
 
     def minimumSizeHint(self):
         atual = self.currentWidget()

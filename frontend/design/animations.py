@@ -4,10 +4,13 @@ animações/efeitos nos próprios widgets (setProperty) pra evitar que o
 garbage collector do Python derrube o QPropertyAnimation no meio do
 percurso, um bug clássico de animação Qt "que não anima nada"."""
 
+import re
+
 from PySide6.QtCore import (
     QEasingCurve,
     QPoint,
     QPropertyAnimation,
+    QVariantAnimation,
     Qt,
 )
 from PySide6.QtWidgets import QGraphicsOpacityEffect
@@ -81,3 +84,52 @@ def slide_up(widget, distancia=16, duracao=260, ao_terminar=None):
     animacao.start()
 
     return animacao
+
+
+# "R$ 1.284,50", "-R$ 5,00", "23", "14 produtos", "12,5%" -- so' textos
+# que SAO um numero (com prefixo R$ e/ou sufixo curto); datas, "—" e
+# frases ficam de fora e so' trocam o texto.
+_RE_NUMERO_KPI = re.compile(r"^(-?R\$\s?-?|-?)(\d{1,3}(?:\.\d{3})*|\d+)(,\d+)?(\s*[%\w ]{0,20})$")
+
+
+def _formatar_br(valor, casas):
+    texto = f"{valor:,.{casas}f}"  # 1,284.50
+    return texto.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def contar(rotulo, texto, duracao=650):
+    """Mostra `texto` no QLabel contando o numero de 0 ate' o valor
+    (efeito de painel). Passa sempre por privacidade.definir_texto, entao
+    com o olhinho fechado continua "R$ ••••". Devolve False quando o texto
+    nao e' um numero (ai' so' troca o texto, sem animar)."""
+    from design.privacidade import privacidade
+
+    anterior = getattr(rotulo, "_contar_anim", None)
+    if anterior is not None:
+        anterior.stop()
+
+    achado = _RE_NUMERO_KPI.match((texto or "").strip())
+    if not achado or movimento_reduzido():
+        privacidade.definir_texto(rotulo, texto)
+        return False
+
+    prefixo, inteiro, decimal, sufixo = achado.groups()
+    casas = len(decimal) - 1 if decimal else 0
+    alvo = float(inteiro.replace(".", "") + ("." + decimal[1:] if decimal else ""))
+    if alvo == 0:
+        privacidade.definir_texto(rotulo, texto)
+        return False
+
+    animacao = QVariantAnimation(rotulo)
+    animacao.setDuration(duracao)
+    animacao.setStartValue(0.0)
+    animacao.setEndValue(alvo)
+    animacao.setEasingCurve(QEasingCurve.OutCubic)
+    animacao.valueChanged.connect(
+        lambda v: privacidade.definir_texto(rotulo, f"{prefixo}{_formatar_br(v, casas)}{sufixo}")
+    )
+    # termina no texto original exato (sem arredondamento da animacao)
+    animacao.finished.connect(lambda: privacidade.definir_texto(rotulo, texto))
+    rotulo._contar_anim = animacao
+    animacao.start()
+    return True

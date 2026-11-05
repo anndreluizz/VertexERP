@@ -319,6 +319,7 @@ class PrincipalWindow(QMainWindow):
         )
 
         self.dashboard.navegar_relatorios.connect(self.ir_para_relatorios)
+        self.dashboard.tarefa_escolhida.connect(self._abrir_tarefa)
 
         self.pdv.voltar.connect(
             lambda: self._exibir_pagina("dashboard", self.dashboard)
@@ -426,6 +427,21 @@ class PrincipalWindow(QMainWindow):
                 busca.definir_dados(*dados)
         except RuntimeError:
             pass  # dialogo ja' fechado e destruido
+
+    def _abrir_tarefa(self, tarefa):
+        """Botao dos cartoes "Para fazer hoje": abre a tela ja' filtrada."""
+        if tarefa == "fiado":
+            from telas.para_fazer_hoje import PRAZO_COBRANCA_DIAS
+            self._exibir_pagina("clientes", self.clientes)
+            indice = self.clientes.combo_prazo.findData(PRAZO_COBRANCA_DIAS)
+            if indice >= 0:
+                self.clientes.combo_prazo.setCurrentIndex(indice)
+            self.clientes.selecionar_status("INADIMPLENTES")
+        elif tarefa == "estoque":
+            self._exibir_pagina("produtos", self.produtos)
+            self.produtos.selecionar_status("REPOR")
+        elif tarefa == "boletos":
+            self.ir_para_contas_pagar()
 
     def _ao_escolher_busca(self, tipo, alvo):
         if tipo == "tela":

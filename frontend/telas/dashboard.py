@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 
 from PySide6.QtCore import Qt, QTimer, Signal
+
+from telas.para_fazer_hoje import ParaFazerHoje, tarefas_do_dia
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QWidget,
@@ -149,6 +151,7 @@ class Dashboard(QWidget):
     navegar_estoque = Signal()
     navegar_caixa = Signal()
     navegar_relatorios = Signal()
+    tarefa_escolhida = Signal(str)  # "fiado" | "estoque" | "boletos"
 
     def __init__(self, usuario_id=None):
 
@@ -251,6 +254,11 @@ class Dashboard(QWidget):
         # (antes das acoes rapidas, que tambem usam)
         self._financeiro = usuario_tem_permissao("financeiro.ver")
         self.layout_principal.addWidget(self._construir_acoes_rapidas())
+
+        # Vertex 2.0: o que pede acao hoje, antes dos numeros
+        self.para_fazer = ParaFazerHoje()
+        self.para_fazer.acao.connect(self.tarefa_escolhida)
+        self.layout_principal.addWidget(self.para_fazer)
 
         # ======================
         # KPIs
@@ -781,6 +789,10 @@ class Dashboard(QWidget):
             self._atualizar_vendas_recentes(vendas_finalizadas, usuarios_por_id)
             self._atualizar_clientes_recentes(vendas_finalizadas, clientes)
             self._atualizar_alertas(produtos, contas_pagar, clientes, movimentos_fiado)
+            self.para_fazer.definir(tarefas_do_dia(
+                produtos, contas_pagar, clientes, movimentos_fiado,
+                financeiro=self._financeiro,
+            ))
         except Exception as erro:
             self._ao_carregar_erro(erro)
 

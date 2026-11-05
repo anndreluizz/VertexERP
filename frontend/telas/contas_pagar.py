@@ -426,7 +426,7 @@ class ContasPagar(QWidget):
         col_titulo = QVBoxLayout()
         col_titulo.setSpacing(0)
 
-        titulo = QLabel("Contas a Pagar")
+        titulo = QLabel("Boletos")
         titulo.setStyleSheet(f"""
             background:transparent; font-size:{tokens.TAMANHO_LG}px;
             font-weight:800; color:{tokens.TEXTO};

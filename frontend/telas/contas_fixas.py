@@ -162,7 +162,7 @@ class ContasFixasDialog(DialogoPadrao):
             self,
             "Parar de repetir",
             f"\"{fixa['descricao']}\" não vai mais ser criada nos próximos "
-            "meses. As contas que já estão em Contas a Pagar continuam lá.\n\n"
+            "meses. As contas que já estão em Boletos continuam lá.\n\n"
             "Parar de repetir?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,

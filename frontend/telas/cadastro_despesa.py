@@ -768,7 +768,7 @@ class CadastroDespesaDialog(DialogoPadrao):
                 ultimo = _somar_meses(primeiro, self.meses.value() - 1)
                 fim = f" A última vence em {ultimo.strftime('%d/%m/%Y')} e depois para sozinha."
             else:
-                fim = " Para parar, use Contas fixas na tela de Contas a Pagar."
+                fim = " Para parar, use Contas fixas na tela de Boletos."
             self.lbl_repeticao.setText(f"Vence todo dia {primeiro.day}. {detalhe}{fim}")
 
         if hasattr(self, "_corpo_widget"):

@@ -38,7 +38,7 @@ DESCRICOES = {
     "vitrine": "O que aparece no site da loja",
     "clientes": "Fichas, fiado e cobrança",
     "fornecedores": "Contatos e compras",
-    "contas_pagar": "Boletos e vencimentos",
+    "contas_pagar": "Vencimentos e contas fixas",
     "conciliacao_bancaria": "Conferir Pix e cartão",
     "visao_geral": "Entrou, saiu e sobrou",
     "relatorios": "Vendas, caixa e estoque",

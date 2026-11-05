@@ -159,7 +159,7 @@ ITENS_MENU = [
     ("clientes", "users", "Clientes"),
     ("fornecedores", "truck", "Fornecedores"),
     ("caixa", "wallet", "Caixa"),
-    ("contas_pagar", "file-text", "Contas a Pagar"),
+    ("contas_pagar", "file-text", "Boletos"),
     ("conciliacao_bancaria", "credit-card", "Conciliação Bancária"),
     ("visao_geral", "trending-up", "Visão Geral"),
     ("relatorios", "bar-chart-2", "Relatórios"),

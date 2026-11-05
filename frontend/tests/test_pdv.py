@@ -95,3 +95,16 @@ def test_separar_multiplicador_sem_asterisco_ou_invalido_e_codigo_normal():
     # nao-numero ou zero antes do "*" -> faz parte do codigo/nome
     assert _separar_multiplicador("BOLSA*G") == (1, "BOLSA*G")
     assert _separar_multiplicador("0*98") == (1, "0*98")
+
+
+def test_cartao_do_cliente_mostra_situacao_do_fiado():
+    tela = _tela_pdv()
+    assert tela.lbl_cliente.text() == "Balcão (sem cliente)"
+    cliente = {"id": 7, "nome": "Maria do Socorro", "limite_credito": 500,
+               "_agr": {"saldo_devedor": 154.0, "dias_em_atraso": 5}}
+    tela.definir_cliente(cliente)
+    assert tela.lbl_cliente.text() == "Maria do Socorro"
+    assert tela.lbl_cliente_info.text() == "Fiado em aberto · deve R$ 154,00 de R$ 500,00"
+    assert tela.bt_selecionar_cliente.text() == "Trocar  F2"
+    tela.limpar_cliente()
+    assert tela.lbl_cliente_info.text() == "Para fiado, escolha um cliente"

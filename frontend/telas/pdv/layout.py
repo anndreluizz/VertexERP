@@ -447,14 +447,19 @@ class LayoutMixin:
             }}
         """)
 
-        layout = QHBoxLayout(linha)
-        layout.setContentsMargins(12, 8, 8, 8)
+        # Vertex 2.0: nome + situacao do fiado em cima (largura toda, sem
+        # cortar o nome), botoes numa linha embaixo
+        externo = QVBoxLayout(linha)
+        externo.setContentsMargins(12, 10, 10, 10)
+        externo.setSpacing(8)
+        layout = QHBoxLayout()
         layout.setSpacing(8)
+        externo.addLayout(layout)
 
         lbl_icone = QLabel()
         lbl_icone.setStyleSheet("background:transparent;")
         lbl_icone.setPixmap(icone_pixmap("users", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
-        layout.addWidget(lbl_icone)
+        layout.addWidget(lbl_icone, alignment=Qt.AlignTop)
 
         col_cliente = QVBoxLayout()
         col_cliente.setSpacing(0)
@@ -465,17 +470,31 @@ class LayoutMixin:
             font-size:{tokens.TAMANHO_XS}px; font-weight:700;
         """)
 
-        self.lbl_cliente = QLabel("Nenhum cliente selecionado")
+        self.lbl_cliente = QLabel("Balcão (sem cliente)")
         self.lbl_cliente.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_MD}px; font-weight:700;
+        """)
+
+        # Vertex 2.0: situacao do fiado ja' no PDV (Em dia / Atrasado /
+        # Perto do limite...) -- vem pronta do Selecionar Cliente
+        self.lbl_cliente_info = QLabel("Para fiado, escolha um cliente")
+        self.lbl_cliente_info.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_SM}px; font-weight:600;
+            font-size:{tokens.TAMANHO_XS}px; font-weight:600;
         """)
 
         col_cliente.addWidget(lbl_rotulo)
         col_cliente.addWidget(self.lbl_cliente)
+        col_cliente.addWidget(self.lbl_cliente_info)
 
-        layout.addLayout(col_cliente)
+        self.lbl_cliente_info.setWordWrap(True)
+        layout.addLayout(col_cliente, stretch=1)
+
+        layout = QHBoxLayout()
+        layout.setSpacing(8)
         layout.addStretch()
+        externo.addLayout(layout)
 
         self.bt_limpar_cliente = QPushButton("remover")
         self.bt_limpar_cliente.setCursor(Qt.PointingHandCursor)
@@ -489,11 +508,11 @@ class LayoutMixin:
         self.bt_limpar_cliente.setVisible(False)
         layout.addWidget(self.bt_limpar_cliente)
 
-        self.bt_selecionar_cliente = QPushButton("F2")
+        self.bt_selecionar_cliente = QPushButton("Escolher  F2")
         self.bt_selecionar_cliente.setToolTip("Selecionar cliente (F2)")
         self.bt_selecionar_cliente.setCursor(Qt.PointingHandCursor)
         self.bt_selecionar_cliente.setFocusPolicy(Qt.NoFocus)
-        self.bt_selecionar_cliente.setFixedHeight(30)
+        self.bt_selecionar_cliente.setFixedHeight(34)
         self.bt_selecionar_cliente.setStyleSheet(f"""
             QPushButton {{
                 background:{tokens.CARD}; color:{tokens.PRIMARIA};
@@ -939,10 +958,11 @@ class LayoutMixin:
         layout.addStretch()
 
         caixa_total = QFrame()
+        # Vertex 2.0: total num cartao escuro, valor verde (ve' de longe)
         caixa_total.setStyleSheet(f"""
             QFrame {{
-                background: {tokens.SUCESSO_CLARO};
-                border-radius: {tokens.RADIUS_SM}px;
+                background: {tokens.SIDEBAR};
+                border-radius: {tokens.RADIUS_MD}px;
             }}
         """)
 
@@ -952,16 +972,16 @@ class LayoutMixin:
 
         lbl_total_rotulo = QLabel("TOTAL")
         lbl_total_rotulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px; font-weight:800; letter-spacing: 0.5px;
+            background:transparent; color:{tokens.TEXTO_SIDEBAR};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:800; letter-spacing: 1px;
         """)
         layout_caixa_total.addWidget(lbl_total_rotulo)
 
         self.total = QLabel("R$ 0,00")
         self.total.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.total.setStyleSheet(f"""
-            background:transparent; font-size: 40px; font-weight: 900;
-            color: {tokens.SECUNDARIA};
+            background:transparent; font-size: 46px; font-weight: 900;
+            color: #4ADE80;
         """)
         layout_caixa_total.addWidget(self.total)
 

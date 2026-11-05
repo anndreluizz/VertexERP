@@ -95,6 +95,18 @@ def situacao_fiado(cliente):
     return "Fiado em aberto", "info", disponivel
 
 
+def texto_situacao_cliente(cliente):
+    """Linha curta pro cartao do cliente no PDV: "Em dia", ou
+    "Fiado em aberto · deve R$ 154,00 de R$ 500,00"."""
+    selo, _variante, _disp = situacao_fiado(cliente)
+    saldo = float((cliente.get("_agr") or {}).get("saldo_devedor", 0) or 0)
+    if saldo <= 0.009 or cliente.get("negativado"):
+        return selo
+    limite = float(cliente.get("limite_credito") or 0)
+    texto = f"{selo} · deve {formatar_moeda(saldo)}"
+    return texto + (f" de {formatar_moeda(limite)}" if limite > 0 else "")
+
+
 class ItemResultadoCliente(QWidget):
 
     def __init__(self, cliente):

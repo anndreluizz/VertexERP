@@ -4,7 +4,11 @@ from telas.pagamento import PagamentoWindow
 from telas.buscar_produto import BuscarProdutoDialog
 from telas.venda_concluida import VendaConcluidaDialog
 from telas.cadastro_produto import CadastroProdutoWindow
-from telas.selecionar_cliente import SelecionarClienteDialog
+from telas.selecionar_cliente import (
+    SelecionarClienteDialog,
+    situacao_fiado,
+    texto_situacao_cliente,
+)
 from services.venda_service import (
     finalizar_venda as enviar_venda,
 )
@@ -431,8 +435,16 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
         self.lbl_cliente.setText(cliente["nome"])
         self.lbl_cliente.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO};
-            font-size:{tokens.TAMANHO_SM}px; font-weight:600;
+            font-size:{tokens.TAMANHO_MD}px; font-weight:700;
         """)
+        self.lbl_cliente_info.setText(texto_situacao_cliente(cliente))
+        cor = {"erro": tokens.ERRO, "alerta": tokens.ALERTA_TEXTO, "sucesso": tokens.SUCESSO}.get(
+            situacao_fiado(cliente)[1], tokens.TEXTO_SECUNDARIO)
+        self.lbl_cliente_info.setStyleSheet(f"""
+            background:transparent; color:{cor};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+        """)
+        self.bt_selecionar_cliente.setText("Trocar  F2")
         self.bt_limpar_cliente.setVisible(True)
 
     def limpar_cliente(self):
@@ -440,11 +452,17 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
         self.cliente_id = None
         self.cliente_nome = None
 
-        self.lbl_cliente.setText("Nenhum cliente selecionado")
+        self.lbl_cliente.setText("Balcão (sem cliente)")
         self.lbl_cliente.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_SM}px; font-weight:600;
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_MD}px; font-weight:700;
         """)
+        self.lbl_cliente_info.setText("Para fiado, escolha um cliente")
+        self.lbl_cliente_info.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:600;
+        """)
+        self.bt_selecionar_cliente.setText("Escolher  F2")
         self.bt_limpar_cliente.setVisible(False)
 
     # ==================================================

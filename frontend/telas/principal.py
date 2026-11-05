@@ -1,4 +1,4 @@
-from telas.dashboard import Dashboard
+from telas.inicio import Inicio
 from telas.pdv import PDV
 from telas.vendas import Vendas
 from telas.caixa import Caixa
@@ -257,7 +257,7 @@ class PrincipalWindow(QMainWindow):
         self.paginas = PilhaPaginas()
         layout_central.addWidget(self.paginas, stretch=1)
 
-        self.dashboard = Dashboard(usuario_id=info_usuario.get("id"))
+        self.dashboard = Inicio(usuario_id=info_usuario.get("id"))
         self.pdv = PDV()
         self.vendas = Vendas()
         self.produtos = Produtos()
@@ -308,17 +308,6 @@ class PrincipalWindow(QMainWindow):
         # EVENTOS
         # ======================
 
-        self.dashboard.navegar_pdv.connect(self.ir_para_pdv)
-
-        self.dashboard.navegar_estoque.connect(
-            lambda: self._exibir_pagina("produtos", self.produtos)
-        )
-
-        self.dashboard.navegar_caixa.connect(
-            lambda: self._exibir_pagina("caixa", self.caixa)
-        )
-
-        self.dashboard.navegar_relatorios.connect(self.ir_para_relatorios)
         self.dashboard.tarefa_escolhida.connect(self._abrir_tarefa)
 
         self.pdv.voltar.connect(

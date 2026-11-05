@@ -34,6 +34,31 @@ from telas.configuracoes.lojas import LojasMixin
 from telas.configuracoes.paginas import PaginasMixin
 
 
+# palavras que a busca do menu tambem acha (alem do nome da secao)
+PALAVRAS_SECAO = {
+    "Dados da loja": "nome cnpj endereco telefone logo loja",
+    "Lojas e filiais": "matriz filial lojas estoque",
+    "Pagamentos e PIX": "pix chave qr code formas cartao credito debito",
+    "Atalhos do PDV": "teclas atalhos f1 f2 f3 f4 pdv caixa",
+    "Impressora e cupom": "impressora termica cupom recibo vias papel 80mm 58mm imprimir",
+    "Hardware e scanner": "leitor scanner codigo de barras balanca gaveta",
+    "WhatsApp": "whatsapp mensagem cobranca recibo extrato",
+    "E-mail": "email e-mail smtp relatorio",
+    "Usuários e perfis": "usuarios senha perfis vendedor administrador permissao",
+    "Backup": "backup copia seguranca restaurar onedrive",
+}
+
+
+def secao_corresponde(termo, rotulo):
+    """Busca do menu de Configuracoes: sem acento, pelo nome ou palavras."""
+    import unicodedata
+    def norm(t):
+        return "".join(c for c in unicodedata.normalize("NFKD", t or "")
+                       if not unicodedata.combining(c)).lower()
+    termo = norm(termo).strip()
+    return not termo or termo in norm(rotulo) or termo in norm(PALAVRAS_SECAO.get(rotulo, ""))
+
+
 class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWidget):
 
     voltar = Signal()
@@ -109,7 +134,8 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
         cabecalho.addSpacing(4)
         cabecalho.addLayout(col_titulo)
         cabecalho.addStretch()
-        cabecalho.addWidget(bt_usuarios)
+        # Vertex 2.0: usuarios virou item do menu (Pessoas e sistema)
+        bt_usuarios.hide()
 
         layout.addLayout(cabecalho)
 
@@ -146,6 +172,22 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
         self.bt_lojas = ItemMenuConfig("truck", "Lojas e filiais")
         self.bt_backup = ItemMenuConfig("download", "Backup")
         self.bt_backup.setVisible(usuario_e_admin())
+        self.bt_usuarios_menu = ItemMenuConfig("users", "Usuários e perfis")
+        self.bt_usuarios_menu.setCheckable(False)
+        self.bt_usuarios_menu.clicked.connect(self.abrir_gerenciar_usuarios)
+        self.bt_usuarios_menu.setVisible(usuario_e_admin())
+
+        # Vertex 2.0: busca no menu (nome da secao ou palavras: "pix",
+        # "cupom", "senha"...)
+        self.busca_config = QLineEdit()
+        self.busca_config.setPlaceholderText("Buscar configuração")
+        self.busca_config.setClearButtonEnabled(True)
+        self.busca_config.setMinimumHeight(38)
+        self.busca_config.setStyleSheet(f"""
+            QLineEdit {{ background:{tokens.FUNDO}; border:1px solid {tokens.BORDA};
+                         border-radius:{tokens.RADIUS_SM}px; padding:0 10px;
+                         font-size:{tokens.TAMANHO_MD}px; color:{tokens.TEXTO}; }}
+        """)
 
         # agrupado por assunto; os itens "em breve" (Fidelidade, TEF,
         # LGPD) saíram -- botão que não faz nada só ocupava espaço
@@ -158,6 +200,7 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
             """)
             return lbl
 
+        submenu_layout.addWidget(self.busca_config)
         submenu_layout.addWidget(grupo("LOJA"))
         submenu_layout.addWidget(self.bt_gerais)
         submenu_layout.addWidget(self.bt_lojas)
@@ -169,10 +212,19 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
         submenu_layout.addWidget(grupo("COMUNICAÇÃO"))
         submenu_layout.addWidget(self.bt_whatsapp)
         submenu_layout.addWidget(self.bt_email_config)
-        self.lbl_grupo_sistema = grupo("SISTEMA")
+        self.lbl_grupo_sistema = grupo("PESSOAS E SISTEMA")
         self.lbl_grupo_sistema.setVisible(usuario_e_admin())
         submenu_layout.addWidget(self.lbl_grupo_sistema)
+        submenu_layout.addWidget(self.bt_usuarios_menu)
         submenu_layout.addWidget(self.bt_backup)
+
+        self._itens_menu = [
+            self.bt_gerais, self.bt_lojas, self.bt_pix, self.bt_atalhos,
+            self.bt_impressora, self.bt_hardware, self.bt_whatsapp,
+            self.bt_email_config, self.bt_usuarios_menu, self.bt_backup,
+        ]
+        self._visivel_por_permissao = {bt: not bt.isHidden() for bt in self._itens_menu}
+        self.busca_config.textChanged.connect(self._filtrar_menu)
 
         submenu_layout.addStretch()
 
@@ -204,7 +256,11 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
         self.paginas.addWidget(self._criar_pagina_lojas())
         self.paginas.addWidget(self._criar_pagina_backup())
 
+        # largura de formulario: campo esticado por 1000px nao parece
+        # tela de configuracao (sobra espaco a direita em tela grande)
+        self.paginas.setMaximumWidth(880)
         corpo.addWidget(self.paginas, stretch=1)
+        corpo.addStretch(0)
 
         layout.addLayout(corpo, stretch=1)
 
@@ -249,6 +305,11 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
         self.carregar()
 
     # ======================================
+
+    def _filtrar_menu(self, termo):
+        for bt in self._itens_menu:
+            rotulo = bt.property("rotulo") or bt.text().strip()
+            bt.setVisible(self._visivel_por_permissao[bt] and secao_corresponde(termo, rotulo))
 
     def _selecionar_aba(self, indice):
 

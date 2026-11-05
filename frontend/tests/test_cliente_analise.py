@@ -113,3 +113,17 @@ def test_devendo_ha_mais_de_2_meses_sem_pagar_nao_e_em_dia():
     quita_em_45 = _agr(_mov("COMPRA", 50, 60), _mov("PAGAMENTO", 50, 15))
     assert ca.status_financeiro(quita_em_45) == "Bom Pagador"
     assert ca.status_financeiro(_agr(_mov("COMPRA", 100, 10))) == "Em Dia"
+
+
+def test_atrasado_amarelo_entre_2_meses_e_inadimplencia():
+    from telas.clientes import _status_cliente
+    from telas.selecionar_cliente import situacao_fiado
+    cliente = {"nome": "R", "ativo": True}
+    agr = _agr(_mov("COMPRA", 320, 75))
+    assert ca.atrasado_sem_ser_inadimplente(agr)
+    assert _status_cliente(cliente, agr, 90) == ("Atrasado · 75 dias", "alerta")
+    assert situacao_fiado({**cliente, "_agr": agr})[:2] == ("Atrasado · 75 dias", "alerta")
+    # passou do prazo de inadimplencia: vermelho
+    assert _status_cliente(cliente, _agr(_mov("COMPRA", 50, 120)), 90)[1] == "erro"
+    # ate' 2 meses: fiado em aberto normal
+    assert _status_cliente(cliente, _agr(_mov("COMPRA", 50, 50)), 90) == ("Fiado em aberto", "info")

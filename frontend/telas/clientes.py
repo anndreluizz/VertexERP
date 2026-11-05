@@ -147,6 +147,9 @@ def _status_cliente(cliente, agr, prazo_dias):
     if cliente_analise.eh_inadimplente(agr, prazo_dias):
         return f"Atrasado · {agr.get('dias_em_atraso')} dias", "erro"
 
+    if cliente_analise.atrasado_sem_ser_inadimplente(agr, prazo_dias):
+        return f"Atrasado · {agr.get('dias_em_atraso')} dias", "alerta"
+
     if cliente_analise.eh_em_dia(agr):
         return "Em dia", "sucesso"
 
@@ -361,6 +364,7 @@ class PainelCliente(Card):
     receber = Signal(dict)
     cobrar = Signal(dict)
     reativar = Signal(dict)
+    lancar = Signal(dict)
 
     def __init__(self, parent=None):
 
@@ -469,6 +473,10 @@ class PainelCliente(Card):
         for linha, (rotulo, valor) in enumerate((
             ("Última compra", _data_curta(agr.get("ultima_compra"))),
             ("Último pagamento", _data_curta(agr.get("ultimo_pagamento"))),
+            # define bom pagador (ate' 2 meses) x paga com atraso
+            ("Paga em média",
+             f"{agr['prazo_medio_pagamento']:.0f} dias"
+             if agr.get("prazo_medio_pagamento") is not None else "—"),
             ("Compras no fiado", str(agr.get("qtd_compras", 0))),
             ("Perfil", _perfil(agr, prazo_dias)),
         )):
@@ -543,9 +551,19 @@ class PainelCliente(Card):
                 acoes.addWidget(bt_cobrar, stretch=1)
             self._acoes.addLayout(acoes)
 
-        bt_ficha = BotaoSecundario("Abrir ficha completa", icone_nome="user")
+        # lado a lado: em tela baixa (768px) 3 linhas de botao escondiam
+        # as ultimas movimentacoes
+        baixo = QHBoxLayout()
+        baixo.setSpacing(8)
+        if cliente.get("ativo", True) and not cliente.get("negativado"):
+            bt_lancar = BotaoSecundario("Lançar fiado", icone_nome="plus")
+            bt_lancar.clicked.connect(lambda: self.lancar.emit(cliente))
+            baixo.addWidget(bt_lancar, stretch=1)
+
+        bt_ficha = BotaoSecundario("Ficha completa", icone_nome="user")
         bt_ficha.clicked.connect(lambda: self.abrir_ficha.emit(cliente))
-        self._acoes.addWidget(bt_ficha)
+        baixo.addWidget(bt_ficha, stretch=1)
+        self._acoes.addLayout(baixo)
 
 
 class Clientes(QWidget):
@@ -826,6 +844,9 @@ class Clientes(QWidget):
         self.painel.receber.connect(self.receber_pagamento)
         self.painel.cobrar.connect(self.cobrar_whatsapp)
         self.painel.reativar.connect(self.reativar_cliente)
+        self.painel.lancar.connect(
+            lambda cliente: self._abrir_ficha(cliente, acao="lancar_fiado")
+        )
 
         corpo.addWidget(self.card_lista, stretch=1)
         corpo.addWidget(self.painel)

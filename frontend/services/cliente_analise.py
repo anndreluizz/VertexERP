@@ -228,6 +228,17 @@ def paga_com_atraso(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
     )
 
 
+def atrasado_sem_ser_inadimplente(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
+    """Tem compra em aberto ha mais de 2 meses (limite do bom pagador)
+    mas ainda nao e' inadimplente -- vira o selo "Atrasado · N dias"
+    (amarelo) na lista e no PDV, em vez de um "Fiado em aberto" neutro."""
+    atraso = agr.get("dias_em_atraso")
+    return (
+        atraso is not None and atraso > PRAZO_BOM_PAGADOR_DIAS
+        and not eh_inadimplente(agr, prazo_dias)
+    )
+
+
 def eh_em_dia(agr):
     """Sem saldo devedor nenhum."""
     return agr["saldo_devedor"] <= _EPSILON

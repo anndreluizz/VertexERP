@@ -86,6 +86,8 @@ def situacao_fiado(cliente):
 
     if agr and cliente_analise.eh_inadimplente(agr):
         return f"Atrasado · {agr.get('dias_em_atraso')} dias", "erro", disponivel
+    if agr and cliente_analise.atrasado_sem_ser_inadimplente(agr):
+        return f"Atrasado · {agr.get('dias_em_atraso')} dias", "alerta", disponivel
     if limite > 0 and saldo >= limite - 0.009:
         return "Limite estourado", "erro", disponivel
     if saldo <= 0.009:

@@ -1,3 +1,4 @@
+from utils.formatacao import ler_moeda
 from datetime import datetime
 
 from services.produto_service import (
@@ -44,6 +45,6 @@ def _baixar_foto_com_id(produto_id):
 
 def _parse_valor(texto):
     try:
-        return max(0.0, float((texto or "").strip().replace(",", ".") or 0))
+        return max(0.0, ler_moeda(texto) if (texto or "").strip() else 0.0)
     except ValueError:
         return 0.0

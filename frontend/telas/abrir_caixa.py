@@ -14,7 +14,7 @@ from services.worker import rodar_em_thread
 
 from design import tokens
 from design.widgets import Badge, BotaoSucesso, DialogoPadrao, campo_rotulado, titulo_secao
-from utils.formatacao import formatar_moeda
+from utils.formatacao import formatar_moeda, ler_moeda
 
 VALORES_RAPIDOS = [50, 100, 150, 200, 300, 500]
 
@@ -192,7 +192,7 @@ class AbrirCaixaWindow(DialogoPadrao):
     def confirmar(self):
 
         try:
-            valor = float(self.valor.text().replace(",", "."))
+            valor = ler_moeda(self.valor.text())
         except ValueError:
             valor = 0
 
@@ -209,6 +209,6 @@ class AbrirCaixaWindow(DialogoPadrao):
     @property
     def saldo(self):
         try:
-            return float(self.valor.text().replace(",", "."))
+            return ler_moeda(self.valor.text())
         except ValueError:
             return 0.0

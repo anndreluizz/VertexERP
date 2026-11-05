@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QMessageBox,
     QWidget,
+    QGridLayout,
+    QSpinBox,
 )
 
 from services.caixa_service import caixa_aberto, resumo_caixa, fechar_caixa, listar_movimentos_caixa
@@ -93,6 +95,14 @@ def _confirmar_e_preparar_impressao(valor_contado, observacoes, caixa_id,
     responsavel = (usuario or {}).get("nome") or "—"
 
     return response, movimentos, responsavel, config
+
+
+CEDULAS = (200, 100, 50, 20, 10, 5, 2)
+
+
+def soma_notas(quantidades, moedas=0.0):
+    """{valor_da_nota: quantidade} + moedas -> total em R$."""
+    return round(sum(nota * int(qtd or 0) for nota, qtd in quantidades.items()) + float(moedas or 0), 2)
 
 
 def _texto_para_valor(texto):
@@ -282,9 +292,48 @@ class FecharCaixaWindow(DialogoPadrao):
             "na próxima etapa.  ·  Enter continua",
         ))
 
+        # Vertex 2.0: contar por nota (opcional) -- quantas de cada e o
+        # total vai sozinho pro campo de cima
+        layout.addWidget(titulo_secao("Ou conte por nota"))
+        grade = QGridLayout()
+        grade.setHorizontalSpacing(10)
+        grade.setVerticalSpacing(8)
+        self.qtd_notas = {}
+        estilo_spin = f"""
+            QSpinBox {{ background:{tokens.CARD}; border:1px solid {tokens.BORDA_FORTE};
+                        border-radius:{tokens.RADIUS_SM}px; padding:4px 6px;
+                        font-size:{tokens.TAMANHO_LG}px; font-weight:700; color:{tokens.TEXTO}; }}
+        """
+        for i, nota in enumerate(CEDULAS):
+            spin = QSpinBox()
+            spin.setRange(0, 9999)
+            spin.setMinimumHeight(38)
+            spin.setStyleSheet(estilo_spin)
+            spin.setAccessibleName(f"Quantidade de notas de {nota} reais")
+            spin.valueChanged.connect(self._somar_notas)
+            self.qtd_notas[nota] = spin
+            grade.addWidget(campo_rotulado(f"R$ {nota}", spin), i // 4, i % 4)
+        self.moedas_input = QLineEdit()
+        self.moedas_input.setPlaceholderText("0,00")
+        self.moedas_input.setMinimumHeight(38)
+        self.moedas_input.setStyleSheet(estilo_spin.replace("QSpinBox", "QLineEdit"))
+        self.moedas_input.textChanged.connect(self._somar_notas)
+        grade.addWidget(campo_rotulado("Moedas (R$)", self.moedas_input), 1, 3)
+        for coluna in range(4):
+            grade.setColumnStretch(coluna, 1)
+        layout.addLayout(grade)
+
         layout.addStretch()
 
         return pagina
+
+    def _somar_notas(self, *_):
+        total = soma_notas(
+            {nota: spin.value() for nota, spin in self.qtd_notas.items()},
+            _texto_para_valor(self.moedas_input.text()) or 0,
+        )
+        if total > 0:
+            self.valor_input.setText(formatar_moeda(total, com_simbolo=False))
 
     def avancar_para_conferencia(self):
 

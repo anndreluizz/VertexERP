@@ -13,7 +13,7 @@ def _telas(monkeypatch, info):
 def test_vendedor_ve_so_as_telas_do_dia_a_dia(monkeypatch):
     telas = _telas(monkeypatch, {"admin": False, "permissoes": []})
 
-    assert telas == {"dashboard", "pdv", "vendas", "produtos", "clientes", "caixa"}
+    assert telas == {"inicio", "dashboard", "pdv", "vendas", "produtos", "clientes", "caixa"}
 
 
 def test_admin_ve_tudo(monkeypatch):

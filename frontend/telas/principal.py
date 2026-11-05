@@ -15,6 +15,7 @@ from telas.contas_pagar import ContasPagar
 from telas.conciliacao_bancaria import ConciliacaoBancaria
 from telas.visao_geral import VisaoGeral
 from telas.configuracoes import Configuracoes
+from telas.modulos import TelaModulos
 from telas.caixa_bloqueado import CaixaBloqueadoDialog
 from telas.abrir_caixa import AbrirCaixaWindow
 from telas.trocar_senha import TrocarSenhaDialog
@@ -39,7 +40,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone
-from design.sidebar import Sidebar
+from design.abas import BarraAbas
 from design.header import Header
 from design.janela import pintar_barra_titulo
 from design.widgets import BotaoSecundario, PilhaPaginas
@@ -146,9 +147,11 @@ def pode_abrir_tela(chave):
 
 
 # (chave, ícone lucide, rótulo) — única fonte de verdade pra montar tanto
-# os itens da sidebar quanto o título mostrado no header.
+# os cartões da tela Início (telas/modulos.py) e as abas quanto o título
+# mostrado no header.
 ITENS_MENU = [
-    ("dashboard", "home", "Início"),
+    ("inicio", "home", "Início"),
+    ("dashboard", "trending-up", "Resumo do dia"),
     ("pdv", "shopping-cart", "PDV"),
     ("vendas", "file-text", "Vendas"),
     ("produtos", "package", "Produtos"),
@@ -204,25 +207,23 @@ class PrincipalWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
 
-        layout = QHBoxLayout(central)
+        layout = QVBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
         # ======================
-        # MENU LATERAL
+        # ABAS (Vertex 2.0 -- no lugar do menu lateral; os módulos
+        # ficam na tela Início, ver telas/modulos.py)
         # ======================
 
-        self.sidebar = Sidebar(nome_loja, nome_usuario, cargo)
+        self.abas = BarraAbas(nome_loja)
 
         self._titulos = {chave: titulo for chave, _, titulo in ITENS_MENU}
+        self._icones = {chave: icone_nome for chave, icone_nome, _ in ITENS_MENU}
 
-        for chave, icone_nome, titulo in ITENS_MENU:
-            if pode_abrir_tela(chave):
-                self.sidebar.adicionar_item(chave, icone_nome, titulo)
+        self.abas.aba_selecionada.connect(self._navegar)
 
-        self.sidebar.item_clicado.connect(self._navegar)
-
-        layout.addWidget(self.sidebar)
+        layout.addWidget(self.abas)
 
         # ======================
         # ÁREA CENTRAL (header + páginas)
@@ -249,6 +250,8 @@ class PrincipalWindow(QMainWindow):
         self.paginas = PilhaPaginas()
         layout_central.addWidget(self.paginas, stretch=1)
 
+        self.modulos = TelaModulos(ITENS_MENU, pode_abrir_tela)
+        self.modulos.abrir.connect(self._navegar)
         self.dashboard = Dashboard(usuario_id=info_usuario.get("id"))
         self.pdv = PDV()
         self.vendas = Vendas()
@@ -276,6 +279,7 @@ class PrincipalWindow(QMainWindow):
 
         self.config = Configuracoes()
 
+        self.paginas.addWidget(self.modulos)
         self.paginas.addWidget(self.dashboard)
         self.paginas.addWidget(self.pdv)
         self.paginas.addWidget(self.vendas)
@@ -313,48 +317,50 @@ class PrincipalWindow(QMainWindow):
         self.dashboard.navegar_relatorios.connect(self.ir_para_relatorios)
 
         self.pdv.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
+            self._ir_inicio
         )
 
         self.produtos.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
+            self._ir_inicio
         )
 
         self.vitrine.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
+            self._ir_inicio
         )
 
         self.vendas.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
+            self._ir_inicio
         )
         self.vendas.troca_iniciada.connect(self._iniciar_troca)
 
         self.clientes.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
+            self._ir_inicio
         )
 
         self.fornecedores.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
+            self._ir_inicio
         )
 
         self.config.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
+            self._ir_inicio
         )
 
-        self.config.loja_atualizada.connect(self.sidebar.definir_nome_loja)
+        self.config.loja_atualizada.connect(self.abas.definir_nome_loja)
 
         self.relatorios.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
+            self._ir_inicio
         )
 
         self.contas_pagar.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
+            self._ir_inicio
         )
 
         self.visao_geral.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
+            self._ir_inicio
         )
 
+        # abre com Início + Resumo do dia (a tela de sempre ao entrar)
+        self._exibir_pagina("inicio", self.modulos)
         self._exibir_pagina("dashboard", self.dashboard)
 
         # ======================
@@ -363,6 +369,12 @@ class PrincipalWindow(QMainWindow):
 
         self.atalho_pdv = QShortcut(QKeySequence("F3"), self)
         self.atalho_pdv.activated.connect(self.atalho_f3)
+
+        QShortcut(QKeySequence("Ctrl+W"), self).activated.connect(self.abas.fechar_atual)
+        QShortcut(QKeySequence("Ctrl+Tab"), self).activated.connect(self.abas.proxima)
+        QShortcut(QKeySequence("Ctrl+Shift+Tab"), self).activated.connect(
+            lambda: self.abas.proxima(-1)
+        )
 
         # ======================
         # STATUS DE CONEXAO -- checagem leve em segundo plano, so pra
@@ -479,7 +491,10 @@ class PrincipalWindow(QMainWindow):
 
         self.paginas.setCurrentWidget(pagina)
         self.header.definir_titulo(self._titulos.get(chave, ""))
-        self.sidebar.selecionar(chave)
+        self.abas.abrir(chave, self._titulos.get(chave, ""), self._icones.get(chave))
+
+    def _ir_inicio(self):
+        self._exibir_pagina("inicio", self.modulos)
 
     def _navegar(self, chave):
 
@@ -496,6 +511,7 @@ class PrincipalWindow(QMainWindow):
             return
 
         paginas = {
+            "inicio": self.modulos,
             "dashboard": self.dashboard,
             "produtos": self.produtos,
             "vitrine": self.vitrine,

@@ -75,7 +75,9 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
         self._id_ultimo_item = None
         self._fotos_cache = {}
 
-        self._usuario_id = (me() or {}).get("id")
+        _eu = me() or {}
+        self._usuario_id = _eu.get("id")
+        self._operador = (_eu.get("nome") or "").split(" ")[0]
         self.atalhos = self._carregar_atalhos()
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
@@ -119,7 +121,10 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
         # layout de caixa de loja: ultimo item em destaque, campo de
         # codigo, e a lista em formato de cupom; cliente/totais ficam
         # no painel da direita, com o TOTAL grande
-        layout_esquerda.addWidget(self._construir_ultimo_item())
+        # Vertex 2.0 (prototipo): sem o cartao "ultimo item" -- o item
+        # lido continua destacado na lista. Construido escondido porque
+        # o carrinho ainda atualiza os rotulos dele.
+        self._construir_ultimo_item().hide()
         layout_esquerda.addWidget(self._construir_campo_codigo())
         layout_esquerda.addWidget(self.lbl_status_busca)
         layout_esquerda.addWidget(self._construir_mais_vendidos())
@@ -142,8 +147,14 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
         # carrinho ao lado, em vez de ficar pequeno com um vão cinza
         # vazio embaixo — o conteúdo continua compacto e ancorado no
         # topo do card (ver stretch interno em _construir_cartao_resumo).
-        layout_resumo.addWidget(self._construir_cartao_resumo(), stretch=1)
+        # Vertex 2.0 (prototipo): cliente, total escuro, formas
+        # coloridas, Finalizar e Cancelar
+        layout_resumo.addWidget(self._construir_cartao_cliente())
+        layout_resumo.addWidget(self._construir_cartao_resumo())
+        layout_resumo.addWidget(self._construir_formas_pagamento())
+        layout_resumo.addStretch()
         layout_resumo.addWidget(self._construir_botao_pagar())
+        layout_resumo.addWidget(self.bt_cancelar)
 
         corpo.addWidget(painel_resumo)
 
@@ -188,6 +199,9 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
         # com o foco no campo de codigo (vazio) quanto na propria lista
         self.campo_codigo.installEventFilter(self)
         self.tabela.installEventFilter(self)
+
+        if self._operador:
+            self.lbl_info_venda.setText(f"Operador {self._operador}")
 
         fade_in(self, duracao=200)
 
@@ -617,7 +631,10 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
     # FINALIZAR VENDA (PAGAR - F3)
     # ==================================================
 
-    def finalizar_venda(self):
+    def finalizar_venda(self, forma=None):
+        """forma: "DINHEIRO"/"PIX"/... quando veio de um botao de forma do
+        painel (abre o pagamento ja' nela); clicked() manda bool -> ignora."""
+        forma = forma if isinstance(forma, str) else None
 
         # Trava de reentrância: bloqueia clique duplo no botão e F3
         # repetido (o atalho global em principal.py chama este mesmo
@@ -659,6 +676,8 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
             acrescimo=self.acrescimo_valor,
             credito_troca=self.credito_troca,
         )
+        if forma:
+            tela.selecionar_forma(forma)
 
         if tela.exec() != QDialog.Accepted:
             return

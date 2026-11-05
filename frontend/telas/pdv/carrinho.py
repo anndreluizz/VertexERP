@@ -260,29 +260,27 @@ class CarrinhoMixin:
 
         total = max(0.0, self._total_bruto)
 
-        self.lbl_itens_valor.setText(str(len(self.itens)))
+        n = len(self.itens)
+        self.lbl_itens_valor.setText("1 item" if n == 1 else f"{n} itens")
         self.lbl_itens_tabela.setText(
             "1 item" if len(self.itens) == 1 else f"{len(self.itens)} itens"
         )
-        self.lbl_subtotal_valor.setText(formatar_moeda(subtotal))
-
+        # Vertex 2.0: cartao do total e' escuro; subtotal/desconto/
+        # acrescimo so' aparecem quando ha' ajuste
+        ajuste = bool(self.desconto_valor or self.acrescimo_valor)
+        self.lbl_subtotal_valor.setText(f"Subtotal {formatar_moeda(subtotal)}" if ajuste else "")
         self.lbl_desconto_valor.setText(
-            f"- {formatar_moeda(self.desconto_valor)}"
-            if self.desconto_valor else formatar_moeda(0)
+            f"Desconto − {formatar_moeda(self.desconto_valor)}" if self.desconto_valor else ""
         )
-        self.lbl_desconto_valor.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_SM}px; font-weight:700;
-            color: {tokens.ERRO if self.desconto_valor else tokens.TEXTO};
-        """)
-
+        self.lbl_desconto_valor.setStyleSheet(
+            f"background:transparent; font-size:{tokens.TAMANHO_MD}px; font-weight:700; color:#FCA5A5;"
+        )
         self.lbl_acrescimo_valor.setText(
-            f"+ {formatar_moeda(self.acrescimo_valor)}"
-            if self.acrescimo_valor else formatar_moeda(0)
+            f"Acréscimo + {formatar_moeda(self.acrescimo_valor)}" if self.acrescimo_valor else ""
         )
-        self.lbl_acrescimo_valor.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_SM}px; font-weight:700;
-            color: {tokens.SECUNDARIA if self.acrescimo_valor else tokens.TEXTO};
-        """)
+        self.lbl_acrescimo_valor.setStyleSheet(
+            f"background:transparent; font-size:{tokens.TAMANHO_MD}px; font-weight:700; color:#4ADE80;"
+        )
 
         self.total.setText(formatar_moeda(total))
 

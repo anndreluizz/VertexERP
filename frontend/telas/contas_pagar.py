@@ -453,7 +453,7 @@ class ContasPagar(QWidget):
         self.bt_contas_fixas.clicked.connect(self.abrir_contas_fixas)
         cabecalho.addWidget(self.bt_contas_fixas)
 
-        self.bt_nova_despesa = BotaoPrimario("Nova despesa", icone_nome="plus")
+        self.bt_nova_despesa = BotaoPrimario("Novo boleto", icone_nome="plus")
         self.bt_nova_despesa.clicked.connect(self.nova_despesa)
 
         cabecalho.addWidget(self.bt_nova_despesa)
@@ -940,7 +940,7 @@ class ContasPagar(QWidget):
             lbl_vazio = QLabel(
                 "Nenhuma conta encontrada com esses filtros."
                 if self.contas else
-                "Nenhuma conta cadastrada ainda. Clique em \"Nova despesa\" "
+                "Nenhuma conta cadastrada ainda. Clique em \"Novo boleto\" "
                 "pra lançar a primeira."
             )
             lbl_vazio.setAlignment(Qt.AlignCenter)

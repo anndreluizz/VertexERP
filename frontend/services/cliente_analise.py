@@ -25,7 +25,7 @@ PRAZO_INADIMPLENCIA_PADRAO = 90
 
 # quem quita as compras, em média, em até tantos dias é "bom pagador";
 # acima disso, "paga com atraso"
-PRAZO_BOM_PAGADOR_DIAS = 30
+PRAZO_BOM_PAGADOR_DIAS = 60  # 2 meses (pedido do dono, 05/11/2026)
 
 _EPSILON = 0.009  # mesmo limiar de "zero" já usado no resto do projeto
 

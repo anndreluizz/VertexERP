@@ -36,7 +36,7 @@ from services.movimento_caixa_service import (
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.privacidade import botao_olho, privacidade
-from design.widgets import Badge, BotaoSecundario, BotaoSucesso
+from design.widgets import Badge, BotaoSecundario, BotaoSucesso, cor_forma_pagamento
 from services.worker import rodar_em_thread, em_paralelo
 from services import api
 from telas.relatorios import NOMES_FORMA_PAGAMENTO
@@ -86,6 +86,62 @@ def _texto_abertura(texto):
     if (hoje - dt.date()).days == 1:
         return f"Aberto ontem às {hora}"
     return f"Aberto em {dt.strftime('%d/%m')} às {hora}"
+
+
+def _tempo_aberto(texto, agora=None):
+    """"há 2h45" / "há 35 min" desde a abertura -- ajuda a ver de longe o
+    caixa chegando nas 24h (depois disso ele bloqueia as vendas)."""
+    try:
+        dt = datetime.fromisoformat(str(texto).replace("T", " ")[:19])
+    except ValueError:
+        return ""
+    minutos = max(0, int(((agora or datetime.now()) - dt).total_seconds() // 60))
+    if minutos < 60:
+        return f"há {minutos} min"
+    return f"há {minutos // 60}h{minutos % 60:02d}"
+
+
+def fatias_formas(resumo):
+    """[(rotulo, forma, valor)] do que ENTROU no turno, por forma (vendas
+    + fiado recebido), so' as que tiveram valor -- pra barra colorida."""
+    v = lambda chave: float((resumo or {}).get(chave, 0) or 0)
+    fatias = [
+        ("Dinheiro", "DINHEIRO", v("vendas_dinheiro") + v("recebimentos_fiado_dinheiro")),
+        ("Pix", "PIX", v("vendas_pix") + v("recebimentos_fiado_pix")),
+        ("Cartão", "CARTAO", v("vendas_cartao") + v("recebimentos_fiado_cartao")),
+        ("Outras", "CHEQUE", v("recebimentos_fiado_outros")),
+    ]
+    return [f for f in fatias if f[2] >= 0.01]
+
+
+class BarraFormas(QWidget):
+    """Barra unica dividida nas cores das formas de pagamento."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(14)
+        self._fatias = []
+
+    def definir(self, fatias):
+        self._fatias = fatias
+        self.update()
+
+    def paintEvent(self, _evento):
+        from PySide6.QtGui import QColor, QPainter, QPainterPath
+        pintor = QPainter(self)
+        pintor.setRenderHint(QPainter.Antialiasing)
+        caminho = QPainterPath()
+        caminho.addRoundedRect(self.rect(), 7, 7)
+        pintor.setClipPath(caminho)
+        pintor.fillRect(self.rect(), QColor(tokens.FUNDO))
+        total = sum(f[2] for f in self._fatias)
+        x = 0.0
+        for _rotulo, forma, valor in self._fatias:
+            largura = self.width() * valor / total if total else 0
+            pintor.fillRect(int(x), 0, int(round(x + largura)) - int(x), self.height(),
+                            QColor(cor_forma_pagamento(forma)))
+            x += largura
+        pintor.end()
 
 
 _TIPOS_SO_FIADO = ("VENDA_FIADO", "ESTORNO_FIADO")
@@ -443,6 +499,29 @@ class Caixa(QWidget):
         col_historico = QVBoxLayout()
         col_historico.setSpacing(10)
 
+        # Vertex 2.0: quanto entrou em cada forma, numa barra so'
+        self.cartao_formas = QFrame()
+        self.cartao_formas.setObjectName("cartaoFormas")
+        self.cartao_formas.setStyleSheet(f"""
+            #cartaoFormas {{ background:{tokens.CARD}; border:1px solid {tokens.BORDA};
+                             border-radius:{tokens.RADIUS_LG}px; }}
+        """)
+        lay_formas = QVBoxLayout(self.cartao_formas)
+        lay_formas.setContentsMargins(18, 14, 18, 14)
+        lay_formas.setSpacing(10)
+        self.lbl_formas_titulo = QLabel("Entrou no turno")
+        self.lbl_formas_titulo.setStyleSheet(
+            f"background:transparent; color:{tokens.TEXTO}; font-size:{tokens.TAMANHO_MD}px; font-weight:700;"
+        )
+        lay_formas.addWidget(self.lbl_formas_titulo)
+        self.barra_formas = BarraFormas()
+        lay_formas.addWidget(self.barra_formas)
+        self.legenda_formas = QHBoxLayout()
+        self.legenda_formas.setSpacing(18)
+        lay_formas.addLayout(self.legenda_formas)
+        self.cartao_formas.setVisible(self._ve_totais)
+        col_historico.addWidget(self.cartao_formas)
+
         historico_cabecalho = QHBoxLayout()
 
         lbl_historico_titulo = QLabel("Movimentações do turno")
@@ -685,7 +764,10 @@ class Caixa(QWidget):
 
             resumo = resumo or {}
 
-            self.lbl_abertura.setText(_texto_abertura(caixa.get("data_abertura")))
+            tempo = _tempo_aberto(caixa.get("data_abertura"))
+            self.lbl_abertura.setText(
+                _texto_abertura(caixa.get("data_abertura")) + (f" · {tempo}" if tempo else "")
+            )
 
             def valor(chave):
                 return float(resumo.get(chave, 0) or 0)
@@ -732,11 +814,39 @@ class Caixa(QWidget):
                 "quando o cliente paga."
             )
 
+            self._atualizar_formas(resumo)
+
             self.carregar_movimentos(movimentos)
 
             self.paginas.setCurrentWidget(self.pagina_com_caixa)
         except Exception as erro:
             self._ao_carregar_erro(erro)
+
+    def _atualizar_formas(self, resumo):
+        fatias = fatias_formas(resumo)
+        self.barra_formas.definir(fatias)
+        while self.legenda_formas.count():
+            item = self.legenda_formas.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        total = sum(f[2] for f in fatias)
+        privacidade.definir_texto(self.lbl_formas_titulo, f"Entrou no turno: {formatar_moeda(total)}")
+        for rotulo, forma, valor in fatias:
+            lbl = QLabel()
+            lbl.setStyleSheet(
+                f"background:transparent; color:{tokens.TEXTO_SECUNDARIO}; font-size:{tokens.TAMANHO_SM}px;"
+            )
+            lbl.setTextFormat(Qt.RichText)
+            cor = cor_forma_pagamento(forma)
+            privacidade.definir_texto(
+                lbl, f"<span style='color:{cor}'>●</span> {rotulo} <b>{formatar_moeda(valor)}</b>"
+            )
+            self.legenda_formas.addWidget(lbl)
+        if not fatias:
+            vazio = QLabel("Nada entrou ainda neste turno.")
+            vazio.setStyleSheet(f"background:transparent; color:{tokens.TEXTO_TERCIARIO};")
+            self.legenda_formas.addWidget(vazio)
+        self.legenda_formas.addStretch()
 
     def _ao_carregar_erro(self, erro):
         QMessageBox.critical(

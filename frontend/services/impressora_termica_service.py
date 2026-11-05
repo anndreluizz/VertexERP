@@ -347,12 +347,30 @@ def gerar_comandos_comprovante(dados, config_loja, logo_bytes=None, largura_pape
     partes.append(_negrito(False))
     partes.append(_linha())
 
+    unidades = 0
     for item in dados["itens"]:
-        linha_item = f"{item['quantidade']}x  {item['nome']}"
-        partes.append(
-            _linha_dupla_coluna(linha_item, _moeda(item["subtotal"]), largura)
-        )
+        qtd = float(item["quantidade"] or 0)
+        unidades += qtd
+        qtd_txt = f"{qtd:g}".replace(".", ",")
+        unitario = item.get("valor_unitario")
+        if qtd != 1 and unitario is not None:
+            # Vertex 2.0: com mais de 1, mostra o preco de cada um embaixo
+            partes.append(_linhas_quebradas(item["nome"], largura))
+            partes.append(_linha_dupla_coluna(
+                f"    {qtd_txt} x {_moeda(unitario)}", _moeda(item["subtotal"]), largura
+            ))
+        else:
+            partes.append(_linha_dupla_coluna(
+                f"{qtd_txt}x  {item['nome']}", _moeda(item["subtotal"]), largura
+            ))
 
+    partes.append(_linha())
+    n_itens = len(dados["itens"])
+    unid_txt = f"{unidades:g}".replace(".", ",")
+    partes.append(_linha(
+        f"{n_itens} {'item' if n_itens == 1 else 'itens'} · {unid_txt} "
+        f"{'unidade' if unidades == 1 else 'unidades'}"
+    ))
     partes.append(_divisoria(largura))
 
     desconto = float(dados.get("desconto") or 0)
@@ -400,6 +418,10 @@ def gerar_comandos_comprovante(dados, config_loja, logo_bytes=None, largura_pape
     partes.append(_divisoria(largura))
     partes.append(_alinhar(1))  # centro
 
+    if desconto > 0:
+        partes.append(_negrito(True))
+        partes.append(_linha(f"Você economizou {_moeda(desconto)}!"))
+        partes.append(_negrito(False))
     partes.append(_linha("Obrigado pela preferência!"))
     partes.append(_linha())
 
@@ -492,10 +514,13 @@ def gerar_comandos_recibo_pagamento(
     )
     partes.append(_linha())
 
+    # Vertex 2.0: saldo atual em altura dupla (o que o cliente quer ver)
     partes.append(_negrito(True))
+    partes.append(_tamanho_fonte(1, 2))
     partes.append(
         _linha_dupla_coluna("Saldo atual:", _moeda(saldo_depois), largura)
     )
+    partes.append(_tamanho_fonte(1, 1))
     partes.append(_negrito(False))
     partes.append(_linha())
 

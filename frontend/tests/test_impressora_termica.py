@@ -299,3 +299,16 @@ def test_duas_vias_cupom_e_recibo_saem_marcados_e_cortados():
 
         uma = _enviados({}, imprimir)  # config antiga, sem "vias"
         assert uma.count(svc._cortar_papel()) == 1 and b"VIA " not in uma
+
+
+def test_cupom_mostra_unitario_contagem_e_economia():
+    from services import impressora_termica_service as t
+    dados = {"venda_id": 1, "data": "2026-11-05T10:00:00",
+             "itens": [{"quantidade": 2, "nome": "Sandalia", "subtotal": 79.8, "valor_unitario": 39.9},
+                       {"quantidade": 1, "nome": "Camiseta", "subtotal": 29.9, "valor_unitario": 29.9}],
+             "desconto": 9.7, "valor_total": 100.0, "forma_pagamento": "DINHEIRO"}
+    texto = t.gerar_comandos_comprovante(dados, {"nome_loja": "Loja"}).decode("cp860")
+    assert "2 x R$ 39,90" in texto
+    assert "1 x R$ 29,90" not in texto
+    assert "2 itens · 3 unidades" in texto
+    assert "Você economizou R$ 9,70!" in texto

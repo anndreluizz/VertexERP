@@ -207,7 +207,8 @@ class PrincipalWindow(QMainWindow):
         cargo = api.cargo_usuario(info_usuario)
 
         nome_loja = config.get("nome_loja") or "Vertex ERP"
-        self.setWindowTitle(f"Vertex ERP · {nome_loja}")
+        if config.get("nome_loja"):
+            self.setWindowTitle(f"Vertex ERP · {nome_loja}")
 
         central = QWidget()
         self.setCentralWidget(central)

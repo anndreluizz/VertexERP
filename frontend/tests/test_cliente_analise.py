@@ -127,3 +127,16 @@ def test_atrasado_amarelo_entre_2_meses_e_inadimplencia():
     assert _status_cliente(cliente, _agr(_mov("COMPRA", 50, 120)), 90)[1] == "erro"
     # ate' 2 meses: fiado em aberto normal
     assert _status_cliente(cliente, _agr(_mov("COMPRA", 50, 50)), 90) == ("Fiado em aberto", "info")
+
+
+def test_extrato_desde_o_ultimo_pagamento():
+    from telas.clientes import extrato_desde_ultimo_pagamento
+    movs = [
+        {"tipo": "COMPRA", "valor": 50, "data": "2026-09-01"},
+        {"tipo": "PAGAMENTO", "valor": 50, "data": "2026-10-12"},
+        {"tipo": "COMPRA", "valor": 79.8, "data": "2026-10-18"},
+        {"tipo": "COMPRA", "valor": 36.4, "data": "2026-11-01"},
+    ]
+    assert [m["data"] for m in extrato_desde_ultimo_pagamento(movs)] == ["2026-10-12", "2026-10-18", "2026-11-01"]
+    so_compras = [{"tipo": "COMPRA", "valor": 1, "data": f"2026-10-{d:02d}"} for d in range(1, 13)]
+    assert len(extrato_desde_ultimo_pagamento(so_compras)) == 8

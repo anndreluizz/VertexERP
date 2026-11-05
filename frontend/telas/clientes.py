@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QGridLayout,
+    QSizePolicy,
     QLabel,
     QPushButton,
     QFrame,
@@ -32,7 +33,8 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone, icone_pixmap
-from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
+from design.fonts import familia_titulo
+from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, BotaoSucesso, CampoTexto, Card, CardKPI
 from services.worker import rodar_em_thread, em_paralelo
 from utils.formatacao import formatar_moeda
 from utils.periodo import rotulo_mes
@@ -365,12 +367,13 @@ class PainelCliente(Card):
     cobrar = Signal(dict)
     reativar = Signal(dict)
     lancar = Signal(dict)
+    extrato = Signal(dict)
 
     def __init__(self, parent=None):
 
         super().__init__(parent)
 
-        self.setFixedWidth(360)
+        self.setFixedWidth(430)
 
         externo = QVBoxLayout(self)
         externo.setContentsMargins(0, 0, 0, 16)
@@ -419,151 +422,127 @@ class PainelCliente(Card):
         agr = agr or {}
         prazo_dias = prazo_dias or cliente_analise.PRAZO_INADIMPLENCIA_PADRAO
 
-        # ---- cabeçalho
-        topo = QHBoxLayout()
-        topo.setSpacing(12)
-        topo.addWidget(Avatar(cliente.get("nome", ""), tamanho=48))
-        col = QVBoxLayout()
-        col.setSpacing(2)
-        nome = _rotulo(cliente.get("nome") or "", tokens.TAMANHO_LG, peso=700)
-        nome.setWordWrap(True)
-        col.addWidget(nome)
-        contato = " · ".join(
-            p for p in (f"Cód. {cliente.get('id')}", cliente.get("telefone")) if p
-        )
-        col.addWidget(_rotulo(contato, tokens.TAMANHO_SM, tokens.TEXTO_SECUNDARIO))
-        topo.addLayout(col, stretch=1)
-        self._layout.addLayout(topo)
-
-        # ---- saldo em destaque
+        # ---- cabeçalho (Vertex 2.0 = prototipo)
         saldo = float(agr.get("saldo_devedor", 0) or 0)
         texto_status, variante = _status_cliente(cliente, agr, prazo_dias)
 
-        caixa = QFrame()
-        caixa.setStyleSheet(
-            f"QFrame {{ background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_MD}px; }}"
-        )
-        cx = QHBoxLayout(caixa)
-        cx.setContentsMargins(16, 14, 16, 14)
-        esq = QVBoxLayout()
-        esq.setSpacing(2)
-        esq.addWidget(
-            _rotulo("SALDO DEVEDOR", tokens.TAMANHO_XS, tokens.TEXTO_TERCIARIO, 700)
-        )
-        cor_saldo = tokens.ERRO if variante == "erro" else tokens.TEXTO
-        esq.addWidget(_rotulo(formatar_moeda(saldo), tokens.TAMANHO_XXL, cor_saldo, 800))
-        cx.addLayout(esq, stretch=1)
-        dir_ = QVBoxLayout()
-        dir_.setSpacing(4)
-        dir_.addWidget(Badge(texto_status, variante), 0, Qt.AlignRight)
+        topo = QHBoxLayout()
+        topo.setSpacing(14)
+        topo.addWidget(Avatar(cliente.get("nome", ""), tamanho=56))
+        col = QVBoxLayout()
+        col.setSpacing(2)
+        nome = _rotulo(cliente.get("nome") or "", 20, peso=700)
+        nome.setWordWrap(True)
+        col.addWidget(nome)
+        desde = cliente_analise._parse_data(cliente.get("criado_em"))
+        contato = " · ".join(p for p in (
+            cliente.get("telefone"), f"cliente desde {desde.year}" if desde else None,
+        ) if p)
+        col.addWidget(_rotulo(contato or f"Cód. {cliente.get('id')}",
+                              tokens.TAMANHO_MD, tokens.TEXTO_SECUNDARIO))
+        col.addWidget(Badge(texto_status, variante), 0, Qt.AlignLeft)
+        topo.addLayout(col, stretch=1)
+        self._layout.addLayout(topo)
+
+        # ---- 3 quadros: deve / limite / paga em media
+        quadros = QHBoxLayout()
+        quadros.setSpacing(10)
         limite = float(cliente.get("limite_credito") or 0)
-        lbl_lim = _rotulo(
-            f"Limite {formatar_moeda(limite)}" if limite > 0 else "Sem limite definido",
-            tokens.TAMANHO_XS, tokens.TEXTO_TERCIARIO,
-        )
-        lbl_lim.setAlignment(Qt.AlignRight)
-        dir_.addWidget(lbl_lim)
-        cx.addLayout(dir_)
-        self._layout.addWidget(caixa)
+        prazo = agr.get("prazo_medio_pagamento")
+        for rotulo, valor, cor in (
+            ("Deve", formatar_moeda(saldo), tokens.ERRO if variante == "erro" else tokens.TEXTO),
+            ("Limite", formatar_moeda(limite) if limite > 0 else "—", tokens.TEXTO),
+            ("Paga em média", f"{prazo:.0f} dias" if prazo is not None else "—", tokens.TEXTO),
+        ):
+            q = QFrame()
+            q.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+            q.setStyleSheet(f"QFrame {{ background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_MD}px; }}")
+            ql = QVBoxLayout(q)
+            ql.setContentsMargins(12, 10, 12, 10)
+            ql.setSpacing(2)
+            ql.addWidget(_rotulo(rotulo, tokens.TAMANHO_SM, tokens.TEXTO_SECUNDARIO))
+            lbl = _rotulo(valor, 17, cor, 700)
+            lbl.setStyleSheet(lbl.styleSheet() + f" font-family:'{familia_titulo()}';")
+            ql.addWidget(lbl)
+            quadros.addWidget(q, stretch=1)
+        self._layout.addLayout(quadros)
 
-        # ---- datas
-        datas = QGridLayout()
-        datas.setHorizontalSpacing(12)
-        datas.setVerticalSpacing(6)
-        for linha, (rotulo, valor) in enumerate((
-            ("Última compra", _data_curta(agr.get("ultima_compra"))),
-            ("Último pagamento", _data_curta(agr.get("ultimo_pagamento"))),
-            # define bom pagador (ate' 2 meses) x paga com atraso
-            ("Paga em média",
-             f"{agr['prazo_medio_pagamento']:.0f} dias"
-             if agr.get("prazo_medio_pagamento") is not None else "—"),
-            ("Compras no fiado", str(agr.get("qtd_compras", 0))),
-            ("Perfil", _perfil(agr, prazo_dias)),
-        )):
-            datas.addWidget(
-                _rotulo(rotulo, tokens.TAMANHO_SM, tokens.TEXTO_SECUNDARIO), linha, 0
+        # ---- acoes em grade 2x2
+        grade = QGridLayout()
+        grade.setSpacing(8)
+        botoes = []
+        if not cliente.get("ativo", True):
+            bt = BotaoPrimario("Reativar cliente", icone_nome="check")
+            bt.clicked.connect(lambda: self.reativar.emit(cliente))
+            botoes.append(bt)
+        else:
+            if saldo > 0.009:
+                bt = BotaoSucesso("Receber", icone_nome="wallet")
+                bt.clicked.connect(lambda: self.receber.emit(cliente))
+                botoes.append(bt)
+            if not cliente.get("negativado"):
+                bt = BotaoSecundario("Lançar fiado", icone_nome="plus")
+                bt.clicked.connect(lambda: self.lancar.emit(cliente))
+                botoes.append(bt)
+            if cliente.get("telefone") and saldo > 0.009:
+                bt = BotaoSucesso("Cobrar no WhatsApp", icone_nome="message-circle")
+                bt.setToolTip("Enviar mensagem de cobrança pelo WhatsApp")
+                bt.clicked.connect(lambda: self.cobrar.emit(cliente))
+                botoes.append(bt)
+            if cliente.get("telefone"):
+                bt = BotaoSecundario("Enviar extrato", icone_nome="file-text")
+                bt.clicked.connect(lambda: self.extrato.emit(cliente))
+                botoes.append(bt)
+        for k, bt in enumerate(botoes):
+            bt.setMinimumHeight(46)
+            # encolhe pra caber no painel (texto+icone pediam mais largura)
+            bt.setMinimumWidth(0)
+            bt.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+            grade.addWidget(bt, k // 2, k % 2)
+        self._layout.addLayout(grade)
+
+        # ---- extrato desde o ultimo pagamento
+        self._layout.addWidget(_rotulo("Extrato desde o último pagamento", tokens.TAMANHO_MD, peso=700))
+        for mov in extrato_desde_ultimo_pagamento(movimentos or []):
+            pagamento = mov.get("tipo") != "COMPRA"
+            linha_frame = QFrame()
+            linha_frame.setStyleSheet(
+                f"QFrame {{ border:none; border-top:1px solid {tokens.BORDA}; background:transparent; }}"
             )
-            v = _rotulo(valor, tokens.TAMANHO_SM, peso=600)
-            v.setAlignment(Qt.AlignRight)
-            datas.addWidget(v, linha, 1)
-        self._layout.addLayout(datas)
-
-        # ---- últimas movimentações
-        self._layout.addWidget(
-            _rotulo("ÚLTIMAS MOVIMENTAÇÕES", tokens.TAMANHO_XS, tokens.TEXTO_TERCIARIO, 700)
-        )
-
-        recentes = sorted(
-            movimentos or [],
-            key=lambda m: str(m.get("data") or ""),
-            reverse=True,
-        )[:5]
-
-        if not recentes:
-            self._layout.addWidget(_rotulo(
-                "Nenhuma movimentação no fiado ainda.",
-                tokens.TAMANHO_SM, tokens.TEXTO_TERCIARIO,
-            ))
-
-        for mov in recentes:
-            pagamento = mov.get("tipo") == "PAGAMENTO"
-            linha = QHBoxLayout()
+            linha = QHBoxLayout(linha_frame)
+            linha.setContentsMargins(0, 8, 0, 8)
             linha.setSpacing(10)
-            col_mov = QVBoxLayout()
-            col_mov.setSpacing(0)
-            descricao = mov.get("descricao") or (
-                "Pagamento" if pagamento else "Compra no fiado"
-            )
-            lbl_desc = _rotulo(descricao, tokens.TAMANHO_SM, peso=500)
+            data = cliente_analise._parse_data(mov.get("data"))
+            linha.addWidget(_rotulo(data.strftime("%d/%m") if data else "—",
+                                    tokens.TAMANHO_MD, tokens.TEXTO_SECUNDARIO))
+            descricao = mov.get("descricao") or ("Pagamento" if pagamento else "Compra no fiado")
+            lbl_desc = _rotulo(descricao, tokens.TAMANHO_MD)
             lbl_desc.setWordWrap(True)
-            col_mov.addWidget(lbl_desc)
-            col_mov.addWidget(_rotulo(
-                _data_curta(cliente_analise._parse_data(mov.get("data"))),
-                tokens.TAMANHO_XS, tokens.TEXTO_TERCIARIO,
-            ))
-            linha.addLayout(col_mov, stretch=1)
+            linha.addWidget(lbl_desc, stretch=1)
             valor = float(mov.get("valor", 0) or 0)
             linha.addWidget(_rotulo(
-                f"{'+' if pagamento else '−'} {formatar_moeda(valor)}",
-                tokens.TAMANHO_SM,
-                tokens.SECUNDARIA if pagamento else tokens.TEXTO,
-                700,
-            ), 0, Qt.AlignTop)
-            self._layout.addLayout(linha)
+                f"− {formatar_moeda(valor)}" if pagamento else formatar_moeda(valor),
+                tokens.TAMANHO_MD, tokens.SECUNDARIA if pagamento else tokens.TEXTO, 700,
+            ))
+            self._layout.addWidget(linha_frame)
+        if not movimentos:
+            self._layout.addWidget(_rotulo("Nenhuma movimentação no fiado ainda.",
+                                           tokens.TAMANHO_SM, tokens.TEXTO_TERCIARIO))
 
         self._layout.addStretch()
 
-        # ---- ações
-        if not cliente.get("ativo", True):
-            bt_reativar = BotaoPrimario("Reativar cliente", icone_nome="check")
-            bt_reativar.clicked.connect(lambda: self.reativar.emit(cliente))
-            self._acoes.addWidget(bt_reativar)
-        elif saldo > 0.009:
-            acoes = QHBoxLayout()
-            acoes.setSpacing(8)
-            bt_receber = BotaoPrimario("Receber", icone_nome="wallet")
-            bt_receber.clicked.connect(lambda: self.receber.emit(cliente))
-            acoes.addWidget(bt_receber, stretch=1)
-            if cliente.get("telefone"):
-                bt_cobrar = BotaoSecundario("Cobrar", icone_nome="message-circle")
-                bt_cobrar.setToolTip("Enviar mensagem de cobrança pelo WhatsApp")
-                bt_cobrar.clicked.connect(lambda: self.cobrar.emit(cliente))
-                acoes.addWidget(bt_cobrar, stretch=1)
-            self._acoes.addLayout(acoes)
-
-        # lado a lado: em tela baixa (768px) 3 linhas de botao escondiam
-        # as ultimas movimentacoes
-        baixo = QHBoxLayout()
-        baixo.setSpacing(8)
-        if cliente.get("ativo", True) and not cliente.get("negativado"):
-            bt_lancar = BotaoSecundario("Lançar fiado", icone_nome="plus")
-            bt_lancar.clicked.connect(lambda: self.lancar.emit(cliente))
-            baixo.addWidget(bt_lancar, stretch=1)
-
-        bt_ficha = BotaoSecundario("Ficha completa", icone_nome="user")
+        bt_ficha = BotaoSecundario("Abrir ficha completa", icone_nome="user")
         bt_ficha.clicked.connect(lambda: self.abrir_ficha.emit(cliente))
-        baixo.addWidget(bt_ficha, stretch=1)
-        self._acoes.addLayout(baixo)
+        self._acoes.addWidget(bt_ficha)
+
+
+def extrato_desde_ultimo_pagamento(movimentos, maximo=8):
+    """Do ultimo pagamento (ou haver) pra frente, em ordem de data -- o
+    que o cliente ainda deve 'desta rodada'. Sem pagamento: as ultimas."""
+    ordenados = sorted(movimentos, key=lambda m: str(m.get("data") or ""))
+    ultimo = max((k for k, m in enumerate(ordenados) if m.get("tipo") != "COMPRA"), default=None)
+    trecho = ordenados[ultimo:] if ultimo is not None else ordenados
+    return trecho[-maximo:]
 
 
 class Clientes(QWidget):
@@ -624,10 +603,10 @@ class Clientes(QWidget):
         col_titulo = QVBoxLayout()
         col_titulo.setSpacing(0)
 
-        titulo = QLabel("Clientes")
+        titulo = QLabel("Clientes e fiado")
         titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_LG}px;
-            font-weight:800; color:{tokens.TEXTO};
+            background:transparent; font-size:28px; font-family:'{familia_titulo()}';
+            font-weight:700; color:{tokens.TEXTO};
         """)
 
         subtitulo = QLabel(
@@ -846,6 +825,9 @@ class Clientes(QWidget):
         self.painel.reativar.connect(self.reativar_cliente)
         self.painel.lancar.connect(
             lambda cliente: self._abrir_ficha(cliente, acao="lancar_fiado")
+        )
+        self.painel.extrato.connect(
+            lambda cliente: self._abrir_ficha(cliente, acao="enviar_extrato_whatsapp")
         )
 
         corpo.addWidget(self.card_lista, stretch=1)

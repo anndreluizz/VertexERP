@@ -23,7 +23,7 @@ from design.widgets import (
     BotaoPerigo, BotaoSecundario, BotaoSucesso, CampoTexto, DialogoPadrao,
     campo_rotulado, cor_forma_pagamento, titulo_secao,
 )
-from utils.formatacao import formatar_moeda, linhas_resumo_caixa
+from utils.formatacao import formatar_moeda, ler_moeda, linhas_resumo_caixa
 
 
 # rotulos de tipo de movimento em texto puro pro extrato do dia --
@@ -107,11 +107,8 @@ def soma_notas(quantidades, moedas=0.0):
 
 def _texto_para_valor(texto):
     """Aceita '780', '780,5', '1.234,56' e '1234.56'; None se não for número."""
-    texto = (texto or "").replace("R$", "").strip()
-    if "," in texto:
-        texto = texto.replace(".", "").replace(",", ".")
     try:
-        return round(float(texto), 2)
+        return round(ler_moeda(texto), 2)
     except ValueError:
         return None
 

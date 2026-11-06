@@ -33,17 +33,19 @@ _CLARO = {
     "ERRO_HOVER": "#8A2B21",
     "ERRO_CLARO": "#FBEBE8",
 
-    "FUNDO": "#F5F3EF",
+    # 06/11: "tela muito branca" -- fundo um tom mais escuro pra os cartoes
+    # brancos se destacarem, bordas e textos cinza mais fortes
+    "FUNDO": "#EAE6DD",
     "SIDEBAR": "#101F38",
     "SIDEBAR_HOVER": "#1C3357",
     "SIDEBAR_ATIVO": "#24406B",
 
     "CARD": "#FFFFFF",
-    "BORDA": "#E4DFD5",
-    "BORDA_FORTE": "#D3CCBD",
+    "BORDA": "#D6CFC1",
+    "BORDA_FORTE": "#BDB4A2",
 
-    "TEXTO": "#16213B",
-    "TEXTO_SECUNDARIO": "#5B6B85",
+    "TEXTO": "#0E1830",
+    "TEXTO_SECUNDARIO": "#3F4C63",
     # era #8B96AC (~2,98:1 sobre CARD branco -- reprova WCAG AA, que
     # exige 4,5:1 pra texto normal). Usado em 38 das ~39 telas (legenda
     # de campo, texto secundario de cards etc.), boa parte em
@@ -52,12 +54,14 @@ _CLARO = {
     # perto de TEXTO_SECUNDARIO (pouco espaco pra um terceiro nivel mais
     # claro continuar acessivel sobre fundo quase branco); 5,47:1
     # sobre CARD e 4,94:1 sobre FUNDO, os dois com folga sobre o 4,5:1.
-    "TEXTO_TERCIARIO": "#5C6A82",
+    "TEXTO_TERCIARIO": "#4A5770",
     "TEXTO_CLARO": "#FFFFFF",
     "TEXTO_SIDEBAR": "#C7D2E3",
     "TEXTO_SIDEBAR_APAGADO": "#7C89A3",
 
     "SOMBRA_COR": "#16213B",
+    # barra de comparacao nos graficos (ex.: "media" ao lado de "hoje")
+    "GRAFICO_NEUTRO": "#9AA6BA",
 }
 
 # ==========================================
@@ -107,6 +111,7 @@ _ESCURO = {
     "TEXTO_SIDEBAR_APAGADO": "#71809C",
 
     "SOMBRA_COR": "#000000",
+    "GRAFICO_NEUTRO": "#566379",
 }
 
 ESCURO_ATIVO = False
@@ -159,11 +164,12 @@ RADIUS_PILL = 999
 
 FONTE_FAMILIA_PADRAO = "Segoe UI"
 
-TAMANHO_XS = 11
-TAMANHO_SM = 12
-TAMANHO_BASE = 13
-TAMANHO_MD = 14
-TAMANHO_LG = 16
+# 06/11: +1 px em tudo -- 11-13 px era pequeno pra ler no balcao
+TAMANHO_XS = 12
+TAMANHO_SM = 13
+TAMANHO_BASE = 14
+TAMANHO_MD = 15
+TAMANHO_LG = 17
 TAMANHO_XL = 20
 TAMANHO_XXL = 28
 

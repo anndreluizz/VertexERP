@@ -67,13 +67,13 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
         self.modo_venda = "UN"
 
         if produto:
-            titulo_texto = "Editar Produto"
+            titulo_texto = "Editar produto"
             subtitulo_texto = "Atualize os dados do produto no sistema."
         elif produto_pai:
             titulo_texto = f"Nova Variação de \"{produto_pai['nome']}\""
             subtitulo_texto = "Mesmo produto em outra cor/tamanho, com código e estoque próprios."
         else:
-            titulo_texto = "Novo Produto"
+            titulo_texto = "Novo produto"
             subtitulo_texto = "Bipe o código de barras ou digite o nome. Enter passa pro próximo campo."
 
         self.setWindowTitle(titulo_texto)
@@ -93,7 +93,8 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
             titulo_texto, subtitulo_texto,
             fechavel=True, ao_fechar=self.reject,
         )
-        cabecalho.setStyleSheet(f"background:{tokens.CARD};")
+        # Vertex 2.0: cabecalho escuro igual 'as outras subtelas (o fundo
+        # branco que estava aqui escondia o titulo, que e' branco)
 
         self.favorito = QPushButton("Favorito")
         self.favorito.setCheckable(True)
@@ -587,7 +588,7 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
         self.bt_cancelar.clicked.connect(self.reject)
 
         self.bt_salvar = BotaoSucesso(
-            "Salvar Alterações" if produto else "Cadastrar Produto", icone_nome="check",
+            "Salvar alterações" if produto else "Cadastrar produto", icone_nome="check",
         )
         self.bt_salvar.setMinimumWidth(220)
         self.bt_salvar.clicked.connect(self.salvar)

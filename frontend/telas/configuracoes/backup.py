@@ -48,11 +48,7 @@ class BackupMixin:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(14)
 
-        lbl_secao = QLabel("BACKUP DO BANCO DE DADOS")
-        lbl_secao.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.6px;
-        """)
+        lbl_secao = self._titulo_bloco("BACKUP DO BANCO DE DADOS")
         layout.addWidget(lbl_secao)
 
         dica = QLabel(
@@ -111,11 +107,7 @@ class BackupMixin:
         linha_divisoria.setStyleSheet(f"background:{tokens.BORDA};")
         layout.addWidget(linha_divisoria)
 
-        lbl_historico = QLabel("Histórico")
-        lbl_historico.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.6px;
-        """)
+        lbl_historico = self._titulo_bloco("Histórico")
         layout.addWidget(lbl_historico)
 
         self.tabela_backups = QTableWidget()

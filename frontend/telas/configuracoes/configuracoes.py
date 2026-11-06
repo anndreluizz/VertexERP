@@ -22,13 +22,14 @@ from services.worker import rodar_em_thread
 from telas.gerenciar_usuarios import GerenciarUsuariosDialog
 
 from design import tokens
-from design.icons import icone, icone_pixmap
+from design.icons import icone
 from design.widgets import (
     BotaoSecundario, BotaoSucesso, CampoTexto, PilhaPaginas, estilo_checkbox,
 )
 from utils.validacao import email_valido
 from telas.configuracoes.backup import BackupMixin
-from telas.configuracoes.comum import ItemMenuConfig, _SECOES, _SECOES_DO_RODAPE
+from telas.configuracoes.comum import Interruptor, ItemMenuConfig, _SECOES, _SECOES_DO_RODAPE, frase
+from design.fonts import familia_titulo
 from telas.configuracoes.impressora import ImpressoraMixin
 from telas.configuracoes.lojas import LojasMixin
 from telas.configuracoes.paginas import PaginasMixin
@@ -137,7 +138,7 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
         # Vertex 2.0: usuarios virou item do menu (Pessoas e sistema)
         bt_usuarios.hide()
 
-        layout.addLayout(cabecalho)
+        self.bt_voltar.hide()  # Vertex 2.0: a barra de cima ja' navega
 
         # ======================
         # CORPO (submenu + conteúdo)
@@ -150,17 +151,16 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
 
         submenu_frame = QFrame()
         submenu_frame.setObjectName("submenuConfig")
-        submenu_frame.setFixedWidth(260)
-        submenu_frame.setStyleSheet(f"""
-            QFrame#submenuConfig {{
-                background:{tokens.CARD}; border-radius:{tokens.RADIUS_LG}px;
-                border:1px solid {tokens.BORDA};
-            }}
-        """)
+        submenu_frame.setFixedWidth(280)
+        submenu_frame.setStyleSheet("QFrame#submenuConfig { background:transparent; border:none; }")
 
         submenu_layout = QVBoxLayout(submenu_frame)
-        submenu_layout.setContentsMargins(10, 10, 10, 10)
+        submenu_layout.setContentsMargins(0, 0, 0, 0)
         submenu_layout.setSpacing(4)
+        titulo.setStyleSheet(f"background:transparent; font-size:28px; font-weight:700; "
+                             f"color:{tokens.TEXTO}; font-family:'{familia_titulo()}';")
+        titulo.setContentsMargins(0, 0, 0, 6)
+        submenu_layout.addWidget(titulo)
 
         self.bt_gerais = ItemMenuConfig("store", "Dados da loja")
         self.bt_pix = ItemMenuConfig("credit-card", "Pagamentos e PIX")
@@ -182,9 +182,11 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
         self.busca_config = QLineEdit()
         self.busca_config.setPlaceholderText("Buscar configuração")
         self.busca_config.setClearButtonEnabled(True)
-        self.busca_config.setMinimumHeight(38)
+        self.busca_config.setMinimumHeight(40)
+        self.busca_config.addAction(icone("search", cor=tokens.TEXTO_SECUNDARIO, tamanho=15),
+                                    QLineEdit.LeadingPosition)
         self.busca_config.setStyleSheet(f"""
-            QLineEdit {{ background:{tokens.FUNDO}; border:1px solid {tokens.BORDA};
+            QLineEdit {{ background:{tokens.CARD}; border:1px solid {tokens.BORDA_FORTE};
                          border-radius:{tokens.RADIUS_SM}px; padding:0 10px;
                          font-size:{tokens.TAMANHO_MD}px; color:{tokens.TEXTO}; }}
         """)
@@ -195,8 +197,8 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
             lbl = QLabel(texto)
             lbl.setStyleSheet(f"""
                 background:transparent; border:none; font-size:{tokens.TAMANHO_XS}px;
-                font-weight:800; color:{tokens.TEXTO_TERCIARIO}; letter-spacing:0.6px;
-                padding:10px 12px 4px 12px;
+                font-weight:700; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.8px;
+                padding:12px 10px 4px 10px;
             """)
             return lbl
 
@@ -273,19 +275,26 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
         self.barra_salvar = QFrame()
         self.barra_salvar.setObjectName("barraSalvar")
         rodape_layout = QHBoxLayout(self.barra_salvar)
-        rodape_layout.setContentsMargins(18, 10, 10, 10)
+        rodape_layout.setContentsMargins(16, 10, 10, 10)
         rodape_layout.setSpacing(10)
 
         self.lbl_estado = QLabel("")
         rodape_layout.addWidget(self.lbl_estado)
         rodape_layout.addStretch()
 
-        self.bt_descartar = BotaoSecundario("Descartar")
+        self.bt_descartar = QPushButton("Descartar")
+        self.bt_descartar.setCursor(Qt.PointingHandCursor)
+        self.bt_descartar.setStyleSheet(f"""
+            QPushButton {{ background:transparent; color:#FFFFFF; border:1px solid #7C89A3;
+                           border-radius:9px; padding:0 14px; font-weight:600;
+                           font-size:{tokens.TAMANHO_MD}px; }}
+            QPushButton:hover {{ background:rgba(255,255,255,0.1); }}
+        """)
         self.bt_descartar.setMinimumHeight(42)
         self.bt_descartar.clicked.connect(self._descartar)
         rodape_layout.addWidget(self.bt_descartar)
 
-        self.bt_salvar = BotaoSucesso("Salvar alterações", icone_nome="check")
+        self.bt_salvar = BotaoSucesso("Salvar · Ctrl+S")
         self.bt_salvar.setMinimumHeight(42)
         self.bt_salvar.setMinimumWidth(200)
         self.bt_salvar.setToolTip("Ctrl+S")
@@ -347,42 +356,8 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
             }}
         """)
         layout_cartao = QVBoxLayout(cartao)
-        layout_cartao.setContentsMargins(28, 22, 28, 24)
-        layout_cartao.setSpacing(18)
-
-        if indice is not None:
-            icone_nome, titulo, descricao = _SECOES[indice]
-            topo = QHBoxLayout()
-            topo.setSpacing(12)
-            chip = QLabel()
-            chip.setFixedSize(44, 44)
-            chip.setAlignment(Qt.AlignCenter)
-            chip.setStyleSheet(f"""
-                background:{tokens.PRIMARIA_CLARA}; border:none; border-radius:{tokens.RADIUS_MD}px;
-            """)
-            chip.setPixmap(icone_pixmap(icone_nome, cor=tokens.PRIMARIA, tamanho=20))
-            col = QVBoxLayout()
-            col.setSpacing(2)
-            lbl_t = QLabel(titulo)
-            lbl_t.setStyleSheet(f"""
-                background:transparent; border:none; font-size:{tokens.TAMANHO_LG}px;
-                font-weight:800; color:{tokens.TEXTO};
-            """)
-            lbl_d = QLabel(descricao)
-            lbl_d.setStyleSheet(f"""
-                background:transparent; border:none; font-size:{tokens.TAMANHO_SM}px;
-                color:{tokens.TEXTO_TERCIARIO};
-            """)
-            col.addWidget(lbl_t)
-            col.addWidget(lbl_d)
-            topo.addWidget(chip)
-            topo.addLayout(col, 1)
-            layout_cartao.addLayout(topo)
-
-            separador = QFrame()
-            separador.setFixedHeight(1)
-            separador.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
-            layout_cartao.addWidget(separador)
+        layout_cartao.setContentsMargins(20, 6, 20, 20)
+        layout_cartao.setSpacing(12)
 
         pagina.setStyleSheet("background:transparent;")
         layout_cartao.addWidget(pagina, 1)
@@ -391,7 +366,18 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
         envoltorio.setStyleSheet("background:transparent;")
         layout_env = QVBoxLayout(envoltorio)
         layout_env.setContentsMargins(0, 0, 4, 0)
+        layout_env.setSpacing(16)
+        if indice is not None:
+            _icone, titulo, descricao = _SECOES[indice]
+            lbl_t = QLabel(titulo)
+            lbl_t.setStyleSheet(f"background:transparent; font-size:24px; font-weight:700; color:{tokens.TEXTO};")
+            lbl_d = QLabel(descricao)
+            lbl_d.setWordWrap(True)
+            lbl_d.setStyleSheet(f"background:transparent; font-size:15px; color:{tokens.TEXTO_SECUNDARIO};")
+            layout_env.addWidget(lbl_t)
+            layout_env.addWidget(lbl_d)
         layout_env.addWidget(cartao)
+        layout_env.addStretch()
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -406,13 +392,45 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
             QCheckBox {{ color:{tokens.TEXTO}; font-size:{tokens.TAMANHO_MD}px; }}
         """
 
-    def _campo(self, layout, rotulo, placeholder, cls=None):
-
-        lbl = QLabel(rotulo)
+    def _titulo_bloco(self, texto):
+        lbl = QLabel(frase(texto))
         lbl.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+            background:transparent; font-size:15px; font-weight:700; color:{tokens.TEXTO};
+            border:none; padding:10px 0 8px 0;
         """)
+        return lbl
+
+    def _linha(self, layout, rotulo, ajuda, controle):
+        """Linha do prototipo Config2: nome (e ajuda) a' esquerda,
+        controle a' direita, separadas por um fio."""
+        linha = QFrame()
+        linha.setObjectName("linhaConfig")
+        linha.setStyleSheet(f"QFrame#linhaConfig {{ background:transparent; border:none; "
+                            f"border-top:1px solid {tokens.BORDA}; }}")
+        h = QHBoxLayout(linha)
+        h.setContentsMargins(0, 12, 0, 12)
+        h.setSpacing(20)
+        col = QVBoxLayout()
+        col.setSpacing(3)
+        lbl = QLabel(frase(rotulo))
+        lbl.setStyleSheet(f"background:transparent; border:none; font-size:15px; "
+                          f"font-weight:600; color:{tokens.TEXTO};")
+        col.addWidget(lbl)
+        if ajuda:
+            lbl_ajuda = QLabel(ajuda)
+            lbl_ajuda.setWordWrap(True)
+            lbl_ajuda.setStyleSheet(f"background:transparent; border:none; font-size:13px; "
+                                    f"color:{tokens.TEXTO_SECUNDARIO};")
+            col.addWidget(lbl_ajuda)
+        h.addLayout(col, 1)
+        h.addWidget(controle, 0, Qt.AlignVCenter)
+        layout.addWidget(linha)
+        return controle
+
+    def _interruptor(self, layout, rotulo, ajuda=""):
+        return self._linha(layout, rotulo, ajuda, Interruptor(rotulo))
+
+    def _campo(self, layout, rotulo, placeholder, cls=None):
 
         if cls is None:
             campo = CampoTexto(placeholder)
@@ -422,10 +440,8 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
             # CampoTexto) -- não sobrescrever por cima.
             campo = cls(placeholder)
 
-        layout.addWidget(lbl)
-        layout.addWidget(campo)
-
-        return campo
+        campo.setFixedWidth(300)
+        return self._linha(layout, rotulo, "", campo)
 
     # ======================================
 
@@ -534,14 +550,13 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
         secao = self.paginas.currentIndex() if hasattr(self, "paginas") else 0
         self.barra_salvar.setVisible(secao in _SECOES_DO_RODAPE or self._alterado)
 
+        fundo = borda = tokens.SIDEBAR
+        cor_texto = "#FFFFFF"
         if self._alterado:
-            fundo, borda = tokens.ALERTA_CLARO, tokens.ALERTA
-            texto = "●  Você tem alterações não salvas"
-            cor_texto = tokens.ALERTA_TEXTO
+            texto = "Você mudou configurações e ainda não salvou."
         else:
-            fundo, borda = tokens.CARD, tokens.BORDA
-            texto = "✓  Tudo salvo"
-            cor_texto = tokens.TEXTO_TERCIARIO
+            texto = "Nenhuma alteração pendente."
+            cor_texto = tokens.TEXTO_SIDEBAR
         self.barra_salvar.setStyleSheet(f"""
             QFrame#barraSalvar {{
                 background:{fundo}; border:1px solid {borda};
@@ -551,7 +566,7 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
         self.lbl_estado.setText(texto)
         self.lbl_estado.setStyleSheet(f"""
             background:transparent; border:none; font-size:{tokens.TAMANHO_MD}px;
-            font-weight:700; color:{cor_texto};
+            font-weight:600; color:{cor_texto};
         """)
         self.bt_salvar.setEnabled(self._alterado)
         self.bt_descartar.setVisible(self._alterado)

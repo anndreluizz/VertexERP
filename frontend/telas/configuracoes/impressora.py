@@ -5,7 +5,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QFrame,
     QMessageBox,
-    QCheckBox,
     QSpinBox,
     QComboBox,
     QRadioButton,
@@ -31,20 +30,13 @@ class ImpressoraMixin:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(14)
 
-        lbl_secao = QLabel("IMPRESSORA TÉRMICA (CUPOM)")
-        lbl_secao.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.6px;
-        """)
+        lbl_secao = self._titulo_bloco("IMPRESSORA TÉRMICA (CUPOM)")
         layout.addWidget(lbl_secao)
 
         dica_topo = QLabel(
-            "Manda o comprovante direto no protocolo da impressora "
-            "térmica (ESC/POS), sem depender da janela de impressão "
-            "do Windows -- resolve o caso mais comum de impressora "
-            "térmica genérica que não imprime nada por causa do "
-            "driver. Com isso desligado, a impressão continua saindo "
-            "pela janela normal do Windows, como sempre."
+            "Ligado, o Vertex fala direto com a impressora térmica (ESC/POS): "
+            "resolve a impressora genérica que não imprime por causa do driver. "
+            "Desligado, imprime pela janela normal do Windows."
         )
         dica_topo.setWordWrap(True)
         dica_topo.setStyleSheet(f"""
@@ -53,14 +45,14 @@ class ImpressoraMixin:
         """)
         layout.addWidget(dica_topo)
 
-        self.impressora_ativa = QCheckBox(
-            "Imprimir comprovantes e extratos direto na impressora térmica"
+        self.impressora_ativa = self._interruptor(
+            layout, "Imprimir na impressora térmica", "Comprovantes e extratos saem direto nela"
         )
-        self.impressora_ativa.setStyleSheet(self._estilo_checkbox())
         self.impressora_ativa.toggled.connect(self._atualizar_visibilidade_impressora)
-        layout.addWidget(self.impressora_ativa)
 
-        linha_conexao = QHBoxLayout()
+        caixa_conexao = QWidget()
+        linha_conexao = QHBoxLayout(caixa_conexao)
+        linha_conexao.setContentsMargins(0, 0, 0, 0)
         self.impressora_conexao_rede = QRadioButton("Rede (Wi-Fi/Ethernet)")
         self.impressora_conexao_usb = QRadioButton("USB")
         self.impressora_conexao_rede.setChecked(True)
@@ -75,25 +67,19 @@ class ImpressoraMixin:
 
         linha_conexao.addWidget(self.impressora_conexao_rede)
         linha_conexao.addWidget(self.impressora_conexao_usb)
-        linha_conexao.addStretch()
-        layout.addLayout(linha_conexao)
+        self._linha(layout, "Como está ligada", "Pela rede ou no cabo USB", caixa_conexao)
 
         # ---- bloco rede ----
 
         self.impressora_bloco_rede = QWidget()
         layout_rede = QVBoxLayout(self.impressora_bloco_rede)
         layout_rede.setContentsMargins(0, 0, 0, 0)
-        layout_rede.setSpacing(10)
+        layout_rede.setSpacing(0)
 
         self.impressora_ip = self._campo(
             layout_rede, "IP DA IMPRESSORA", "Ex: 192.168.0.50"
         )
 
-        lbl_porta = QLabel("PORTA")
-        lbl_porta.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
         self.impressora_porta = QSpinBox()
         self.impressora_porta.setRange(1, 65535)
         self.impressora_porta.setValue(9100)
@@ -105,8 +91,8 @@ class ImpressoraMixin:
                 background: {tokens.CARD};
             }}
         """)
-        layout_rede.addWidget(lbl_porta)
-        layout_rede.addWidget(self.impressora_porta)
+        self.impressora_porta.setFixedWidth(120)
+        self._linha(layout_rede, "Porta", "Quase sempre 9100", self.impressora_porta)
 
         layout.addWidget(self.impressora_bloco_rede)
 
@@ -115,13 +101,7 @@ class ImpressoraMixin:
         self.impressora_bloco_usb = QWidget()
         layout_usb = QVBoxLayout(self.impressora_bloco_usb)
         layout_usb.setContentsMargins(0, 0, 0, 0)
-        layout_usb.setSpacing(10)
-
-        lbl_usb = QLabel("IMPRESSORA (INSTALADA NO WINDOWS)")
-        lbl_usb.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
+        layout_usb.setSpacing(0)
         self.impressora_usb = QComboBox()
         self.impressora_usb.setEditable(True)
         self.impressora_usb.setMinimumHeight(42)
@@ -133,23 +113,25 @@ class ImpressoraMixin:
             }}
         """)
 
-        bt_atualizar_usb = BotaoSecundario("Atualizar lista", icone_nome="refresh-cw")
-        bt_atualizar_usb.setMinimumHeight(38)
+        bt_atualizar_usb = BotaoSecundario("", icone_nome="refresh-cw")
+        bt_atualizar_usb.setToolTip("Atualizar lista de impressoras")
+        bt_atualizar_usb.setAccessibleName("Atualizar lista de impressoras")
+        bt_atualizar_usb.setFixedSize(42, 42)
         bt_atualizar_usb.clicked.connect(self._carregar_impressoras_usb)
 
-        layout_usb.addWidget(lbl_usb)
-        layout_usb.addWidget(self.impressora_usb)
-        layout_usb.addWidget(bt_atualizar_usb)
+        caixa_usb = QWidget()
+        h_usb = QHBoxLayout(caixa_usb)
+        h_usb.setContentsMargins(0, 0, 0, 0)
+        h_usb.setSpacing(6)
+        self.impressora_usb.setFixedWidth(252)
+        h_usb.addWidget(self.impressora_usb)
+        h_usb.addWidget(bt_atualizar_usb)
+        self._linha(layout_usb, "Impressora térmica", "A que está instalada neste computador", caixa_usb)
 
         layout.addWidget(self.impressora_bloco_usb)
 
         # ---- papel ----
 
-        lbl_papel = QLabel("LARGURA DO PAPEL")
-        lbl_papel.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
         self.impressora_largura_papel = QComboBox()
         self.impressora_largura_papel.addItem("80mm", 80)
         self.impressora_largura_papel.addItem("58mm", 58)
@@ -161,32 +143,31 @@ class ImpressoraMixin:
                 background: {tokens.CARD};
             }}
         """)
-        layout.addWidget(lbl_papel)
-        layout.addWidget(self.impressora_largura_papel)
+        self.impressora_largura_papel.setFixedWidth(300)
+        self._linha(layout, "Largura do papel", "", self.impressora_largura_papel)
 
         # ---- vias ----
 
-        lbl_vias = QLabel("VIAS (VENDA E RECIBO DE PAGAMENTO)")
-        lbl_vias.setStyleSheet(lbl_papel.styleSheet())
         self.impressora_vias = QComboBox()
         self.impressora_vias.addItem("1 via", 1)
         self.impressora_vias.addItem("2 vias (cliente + loja)", 2)
         self.impressora_vias.setMinimumHeight(42)
         self.impressora_vias.setStyleSheet(self.impressora_largura_papel.styleSheet())
-        layout.addWidget(lbl_vias)
-        layout.addWidget(self.impressora_vias)
+        self.impressora_vias.setFixedWidth(300)
+        self._linha(layout, "Vias", "Na venda e no recibo de pagamento", self.impressora_vias)
 
         linha_botoes = QHBoxLayout()
         linha_botoes.setSpacing(10)
 
-        bt_testar_impressora = BotaoSecundario("Testar Impressão", icone_nome="printer")
+        bt_testar_impressora = BotaoSecundario("Imprimir teste", icone_nome="printer")
         bt_testar_impressora.setMinimumHeight(42)
         bt_testar_impressora.clicked.connect(self.testar_impressora_termica)
 
-        bt_salvar_impressora = BotaoSucesso("Salvar Configuração da Impressora")
+        bt_salvar_impressora = BotaoSucesso("Salvar impressora")
         bt_salvar_impressora.setMinimumHeight(42)
         bt_salvar_impressora.clicked.connect(self.salvar_impressora_termica)
 
+        linha_botoes.addStretch()
         linha_botoes.addWidget(bt_testar_impressora)
         linha_botoes.addWidget(bt_salvar_impressora)
         layout.addLayout(linha_botoes)
@@ -206,11 +187,7 @@ class ImpressoraMixin:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(14)
 
-        lbl_secao = QLabel("LEITOR DE CÓDIGO DE BARRAS")
-        lbl_secao.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.6px;
-        """)
+        lbl_secao = self._titulo_bloco("LEITOR DE CÓDIGO DE BARRAS")
         layout.addWidget(lbl_secao)
 
         dica_usb = QLabel(

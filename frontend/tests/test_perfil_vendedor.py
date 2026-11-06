@@ -56,7 +56,7 @@ def test_tela_caixa_do_vendedor_esconde_saldo_e_conferencia(_qapp, monkeypatch):
     tela = Caixa()
 
     assert tela._ve_totais is False
-    assert tela.lbl_total_previsto.isHidden()
+    assert tela.secao_kpis.isHidden() and tela.cartao_conferir.isHidden()
     assert tela.bt_caixas_anteriores.isHidden()
     assert not tela.bt_sangria.isHidden() and not tela.bt_suprimento.isHidden()
 

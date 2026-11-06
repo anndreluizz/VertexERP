@@ -196,7 +196,7 @@ class _Numero(QFrame):
 
 
 class BarrasHora(QWidget):
-    """Vendas por hora: barra cinza (media) e azul (hoje) por hora."""
+    """Vendas por hora: barra cinza-azulada (media) e azul (hoje) por hora."""
 
     def __init__(self):
         super().__init__()
@@ -224,7 +224,7 @@ class BarrasHora(QWidget):
         p.drawLine(0, area, self.width(), area)
         for i, (hora, hoje, media) in enumerate(self._dados):
             centro = largura_grupo * i + largura_grupo / 2
-            for deslocamento, valor, cor in ((-barra - 1.5, media, tokens.BORDA_FORTE),
+            for deslocamento, valor, cor in ((-barra - 1.5, media, tokens.GRAFICO_NEUTRO),
                                              (1.5, hoje, tokens.PRIMARIA)):
                 h = (area - 6) * valor / maior
                 if h > 0:
@@ -364,8 +364,11 @@ class Inicio(QWidget):
                 f"{n} {'pagamento' if n == 1 else 'pagamentos'} hoje",
                 tokens.SUCESSO if n else None,
             )
+            # bloquinho de cor feito com fundo (o simbolo quadrado nao existe na Figtree)
+            cor = "<span style='background-color:{}'>&nbsp;&nbsp;&nbsp;</span>".format
             self.lbl_legenda_horas.setText(
-                f"Hoje (azul) e média das últimas {SEMANAS_MEDIA} {r['dia_semana']}s (cinza)"
+                f"{cor(tokens.PRIMARIA)} Hoje &nbsp;&nbsp;&nbsp; {cor(tokens.GRAFICO_NEUTRO)} "
+                f"Média das últimas {SEMANAS_MEDIA} {r['dia_semana']}s"
             )
             self.barras.definir(r["horas"])
             self._pintar_top(r["mais_vendidos"])

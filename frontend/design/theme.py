@@ -47,6 +47,7 @@ def aplicar_tema(app, escuro: bool = False):
     app.setStyleSheet(f"""
         QWidget {{
             font-family: "{familia_fonte}";
+            font-weight: 500;  /* 06/11: Figtree 400 ficava fina demais no Windows */
         }}
 
         QToolTip {{

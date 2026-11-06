@@ -25,7 +25,7 @@ PRAZO_INADIMPLENCIA_PADRAO = 90
 
 # quem quita as compras, em média, em até tantos dias é "bom pagador";
 # acima disso, "paga com atraso"
-PRAZO_BOM_PAGADOR_DIAS = 30
+PRAZO_BOM_PAGADOR_DIAS = 60  # 2 meses (pedido do dono, 05/11/2026)
 
 _EPSILON = 0.009  # mesmo limiar de "zero" já usado no resto do projeto
 
@@ -224,6 +224,17 @@ def paga_com_atraso(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
             (prazo is not None and prazo > PRAZO_BOM_PAGADOR_DIAS)
             or (atraso is not None and atraso > PRAZO_BOM_PAGADOR_DIAS)
         )
+        and not eh_inadimplente(agr, prazo_dias)
+    )
+
+
+def atrasado_sem_ser_inadimplente(agr, prazo_dias=PRAZO_INADIMPLENCIA_PADRAO):
+    """Tem compra em aberto ha mais de 2 meses (limite do bom pagador)
+    mas ainda nao e' inadimplente -- vira o selo "Atrasado · N dias"
+    (amarelo) na lista e no PDV, em vez de um "Fiado em aberto" neutro."""
+    atraso = agr.get("dias_em_atraso")
+    return (
+        atraso is not None and atraso > PRAZO_BOM_PAGADOR_DIAS
         and not eh_inadimplente(agr, prazo_dias)
     )
 

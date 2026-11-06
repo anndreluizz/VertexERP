@@ -194,7 +194,7 @@ class InteligenciaNegocios(QWidget):
         self.card_lucro = CardKPI("Lucro bruto", "bar-chart-2", tokens.SECUNDARIA)
         self.card_fiado = CardKPI("Fiado em aberto", "users", tokens.ALERTA)
         self.card_recebido = CardKPI("Fiado recebido", "wallet", tokens.SUCESSO)
-        self.card_contas = CardKPI("Contas a pagar (30 dias)", "file-text", tokens.ERRO)
+        self.card_contas = CardKPI("Boletos (30 dias)", "file-text", tokens.ERRO)
         self.card_previsao = CardKPI("Previsão 30 dias", "calendar", tokens.PRIMARIA)
         cards = [
             self.card_faturamento, self.card_vendas, self.card_ticket, self.card_lucro,
@@ -225,7 +225,7 @@ class InteligenciaNegocios(QWidget):
         self.secao_formas = SecaoCard("Formas de pagamento", "credit-card")
         self.tabela_formas = tabela_lista(["Forma", "Vendas", "Total"])
         self.secao_formas.corpo.addWidget(self.tabela_formas)
-        self.secao_contas = SecaoCard("Contas a pagar próximas", "file-text")
+        self.secao_contas = SecaoCard("Boletos próximos", "file-text")
         self.tabela_contas = tabela_lista(["Vencimento", "Descrição", "Valor"])
         self.secao_contas.corpo.addWidget(self.tabela_contas)
         linha1.addWidget(self.secao_formas, 2, Qt.AlignTop)

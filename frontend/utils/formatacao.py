@@ -61,3 +61,16 @@ def linhas_resumo_caixa(resumo):
 
 def nome_forma(codigo):
     return NOMES_FORMA.get(codigo, codigo)
+
+
+def ler_moeda(texto):
+    """Texto digitado/preenchido -> float. Aceita "1.234,50", "1234,50",
+    "R$ 50", "12.5" e "1.000" (mil). Levanta ValueError se nao for numero.
+    Antes cada tela fazia float(t.replace(",", ".")) e "1.234,50" -- o que
+    o proprio formatar_moeda escreve no campo -- dava "valor invalido"."""
+    t = str(texto or "").replace("R$", "").replace(" ", "").strip()
+    if "," in t:
+        t = t.replace(".", "").replace(",", ".")
+    elif t.count(".") > 1 or (t.count(".") == 1 and len(t.split(".")[1]) == 3):
+        t = t.replace(".", "")
+    return float(t)

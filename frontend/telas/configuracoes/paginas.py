@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QMessageBox,
     QKeySequenceEdit,
-    QCheckBox,
     QSpinBox,
     QFileDialog,
 )
@@ -36,11 +35,7 @@ class PaginasMixin:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(14)
 
-        lbl_secao = QLabel("DADOS DA LOJA")
-        lbl_secao.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.6px;
-        """)
+        lbl_secao = self._titulo_bloco("DADOS DA LOJA")
         layout.addWidget(lbl_secao)
 
         linha_logo = QHBoxLayout()
@@ -99,11 +94,7 @@ class PaginasMixin:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(14)
 
-        lbl_secao = QLabel("RECEBIMENTO VIA PIX")
-        lbl_secao.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.6px;
-        """)
+        lbl_secao = self._titulo_bloco("RECEBIMENTO VIA PIX")
         layout.addWidget(lbl_secao)
 
         self.pix_chave = self._campo(
@@ -138,16 +129,12 @@ class PaginasMixin:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(14)
 
-        lbl_secao = QLabel("ATALHOS DE TECLADO DO PDV")
-        lbl_secao.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.6px;
-        """)
+        lbl_secao = self._titulo_bloco("ATALHOS DE TECLADO DO PDV")
         layout.addWidget(lbl_secao)
 
-        self.atalho_busca = self._campo_atalho(layout, "PESQUISAR PRODUTO (padrão: F1)")
-        self.atalho_cadastro = self._campo_atalho(layout, "NOVO PRODUTO (padrão: F4)")
-        self.atalho_cancelar = self._campo_atalho(layout, "CANCELAR VENDA (padrão: Esc)")
+        self.atalho_busca = self._campo_atalho(layout, "Pesquisar produto", "Padrão: F1")
+        self.atalho_cadastro = self._campo_atalho(layout, "Novo produto", "Padrão: F4")
+        self.atalho_cancelar = self._campo_atalho(layout, "Cancelar venda", "Padrão: Esc")
 
         dica = QLabel(
             '"Pagar" continua fixo em F3 nesta versão. As mudanças '
@@ -161,10 +148,10 @@ class PaginasMixin:
         """)
         layout.addWidget(dica)
 
-        bt_salvar_atalhos = BotaoSucesso("Salvar Atalhos")
+        bt_salvar_atalhos = BotaoSucesso("Salvar atalhos")
         bt_salvar_atalhos.setMinimumHeight(42)
         bt_salvar_atalhos.clicked.connect(self.salvar_atalhos)
-        layout.addWidget(bt_salvar_atalhos)
+        layout.addWidget(bt_salvar_atalhos, 0, Qt.AlignRight)
 
         layout.addStretch()
 
@@ -179,11 +166,7 @@ class PaginasMixin:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(14)
 
-        lbl_secao = QLabel("INTEGRAÇÃO COM WHATSAPP (VIA Z-API)")
-        lbl_secao.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.6px;
-        """)
+        lbl_secao = self._titulo_bloco("INTEGRAÇÃO COM WHATSAPP (VIA Z-API)")
         layout.addWidget(lbl_secao)
 
         dica_topo = QLabel(
@@ -206,34 +189,20 @@ class PaginasMixin:
         )
         self.whatsapp_token.setEchoMode(QLineEdit.Password)
 
-        self.whatsapp_ativo = QCheckBox("Ativar integração com WhatsApp")
-        self.whatsapp_ativo.setStyleSheet(self._estilo_checkbox())
-        layout.addWidget(self.whatsapp_ativo)
+        self.whatsapp_ativo = self._interruptor(
+            layout, "Ativar integração com WhatsApp", "Liga o envio de mensagens pela Z-API")
 
         linha_divisoria = QFrame()
         linha_divisoria.setFixedHeight(1)
         linha_divisoria.setStyleSheet(f"background:{tokens.BORDA};")
         layout.addWidget(linha_divisoria)
 
-        lbl_automacoes = QLabel("AUTOMAÇÕES")
-        lbl_automacoes.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.6px;
-        """)
+        lbl_automacoes = self._titulo_bloco("AUTOMAÇÕES")
         layout.addWidget(lbl_automacoes)
 
-        self.whatsapp_lembrete_fiado_ativo = QCheckBox(
-            "Lembrar cliente com fiado parado"
-        )
-        self.whatsapp_lembrete_fiado_ativo.setStyleSheet(self._estilo_checkbox())
-        layout.addWidget(self.whatsapp_lembrete_fiado_ativo)
+        self.whatsapp_lembrete_fiado_ativo = self._interruptor(
+            layout, "Lembrar cliente com fiado parado", "Manda um lembrete educado pelo WhatsApp")
 
-        linha_dias = QHBoxLayout()
-        lbl_dias = QLabel("Avisar depois de quantos dias parado:")
-        lbl_dias.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_SM}px;
-            color:{tokens.TEXTO_SECUNDARIO};
-        """)
         self.whatsapp_lembrete_fiado_dias = QSpinBox()
         self.whatsapp_lembrete_fiado_dias.setRange(1, 365)
         self.whatsapp_lembrete_fiado_dias.setValue(30)
@@ -245,16 +214,11 @@ class PaginasMixin:
                 background: {tokens.CARD};
             }}
         """)
-        linha_dias.addWidget(lbl_dias)
-        linha_dias.addWidget(self.whatsapp_lembrete_fiado_dias)
-        linha_dias.addStretch()
-        layout.addLayout(linha_dias)
+        self.whatsapp_lembrete_fiado_dias.setFixedWidth(110)
+        self._linha(layout, "Avisar depois de quantos dias parado", "", self.whatsapp_lembrete_fiado_dias)
 
-        self.whatsapp_comprovante_venda_ativo = QCheckBox(
-            "Mandar comprovante da venda automaticamente pro cliente"
-        )
-        self.whatsapp_comprovante_venda_ativo.setStyleSheet(self._estilo_checkbox())
-        layout.addWidget(self.whatsapp_comprovante_venda_ativo)
+        self.whatsapp_comprovante_venda_ativo = self._interruptor(
+            layout, "Mandar comprovante da venda", "Vai sozinho pro WhatsApp do cliente")
 
         layout.addStretch()
 
@@ -267,11 +231,7 @@ class PaginasMixin:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(14)
 
-        lbl_secao = QLabel("ENVIO DE E-MAIL (SMTP)")
-        lbl_secao.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.6px;
-        """)
+        lbl_secao = self._titulo_bloco("ENVIO DE E-MAIL (SMTP)")
         layout.addWidget(lbl_secao)
 
         dica_topo = QLabel(
@@ -300,13 +260,8 @@ class PaginasMixin:
                 background: {tokens.CARD};
             }}
         """)
-        lbl_porta = QLabel("PORTA")
-        lbl_porta.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
-        layout.addWidget(lbl_porta)
-        layout.addWidget(self.smtp_porta)
+        self.smtp_porta.setFixedWidth(120)
+        self._linha(layout, "Porta", "Gmail e Outlook usam 587", self.smtp_porta)
 
         self.smtp_usuario = self._campo(
             layout, "USUÁRIO (E-MAIL)", "seuemail@gmail.com", cls=EmailField
@@ -321,9 +276,8 @@ class PaginasMixin:
             layout, "REMETENTE (OPCIONAL)", "Se vazio, usa o usuário acima"
         )
 
-        self.smtp_ativo = QCheckBox("Ativar envio de comprovante por e-mail")
-        self.smtp_ativo.setStyleSheet(self._estilo_checkbox())
-        layout.addWidget(self.smtp_ativo)
+        self.smtp_ativo = self._interruptor(
+            layout, "Ativar envio de comprovante por e-mail", "Usa o servidor configurado acima")
 
         layout.addStretch()
 
@@ -392,28 +346,20 @@ class PaginasMixin:
             )
         )
 
-    def _campo_atalho(self, layout, rotulo):
-
-        lbl = QLabel(rotulo)
-        lbl.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
+    def _campo_atalho(self, layout, rotulo, ajuda=""):
 
         campo = QKeySequenceEdit()
         campo.setMinimumHeight(42)
         campo.setStyleSheet(f"""
-            QKeySequenceEdit {{
-                border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;
+            QKeySequenceEdit QLineEdit {{
+                border: 1.5px solid {tokens.BORDA_FORTE}; border-radius: {tokens.RADIUS_SM}px;
                 padding: 0 12px; font-size: {tokens.TAMANHO_MD}px; color: {tokens.TEXTO};
-                background: {tokens.CARD};
+                background: {tokens.CARD}; min-height: 40px;
             }}
         """)
 
-        layout.addWidget(lbl)
-        layout.addWidget(campo)
-
-        return campo
+        campo.setFixedWidth(200)
+        return self._linha(layout, rotulo, ajuda, campo)
 
     def _carregar_atalhos_ui(self):
 

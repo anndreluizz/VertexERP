@@ -26,7 +26,7 @@ from services.api import configuracoes
 from services.pix_utils import montar_payload_pix
 from services.worker import rodar_em_thread
 from telas.selecionar_cliente import SelecionarClienteDialog
-from utils.formatacao import formatar_moeda
+from utils.formatacao import formatar_moeda, ler_moeda
 
 # rotulo exibido, valor enviado pra API, icone (lucide) do botao -- a
 # ordem aqui e' a tecla de atalho (1 = Dinheiro, 2 = Debito...)
@@ -55,13 +55,17 @@ EPSILON = 0.005
 
 def _texto_para_valor(texto):
     """Aceita '50', '50,5', '1.234,56' e '1234.56'."""
-    texto = (texto or "").strip()
-    if "," in texto:
-        texto = texto.replace(".", "").replace(",", ".")
     try:
-        return round(float(texto or 0), 2)
+        return round(ler_moeda(texto), 2) if (texto or "").strip() else 0.0
     except ValueError:
         return 0.0
+
+
+def troco_previa(forma, valor, falta):
+    """"Troco: R$ 10,40" enquanto digita, so' em dinheiro e passando do que falta."""
+    if forma == "DINHEIRO" and valor - falta > EPSILON and falta > EPSILON:
+        return f"Troco: R$ {_fmt(valor - falta)}"
+    return ""
 
 
 def _fmt(valor):
@@ -469,6 +473,8 @@ class PagamentoWindow(QDialog):
         """)
         self.campo_valor.returnPressed.connect(self.lancar_pagamento)
         self.campo_valor.textEdited.connect(self._valor_editado)
+        # digitar OU clicar numa nota (setText) atualiza o troco
+        self.campo_valor.textChanged.connect(self._atualizar_troco_previa)
         caixa_layout.addWidget(self.campo_valor)
 
         bloco_layout.addWidget(self.caixa_valor)
@@ -478,6 +484,16 @@ class PagamentoWindow(QDialog):
             f"background:transparent; font-size:11px; color:{tokens.TEXTO_TERCIARIO};"
         )
         bloco_layout.addWidget(self.lbl_dica_valor)
+
+        # Vertex 2.0: troco aparece enquanto digita (antes so' depois do Enter)
+        self.lbl_troco_previa = QLabel("")
+        self.lbl_troco_previa.setVisible(False)
+        self.lbl_troco_previa.setStyleSheet(
+            f"background:{tokens.SUCESSO_CLARO}; color:{tokens.SECUNDARIA_HOVER}; "
+            f"border-radius:{tokens.RADIUS_SM}px; padding:8px 12px; "
+            f"font-size:{tokens.TAMANHO_LG}px; font-weight:800;"
+        )
+        bloco_layout.addWidget(self.lbl_troco_previa)
 
         # notas -- so' em dinheiro
         self.bloco_notas = QFrame()
@@ -769,6 +785,13 @@ class PagamentoWindow(QDialog):
         self._avisar(None)
         if self.forma_atual == "PIX":
             self._timer_pix.start()
+
+    def _atualizar_troco_previa(self, *_):
+        if not hasattr(self, "lbl_troco_previa"):
+            return  # campo ainda sendo montado
+        texto = troco_previa(self.forma_atual, _texto_para_valor(self.campo_valor.text()), self.falta())
+        self.lbl_troco_previa.setText(texto)
+        self.lbl_troco_previa.setVisible(bool(texto))
 
     def _usar_nota(self, nota):
 

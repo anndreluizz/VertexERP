@@ -204,16 +204,16 @@ class FormularioMixin:
     def _atualizar_estilo_favorito(self, marcado):
 
         self.favorito.setIcon(icone(
-            "star-filled" if marcado else "star", cor=tokens.ALERTA, tamanho=15,
+            "star-filled" if marcado else "star", cor="#FBBF24", tamanho=15,
         ))
 
         self.favorito.setStyleSheet(f"""
             QPushButton {{
-                background: {tokens.ALERTA_CLARO if marcado else tokens.CARD};
-                color: {tokens.ALERTA_TEXTO};
-                border: 1.5px solid {tokens.ALERTA if marcado else tokens.BORDA};
+                background: {'rgba(245, 158, 11, 0.18)' if marcado else 'transparent'};
+                color: {'#FBBF24' if marcado else '#FFFFFF'};
+                border: 1px solid {'#FBBF24' if marcado else 'rgba(255, 255, 255, 0.35)'};
                 border-radius: {tokens.RADIUS_PILL}px;
                 padding: 0 16px; font-weight: 700; font-size: {tokens.TAMANHO_SM}px;
             }}
-            QPushButton:hover {{ background: {tokens.ALERTA_CLARO}; }}
+            QPushButton:hover {{ background: rgba(255, 255, 255, 0.1); }}
         """)

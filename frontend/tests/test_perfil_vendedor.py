@@ -56,16 +56,18 @@ def test_tela_caixa_do_vendedor_esconde_saldo_e_conferencia(_qapp, monkeypatch):
     tela = Caixa()
 
     assert tela._ve_totais is False
-    assert tela.lbl_total_previsto.isHidden()
+    assert tela.secao_kpis.isHidden() and tela.cartao_conferir.isHidden()
     assert tela.bt_caixas_anteriores.isHidden()
     assert not tela.bt_sangria.isHidden() and not tela.bt_suprimento.isHidden()
 
 
 def test_dashboard_abre_para_admin_e_vendedor(_qapp, monkeypatch):
     # 19/10: _financeiro era lido antes de existir e o programa nao abria
-    from telas.dashboard import Dashboard
+    from telas.inicio import Inicio
 
-    monkeypatch.setattr(Dashboard, "carregar", lambda self: None)
+    monkeypatch.setattr(Inicio, "carregar", lambda self: None)
     for info in ({"admin": True}, {"admin": False, "permissoes": []}):
         monkeypatch.setattr(api, "_INFO_USUARIO_CACHE", info)
-        Dashboard(usuario_id=1)
+        tela = Inicio(usuario_id=1)
+        # vendedor: so' 2 numeros (caixa e ticket nem entram na tela)
+        assert (tela.num_caixa.parent() is None) is (not info["admin"])

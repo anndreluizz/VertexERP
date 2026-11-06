@@ -11,21 +11,33 @@ def carregar_fonte_inter():
     de volta pra Segoe UI (ja vem em qualquer Windows) em vez de
     quebrar a aplicacao inteira por causa de uma fonte decorativa."""
 
-    caminho = caminho_asset("fonts", "Inter-Variable.ttf")
+    global _familia_carregada, _familia_titulo
 
-    global _familia_carregada
-
-    id_fonte = QFontDatabase.addApplicationFont(caminho)
-
-    if id_fonte == -1:
+    # Vertex 2.0: Figtree no texto e Bricolage Grotesque nos titulos
+    # (as do prototipo); Inter fica de reserva se a Figtree falhar
+    for arquivo in ("Figtree-Variable.ttf", "Inter-Variable.ttf"):
+        familias = _registrar(arquivo)
+        if familias:
+            _familia_carregada = familias[0]
+            break
+    else:
         return FONTE_FAMILIA_PADRAO
 
-    familias = QFontDatabase.applicationFontFamilies(id_fonte)
-
-    if familias:
-        _familia_carregada = familias[0]
+    titulo = _registrar("BricolageGrotesque-Variable.ttf")
+    _familia_titulo = titulo[0] if titulo else _familia_carregada
 
     return _familia_carregada
+
+
+def _registrar(arquivo):
+    id_fonte = QFontDatabase.addApplicationFont(caminho_asset("fonts", arquivo))
+    return QFontDatabase.applicationFontFamilies(id_fonte) if id_fonte != -1 else []
+
+
+def familia_titulo():
+    """Familia dos titulos grandes (Bricolage Grotesque) pra usar em
+    stylesheet: f"font-family:'{familia_titulo()}';"."""
+    return _familia_titulo
 
 
 # família que carregar_fonte_inter() conseguiu registrar (Inter), ou o
@@ -33,6 +45,7 @@ def carregar_fonte_inter():
 # QFont(tokens.FONTE_FAMILIA_PADRAO, ...), que travava botões e menu em
 # Segoe UI enquanto o resto da tela (stylesheet global) já era Inter
 _familia_carregada = FONTE_FAMILIA_PADRAO
+_familia_titulo = FONTE_FAMILIA_PADRAO
 
 
 def fonte(tamanho_px):

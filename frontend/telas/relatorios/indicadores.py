@@ -226,7 +226,7 @@ class IndicadoresMixin:
         painel_prazo = PainelSecao("⏱️", "Prazo Médio de Pagamento por Fornecedor")
         subtitulo_prazo = QLabel(
             "Só considera compras a prazo (com parcelas geradas em "
-            "Contas a Pagar)."
+            "Boletos)."
         )
         subtitulo_prazo.setWordWrap(True)
         subtitulo_prazo.setStyleSheet(

@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QVBoxLayout,
     QHBoxLayout,
-    QGridLayout,
     QFrame,
     QMessageBox,
     QApplication,
@@ -24,6 +23,7 @@ from requests.exceptions import ConnectionError
 
 from design import tokens
 from design.animations import fade_in, slide_up
+from design.fonts import familia_titulo
 from design.icons import icone, icone_pixmap
 from design.widgets import BotaoPrimario
 from services import api
@@ -33,14 +33,6 @@ from services.worker import rodar_em_thread, em_paralelo
 from utils.acessibilidade import movimento_reduzido
 from telas.verificar_2fa import Verificar2FADialog
 from telas.principal import PrincipalWindow
-
-
-BENEFICIOS = [
-    ("shopping-cart", "Vendas", "Caixa rápido no balcão"),
-    ("package", "Estoque", "Produto certo na prateleira"),
-    ("users", "Clientes", "Fiado sem caderninho"),
-    ("wallet", "Financeiro", "Contas sempre em dia"),
-]
 
 
 class _PainelAnimado(QFrame):
@@ -102,13 +94,14 @@ class _PainelAnimado(QFrame):
 
         gradiente = QLinearGradient(0, 0, x2, y2)
         gradiente.setColorAt(0, QColor(tokens.PRIMARIA))
-        gradiente.setColorAt(1, QColor(tokens.PRIMARIA_ESCURA))
+        gradiente.setColorAt(1, QColor(tokens.SIDEBAR))
 
         painter.fillRect(self.rect(), gradiente)
 
-        self._desenhar_forma(painter, largura * 0.88, altura * 0.1, 150, 0.0)
-        self._desenhar_forma(painter, largura * 0.06, altura * 0.55, 170, 0.33)
-        self._desenhar_forma(painter, largura * 0.8, altura * 0.92, 130, 0.66)
+        self._desenhar_forma(painter, largura * 0.86, altura * 0.12, 260, 0.0)
+        self._desenhar_forma(painter, largura * 0.1, altura * 0.6, 300, 0.33)
+        self._desenhar_forma(painter, largura * 0.7, altura * 0.95, 220, 0.66)
+        self._desenhar_forma(painter, largura * 0.3, altura * 0.08, 180, 0.5)
 
     def _desenhar_forma(self, painter, x_base, y_base, raio, deslocamento_fase):
         """Um círculo com borda suave (gradiente radial que desaparece
@@ -116,10 +109,10 @@ class _PainelAnimado(QFrame):
         dá profundidade sem competir com o texto por cima."""
 
         fase_local = (self._fase + deslocamento_fase) % 1.0
-        deslocamento = math.sin(fase_local * 2 * math.pi) * 20
+        deslocamento = math.sin(fase_local * 2 * math.pi) * 34
 
         gradiente = QRadialGradient(x_base, y_base + deslocamento, raio)
-        gradiente.setColorAt(0.0, QColor(255, 255, 255, 22))
+        gradiente.setColorAt(0.0, QColor(255, 255, 255, 26))
         gradiente.setColorAt(1.0, QColor(255, 255, 255, 0))
 
         painter.setPen(Qt.NoPen)
@@ -171,21 +164,80 @@ class LoginWindow(QWidget):
         # e o estado definido aqui já vale pra esse show(). Ao sair do
         # maximizado, volta pro tamanho de 1180x720 acima.
         self.setWindowState(Qt.WindowMaximized)
-        self.setStyleSheet(f"background:{tokens.CARD};")
+        self.setStyleSheet(f"background:{tokens.SIDEBAR};")
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        raiz = QVBoxLayout(self)
+        raiz.setContentsMargins(0, 0, 0, 0)
 
-        self._painel_marca = self._construir_painel_marca()
+        # Vertex 2.0: login no meio da tela, em cima do fundo animado
+        self._painel_marca = _PainelAnimado()
+        raiz.addWidget(self._painel_marca)
 
-        layout.addWidget(self._painel_marca, stretch=5)
-        layout.addWidget(self._construir_painel_formulario(), stretch=6)
+        fundo = QVBoxLayout(self._painel_marca)
+        fundo.setContentsMargins(40, 28, 40, 24)
+        fundo.setSpacing(0)
+
+        topo = QHBoxLayout()
+        topo.setSpacing(12)
+        self._logo = QWidget()
+        self._logo.setStyleSheet("background:transparent;")
+        linha_logo = QHBoxLayout(self._logo)
+        linha_logo.setContentsMargins(0, 0, 0, 0)
+        linha_logo.setSpacing(12)
+        marca = QLabel("V")
+        marca.setFixedSize(40, 40)
+        marca.setAlignment(Qt.AlignCenter)
+        marca.setStyleSheet("""
+            background: rgba(255, 255, 255, 0.16);
+            color: white; border-radius: 12px;
+            font-size: 19px; font-weight: 800;
+        """)
+        nome = QLabel("Vertex ERP")
+        nome.setStyleSheet(f"background:transparent; color:white; font-size:20px; "
+                           f"font-weight:700; font-family:'{familia_titulo()}';")
+        linha_logo.addWidget(marca)
+        linha_logo.addWidget(nome)
+        topo.addWidget(self._logo)
+        topo.addStretch()
+        topo.addWidget(self._construir_bt_tema())
+        fundo.addLayout(topo)
+
+        fundo.addStretch(2)
+        self._cartao = self._construir_painel_formulario()
+        fundo.addWidget(self._cartao, 0, Qt.AlignHCenter)
+        fundo.addSpacing(22)
+
+        frase = QLabel("Sua loja organizada, do caixa ao fiado.")
+        frase.setAlignment(Qt.AlignCenter)
+        frase.setStyleSheet("background:transparent; color: rgba(255, 255, 255, 0.75); font-size:15px;")
+        fundo.addWidget(frase)
+        fundo.addStretch(3)
+
+        rodape = QHBoxLayout()
+        endereco = api.URL.split("://", 1)[-1]
+        lbl_servidor = QLabel(f"●  Servidor: {endereco}")
+        lbl_servidor.setStyleSheet("background:transparent; color: rgba(255, 255, 255, 0.55); font-size:12px;")
+        bt_config_servidor = self._link(
+            "Configurar servidor", "rgba(255, 255, 255, 0.7)", "#FFFFFF",
+            tamanho=tokens.TAMANHO_SM, peso=500,
+        )
+        bt_config_servidor.setIcon(icone("settings", cor="#C7D2E3", tamanho=14))
+        bt_config_servidor.clicked.connect(self.configurar_servidor)
+        rodape.addWidget(lbl_servidor)
+        rodape.addStretch()
+        rodape.addWidget(bt_config_servidor)
+        fundo.addLayout(rodape)
 
         self.usuario.setFocus()
 
-        fade_in(self, duracao=260)
-        self._animar_beneficios_escalonado()
+        # entrada: logo aparece, cartao sobe e aparece (espera o layout
+        # posicionar o cartao, senao o slide_up parte da posicao 0,0)
+        fade_in(self._logo, duracao=500)
+        QTimer.singleShot(60, self._animar_entrada)
+
+    def _animar_entrada(self):
+        fade_in(self._cartao, duracao=520)
+        slide_up(self._cartao, distancia=36, duracao=620)
 
     def closeEvent(self, event):
         # getattr defensivo: em testes a janela pode ser criada via
@@ -196,176 +248,18 @@ class LoginWindow(QWidget):
         super().closeEvent(event)
 
     # ======================================
-    # PAINEL ESQUERDO — MARCA
-    # ======================================
-
-    def _construir_painel_marca(self):
-
-        painel = _PainelAnimado()
-
-        layout = QVBoxLayout(painel)
-        layout.setContentsMargins(56, 44, 56, 36)
-        layout.setSpacing(0)
-
-        # ---- logo no topo
-        topo = QHBoxLayout()
-        topo.setSpacing(12)
-
-        marca = QLabel("V")
-        marca.setFixedSize(40, 40)
-        marca.setAlignment(Qt.AlignCenter)
-        marca.setStyleSheet("""
-            background: rgba(255, 255, 255, 0.16);
-            color: white; border-radius: 12px;
-            font-size: 19px; font-weight: 800;
-        """)
-
-        nome = QLabel("Vertex ERP")
-        nome.setStyleSheet("""
-            background:transparent; color:white;
-            font-size:18px; font-weight:800;
-        """)
-
-        topo.addWidget(marca)
-        topo.addWidget(nome)
-        topo.addStretch()
-        layout.addLayout(topo)
-
-        layout.addStretch(3)
-
-        # ---- mensagem principal
-        titulo = QLabel("Sua loja organizada,\ndo caixa ao fiado.")
-        titulo.setStyleSheet("""
-            background:transparent; color:white;
-            font-size:34px; font-weight:800;
-        """)
-        layout.addWidget(titulo)
-        layout.addSpacing(14)
-
-        descricao = QLabel(
-            "Vendas, estoque, clientes e financeiro num lugar só, "
-            "pra você fechar o dia sabendo exatamente onde está cada real."
-        )
-        descricao.setWordWrap(True)
-        descricao.setMaximumWidth(440)
-        descricao.setStyleSheet("""
-            background:transparent; color: rgba(255, 255, 255, 0.80);
-            font-size:14px;
-        """)
-        layout.addWidget(descricao)
-        layout.addSpacing(36)
-
-        # ---- benefícios, um por linha (em 2 colunas o texto quebrava
-        # na largura mínima da janela)
-        grade = QGridLayout()
-        grade.setVerticalSpacing(16)
-
-        self._linhas_beneficio = []
-
-        for indice, (icone_nome, titulo_beneficio, subtitulo) in enumerate(BENEFICIOS):
-            linha = self._linha_beneficio(icone_nome, titulo_beneficio, subtitulo)
-            self._linhas_beneficio.append(linha)
-            grade.addWidget(linha, indice, 0)
-
-        layout.addLayout(grade)
-
-        layout.addStretch(4)
-
-        # ---- rodapé: em qual servidor este PC vai entrar (ajuda a
-        # perceber na hora um Terminal apontando pro lugar errado)
-        endereco = api.URL.split("://", 1)[-1]
-        rodape = QLabel(f"●  Servidor: {endereco}")
-        rodape.setStyleSheet("""
-            background:transparent; color: rgba(255, 255, 255, 0.55);
-            font-size:12px;
-        """)
-        layout.addWidget(rodape)
-
-        return painel
-
-    def _animar_beneficios_escalonado(self):
-        """Entram um de cada vez (em vez de todos de uma vez com o
-        resto da tela) -- reaproveita fade_in/slide_up já existentes,
-        só com um atrasinho crescente entre eles."""
-
-        for indice, linha in enumerate(self._linhas_beneficio):
-            atraso = 240 + indice * 100
-            QTimer.singleShot(
-                atraso,
-                lambda linha=linha: (fade_in(linha, duracao=300), slide_up(linha, duracao=300)),
-            )
-
-    def _linha_beneficio(self, icone_nome, titulo, subtitulo):
-
-        linha = QWidget()
-        linha.setStyleSheet("background:transparent;")
-
-        linha_layout = QHBoxLayout(linha)
-        linha_layout.setContentsMargins(0, 0, 0, 0)
-        linha_layout.setSpacing(12)
-
-        bolha = QLabel()
-        bolha.setFixedSize(36, 36)
-        bolha.setAlignment(Qt.AlignCenter)
-        bolha.setStyleSheet("""
-            background: rgba(255, 255, 255, 0.12);
-            border-radius: 10px;
-        """)
-        bolha.setPixmap(icone_pixmap(icone_nome, cor=tokens.TEXTO_CLARO, tamanho=17))
-
-        coluna = QVBoxLayout()
-        coluna.setSpacing(1)
-        coluna.setContentsMargins(0, 0, 0, 0)
-
-        lbl_titulo = QLabel(titulo)
-        lbl_titulo.setStyleSheet(f"""
-            background:transparent; color: {tokens.TEXTO_CLARO};
-            font-size:14px; font-weight:700;
-        """)
-
-        lbl_subtitulo = QLabel(subtitulo)
-        lbl_subtitulo.setWordWrap(True)
-        lbl_subtitulo.setStyleSheet("""
-            background:transparent; color: rgba(255, 255, 255, 0.70);
-            font-size:12px;
-        """)
-
-        coluna.addWidget(lbl_titulo)
-        coluna.addWidget(lbl_subtitulo)
-
-        linha_layout.addWidget(bolha, alignment=Qt.AlignTop)
-        linha_layout.addLayout(coluna, stretch=1)
-
-        return linha
-
-    # ======================================
-    # PAINEL DIREITO — FORMULÁRIO
+    # CARTAO DO FORMULARIO (no meio)
     # ======================================
 
     def _construir_painel_formulario(self):
 
         painel = QFrame()
-        painel.setStyleSheet(f"background:{tokens.CARD};")
+        painel.setObjectName("cartaoLogin")
+        painel.setFixedWidth(452)
+        painel.setStyleSheet(f"QFrame#cartaoLogin {{ background:{tokens.CARD}; border-radius:22px; }}")
 
-        externo = QVBoxLayout(painel)
-        externo.setContentsMargins(28, 20, 28, 24)
-        externo.setSpacing(0)
-
-        barra_topo = QHBoxLayout()
-        barra_topo.addStretch()
-        barra_topo.addWidget(self._construir_bt_tema())
-        externo.addLayout(barra_topo)
-
-        externo.addStretch(2)
-
-        # formulário "solto" no painel (sem cartão em volta): o painel
-        # da direita inteiro já é a superfície do formulário
-        coluna = QWidget()
-        coluna.setFixedWidth(372)
-        coluna.setStyleSheet("background:transparent;")
-
-        layout = QVBoxLayout(coluna)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout = QVBoxLayout(painel)
+        layout.setContentsMargins(40, 36, 40, 32)
         layout.setSpacing(0)
 
         saudacao = QLabel(_saudacao().upper())
@@ -380,7 +274,7 @@ class LoginWindow(QWidget):
         titulo = QLabel("Entrar no Vertex")
         titulo.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO};
-            font-size:{tokens.TAMANHO_XXL}px; font-weight:800;
+            font-size:30px; font-weight:700; font-family:'{familia_titulo()}';
         """)
         layout.addWidget(titulo)
         layout.addSpacing(6)
@@ -391,8 +285,7 @@ class LoginWindow(QWidget):
             font-size:{tokens.TAMANHO_MD}px;
         """)
         layout.addWidget(subtitulo)
-        layout.addSpacing(32)
-
+        layout.addSpacing(28)
         layout.addWidget(self._rotulo_campo("E-mail"))
         layout.addSpacing(8)
         layout.addWidget(self._construir_campo_email())
@@ -458,18 +351,6 @@ class LoginWindow(QWidget):
         linha_cadastro.addStretch()
         layout.addLayout(linha_cadastro)
 
-        externo.addWidget(coluna, alignment=Qt.AlignHCenter)
-
-        externo.addStretch(3)
-
-        bt_config_servidor = self._link(
-            "Configurar servidor", tokens.TEXTO_TERCIARIO, tokens.TEXTO_SECUNDARIO,
-            tamanho=tokens.TAMANHO_SM, peso=500,
-        )
-        bt_config_servidor.setIcon(icone("settings", cor=tokens.TEXTO_TERCIARIO, tamanho=14))
-        bt_config_servidor.clicked.connect(self.configurar_servidor)
-        externo.addWidget(bt_config_servidor, alignment=Qt.AlignHCenter)
-
         return painel
 
     def _rotulo_campo(self, texto):
@@ -503,16 +384,16 @@ class LoginWindow(QWidget):
         nome_icone = "moon" if not escuro_atual else "sun"
 
         bt = QPushButton(texto)
-        bt.setIcon(icone(nome_icone, cor=tokens.TEXTO_SECUNDARIO, tamanho=15))
+        bt.setIcon(icone(nome_icone, cor="#C7D2E3", tamanho=15))
         bt.setCursor(Qt.PointingHandCursor)
         bt.setAutoDefault(False)
         bt.setStyleSheet(f"""
             QPushButton {{
                 background:transparent; border:none;
-                color:{tokens.TEXTO_SECUNDARIO}; font-size:{tokens.TAMANHO_SM}px;
+                color:#C7D2E3; font-size:{tokens.TAMANHO_SM}px;
                 padding: 6px 8px;
             }}
-            QPushButton:hover {{ color:{tokens.TEXTO}; }}
+            QPushButton:hover {{ color:#FFFFFF; }}
         """)
         bt.clicked.connect(self._alternar_tema)
 

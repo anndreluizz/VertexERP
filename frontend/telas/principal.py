@@ -1,4 +1,4 @@
-from telas.dashboard import Dashboard
+from telas.inicio import Inicio
 from telas.pdv import PDV
 from telas.vendas import Vendas
 from telas.caixa import Caixa
@@ -39,7 +39,8 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone
-from design.sidebar import Sidebar
+from design.busca_rapida import BuscaRapida
+from design.menu_topo import BarraMenu
 from design.header import Header
 from design.janela import pintar_barra_titulo
 from design.widgets import BotaoSecundario, PilhaPaginas
@@ -136,6 +137,12 @@ PERMISSAO_TELA = {
 }
 
 
+def _carregar_busca():
+    from services.cliente_service import listar_clientes
+    from services.produto_service import listar_produtos
+    return listar_clientes(), listar_produtos()
+
+
 def pode_abrir_tela(chave):
     permissao = PERMISSAO_TELA.get(chave)
     if permissao is None:
@@ -146,7 +153,7 @@ def pode_abrir_tela(chave):
 
 
 # (chave, ícone lucide, rótulo) — única fonte de verdade pra montar tanto
-# os itens da sidebar quanto o título mostrado no header.
+# os itens do menu do topo quanto o título mostrado no header.
 ITENS_MENU = [
     ("dashboard", "home", "Início"),
     ("pdv", "shopping-cart", "PDV"),
@@ -159,7 +166,7 @@ ITENS_MENU = [
     ("clientes", "users", "Clientes"),
     ("fornecedores", "truck", "Fornecedores"),
     ("caixa", "wallet", "Caixa"),
-    ("contas_pagar", "file-text", "Contas a Pagar"),
+    ("contas_pagar", "file-text", "Boletos"),
     ("conciliacao_bancaria", "credit-card", "Conciliação Bancária"),
     ("visao_geral", "trending-up", "Visão Geral"),
     ("relatorios", "bar-chart-2", "Relatórios"),
@@ -200,29 +207,27 @@ class PrincipalWindow(QMainWindow):
         cargo = api.cargo_usuario(info_usuario)
 
         nome_loja = config.get("nome_loja") or "Vertex ERP"
+        if config.get("nome_loja"):
+            self.setWindowTitle(f"Vertex ERP · {nome_loja}")
 
         central = QWidget()
         self.setCentralWidget(central)
 
-        layout = QHBoxLayout(central)
+        layout = QVBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
         # ======================
-        # MENU LATERAL
+        # MENU DO TOPO (Vertex 2.0 -- era o menu lateral)
         # ======================
 
-        self.sidebar = Sidebar(nome_loja, nome_usuario, cargo)
+        self.menu = BarraMenu(nome_loja, ITENS_MENU, pode_abrir_tela)
 
         self._titulos = {chave: titulo for chave, _, titulo in ITENS_MENU}
 
-        for chave, icone_nome, titulo in ITENS_MENU:
-            if pode_abrir_tela(chave):
-                self.sidebar.adicionar_item(chave, icone_nome, titulo)
+        self.menu.item_clicado.connect(self._navegar)
 
-        self.sidebar.item_clicado.connect(self._navegar)
-
-        layout.addWidget(self.sidebar)
+        layout.addWidget(self.menu)
 
         # ======================
         # ÁREA CENTRAL (header + páginas)
@@ -233,14 +238,17 @@ class PrincipalWindow(QMainWindow):
         layout_central.setContentsMargins(0, 0, 0, 0)
         layout_central.setSpacing(0)
 
+        # Vertex 2.0: o cabecalho virou o bloco da direita da barra azul
         self.header = Header(
             nome_loja, nome_usuario, cargo,
             admin=info_usuario.get("admin", False),
+            na_barra=True,
         )
         self.header.solicitou_logout.connect(self._fazer_logout)
         self.header.solicitou_trocar_senha.connect(self._abrir_trocar_senha)
         self.header.tema_alternado.connect(self._alternar_tema)
-        layout_central.addWidget(self.header)
+        self.menu.anexar(self.header)
+        self.menu.busca_pedida.connect(self.abrir_busca)
 
         self.faixa_backup = FaixaAvisoBackup()
         self.faixa_backup.ver_backups.connect(self._abrir_aba_backup)
@@ -249,7 +257,7 @@ class PrincipalWindow(QMainWindow):
         self.paginas = PilhaPaginas()
         layout_central.addWidget(self.paginas, stretch=1)
 
-        self.dashboard = Dashboard(usuario_id=info_usuario.get("id"))
+        self.dashboard = Inicio(usuario_id=info_usuario.get("id"))
         self.pdv = PDV()
         self.vendas = Vendas()
         self.produtos = Produtos()
@@ -300,17 +308,7 @@ class PrincipalWindow(QMainWindow):
         # EVENTOS
         # ======================
 
-        self.dashboard.navegar_pdv.connect(self.ir_para_pdv)
-
-        self.dashboard.navegar_estoque.connect(
-            lambda: self._exibir_pagina("produtos", self.produtos)
-        )
-
-        self.dashboard.navegar_caixa.connect(
-            lambda: self._exibir_pagina("caixa", self.caixa)
-        )
-
-        self.dashboard.navegar_relatorios.connect(self.ir_para_relatorios)
+        self.dashboard.tarefa_escolhida.connect(self._abrir_tarefa)
 
         self.pdv.voltar.connect(
             lambda: self._exibir_pagina("dashboard", self.dashboard)
@@ -341,7 +339,7 @@ class PrincipalWindow(QMainWindow):
             lambda: self._exibir_pagina("dashboard", self.dashboard)
         )
 
-        self.config.loja_atualizada.connect(self.sidebar.definir_nome_loja)
+        self.config.loja_atualizada.connect(self.menu.definir_nome_loja)
 
         self.relatorios.voltar.connect(
             lambda: self._exibir_pagina("dashboard", self.dashboard)
@@ -363,6 +361,9 @@ class PrincipalWindow(QMainWindow):
 
         self.atalho_pdv = QShortcut(QKeySequence("F3"), self)
         self.atalho_pdv.activated.connect(self.atalho_f3)
+
+        QShortcut(QKeySequence("Ctrl+K"), self).activated.connect(self.abrir_busca)
+        self._cache_busca = ([], [])
 
         # ======================
         # STATUS DE CONEXAO -- checagem leve em segundo plano, so pra
@@ -393,6 +394,54 @@ class PrincipalWindow(QMainWindow):
             QTimer.singleShot(
                 _ATRASO_PRIMEIRA_CHECAGEM_BACKUP_MS, self._checar_backup
             )
+
+    # ======================
+    # BUSCA RAPIDA (Ctrl K)
+    # ======================
+
+    def abrir_busca(self):
+        telas = [(c, t) for c, _, t in ITENS_MENU if pode_abrir_tela(c)]
+        self._busca = BuscaRapida(telas, *self._cache_busca, parent=self)
+        self._busca.escolhido.connect(self._ao_escolher_busca)
+        # lista de clientes/produtos chega em segundo plano; enquanto isso
+        # vale o que veio da ultima vez (ou so' as telas, na primeira)
+        rodar_em_thread(self, _carregar_busca, ao_sucesso=self._ao_dados_busca)
+        self._busca.abrir_sobre(self)
+
+    def _ao_dados_busca(self, dados):
+        self._cache_busca = dados
+        busca = getattr(self, "_busca", None)
+        try:
+            if busca is not None and busca.isVisible():
+                busca.definir_dados(*dados)
+        except RuntimeError:
+            pass  # dialogo ja' fechado e destruido
+
+    def _abrir_tarefa(self, tarefa):
+        """Botao dos cartoes "Para fazer hoje": abre a tela ja' filtrada."""
+        if tarefa == "fiado":
+            from telas.para_fazer_hoje import PRAZO_COBRANCA_DIAS
+            self._exibir_pagina("clientes", self.clientes)
+            indice = self.clientes.combo_prazo.findData(PRAZO_COBRANCA_DIAS)
+            if indice >= 0:
+                self.clientes.combo_prazo.setCurrentIndex(indice)
+            self.clientes.selecionar_status("INADIMPLENTES")
+        elif tarefa == "estoque":
+            self._exibir_pagina("produtos", self.produtos)
+            self.produtos.selecionar_status("REPOR")
+        elif tarefa == "boletos":
+            self.ir_para_contas_pagar()
+
+    def _ao_escolher_busca(self, tipo, alvo):
+        if tipo == "tela":
+            self._navegar(alvo)
+        elif tipo == "cliente":
+            self._exibir_pagina("clientes", self.clientes)
+            QTimer.singleShot(0, lambda: self.clientes._abrir_ficha(alvo))
+        elif tipo == "produto":
+            self._exibir_pagina("produtos", self.produtos)
+            self.produtos.pesquisa.setText(alvo.get("nome", ""))
+            self.produtos.filtrar_produtos()
 
     def _checar_atualizacao_terminal(self):
         rodar_em_thread(
@@ -479,7 +528,7 @@ class PrincipalWindow(QMainWindow):
 
         self.paginas.setCurrentWidget(pagina)
         self.header.definir_titulo(self._titulos.get(chave, ""))
-        self.sidebar.selecionar(chave)
+        self.menu.selecionar(chave)
 
     def _navegar(self, chave):
 

@@ -803,7 +803,7 @@ class ImportarNFeDialog(DialogoPadrao):
         if self.forma_pagamento in ("PRAZO", "BOLETO"):
             n = self.numero_parcelas.value()
             resumo += (
-                f"\n•  {n} parcela(s) em Contas a Pagar, a 1ª em "
+                f"\n•  {n} parcela(s) em Boletos, a 1ª em "
                 f"{self.data_vencimento.date().toString('dd/MM/yyyy')}"
                 + (" e as outras no mesmo dia dos meses seguintes" if n > 1 else "")
             )

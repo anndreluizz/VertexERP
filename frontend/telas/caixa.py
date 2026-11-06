@@ -11,14 +11,13 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QFrame,
     QDialog,
     QMessageBox,
     QStackedWidget,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
+    QScrollArea,
+    QLineEdit,
+    QProgressBar,
 )
 
 from services.caixa_service import (
@@ -34,13 +33,14 @@ from services.movimento_caixa_service import (
 )
 
 from design import tokens
-from design.icons import icone, icone_pixmap
+from design.icons import icone_pixmap
 from design.privacidade import botao_olho, privacidade
-from design.widgets import Badge, BotaoSecundario, BotaoSucesso
+from design.widgets import Badge, BotaoPerigo, BotaoSecundario, BotaoSucesso, cor_forma_pagamento
 from services.worker import rodar_em_thread, em_paralelo
 from services import api
 from telas.relatorios import NOMES_FORMA_PAGAMENTO
-from utils.formatacao import formatar_moeda
+from telas.inicio import _Numero, _cartao, _rotulo
+from utils.formatacao import formatar_moeda, ler_moeda
 
 
 _INFO_TIPO_MOVIMENTO = {
@@ -54,20 +54,6 @@ _INFO_TIPO_MOVIMENTO = {
     "ESTORNO_FIADO": ("Fiado cancelado", "neutro"),
     "PAGAMENTO": ("Conta paga", "erro"),
 }
-
-
-def _formatar_data_movimento(texto):
-    """"YYYY-MM-DDTHH:MM:SS" (ou variação com espaço) -> "dd/mm/yyyy
-    HH:MM" -- mais rápido de ler numa lista comprida do que o ISO cru."""
-
-    texto = str(texto or "")
-
-    try:
-        limpo = texto.replace("T", " ")[:16]
-        dt = datetime.strptime(limpo, "%Y-%m-%d %H:%M")
-        return dt.strftime("%d/%m/%Y %H:%M")
-    except ValueError:
-        return texto[:19]
 
 
 def _texto_abertura(texto):
@@ -86,6 +72,32 @@ def _texto_abertura(texto):
     if (hoje - dt.date()).days == 1:
         return f"Aberto ontem às {hora}"
     return f"Aberto em {dt.strftime('%d/%m')} às {hora}"
+
+
+def _tempo_aberto(texto, agora=None):
+    """"há 2h45" / "há 35 min" desde a abertura -- ajuda a ver de longe o
+    caixa chegando nas 24h (depois disso ele bloqueia as vendas)."""
+    try:
+        dt = datetime.fromisoformat(str(texto).replace("T", " ")[:19])
+    except ValueError:
+        return ""
+    minutos = max(0, int(((agora or datetime.now()) - dt).total_seconds() // 60))
+    if minutos < 60:
+        return f"há {minutos} min"
+    return f"há {minutos // 60}h{minutos % 60:02d}"
+
+
+def fatias_formas(resumo):
+    """[(rotulo, forma, valor)] do que ENTROU no turno, por forma (vendas
+    + fiado recebido), so' as que tiveram valor -- pra barra colorida."""
+    v = lambda chave: float((resumo or {}).get(chave, 0) or 0)
+    fatias = [
+        ("Dinheiro", "DINHEIRO", v("vendas_dinheiro") + v("recebimentos_fiado_dinheiro")),
+        ("Pix", "PIX", v("vendas_pix") + v("recebimentos_fiado_pix")),
+        ("Cartão", "CARTAO", v("vendas_cartao") + v("recebimentos_fiado_cartao")),
+        ("Outras", "CHEQUE", v("recebimentos_fiado_outros")),
+    ]
+    return [f for f in fatias if f[2] >= 0.01]
 
 
 _TIPOS_SO_FIADO = ("VENDA_FIADO", "ESTORNO_FIADO")
@@ -172,6 +184,77 @@ def _pill_tipo_movimento(tipo):
     layout.addStretch()
 
     return container
+
+
+def formas_entrada(resumo):
+    """[(rotulo, forma, valor, pct)] pras barras 'Entrou por forma': o que
+    entrou por forma + o fiado lancado (fora da gaveta). pct e' sobre o
+    que entrou de verdade (sem o fiado), como no prototipo."""
+    fatias = fatias_formas(resumo)
+    total = sum(f[2] for f in fatias)
+    prazo = float((resumo or {}).get("vendas_prazo", 0) or 0)
+    if prazo >= 0.01:
+        fatias.append(("Fiado (fora da gaveta)", "PRAZO", prazo))
+    return [(r, f, v, min(100, round(100 * v / total)) if total else 100) for r, f, v in fatias]
+
+
+def _plural(n, um, varios):
+    return f"{n} {um if n == 1 else varios}"
+
+
+def numeros_caixa(resumo, movimentos):
+    """Os 4 cartoes do topo do caixa: abertura, entrou, saiu e esperado
+    na gaveta, com a nota de quantas vendas/sangrias foram."""
+    v = lambda chave: float((resumo or {}).get(chave, 0) or 0)
+    tipos = [_tipo_exibido(m) for m in movimentos or []]
+    vendas = tipos.count("VENDA")
+    fiados = tipos.count("RECEBIMENTO_FIADO")
+    sangrias = tipos.count("SANGRIA")
+    contas = tipos.count("PAGAMENTO")
+    nota_entrou = _plural(vendas, "venda", "vendas")
+    if fiados:
+        nota_entrou += " + " + _plural(fiados, "pagamento de fiado", "pagamentos de fiado")
+    nota_saiu = _plural(sangrias, "sangria", "sangrias")
+    if contas or v("contas_pagas_caixa") >= 0.01:
+        nota_saiu += " · " + _plural(contas, "conta paga", "contas pagas")
+    return {
+        "abertura": v("saldo_inicial"),
+        "entrou": sum(f[2] for f in fatias_formas(resumo)),
+        "nota_entrou": nota_entrou,
+        "saiu": v("sangrias") + v("contas_pagas_caixa"),
+        "nota_saiu": nota_saiu,
+        "gaveta": v("total_previsto"),
+    }
+
+
+def texto_diferenca(esperado, contado_texto):
+    """("Faltou R$ 2,00", "erro") / ("Sobrou ...", "alerta") / ("Bateu
+    certinho", "sucesso"); ("—", "neutro") enquanto nao digitou."""
+    try:
+        contado = ler_moeda(contado_texto)
+    except ValueError:
+        return "—", "neutro"
+    diferenca = round(contado - esperado, 2)
+    if abs(diferenca) < 0.01:
+        return "Bateu certinho", "sucesso"
+    if diferenca < 0:
+        return f"Faltou {formatar_moeda(-diferenca)}", "erro"
+    return f"Sobrou {formatar_moeda(diferenca)}", "alerta"
+
+
+def _hora_movimento(texto):
+    """'2026-11-05T10:42:00' -> '10:42' (o turno e' de no maximo 24h)."""
+    texto = str(texto or "").replace("T", " ")
+    return texto[11:16] if len(texto) >= 16 else texto
+
+
+def _limpar(layout):
+    while layout.count():
+        item = layout.takeAt(0)
+        if item.widget():
+            item.widget().deleteLater()
+        elif item.layout():
+            _limpar(item.layout())
 
 
 def _buscar_dados_caixa(com_resumo=True):
@@ -277,6 +360,9 @@ class Caixa(QWidget):
     # ======================================
 
     def _criar_pagina_com_caixa(self):
+        """Vertex 2.0 (protótipo Caixa2): título claro com as ações, 4
+        números do turno, 'Entrou por forma', movimentos e a conferência
+        da gaveta antes de fechar."""
 
         # Vendedor so' abre e faz sangria/suprimento: sem saldo nem
         # conferencia (quem fecha precisa conferir, ver caixa.fechar)
@@ -284,369 +370,176 @@ class Caixa(QWidget):
             api.usuario_tem_permissao("financeiro.ver")
             or api.usuario_tem_permissao("caixa.fechar")
         )
+        self._esperado = 0.0
 
-        pagina = QWidget()
+        pagina = QScrollArea()
+        pagina.setWidgetResizable(True)
+        pagina.setFrameShape(QFrame.NoFrame)
+        conteudo = QWidget()
+        conteudo.setStyleSheet(f"background:{tokens.FUNDO};")
+        pagina.setWidget(conteudo)
 
-        layout = QVBoxLayout(pagina)
-        layout.setContentsMargins(28, 24, 28, 24)
+        layout = QVBoxLayout(conteudo)
+        layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(18)
 
-        # ---- faixa de status: situação, horário, previsto na gaveta e
-        # as ações do turno (antes ficavam soltas no meio da página)
+        # ---- titulo + acoes
+        topo = QHBoxLayout()
+        topo.setSpacing(8)
+        col_titulo = QVBoxLayout()
+        col_titulo.setSpacing(4)
+        self.lbl_status = _rotulo("Caixa aberto", 28, tokens.TEXTO, 700, titulo=True)
+        self.lbl_abertura = _rotulo("", 15, tokens.TEXTO_SECUNDARIO)
+        col_titulo.addWidget(self.lbl_status)
+        col_titulo.addWidget(self.lbl_abertura)
+        topo.addLayout(col_titulo, stretch=1)
 
-        status_frame = QFrame()
-        status_frame.setObjectName("faixaStatusCaixa")
-        status_frame.setStyleSheet(f"""
-            #faixaStatusCaixa {{
-                background:{tokens.SIDEBAR};
-                border-radius:{tokens.RADIUS_MD}px;
-            }}
-        """)
-
-        status_layout = QHBoxLayout(status_frame)
-        status_layout.setContentsMargins(24, 18, 24, 18)
-        status_layout.setSpacing(16)
-
-        icone_status = QLabel()
-        icone_status.setFixedSize(44, 44)
-        icone_status.setAlignment(Qt.AlignCenter)
-        icone_status.setStyleSheet(
-            "background:rgba(255, 255, 255, 0.12); border-radius:22px;"
-        )
-        icone_status.setPixmap(icone_pixmap("wallet", cor="white", tamanho=20))
-        status_layout.addWidget(icone_status)
-
-        col_status = QVBoxLayout()
-        col_status.setSpacing(4)
-
-        linha_status = QHBoxLayout()
-        linha_status.setSpacing(8)
-
-        bolinha = QLabel()
-        bolinha.setFixedSize(10, 10)
-        bolinha.setStyleSheet(f"background:{tokens.SUCESSO}; border-radius:5px;")
-
-        self.lbl_status = QLabel("Caixa aberto")
-        self.lbl_status.setStyleSheet(f"""
-            background:transparent; color:white;
-            font-size:{tokens.TAMANHO_LG}px; font-weight:800;
-        """)
-
-        linha_status.addWidget(bolinha)
-        linha_status.addWidget(self.lbl_status)
-        linha_status.addStretch()
-
-        self.lbl_abertura = QLabel("")
-        self.lbl_abertura.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SIDEBAR};
-            font-size:{tokens.TAMANHO_SM}px;
-        """)
-
-        col_status.addLayout(linha_status)
-        col_status.addWidget(self.lbl_abertura)
-
-        status_layout.addLayout(col_status)
-        status_layout.addStretch()
-
-        col_total = QVBoxLayout()
-        col_total.setSpacing(0)
-
-        lbl_total_titulo = QLabel("Deve ter na gaveta")
-        lbl_total_titulo.setAlignment(Qt.AlignRight)
-        lbl_total_titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SIDEBAR};
-            font-size:{tokens.TAMANHO_SM}px;
-        """)
-
-        self.lbl_total_previsto = QLabel("R$ 0,00")
-        self.lbl_total_previsto.setAlignment(Qt.AlignRight)
-        self.lbl_total_previsto.setStyleSheet(f"""
-            background:transparent; color:white;
-            font-size:{tokens.TAMANHO_XXL}px; font-weight:800;
-        """)
-
-        linha_total_titulo = QHBoxLayout()
-        linha_total_titulo.setSpacing(4)
-        linha_total_titulo.addStretch()
-        linha_total_titulo.addWidget(lbl_total_titulo)
-        linha_total_titulo.addWidget(botao_olho("white", tamanho=32, tamanho_icone=20))
-        col_total.addLayout(linha_total_titulo)
-        col_total.addWidget(self.lbl_total_previsto)
-
-        if self._ve_totais:
-            status_layout.addLayout(col_total)
-        else:
-            lbl_total_titulo.hide()
-            self.lbl_total_previsto.hide()
-        status_layout.addSpacing(12)
-
-        # ações sobre o fundo escuro: contorno claro, e o Encerrar
-        # preenchido (é o que fecha o turno)
-        estilo_acao = f"""
-            QPushButton {{
-                background:rgba(255, 255, 255, 0.08); color:white;
-                border:1px solid rgba(255, 255, 255, 0.22);
-                border-radius:{tokens.RADIUS_SM}px; padding:0 16px;
-                font-size:{tokens.TAMANHO_SM}px; font-weight:700;
-            }}
-            QPushButton:hover {{ background:rgba(255, 255, 255, 0.16); }}
-            QPushButton:disabled {{ color:rgba(255, 255, 255, 0.4); }}
-        """
-
-        self.bt_suprimento = QPushButton("  Suprimento")
-        self.bt_suprimento.setIcon(icone("arrow-up", cor="white", tamanho=15))
+        self.bt_suprimento = BotaoSecundario("+ Suprimento")
         self.bt_suprimento.setToolTip("Colocar dinheiro na gaveta (ex.: troco extra)")
-        self.bt_suprimento.setCursor(Qt.PointingHandCursor)
-        self.bt_suprimento.setMinimumHeight(40)
-        self.bt_suprimento.setStyleSheet(estilo_acao)
         self.bt_suprimento.clicked.connect(self.suprimento)
-
-        self.bt_sangria = QPushButton("  Sangria")
-        self.bt_sangria.setIcon(icone("arrow-down", cor="white", tamanho=15))
+        self.bt_sangria = BotaoSecundario("− Sangria")
         self.bt_sangria.setToolTip("Tirar dinheiro da gaveta (ex.: levar ao cofre)")
-        self.bt_sangria.setCursor(Qt.PointingHandCursor)
-        self.bt_sangria.setMinimumHeight(40)
-        self.bt_sangria.setStyleSheet(estilo_acao)
         self.bt_sangria.clicked.connect(self.sangria)
-
-        self.bt_encerrar = QPushButton("  Encerrar caixa")
-        self.bt_encerrar.setIcon(icone("log-out", cor=tokens.SIDEBAR, tamanho=15))
-        self.bt_encerrar.setCursor(Qt.PointingHandCursor)
-        self.bt_encerrar.setMinimumHeight(40)
-        self.bt_encerrar.setStyleSheet(f"""
-            QPushButton {{
-                background:white; color:{tokens.SIDEBAR};
-                border:none; border-radius:{tokens.RADIUS_SM}px; padding:0 16px;
-                font-size:{tokens.TAMANHO_SM}px; font-weight:800;
-            }}
-            QPushButton:hover {{ background:{tokens.PRIMARIA_CLARA}; }}
-        """)
+        self.bt_encerrar = BotaoPerigo("Fechar caixa")
         self.bt_encerrar.clicked.connect(self.fechar_caixa)
         self.bt_encerrar.setVisible(api.usuario_tem_permissao("caixa.fechar"))
+        for bt in (self.bt_suprimento, self.bt_sangria, self.bt_encerrar):
+            bt.setMinimumHeight(44)
+            topo.addWidget(bt, 0, Qt.AlignVCenter)
+        topo.addWidget(botao_olho(tokens.TEXTO_SECUNDARIO, tamanho=40, tamanho_icone=20), 0, Qt.AlignVCenter)
+        layout.addLayout(topo)
 
-        status_layout.addWidget(self.bt_suprimento)
-        status_layout.addWidget(self.bt_sangria)
-        status_layout.addWidget(self.bt_encerrar)
-
-        layout.addWidget(status_frame)
-
-        # ---- corpo: conferência (esquerda) + histórico (direita)
-
-        corpo = QHBoxLayout()
-        corpo.setSpacing(18)
-
-        cartao_conferencia = self._criar_cartao_conferencia()
-        cartao_conferencia.setVisible(self._ve_totais)
-        corpo.addWidget(cartao_conferencia)
-
-        # histórico
-        col_historico = QVBoxLayout()
-        col_historico.setSpacing(10)
-
-        historico_cabecalho = QHBoxLayout()
-
-        lbl_historico_titulo = QLabel("Movimentações do turno")
-        lbl_historico_titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_MD}px;
-            font-weight:700; color:{tokens.TEXTO};
+        # ---- 4 numeros do turno
+        self.secao_kpis = QWidget()
+        kpis = QHBoxLayout(self.secao_kpis)
+        kpis.setContentsMargins(0, 0, 0, 0)
+        kpis.setSpacing(14)
+        self.kpi_abertura = _Numero("Abertura")
+        self.kpi_entrou = _Numero("Entrou")
+        self.kpi_saiu = _Numero("Saiu")
+        self.kpi_gaveta = _Numero("Esperado na gaveta")
+        self.kpi_gaveta.setStyleSheet(f"""
+            QFrame#numeroInicio {{ background:{tokens.SIDEBAR}; border:1px solid {tokens.SIDEBAR};
+                                   border-radius:{tokens.RADIUS_LG}px; }}
         """)
+        rotulo_gaveta = self.kpi_gaveta.findChildren(QLabel)[0]
+        rotulo_gaveta.setStyleSheet(rotulo_gaveta.styleSheet().replace(tokens.TEXTO_SECUNDARIO, tokens.TEXTO_SIDEBAR))
+        self.kpi_gaveta.lbl_valor.setStyleSheet(
+            self.kpi_gaveta.lbl_valor.styleSheet().replace(f"color:{tokens.TEXTO};", "color:#FFFFFF;"))
+        self.lbl_total_previsto = self.kpi_gaveta.lbl_valor
+        for kpi in (self.kpi_abertura, self.kpi_entrou, self.kpi_saiu, self.kpi_gaveta):
+            kpis.addWidget(kpi, stretch=1)
+        self.secao_kpis.setVisible(self._ve_totais)
+        layout.addWidget(self.secao_kpis)
 
-        self.bt_atualizar_historico = BotaoSecundario("Atualizar", icone_nome="refresh-cw")
-        self.bt_atualizar_historico.setMinimumHeight(32)
-        self.bt_atualizar_historico.clicked.connect(self.carregar)
+        # ---- entrou por forma + movimentos
+        meio = QHBoxLayout()
+        meio.setSpacing(16)
 
+        self.cartao_formas = _cartao("cartaoFormas")
+        self.cartao_formas.setMinimumWidth(340)
+        lay_formas = QVBoxLayout(self.cartao_formas)
+        lay_formas.setContentsMargins(20, 20, 20, 20)
+        lay_formas.setSpacing(14)
+        lay_formas.addWidget(_rotulo("Entrou por forma", 17, tokens.TEXTO, 700))
+        self.lista_formas = QVBoxLayout()
+        self.lista_formas.setSpacing(14)
+        lay_formas.addLayout(self.lista_formas)
+        nota = _rotulo("Fiado não entra na gaveta: aparece separado no fechamento.",
+                       tokens.TAMANHO_SM, tokens.TEXTO_SECUNDARIO)
+        nota.setWordWrap(True)
+        lay_formas.addWidget(nota)
+        lay_formas.addStretch()
+        self.cartao_formas.setVisible(self._ve_totais)
+        meio.addWidget(self.cartao_formas, stretch=2)
+
+        cartao_movs = _cartao("cartaoMovimentos")
+        lay_movs = QVBoxLayout(cartao_movs)
+        lay_movs.setContentsMargins(20, 16, 20, 16)
+        lay_movs.setSpacing(0)
+        cab_movs = QHBoxLayout()
+        cab_movs.addWidget(_rotulo("Movimentos do turno", 17, tokens.TEXTO, 700))
+        cab_movs.addStretch()
         self.bt_caixas_anteriores = BotaoSecundario("Caixas anteriores", icone_nome="calendar")
         self.bt_caixas_anteriores.setMinimumHeight(32)
         self.bt_caixas_anteriores.clicked.connect(self.abrir_caixas_anteriores)
-
-        historico_cabecalho.addWidget(lbl_historico_titulo)
-        historico_cabecalho.addStretch()
-        historico_cabecalho.addWidget(self.bt_caixas_anteriores)
         self.bt_caixas_anteriores.setVisible(api.usuario_tem_permissao("financeiro.ver"))
-        historico_cabecalho.addWidget(self.bt_atualizar_historico)
-
-        col_historico.addLayout(historico_cabecalho)
-
-        self.tabela_movimentos = QTableWidget()
-        self.tabela_movimentos.setColumnCount(5)
-        self.tabela_movimentos.setHorizontalHeaderLabels(
-            ["Data e hora", "Tipo", "Forma", "Valor", "Descrição"]
-        )
-        cab = self.tabela_movimentos.horizontalHeader()
-        cab.setSectionResizeMode(QHeaderView.Interactive)
-        cab.setSectionResizeMode(4, QHeaderView.Stretch)
-        cab.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self.tabela_movimentos.setColumnWidth(0, 140)
-        self.tabela_movimentos.setColumnWidth(1, 180)
-        self.tabela_movimentos.setColumnWidth(2, 100)
-        self.tabela_movimentos.setColumnWidth(3, 130)
-        self.tabela_movimentos.verticalHeader().setVisible(False)
-        self.tabela_movimentos.verticalHeader().setDefaultSectionSize(44)
-        self.tabela_movimentos.setAlternatingRowColors(True)
-        self.tabela_movimentos.setShowGrid(False)
-        self.tabela_movimentos.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.tabela_movimentos.setSelectionMode(QTableWidget.NoSelection)
-        self.tabela_movimentos.setFocusPolicy(Qt.NoFocus)
-        self.tabela_movimentos.setStyleSheet(f"""
-            QTableWidget {{
-                background:{tokens.CARD};
-                alternate-background-color:{tokens.FUNDO};
-                border:1px solid {tokens.BORDA};
-                border-radius:{tokens.RADIUS_MD}px;
-                color:{tokens.TEXTO};
-                font-size:{tokens.TAMANHO_BASE}px;
-            }}
-            QTableWidget::item {{
-                color:{tokens.TEXTO};
-                background:transparent;
-                padding:0 12px;
-            }}
-            QHeaderView::section {{
-                background:{tokens.CARD};
-                color:{tokens.TEXTO_SECUNDARIO};
-                padding:10px 12px;
-                border:none;
-                border-bottom:1px solid {tokens.BORDA};
-                font-weight:700;
-                font-size:{tokens.TAMANHO_XS}px;
-            }}
-        """)
-        col_historico.addWidget(self.tabela_movimentos, stretch=1)
-
-        self.lbl_sem_movimentos = QLabel(
+        self.bt_atualizar_historico = BotaoSecundario("Atualizar", icone_nome="refresh-cw")
+        self.bt_atualizar_historico.setMinimumHeight(32)
+        self.bt_atualizar_historico.clicked.connect(self.carregar)
+        cab_movs.addWidget(self.bt_caixas_anteriores)
+        cab_movs.addWidget(self.bt_atualizar_historico)
+        lay_movs.addLayout(cab_movs)
+        lay_movs.addSpacing(8)
+        self.lista_movimentos = QVBoxLayout()
+        self.lista_movimentos.setSpacing(0)
+        lay_movs.addLayout(self.lista_movimentos)
+        self.lbl_sem_movimentos = _rotulo(
             "Nenhuma movimentação ainda neste turno.\n"
-            "Vendas, suprimentos e sangrias aparecem aqui."
-        )
+            "Vendas, suprimentos e sangrias aparecem aqui.",
+            tokens.TAMANHO_SM, tokens.TEXTO_TERCIARIO)
         self.lbl_sem_movimentos.setAlignment(Qt.AlignCenter)
-        self.lbl_sem_movimentos.setStyleSheet(f"""
-            background:{tokens.CARD}; border:1px dashed {tokens.BORDA};
-            border-radius:{tokens.RADIUS_MD}px;
-            color:{tokens.TEXTO_TERCIARIO}; font-size:{tokens.TAMANHO_SM}px;
-        """)
+        self.lbl_sem_movimentos.setMinimumHeight(120)
         self.lbl_sem_movimentos.setVisible(False)
-        col_historico.addWidget(self.lbl_sem_movimentos, stretch=1)
+        lay_movs.addWidget(self.lbl_sem_movimentos)
+        lay_movs.addStretch()
+        meio.addWidget(cartao_movs, stretch=3)
+        layout.addLayout(meio)
 
-        corpo.addLayout(col_historico, stretch=1)
+        # ---- conferir a gaveta
+        self.cartao_conferir = _cartao("cartaoConferir")
+        conf = QHBoxLayout(self.cartao_conferir)
+        conf.setContentsMargins(20, 20, 20, 20)
+        conf.setSpacing(16)
+        col_txt = QVBoxLayout()
+        col_txt.setSpacing(4)
+        col_txt.addWidget(_rotulo("Conferir a gaveta antes de fechar", 17, tokens.TEXTO, 700))
+        explica = _rotulo("Conte o dinheiro e digite aqui. O Vertex mostra se sobrou ou faltou.",
+                          tokens.TAMANHO_MD, tokens.TEXTO_SECUNDARIO)
+        explica.setWordWrap(True)
+        col_txt.addWidget(explica)
+        conf.addLayout(col_txt, stretch=1)
 
-        layout.addLayout(corpo, stretch=1)
+        def campo(rotulo, widget):
+            col = QVBoxLayout()
+            col.setSpacing(4)
+            col.addWidget(_rotulo(rotulo, tokens.TAMANHO_SM, tokens.TEXTO_SECUNDARIO))
+            widget.setFixedHeight(44)
+            widget.setMinimumWidth(150)
+            col.addWidget(widget)
+            conf.addLayout(col)
+
+        self.lbl_conf_esperado = QLabel("R$ 0,00")
+        self.lbl_conf_esperado.setStyleSheet(
+            f"background:{tokens.FUNDO}; border-radius:9px; padding:0 12px; "
+            f"color:{tokens.TEXTO}; font-size:17px; font-weight:700;")
+        campo("Esperado na gaveta", self.lbl_conf_esperado)
+        self.campo_contado = QLineEdit()
+        self.campo_contado.setPlaceholderText("R$ 0,00")
+        self.campo_contado.setStyleSheet(
+            f"QLineEdit {{ background:{tokens.CARD}; border:1px solid {tokens.BORDA_FORTE}; "
+            f"border-radius:9px; padding:0 12px; color:{tokens.TEXTO}; font-size:17px; font-weight:700; }}")
+        self.campo_contado.textChanged.connect(self._atualizar_diferenca)
+        campo("Contado", self.campo_contado)
+        self.lbl_diferenca = QLabel("—")
+        campo("Diferença", self.lbl_diferenca)
+        self._atualizar_diferenca()
+        self.cartao_conferir.setVisible(self._ve_totais)
+        layout.addWidget(self.cartao_conferir)
+        layout.addStretch()
 
         return pagina
 
-    def _criar_cartao_conferencia(self):
-        """Resumo do turno montado como a folha de fechamento de papel:
-        uma conta que fecha no "deve ter na gaveta" e, separado, o que
-        entrou por fora da gaveta (PIX, cartão). Antes eram 8 cards
-        iguais e dois totais sem explicar a diferença entre eles."""
+    def _atualizar_diferenca(self, *_):
+        texto, variante = texto_diferenca(self._esperado, self.campo_contado.text())
+        fundo, cor = Badge.variantes()[variante]
+        if variante == "neutro":
+            fundo, cor = tokens.FUNDO, tokens.TEXTO_SECUNDARIO
+        privacidade.definir_texto(self.lbl_diferenca, texto)
+        self.lbl_diferenca.setStyleSheet(
+            f"background:{fundo}; border-radius:9px; padding:0 12px; "
+            f"color:{cor}; font-size:17px; font-weight:700;")
 
-        cartao = QFrame()
-        cartao.setObjectName("cartaoConferencia")
-        cartao.setFixedWidth(400)
-        cartao.setStyleSheet(f"""
-            #cartaoConferencia {{
-                background:{tokens.CARD}; border:1px solid {tokens.BORDA};
-                border-radius:{tokens.RADIUS_LG}px;
-            }}
-        """)
-
-        lay = QVBoxLayout(cartao)
-        lay.setContentsMargins(22, 20, 22, 20)
-        lay.setSpacing(8)
-
-        def secao(texto):
-            lbl = QLabel(texto.upper())
-            lbl.setStyleSheet(f"""
-                background:transparent; color:{tokens.TEXTO_TERCIARIO};
-                font-size:{tokens.TAMANHO_XS}px; font-weight:800; letter-spacing:0.5px;
-            """)
-            lay.addWidget(lbl)
-
-        def linha(rotulo, sinal="", destaque=False):
-            caixa = QWidget()
-            caixa.setStyleSheet("background:transparent;")
-            h = QHBoxLayout(caixa)
-            h.setContentsMargins(0, 0, 0, 0)
-            h.setSpacing(8)
-            lbl_sinal = QLabel(sinal)
-            lbl_sinal.setFixedWidth(14)
-            lbl_sinal.setStyleSheet(f"""
-                background:transparent; color:{tokens.TEXTO_TERCIARIO};
-                font-size:{tokens.TAMANHO_MD}px; font-weight:700;
-            """)
-            lbl_rot = QLabel(rotulo)
-            tamanho = tokens.TAMANHO_MD if destaque else tokens.TAMANHO_BASE
-            lbl_rot.setStyleSheet(f"""
-                background:transparent;
-                color:{tokens.TEXTO if destaque else tokens.TEXTO_SECUNDARIO};
-                font-size:{tamanho}px; font-weight:{800 if destaque else 500};
-            """)
-            lbl_valor = QLabel("R$ 0,00")
-            lbl_valor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            lbl_valor.setStyleSheet(f"""
-                background:transparent; color:{tokens.TEXTO};
-                font-size:{tokens.TAMANHO_LG if destaque else tokens.TAMANHO_BASE}px;
-                font-weight:{800 if destaque else 600};
-            """)
-            h.addWidget(lbl_sinal)
-            h.addWidget(lbl_rot, stretch=1)
-            h.addWidget(lbl_valor)
-            lay.addWidget(caixa)
-            return caixa, lbl_valor
-
-        def separador():
-            sep = QFrame()
-            sep.setFixedHeight(1)
-            sep.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
-            lay.addSpacing(2)
-            lay.addWidget(sep)
-            lay.addSpacing(2)
-
-        titulo = QLabel("Conferência do caixa")
-        titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO};
-            font-size:{tokens.TAMANHO_MD}px; font-weight:700;
-        """)
-        lay.addWidget(titulo)
-        lay.addSpacing(8)
-
-        secao("Dinheiro na gaveta")
-        _, self.lbl_conf_troco = linha("Troco inicial")
-        _, self.lbl_conf_dinheiro = linha("Vendas em dinheiro", "+")
-        self.linha_conf_fiado_dinheiro, self.lbl_conf_fiado_dinheiro = linha(
-            "Fiado recebido em dinheiro", "+"
-        )
-        _, self.lbl_conf_suprimentos = linha("Suprimentos", "+")
-        _, self.lbl_conf_sangrias = linha("Sangrias", "−")
-        # so caixas antigos: boleto pago em dinheiro saia da gaveta
-        self.linha_conf_contas, self.lbl_conf_contas = linha("Contas pagas (boleto)", "−")
-        separador()
-        _, self.lbl_conf_gaveta = linha("Deve ter na gaveta", "=", destaque=True)
-
-        lay.addSpacing(14)
-        secao("Fora da gaveta")
-        _, self.lbl_conf_pix = linha("Vendas no PIX", "+")
-        _, self.lbl_conf_fiado_pix = linha("Fiado recebido no PIX", "+")
-        _, self.lbl_conf_cartao = linha("Vendas no cartão (débito e crédito)", "+")
-        _, self.lbl_conf_fiado_cartao = linha("Fiado recebido no cartão", "+")
-        self.linha_conf_fiado_outros, self.lbl_conf_fiado_outros = linha(
-            "Fiado recebido em outras formas", "+"
-        )
-        separador()
-        _, self.lbl_total_geral = linha("Total do turno", "=", destaque=True)
-
-        lay.addStretch()
-
-        # vendas a prazo não entram em nenhum total (o dinheiro ainda não
-        # chegou) -- fica como nota, pra não parecer que sumiu
-        self.lbl_conf_prazo = QLabel("")
-        self.lbl_conf_prazo.setWordWrap(True)
-        self.lbl_conf_prazo.setStyleSheet(f"""
-            background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px;
-            padding:10px 12px; color:{tokens.TEXTO_SECUNDARIO};
-            font-size:{tokens.TAMANHO_SM}px;
-        """)
-        lay.addWidget(self.lbl_conf_prazo)
-
-        return cartao
 
     # ======================================
     # CARREGAR DADOS
@@ -685,58 +578,56 @@ class Caixa(QWidget):
 
             resumo = resumo or {}
 
-            self.lbl_abertura.setText(_texto_abertura(caixa.get("data_abertura")))
-
-            def valor(chave):
-                return float(resumo.get(chave, 0) or 0)
-
-            troco = valor("saldo_inicial")
-            dinheiro = valor("vendas_dinheiro")
-            suprimentos = valor("suprimentos")
-            sangrias = valor("sangrias")
-            gaveta = valor("total_previsto")
-            pix = valor("vendas_pix")
-            cartao = valor("vendas_cartao")
-            fiado_dinheiro = valor("recebimentos_fiado_dinheiro")
-            fiado_pix = valor("recebimentos_fiado_pix")
-            fiado_cartao = valor("recebimentos_fiado_cartao")
-            fiado_outros = valor("recebimentos_fiado_outros")
-            contas = valor("contas_pagas_caixa")
-
-            privacidade.definir_texto(self.lbl_total_previsto, formatar_moeda(gaveta))
-
-            privacidade.definir_texto(self.lbl_conf_troco, formatar_moeda(troco))
-            privacidade.definir_texto(self.lbl_conf_dinheiro, formatar_moeda(dinheiro))
-            privacidade.definir_texto(self.lbl_conf_fiado_dinheiro, formatar_moeda(fiado_dinheiro))
-            privacidade.definir_texto(self.lbl_conf_suprimentos, formatar_moeda(suprimentos))
-            privacidade.definir_texto(self.lbl_conf_sangrias, formatar_moeda(sangrias))
-            privacidade.definir_texto(self.lbl_conf_contas, formatar_moeda(contas))
-            self.linha_conf_contas.setVisible(abs(contas) >= 0.01)
-            privacidade.definir_texto(self.lbl_conf_gaveta, formatar_moeda(gaveta))
-
-            privacidade.definir_texto(self.lbl_conf_pix, formatar_moeda(pix))
-            privacidade.definir_texto(self.lbl_conf_fiado_pix, formatar_moeda(fiado_pix))
-            privacidade.definir_texto(self.lbl_conf_cartao, formatar_moeda(cartao))
-            privacidade.definir_texto(self.lbl_conf_fiado_cartao, formatar_moeda(fiado_cartao))
-            privacidade.definir_texto(self.lbl_conf_fiado_outros, formatar_moeda(fiado_outros))
-            self.linha_conf_fiado_outros.setVisible(abs(fiado_outros) >= 0.01)
-            privacidade.definir_texto(self.lbl_total_geral, formatar_moeda(valor("total_geral")))
-
-            prazo = valor("vendas_prazo")
-            privacidade.definir_texto(
-                self.lbl_conf_prazo,
-                f"Vendas a prazo (fiado lançado): {formatar_moeda(prazo)}. "
-                "Não entram nos totais porque o dinheiro ainda não chegou."
-                if prazo >= 0.01 else
-                "Vendas a prazo não entram nos totais: o dinheiro só conta "
-                "quando o cliente paga."
+            tempo = _tempo_aberto(caixa.get("data_abertura"))
+            self.lbl_abertura.setText(
+                _texto_abertura(caixa.get("data_abertura")) + (f" · {tempo}" if tempo else "")
             )
+
+            if self._ve_totais:
+                k = numeros_caixa(resumo, movimentos)
+                self.kpi_abertura.definir(formatar_moeda(k["abertura"]), "Troco do começo do dia")
+                self.kpi_entrou.definir(formatar_moeda(k["entrou"]), k["nota_entrou"])
+                self.kpi_saiu.definir(formatar_moeda(k["saiu"]), k["nota_saiu"])
+                self.kpi_gaveta.definir(formatar_moeda(k["gaveta"]), "Só dinheiro vivo",
+                                        tokens.TEXTO_SIDEBAR)
+                self._esperado = k["gaveta"]
+                privacidade.definir_texto(self.lbl_conf_esperado, formatar_moeda(k["gaveta"]))
+                self._atualizar_diferenca()
+                self._atualizar_formas(resumo)
 
             self.carregar_movimentos(movimentos)
 
             self.paginas.setCurrentWidget(self.pagina_com_caixa)
         except Exception as erro:
             self._ao_carregar_erro(erro)
+
+    def _atualizar_formas(self, resumo):
+        _limpar(self.lista_formas)
+        linhas = formas_entrada(resumo)
+        for rotulo, forma, valor, pct in linhas:
+            linha = QVBoxLayout()
+            linha.setSpacing(6)
+            topo = QHBoxLayout()
+            topo.addWidget(_rotulo(rotulo, tokens.TAMANHO_MD, tokens.TEXTO, 600))
+            topo.addStretch()
+            lbl_valor = _rotulo("", tokens.TAMANHO_MD, tokens.TEXTO, 700)
+            privacidade.definir_texto(lbl_valor, formatar_moeda(valor))
+            topo.addWidget(lbl_valor)
+            linha.addLayout(topo)
+            barra = QProgressBar()
+            barra.setRange(0, 100)
+            barra.setValue(pct)
+            barra.setTextVisible(False)
+            barra.setFixedHeight(10)
+            barra.setStyleSheet(f"""
+                QProgressBar {{ background:{tokens.FUNDO}; border:none; border-radius:5px; }}
+                QProgressBar::chunk {{ background:{cor_forma_pagamento(forma)}; border-radius:5px; }}
+            """)
+            linha.addWidget(barra)
+            self.lista_formas.addLayout(linha)
+        if not linhas:
+            self.lista_formas.addWidget(
+                _rotulo("Nada entrou ainda neste turno.", tokens.TAMANHO_MD, tokens.TEXTO_TERCIARIO))
 
     def _ao_carregar_erro(self, erro):
         QMessageBox.critical(
@@ -755,42 +646,36 @@ class Caixa(QWidget):
             reverse=True,
         )
 
-        # zera antes: setCellWidget() por cima de celula que ja' tinha
-        # widget deixava o valor antigo desenhado por baixo do novo
-        self.tabela_movimentos.setRowCount(0)
-        self.tabela_movimentos.setRowCount(len(movimentos))
-        self.tabela_movimentos.setVisible(bool(movimentos))
+        _limpar(self.lista_movimentos)
         self.lbl_sem_movimentos.setVisible(not movimentos)
 
-        for linha, mov in enumerate(movimentos):
-
+        for mov in movimentos:
             tipo = _tipo_exibido(mov)
             forma = mov.get("forma_pagamento")
-            nome_forma = "Fiado" if forma == "PRAZO" else NOMES_FORMA_PAGAMENTO.get(forma, forma or "—")
+            nome_forma = "Fiado" if forma == "PRAZO" else NOMES_FORMA_PAGAMENTO.get(forma, forma or "")
 
-            self.tabela_movimentos.setItem(
-                linha,
-                0,
-                QTableWidgetItem(_formatar_data_movimento(mov.get("data", ""))),
-            )
+            linha = QFrame()
+            linha.setObjectName("linhaMov")
+            linha.setStyleSheet(f"QFrame#linhaMov {{ background:transparent; border:none; "
+                                f"border-top:1px solid {tokens.BORDA}; }}")
+            h = QHBoxLayout(linha)
+            h.setContentsMargins(0, 10, 0, 10)
+            h.setSpacing(12)
+            hora = _rotulo(_hora_movimento(mov.get("data", "")), tokens.TAMANHO_MD, tokens.TEXTO_SECUNDARIO)
+            hora.setFixedWidth(46)
+            h.addWidget(hora)
+            pill = _pill_tipo_movimento(tipo)
+            pill.setFixedWidth(150)
+            h.addWidget(pill)
+            descricao = _descricao_movimento(mov, tipo)
+            if nome_forma and tipo not in _TIPOS_SO_FIADO:
+                descricao = f"{descricao} · {nome_forma}" if descricao else nome_forma
+            lbl_desc = _rotulo(descricao, tokens.TAMANHO_MD, tokens.TEXTO)
+            lbl_desc.setWordWrap(True)
+            h.addWidget(lbl_desc, stretch=1)
+            h.addWidget(_celula_valor_movimento(tipo, formatar_moeda(mov.get("valor", 0))))
+            self.lista_movimentos.addWidget(linha)
 
-            self.tabela_movimentos.setCellWidget(
-                linha, 1, _pill_tipo_movimento(tipo)
-            )
-
-            self.tabela_movimentos.setItem(linha, 2, QTableWidgetItem(nome_forma))
-
-            self.tabela_movimentos.setCellWidget(
-                linha,
-                3,
-                _celula_valor_movimento(tipo, formatar_moeda(mov.get("valor", 0))),
-            )
-
-            self.tabela_movimentos.setItem(
-                linha,
-                4,
-                QTableWidgetItem(_descricao_movimento(mov, tipo)),
-            )
 
     # ======================================
     # AÇÕES

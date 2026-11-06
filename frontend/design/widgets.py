@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.fonts import fonte
-from design.animations import fade_in
+from design.animations import contar, fade_in
 from design.icons import icone, icone_pixmap
 from design.privacidade import botao_olho, privacidade
 from utils.acessibilidade import movimento_reduzido
@@ -208,14 +208,12 @@ class CardKPI(Card):
         self.lbl_titulo.setText(texto)
 
     def definir_valor(self, texto):
-        # o fade sutil da um "respiro" visual toda vez que o numero
-        # muda (carregamento inicial ou um recarregar/filtro) -- sem
-        # ficar sub/somando digito por digito, que exigiria parsear de
-        # volta pra numero um texto ja formatado (moeda, unidade etc.)
-        # via privacidade: com o olhinho fechado, valor em R$ vira mascara
-        privacidade.definir_texto(self.lbl_valor, texto)
+        # numero (R$, quantidade, %) conta de 0 ate' o valor; o resto
+        # ganha so' o fade. contar() passa pela privacidade: com o
+        # olhinho fechado, valor em R$ continua mascara
         self.bt_olho.setVisible("R$" in (texto or ""))
-        fade_in(self.lbl_valor, duracao=240)
+        if not contar(self.lbl_valor, texto):
+            fade_in(self.lbl_valor, duracao=240)
 
 
 # ==========================================
@@ -611,12 +609,17 @@ class CabecalhoDialogo(QFrame):
 
         super().__init__(parent)
 
+        # Vertex 2.0: cabecalho azul-escuro (mesma cor da barra do topo)
+        # em toda subtela -- da' pra ver de longe que abriu uma janela
+        self.setObjectName("cabecalhoDialogo")
+        self.setStyleSheet(f"#cabecalhoDialogo {{ background:{tokens.SIDEBAR}; border:none; }}")
+
         layout_externo = QVBoxLayout(self)
         layout_externo.setContentsMargins(0, 0, 0, 0)
         layout_externo.setSpacing(0)
 
         linha = QHBoxLayout()
-        linha.setContentsMargins(24, 20, 24, 16)
+        linha.setContentsMargins(24, 18, 20, 18)
         linha.setSpacing(12)
 
         self.icone = QLabel()
@@ -633,14 +636,14 @@ class CabecalhoDialogo(QFrame):
 
         self.titulo = QLabel(titulo)
         self.titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO};
-            font-size:{tokens.TAMANHO_LG}px; font-weight:800;
+            background:transparent; color:white;
+            font-size:{tokens.TAMANHO_LG + 2}px; font-weight:800;
         """)
 
         self.subtitulo = QLabel(subtitulo)
         self.subtitulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px;
+            background:transparent; color:{tokens.TEXTO_SIDEBAR};
+            font-size:{tokens.TAMANHO_SM}px;
         """)
 
         col_titulo.addWidget(self.titulo)
@@ -655,14 +658,14 @@ class CabecalhoDialogo(QFrame):
             bt_fechar.setFixedSize(32, 32)
             bt_fechar.setCursor(Qt.PointingHandCursor)
             bt_fechar.setAutoDefault(False)
-            bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=15))
+            bt_fechar.setIcon(icone("x", cor=tokens.TEXTO_SIDEBAR, tamanho=16))
             # so' icone, sem texto -- sem nome, leitor de tela (Narrator/
             # NVDA) nao tem o que anunciar pra esse botao
             bt_fechar.setToolTip("Fechar")
             bt_fechar.setAccessibleName("Fechar")
             bt_fechar.setStyleSheet(f"""
                 QPushButton {{ background:transparent; border:none; border-radius:8px; }}
-                QPushButton:hover {{ background:{tokens.FUNDO}; }}
+                QPushButton:hover {{ background:{tokens.SIDEBAR_HOVER}; }}
             """)
             if ao_fechar:
                 bt_fechar.clicked.connect(ao_fechar)
@@ -670,10 +673,6 @@ class CabecalhoDialogo(QFrame):
 
         layout_externo.addLayout(linha)
 
-        separador = QFrame()
-        separador.setFixedHeight(1)
-        separador.setStyleSheet(f"background:{tokens.BORDA}; border:none;")
-        layout_externo.addWidget(separador)
 
     def definir_icone(self, icone_nome, cor, tamanho_pixmap=20):
         self.icone.setPixmap(icone_pixmap(icone_nome, cor=cor, tamanho=tamanho_pixmap))
@@ -1311,7 +1310,16 @@ class PilhaPaginas(QStackedWidget):
         super().__init__(parent)
         self.layout().setSizeConstraint(QLayout.SetNoConstraint)
         self.setStyleSheet("background:transparent;")
-        self.currentChanged.connect(lambda _i: self.updateGeometry())
+        self.currentChanged.connect(self._ao_trocar)
+
+    def _ao_trocar(self, _indice):
+        self.updateGeometry()
+        # troca de tela/etapa com um fade curto (pula com movimento
+        # reduzido). ponytail: efeito de opacidade na pagina inteira;
+        # se pesar no PC fraco da loja, trocar por fade so' no cabecalho
+        atual = self.currentWidget()
+        if atual is not None and atual.isVisible():
+            fade_in(atual, duracao=170)
 
     def minimumSizeHint(self):
         atual = self.currentWidget()

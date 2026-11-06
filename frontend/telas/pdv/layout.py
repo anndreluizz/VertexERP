@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QFrame,
+    QGridLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
@@ -24,12 +25,13 @@ from PySide6.QtWidgets import (
     QTableWidget,
 )
 from design import tokens
-from design.fonts import fonte
+from design.fonts import familia_titulo, fonte
 from design.icons import icone, icone_pixmap
 from design.widgets import (
     Badge,
     BotaoSucesso,
     CampoTexto,
+    estilo_botao_forma,
 )
 from utils.formatacao import formatar_moeda
 
@@ -115,7 +117,14 @@ class LayoutMixin:
         col_titulo.addWidget(titulo)
         col_titulo.addWidget(self.lbl_loja)
 
-        self.badge_caixa = Badge("Caixa aberto", "sucesso")
+        self.badge_caixa = Badge("CAIXA ABERTO", "sucesso")
+
+        # Vertex 2.0: "Venda nova · Operador Andre · 10:47" ao lado do selo
+        self.lbl_info_venda = QLabel("")
+        self.lbl_info_venda.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_MD}px;
+        """)
 
         self.bt_retomar = self._botao_ghost_cabecalho("Vendas Suspensas")
         self.bt_retomar.setEnabled(False)
@@ -130,25 +139,27 @@ class LayoutMixin:
         # contorno vermelho (e não botão vermelho cheio): é uma ação
         # destrutiva e rara -- não pode ser a coisa mais chamativa da
         # tela, competindo com o Finalizar Venda
-        self.bt_cancelar = QPushButton("  Cancelar venda")
-        self.bt_cancelar.setIcon(icone("x", cor=tokens.ERRO, tamanho=15))
+        self.bt_cancelar = QPushButton("Cancelar venda  ·  Esc")
         self.bt_cancelar.setCursor(Qt.PointingHandCursor)
-        self.bt_cancelar.setMinimumHeight(38)
+        self.bt_cancelar.setMinimumHeight(44)
         self.bt_cancelar.setStyleSheet(f"""
             QPushButton {{
                 background:transparent; color:{tokens.ERRO};
-                border:1.5px solid {tokens.ERRO}; border-radius:{tokens.RADIUS_SM}px;
-                padding:0 14px; font-size:{tokens.TAMANHO_SM}px; font-weight:700;
+                border:1px solid {tokens.BORDA}; border-radius:{tokens.RADIUS_MD}px;
+                font-size:{tokens.TAMANHO_MD}px; font-weight:600;
             }}
             QPushButton:hover {{ background:{tokens.ERRO_CLARO}; }}
         """)
         self.bt_cancelar.clicked.connect(self.cancelar_venda)
 
-        cabecalho.addWidget(self.bt_voltar)
+        # Vertex 2.0 (prototipo): sem titulo grande nem "voltar" -- o
+        # menu do topo ja' diz onde esta' e leva pra qualquer tela
+        self.bt_voltar.hide()
+        titulo.hide()
+        self.lbl_loja.hide()
         cabecalho.addWidget(self.lbl_logo_pdv)
-        cabecalho.addLayout(col_titulo)
-        cabecalho.addSpacing(4)
         cabecalho.addWidget(self.badge_caixa, alignment=Qt.AlignVCenter)
+        cabecalho.addWidget(self.lbl_info_venda, alignment=Qt.AlignVCenter)
 
         self.badge_troca = Badge("Troca", "alerta")
         self.badge_troca.setVisible(False)
@@ -158,7 +169,7 @@ class LayoutMixin:
         cabecalho.addWidget(self.bt_retomar)
         cabecalho.addWidget(self.bt_suspender)
         cabecalho.addWidget(self.bt_orcamento)
-        cabecalho.addWidget(self.bt_cancelar)
+        # Cancelar venda desceu pro fim do painel da direita (prototipo)
 
         return cabecalho
 
@@ -277,7 +288,7 @@ class LayoutMixin:
     def _construir_campo_codigo(self):
 
         container = QFrame()
-        container.setFixedHeight(58)
+        container.setFixedHeight(62)
         container.setStyleSheet(f"""
             QFrame {{
                 background: {tokens.CARD};
@@ -292,13 +303,13 @@ class LayoutMixin:
 
         self.campo_codigo = QLineEdit()
         self.campo_codigo.setPlaceholderText(
-            "Leia o código de barras ou digite o nome  (3* = 3 unidades)"
+            "Bipe o código ou digite o nome do produto…  (3* = 3 unidades)"
         )
         self.campo_codigo.setFont(fonte(16))
         self.campo_codigo.setStyleSheet(f"""
             QLineEdit {{
                 border: none; outline: none; background: transparent;
-                color: {tokens.TEXTO}; font-size: 16px; font-weight: 600;
+                color: {tokens.TEXTO}; font-size: 19px; font-weight: 600;
             }}
         """)
         # ícone desenhado dentro do próprio campo (QLineEdit.addAction)
@@ -441,20 +452,25 @@ class LayoutMixin:
         linha = QFrame()
         linha.setStyleSheet(f"""
             QFrame {{
-                background: {tokens.FUNDO};
+                background: transparent;
                 border: none;
                 border-radius: {tokens.RADIUS_SM}px;
             }}
         """)
 
-        layout = QHBoxLayout(linha)
-        layout.setContentsMargins(12, 8, 8, 8)
+        # Vertex 2.0: nome + situacao do fiado em cima (largura toda, sem
+        # cortar o nome), botoes numa linha embaixo
+        externo = QVBoxLayout(linha)
+        externo.setContentsMargins(12, 10, 10, 10)
+        externo.setSpacing(8)
+        layout = QHBoxLayout()
         layout.setSpacing(8)
+        externo.addLayout(layout)
 
         lbl_icone = QLabel()
         lbl_icone.setStyleSheet("background:transparent;")
         lbl_icone.setPixmap(icone_pixmap("users", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
-        layout.addWidget(lbl_icone)
+        layout.addWidget(lbl_icone, alignment=Qt.AlignTop)
 
         col_cliente = QVBoxLayout()
         col_cliente.setSpacing(0)
@@ -465,17 +481,31 @@ class LayoutMixin:
             font-size:{tokens.TAMANHO_XS}px; font-weight:700;
         """)
 
-        self.lbl_cliente = QLabel("Nenhum cliente selecionado")
+        self.lbl_cliente = QLabel("Balcão (sem cliente)")
         self.lbl_cliente.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_MD}px; font-weight:700;
+        """)
+
+        # Vertex 2.0: situacao do fiado ja' no PDV (Em dia / Atrasado /
+        # Perto do limite...) -- vem pronta do Selecionar Cliente
+        self.lbl_cliente_info = QLabel("Para fiado, escolha um cliente")
+        self.lbl_cliente_info.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_SM}px; font-weight:600;
+            font-size:{tokens.TAMANHO_XS}px; font-weight:600;
         """)
 
         col_cliente.addWidget(lbl_rotulo)
         col_cliente.addWidget(self.lbl_cliente)
+        col_cliente.addWidget(self.lbl_cliente_info)
 
-        layout.addLayout(col_cliente)
+        self.lbl_cliente_info.setWordWrap(True)
+        layout.addLayout(col_cliente, stretch=1)
+
+        layout = QHBoxLayout()
+        layout.setSpacing(8)
         layout.addStretch()
+        externo.addLayout(layout)
 
         self.bt_limpar_cliente = QPushButton("remover")
         self.bt_limpar_cliente.setCursor(Qt.PointingHandCursor)
@@ -489,11 +519,11 @@ class LayoutMixin:
         self.bt_limpar_cliente.setVisible(False)
         layout.addWidget(self.bt_limpar_cliente)
 
-        self.bt_selecionar_cliente = QPushButton("F2")
+        self.bt_selecionar_cliente = QPushButton("Escolher  F2")
         self.bt_selecionar_cliente.setToolTip("Selecionar cliente (F2)")
         self.bt_selecionar_cliente.setCursor(Qt.PointingHandCursor)
         self.bt_selecionar_cliente.setFocusPolicy(Qt.NoFocus)
-        self.bt_selecionar_cliente.setFixedHeight(30)
+        self.bt_selecionar_cliente.setFixedHeight(34)
         self.bt_selecionar_cliente.setStyleSheet(f"""
             QPushButton {{
                 background:{tokens.CARD}; color:{tokens.PRIMARIA};
@@ -827,152 +857,159 @@ class LayoutMixin:
         return linha, lbl_valor
 
     def _construir_cartao_resumo(self):
+        """Vertex 2.0 (prototipo): cartao escuro com itens, desconto/
+        acrescimo e o TOTAL grande em verde."""
 
         cartao = QFrame()
         cartao.setObjectName("cartaoResumoVenda")
         cartao.setStyleSheet(f"""
             QFrame#cartaoResumoVenda {{
-                background: {tokens.CARD};
-                border: 1px solid {tokens.BORDA};
+                background: {tokens.SIDEBAR}; border: none;
                 border-radius: {tokens.RADIUS_LG}px;
             }}
         """)
 
         layout = QVBoxLayout(cartao)
-        layout.setContentsMargins(20, 18, 20, 20)
-        layout.setSpacing(12)
+        layout.setContentsMargins(20, 16, 20, 18)
+        layout.setSpacing(6)
 
-        layout.addWidget(self._construir_linha_cliente())
+        claro = f"background:transparent; color:{tokens.TEXTO_SIDEBAR}; font-size:{tokens.TAMANHO_MD}px;"
 
-        titulo = QLabel("RESUMO DA VENDA")
-        titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px; font-weight:800; letter-spacing: 0.5px;
-        """)
-        layout.addWidget(titulo)
-
-        linha_itens, self.lbl_itens_valor = self._linha_resumo("Itens")
-        self.lbl_itens_valor.setText("0")
-        layout.addLayout(linha_itens)
-
-        linha_subtotal, self.lbl_subtotal_valor = self._linha_resumo("Subtotal")
-        layout.addLayout(linha_subtotal)
-
-        # ------ desconto / acréscimo (recolhido por padrão) ------
-
-        linha_ajuste_botoes = QHBoxLayout()
-        linha_ajuste_botoes.setSpacing(18)
+        topo = QHBoxLayout()
+        topo.setSpacing(14)
+        self.lbl_itens_valor = QLabel("0 itens")
+        self.lbl_itens_valor.setStyleSheet(claro)
+        topo.addWidget(self.lbl_itens_valor)
+        topo.addStretch()
 
         estilo_bt_ajuste = f"""
             QPushButton {{
-                background:transparent; border:none; text-align:left;
-                color:{tokens.PRIMARIA}; font-size:{tokens.TAMANHO_SM}px;
+                background:transparent; border:none; text-align:right;
+                color:{tokens.TEXTO_SIDEBAR}; font-size:{tokens.TAMANHO_SM}px;
                 font-weight:600; padding: 2px 0;
             }}
+            QPushButton:hover {{ color:white; }}
         """
-
-        self.bt_alternar_ajuste = QPushButton("+ Desconto (F6)")
+        self.bt_alternar_ajuste = QPushButton("Desconto · F6")
         self.bt_alternar_ajuste.setCursor(Qt.PointingHandCursor)
         self.bt_alternar_ajuste.setStyleSheet(estilo_bt_ajuste)
         self.bt_alternar_ajuste.clicked.connect(self._alternar_bloco_ajuste)
-
-        self.bt_alternar_acrescimo = QPushButton("+ Acréscimo (F7)")
+        self.bt_alternar_acrescimo = QPushButton("Acréscimo · F7")
         self.bt_alternar_acrescimo.setCursor(Qt.PointingHandCursor)
         self.bt_alternar_acrescimo.setStyleSheet(estilo_bt_ajuste)
         self.bt_alternar_acrescimo.clicked.connect(self._abrir_ajuste_acrescimo)
-
-        linha_ajuste_botoes.addWidget(self.bt_alternar_ajuste)
-        linha_ajuste_botoes.addWidget(self.bt_alternar_acrescimo)
-        linha_ajuste_botoes.addStretch()
-
-        layout.addLayout(linha_ajuste_botoes)
+        topo.addWidget(self.bt_alternar_ajuste)
+        topo.addWidget(self.bt_alternar_acrescimo)
+        layout.addLayout(topo)
 
         self.bloco_ajuste = QFrame()
         self.bloco_ajuste.setVisible(False)
         self.bloco_ajuste.setStyleSheet(f"""
-            QFrame {{
-                background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px;
-            }}
+            QFrame {{ background:{tokens.SIDEBAR_HOVER}; border-radius:{tokens.RADIUS_SM}px; }}
         """)
-
         ajuste_layout = QHBoxLayout(self.bloco_ajuste)
-        ajuste_layout.setContentsMargins(14, 12, 14, 12)
+        ajuste_layout.setContentsMargins(12, 10, 12, 10)
         ajuste_layout.setSpacing(12)
-
-        col_desconto = QVBoxLayout()
-        col_desconto.setSpacing(4)
-        lbl_desconto = QLabel("DESCONTO (R$)")
-        lbl_desconto.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
-        """)
-        self.campo_desconto = CampoTexto("0,00")
-        self.campo_desconto.textChanged.connect(self._recalcular_totais)
-        col_desconto.addWidget(lbl_desconto)
-        col_desconto.addWidget(self.campo_desconto)
-
-        col_acrescimo = QVBoxLayout()
-        col_acrescimo.setSpacing(4)
-        lbl_acrescimo = QLabel("ACRÉSCIMO (R$)")
-        lbl_acrescimo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
-        """)
-        self.campo_acrescimo = CampoTexto("0,00")
-        self.campo_acrescimo.textChanged.connect(self._recalcular_totais)
-        col_acrescimo.addWidget(lbl_acrescimo)
-        col_acrescimo.addWidget(self.campo_acrescimo)
-
-        ajuste_layout.addLayout(col_desconto)
-        ajuste_layout.addLayout(col_acrescimo)
-
+        rotulo_claro = (f"background:transparent; color:{tokens.TEXTO_SIDEBAR}; "
+                        f"font-size:{tokens.TAMANHO_XS}px; font-weight:700;")
+        for texto, attr in (("DESCONTO (R$)", "campo_desconto"), ("ACRÉSCIMO (R$)", "campo_acrescimo")):
+            col = QVBoxLayout()
+            col.setSpacing(4)
+            lbl = QLabel(texto)
+            lbl.setStyleSheet(rotulo_claro)
+            campo = CampoTexto("0,00")
+            campo.textChanged.connect(self._recalcular_totais)
+            setattr(self, attr, campo)
+            col.addWidget(lbl)
+            col.addWidget(campo)
+            ajuste_layout.addLayout(col)
         layout.addWidget(self.bloco_ajuste)
 
-        linha_desconto, self.lbl_desconto_valor = self._linha_resumo("Desconto")
-        layout.addLayout(linha_desconto)
+        # subtotal / desconto / acrescimo: so' com texto quando ha' ajuste
+        # (ver CarrinhoMixin._recalcular_totais)
+        linha_detalhe = QHBoxLayout()
+        linha_detalhe.setSpacing(12)
+        self.lbl_subtotal_valor = QLabel("")
+        self.lbl_desconto_valor = QLabel("")
+        self.lbl_acrescimo_valor = QLabel("")
+        for lbl in (self.lbl_subtotal_valor, self.lbl_desconto_valor, self.lbl_acrescimo_valor):
+            lbl.setStyleSheet(claro)
+            linha_detalhe.addWidget(lbl)
+        linha_detalhe.addStretch()
+        layout.addLayout(linha_detalhe)
 
-        linha_acrescimo, self.lbl_acrescimo_valor = self._linha_resumo("Acréscimo")
-        layout.addLayout(linha_acrescimo)
-
-        # total ancorado embaixo, colado no botao Finalizar -- o espaco
-        # que sobra fica entre o detalhamento e o total
-        layout.addStretch()
-
-        caixa_total = QFrame()
-        caixa_total.setStyleSheet(f"""
-            QFrame {{
-                background: {tokens.SUCESSO_CLARO};
-                border-radius: {tokens.RADIUS_SM}px;
-            }}
-        """)
-
-        layout_caixa_total = QVBoxLayout(caixa_total)
-        layout_caixa_total.setContentsMargins(16, 14, 16, 16)
-        layout_caixa_total.setSpacing(2)
-
+        layout.addSpacing(4)
         lbl_total_rotulo = QLabel("TOTAL")
         lbl_total_rotulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px; font-weight:800; letter-spacing: 0.5px;
+            background:transparent; color:{tokens.TEXTO_SIDEBAR};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:700; letter-spacing: 1px;
         """)
-        layout_caixa_total.addWidget(lbl_total_rotulo)
+        layout.addWidget(lbl_total_rotulo)
 
         self.total = QLabel("R$ 0,00")
-        self.total.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.total.setStyleSheet(f"""
-            background:transparent; font-size: 40px; font-weight: 900;
-            color: {tokens.SECUNDARIA};
+            background:transparent; font-size: 46px; font-weight: 800;
+            color: #4ADE80; font-family:'{familia_titulo()}';
         """)
-        layout_caixa_total.addWidget(self.total)
+        layout.addWidget(self.total)
 
-        layout.addWidget(caixa_total)
+        return cartao
 
+    def _construir_cartao_cliente(self):
+        cartao = QFrame()
+        cartao.setObjectName("cartaoClientePdv")
+        cartao.setStyleSheet(f"""
+            QFrame#cartaoClientePdv {{ background:{tokens.CARD}; border:1px solid {tokens.BORDA};
+                                       border-radius:{tokens.RADIUS_LG}px; }}
+        """)
+        lay = QVBoxLayout(cartao)
+        lay.setContentsMargins(6, 6, 6, 6)
+        lay.addWidget(self._construir_linha_cliente())
+        return cartao
+
+    def _construir_formas_pagamento(self):
+        """Formas de pagamento coloridas no proprio PDV (prototipo):
+        clicar abre o pagamento ja' com a forma escolhida."""
+        from telas.pagamento import FORMAS
+
+        cartao = QFrame()
+        cartao.setObjectName("cartaoFormasPdv")
+        cartao.setStyleSheet(f"""
+            QFrame#cartaoFormasPdv {{ background:{tokens.CARD}; border:1px solid {tokens.BORDA};
+                                      border-radius:{tokens.RADIUS_LG}px; }}
+        """)
+        lay = QVBoxLayout(cartao)
+        lay.setContentsMargins(16, 14, 16, 16)
+        lay.setSpacing(10)
+        titulo = QLabel("Forma de pagamento")
+        titulo.setStyleSheet(f"background:transparent; border:none; color:{tokens.TEXTO}; "
+                             f"font-size:{tokens.TAMANHO_MD}px; font-weight:700;")
+        lay.addWidget(titulo)
+        grade = QGridLayout()
+        grade.setSpacing(8)
+        self.botoes_forma_pdv = {}
+        for i, (rotulo, valor, icone_nome) in enumerate(FORMAS):
+            estilo, cor = estilo_botao_forma(valor, False, "font-size:14px; font-weight:700;")
+            bt = QPushButton(f" {rotulo}")
+            bt.setCursor(Qt.PointingHandCursor)
+            bt.setFocusPolicy(Qt.NoFocus)
+            bt.setMinimumHeight(50)
+            bt.setIcon(icone(icone_nome, cor=cor, tamanho=16))
+            bt.setStyleSheet(estilo)
+            bt.setToolTip(f"Pagar com {rotulo}")
+            bt.clicked.connect(lambda _=False, v=valor: self.finalizar_venda(v))
+            grade.addWidget(bt, i // 3, i % 3)
+            self.botoes_forma_pdv[valor] = bt
+        for coluna in range(3):
+            grade.setColumnStretch(coluna, 1)
+        lay.addLayout(grade)
         return cartao
 
     def _construir_botao_pagar(self):
 
-        self.bt_pagar = BotaoSucesso("Finalizar Venda (F3)", icone_nome="credit-card")
-        self.bt_pagar.setMinimumHeight(58)
+        self.bt_pagar = BotaoSucesso("Finalizar venda   F3", icone_nome="check")
+        self.bt_pagar.setMinimumHeight(64)
+        self.bt_pagar.setFont(fonte(20))
         self.bt_pagar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.bt_pagar.clicked.connect(self.finalizar_venda)
 

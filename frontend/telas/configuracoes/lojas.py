@@ -32,11 +32,7 @@ class LojasMixin:
 
         # ---- loja deste terminal ----
 
-        lbl_terminal = QLabel("Loja deste terminal")
-        lbl_terminal.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:800; color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.6px;
-        """)
+        lbl_terminal = self._titulo_bloco("Loja deste computador")
         layout.addWidget(lbl_terminal)
 
         dica_terminal = QLabel(
@@ -81,11 +77,7 @@ class LojasMixin:
 
         # ---- lojas cadastradas ----
 
-        lbl_cadastradas = QLabel("Lojas cadastradas")
-        lbl_cadastradas.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
+        lbl_cadastradas = self._titulo_bloco("Lojas cadastradas")
         layout.addWidget(lbl_cadastradas)
 
         self.lista_lojas = QVBoxLayout()

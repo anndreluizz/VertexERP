@@ -59,9 +59,9 @@ def test_bom_pagador_vira_excelente():
 def test_compra_muito_mas_paga_devagar_nao_e_excelente():
     movs = []
     for i in range(5):
-        movs += [_mov("COMPRA", 50, 85 - i * 2), _mov("PAGAMENTO", 50, 30 - i * 2)]
+        movs += [_mov("COMPRA", 50, 85 - i * 2), _mov("PAGAMENTO", 50, 15 - i * 2)]
     agr = _agr(*movs)
-    assert agr["prazo_medio_pagamento"] == 55
+    assert agr["prazo_medio_pagamento"] == 70
     assert not ca.eh_bom_pagador(agr)
     assert "Paga com Atraso" in ca.calcular_pontuacao(agr)
 
@@ -78,7 +78,7 @@ def test_selo_ao_lado_do_nome():
     for i in range(3):
         movs += [_mov("COMPRA", 50, 60 - i * 10), _mov("PAGAMENTO", 50, 58 - i * 10)]
     assert ca.selo_pagador(_agr(*movs)) == ("★ Bom pagador", "sucesso")
-    lento = _agr(_mov("COMPRA", 50, 80), _mov("PAGAMENTO", 50, 20))
+    lento = _agr(_mov("COMPRA", 50, 90), _mov("PAGAMENTO", 50, 20))
     assert ca.selo_pagador(lento) == ("Paga com atraso", "alerta")
     assert ca.selo_pagador(_agr(_mov("COMPRA", 50, 3))) is None
     assert ca.selo_pagador({}) is None
@@ -104,8 +104,39 @@ def test_negativado_tem_status_proprio_e_nao_ganha_selo():
     assert ca.calcular_pontuacao(agr) == "🔴 Cliente Negativado"
 
 
-def test_devendo_ha_mais_de_30_dias_sem_pagar_nao_e_em_dia():
-    agr = _agr(_mov("COMPRA", 100, 45))
+def test_devendo_ha_mais_de_2_meses_sem_pagar_nao_e_em_dia():
+    agr = _agr(_mov("COMPRA", 100, 70))
     assert ca.status_financeiro(agr) == "Paga com Atraso"
-    assert ca.calcular_aviso(agr) == "🟡 Pagamento atrasado · compra em aberto há 45 dias"
+    assert ca.calcular_aviso(agr) == "🟡 Pagamento atrasado · compra em aberto há 70 dias"
+    # ate' 2 meses ainda nao e' atraso (regra do dono, 05/11/2026)
+    assert ca.status_financeiro(_agr(_mov("COMPRA", 100, 50))) == "Em Dia"
+    quita_em_45 = _agr(_mov("COMPRA", 50, 60), _mov("PAGAMENTO", 50, 15))
+    assert ca.status_financeiro(quita_em_45) == "Bom Pagador"
     assert ca.status_financeiro(_agr(_mov("COMPRA", 100, 10))) == "Em Dia"
+
+
+def test_atrasado_amarelo_entre_2_meses_e_inadimplencia():
+    from telas.clientes import _status_cliente
+    from telas.selecionar_cliente import situacao_fiado
+    cliente = {"nome": "R", "ativo": True}
+    agr = _agr(_mov("COMPRA", 320, 75))
+    assert ca.atrasado_sem_ser_inadimplente(agr)
+    assert _status_cliente(cliente, agr, 90) == ("Atrasado · 75 dias", "alerta")
+    assert situacao_fiado({**cliente, "_agr": agr})[:2] == ("Atrasado · 75 dias", "alerta")
+    # passou do prazo de inadimplencia: vermelho
+    assert _status_cliente(cliente, _agr(_mov("COMPRA", 50, 120)), 90)[1] == "erro"
+    # ate' 2 meses: fiado em aberto normal
+    assert _status_cliente(cliente, _agr(_mov("COMPRA", 50, 50)), 90) == ("Fiado em aberto", "info")
+
+
+def test_extrato_desde_o_ultimo_pagamento():
+    from telas.clientes import extrato_desde_ultimo_pagamento
+    movs = [
+        {"tipo": "COMPRA", "valor": 50, "data": "2026-09-01"},
+        {"tipo": "PAGAMENTO", "valor": 50, "data": "2026-10-12"},
+        {"tipo": "COMPRA", "valor": 79.8, "data": "2026-10-18"},
+        {"tipo": "COMPRA", "valor": 36.4, "data": "2026-11-01"},
+    ]
+    assert [m["data"] for m in extrato_desde_ultimo_pagamento(movs)] == ["2026-10-12", "2026-10-18", "2026-11-01"]
+    so_compras = [{"tipo": "COMPRA", "valor": 1, "data": f"2026-10-{d:02d}"} for d in range(1, 13)]
+    assert len(extrato_desde_ultimo_pagamento(so_compras)) == 8

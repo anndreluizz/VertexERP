@@ -62,3 +62,13 @@ def test_listar_lojas_esconde_inativas_por_padrao():
     with mock.patch("services.loja_service.get", return_value=resposta):
         assert [l["id"] for l in loja_service.listar_lojas()] == [1]
         assert len(loja_service.listar_lojas(True)) == 2
+
+
+def test_busca_do_menu_de_configuracoes():
+    from telas.configuracoes.configuracoes import secao_corresponde
+    assert secao_corresponde("cupom", "Impressora e cupom")
+    assert secao_corresponde("CHAVE", "Pagamentos e PIX")
+    assert secao_corresponde("senha", "Usuários e perfis")
+    assert secao_corresponde("usuario", "Usuários e perfis")
+    assert not secao_corresponde("pix", "Backup")
+    assert secao_corresponde("", "Backup")

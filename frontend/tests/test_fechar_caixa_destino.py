@@ -18,3 +18,9 @@ def test_destino_do_dinheiro():
     assert FecharCaixaWindow._destino(_tela(300, "250", "60")) is None  # passa do contado
     assert FecharCaixaWindow._destino(_tela(300, "abc", "0")) is None
     assert FecharCaixaWindow._destino(_tela(300, "-5", "0")) is None
+
+
+def test_contar_por_nota_soma_e_preenche():
+    from telas.fechar_caixa import soma_notas
+    assert soma_notas({100: 1, 50: 2, 20: 5, 10: 4, 5: 6, 2: 5, 200: 0}, 2.0) == 382.0
+    assert soma_notas({}, 0) == 0

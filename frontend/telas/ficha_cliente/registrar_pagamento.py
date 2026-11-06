@@ -22,7 +22,7 @@ from services import comprovante_service, impressora_termica_service, preferenci
 from services.worker import rodar_em_thread
 from design import tokens
 from design.icons import icone
-from utils.formatacao import formatar_moeda
+from utils.formatacao import formatar_moeda, ler_moeda
 from design.widgets import (
     Avatar,
     Badge,
@@ -38,6 +38,31 @@ from telas.ficha_cliente.comum import (
     _buscar_dados_recibo_pagamento,
     _dia_com_hora_atual,
 )
+
+
+def valores_rapidos(saldo):
+    """[(rotulo, valor)] dos botoes de valor rapido: tudo, metade e
+    notas redondas menores que a divida."""
+    if saldo <= 0.009:
+        return []
+    opcoes = [(f"Tudo ({formatar_moeda(saldo)})", round(saldo, 2))]
+    if saldo >= 20:
+        opcoes.append(("Metade", round(saldo / 2, 2)))
+    opcoes += [(formatar_moeda(n), n) for n in (100, 50, 20) if n < saldo / 2 or (n < saldo and saldo < 40)]
+    return opcoes[:5]
+
+
+def texto_resta(saldo, texto_valor):
+    try:
+        pago = ler_moeda(texto_valor)
+    except ValueError:
+        return "Digite o valor que o cliente está pagando."
+    resta = saldo - pago
+    if resta > 0.009:
+        return f"Depois deste pagamento fica devendo <b>{formatar_moeda(resta)}</b>"
+    if resta < -0.009:
+        return f"Pagando a mais: sobra <b>{formatar_moeda(-resta)}</b> a favor do cliente"
+    return "<b>Quita tudo</b>: fica sem dever nada"
 
 
 class RegistrarPagamentoDialog(DialogoPadrao):
@@ -112,12 +137,35 @@ class RegistrarPagamentoDialog(DialogoPadrao):
 
         layout.addWidget(caixa_valor)
 
-        lbl_saldo_dica = QLabel(f"Saldo devedor: {formatar_moeda(saldo_devedor)}")
-        lbl_saldo_dica.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            color:{tokens.TEXTO_TERCIARIO};
+        # Vertex 2.0: valores rapidos + "fica devendo" ao vivo
+        linha_rapidos = QHBoxLayout()
+        linha_rapidos.setSpacing(8)
+        for rotulo, valor_rapido in valores_rapidos(saldo_devedor):
+            bt = QPushButton(rotulo)
+            bt.setCursor(Qt.PointingHandCursor)
+            bt.setAutoDefault(False)
+            bt.setFixedHeight(34)
+            bt.setStyleSheet(f"""
+                QPushButton {{ background:{tokens.CARD}; color:{tokens.TEXTO};
+                               border:1px solid {tokens.BORDA_FORTE}; border-radius:17px;
+                               padding:0 14px; font-size:{tokens.TAMANHO_SM}px; font-weight:600; }}
+                QPushButton:hover {{ border-color:{tokens.PRIMARIA}; color:{tokens.PRIMARIA}; }}
+            """)
+            bt.clicked.connect(
+                lambda _=False, v=valor_rapido: self.valor.setText(formatar_moeda(v, com_simbolo=False))
+            )
+            linha_rapidos.addWidget(bt)
+        linha_rapidos.addStretch()
+        layout.addLayout(linha_rapidos)
+
+        self.lbl_resta = QLabel()
+        self.lbl_resta.setStyleSheet(f"""
+            background:{tokens.FUNDO}; border-radius:{tokens.RADIUS_SM}px; padding:10px 14px;
+            font-size:{tokens.TAMANHO_MD}px; color:{tokens.TEXTO};
         """)
-        layout.addWidget(lbl_saldo_dica)
+        layout.addWidget(self.lbl_resta)
+        self.valor.textChanged.connect(self._atualizar_resta)
+        self._atualizar_resta()
 
         lbl_forma_titulo = QLabel("Forma de pagamento")
         lbl_forma_titulo.setStyleSheet(f"""
@@ -299,10 +347,13 @@ class RegistrarPagamentoDialog(DialogoPadrao):
                 cor=cor_texto, tamanho=17,
             ))
 
+    def _atualizar_resta(self):
+        self.lbl_resta.setText(texto_resta(self._saldo_devedor, self.valor.text()))
+
     def confirmar(self):
 
         try:
-            valor = float(self.valor.text().replace(",", "."))
+            valor = ler_moeda(self.valor.text())
         except ValueError:
             QMessageBox.warning(
                 self, "Atenção", "Informe um valor válido."

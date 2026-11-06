@@ -46,3 +46,13 @@ def test_sem_forma_escolhida_finalizar_fica_desligado(_qapp):
     tela = PagamentoWindow(50.0, [{"preco": 50.0, "quantidade": 1}])
 
     assert not tela.bt_confirmar.isEnabled()
+
+
+def test_troco_aparece_enquanto_digita_so_no_dinheiro():
+    from telas.pagamento import _texto_para_valor, troco_previa
+    assert troco_previa("DINHEIRO", 250, 239.6) == "Troco: R$ 10,40"
+    assert troco_previa("PIX", 250, 239.6) == ""
+    assert troco_previa("DINHEIRO", 200, 239.6) == ""
+    assert _texto_para_valor("1.000") == 1000
+    assert _texto_para_valor("1.234,56") == 1234.56
+    assert _texto_para_valor("") == 0.0

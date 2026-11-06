@@ -9,7 +9,7 @@ import '../models/movimento_fiado.dart';
 const prazoInadimplenciaDias = 90;
 
 /// quem quita, em media, em ate tantos dias e' "bom pagador"
-const prazoBomPagadorDias = 30;
+const prazoBomPagadorDias = 60; // 2 meses (pedido do dono, 05/11/2026)
 
 const _epsilon = 0.009;
 

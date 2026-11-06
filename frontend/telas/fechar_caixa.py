@@ -19,8 +19,9 @@ from services import api, comprovante_service, impressora_termica_service, prefe
 from services.worker import rodar_em_thread, em_paralelo
 
 from design import tokens
+from design.fonts import familia_titulo
 from design.widgets import (
-    BotaoPerigo, BotaoSecundario, BotaoSucesso, CampoTexto, DialogoPadrao,
+    BotaoPerigo, BotaoPrimario, BotaoSecundario, CampoTexto, DialogoPadrao,
     campo_rotulado, cor_forma_pagamento, titulo_secao,
 )
 from utils.formatacao import formatar_moeda, ler_moeda, linhas_resumo_caixa
@@ -113,12 +114,36 @@ def _texto_para_valor(texto):
         return None
 
 
+def _texto(texto, tamanho, cor, peso=400):
+    lbl = QLabel(texto)
+    lbl.setWordWrap(True)
+    lbl.setStyleSheet(f"background:transparent; border:none; font-size:{tamanho}px; "
+                      f"font-weight:{peso}; color:{cor};")
+    return lbl
+
+
+def _linha_nota(nome, campo, vezes="×"):
+    """'R$ 100  ×  [ 2 ]' num quadrinho (prototipo DlgFecharCaixa)."""
+    quadro = QFrame()
+    quadro.setObjectName("linhaNota")
+    quadro.setStyleSheet(f"QFrame#linhaNota {{ background:transparent; border:1px solid {tokens.BORDA}; "
+                         f"border-radius:10px; }}")
+    h = QHBoxLayout(quadro)
+    h.setContentsMargins(10, 5, 6, 5)
+    h.setSpacing(8)
+    h.addWidget(_texto(nome, 14, tokens.TEXTO, 600), 1)
+    if vezes:
+        h.addWidget(_texto(vezes, 14, tokens.TEXTO_SECUNDARIO))
+    h.addWidget(campo)
+    return quadro
+
+
 class FecharCaixaWindow(DialogoPadrao):
 
     def __init__(self):
 
         super().__init__(
-            "Fechar Caixa", "Etapa 1 de 2 · conte o dinheiro em espécie na gaveta",
+            "Fechar caixa", "Conte o dinheiro da gaveta",
             "lock", tokens.ALERTA, tokens.ALERTA_CLARO,
             largura=DialogoPadrao.MEDIO,
         )
@@ -137,16 +162,12 @@ class FecharCaixaWindow(DialogoPadrao):
 
         # ---- indicador de etapa (1. Contagem / 2. Conferência) ----
 
-        linha_passos = QHBoxLayout()
-        linha_passos.setSpacing(10)
-
-        self.lbl_passo_1 = QLabel("1   Contagem")
-        self.lbl_passo_2 = QLabel("2   Conferência")
-        for lbl in (self.lbl_passo_1, self.lbl_passo_2):
-            lbl.setAlignment(Qt.AlignCenter)
-            linha_passos.addWidget(lbl, 1)
-
-        self.corpo.addLayout(linha_passos)
+        linha_cabecalho = self.cabecalho.layout().itemAt(0).layout()
+        self.lbl_passo_1 = QLabel("1 Contar")
+        self.lbl_passo_2 = QLabel("2 Conferir")
+        self.lbl_passo_3 = QLabel("3 Imprimir")
+        for lbl in (self.lbl_passo_1, self.lbl_passo_2, self.lbl_passo_3):
+            linha_cabecalho.addWidget(lbl, 0, Qt.AlignVCenter)
 
         self.paginas = QStackedWidget()
         self.paginas.setStyleSheet("background:transparent;")
@@ -161,19 +182,19 @@ class FecharCaixaWindow(DialogoPadrao):
 
         # ---- rodapé: Cancelar + Continuar (etapa 1) / Voltar + Confirmar (etapa 2) ----
 
-        self.bt_continuar = BotaoSucesso("Continuar", icone_nome="chevron-right")
+        self.bt_continuar = BotaoPrimario("Continuar: conferir  →")
         self.bt_continuar.setAutoDefault(False)
         self.bt_continuar.clicked.connect(self.avancar_para_conferencia)
-        self.definir_botoes(self.bt_continuar)
+        self.definir_botoes(self.bt_continuar, "Voltar ao caixa")
 
-        self.bt_voltar = BotaoSecundario("Voltar")
+        self.bt_voltar = BotaoSecundario("←  Voltar")
         self.bt_voltar.setAutoDefault(False)
         self.bt_voltar.setMinimumWidth(140)
         self.bt_voltar.clicked.connect(self.voltar_para_contagem)
 
-        self.bt_confirmar = BotaoPerigo("Confirmar Fechamento", icone_nome="lock")
+        self.bt_confirmar = BotaoPerigo("Fechar caixa e imprimir", icone_nome="lock")
         self.bt_confirmar.setAutoDefault(False)
-        self.bt_confirmar.setMinimumWidth(200)
+        self.bt_confirmar.setMinimumWidth(220)
         self.bt_confirmar.clicked.connect(self.confirmar_fechamento)
 
         self.rodape.addWidget(self.bt_voltar)
@@ -194,6 +215,10 @@ class FecharCaixaWindow(DialogoPadrao):
     def _ao_dados_sucesso(self, resultado):
         self.caixa, self.resumo = resultado
         self._dados_prontos = True
+        from telas.caixa import _texto_abertura
+        if self.caixa.get("data_abertura") and self.paginas.currentWidget() is self.pagina_contagem:
+            self.cabecalho.definir_texto(
+                "Fechar caixa", _texto_abertura(self.caixa["data_abertura"]))
 
     def _ao_dados_erro(self, erro):
         self._erro_dados = erro
@@ -203,21 +228,14 @@ class FecharCaixaWindow(DialogoPadrao):
         botões do rodapé -- deixa claro em que ponto do fluxo (contagem
         cega vs. conferência final) a pessoa está."""
 
-        for n, lbl in ((1, self.lbl_passo_1), (2, self.lbl_passo_2)):
-            if n == numero:
-                lbl.setStyleSheet(f"""
-                    background:{tokens.PRIMARIA_CLARA}; color:{tokens.PRIMARIA};
-                    border:1.5px solid {tokens.PRIMARIA};
-                    border-radius:{tokens.RADIUS_SM}px; font-weight:800;
-                    font-size:{tokens.TAMANHO_MD}px; padding:9px 0;
-                """)
-            else:
-                lbl.setStyleSheet(f"""
-                    background:{tokens.FUNDO}; color:{tokens.TEXTO_TERCIARIO};
-                    border:1.5px solid {tokens.BORDA};
-                    border-radius:{tokens.RADIUS_SM}px; font-weight:600;
-                    font-size:{tokens.TAMANHO_MD}px; padding:9px 0;
-                """)
+        for n, lbl in ((1, self.lbl_passo_1), (2, self.lbl_passo_2), (3, self.lbl_passo_3)):
+            ativo = n == numero
+            lbl.setStyleSheet(f"""
+                background:{'#149174' if ativo else '#1C3357'};
+                color:{'#FFFFFF' if ativo else tokens.TEXTO_SIDEBAR};
+                border-radius:13px; padding:5px 10px;
+                font-size:{tokens.TAMANHO_SM}px; font-weight:{700 if ativo else 500};
+            """)
 
         etapa_1 = numero == 1
         self.bt_cancelar.setVisible(etapa_1)
@@ -237,90 +255,90 @@ class FecharCaixaWindow(DialogoPadrao):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
 
-        aviso = QLabel(
-            "Some todo o dinheiro físico presente na gaveta e informe o "
-            "valor total contado. O sistema só mostra o valor esperado "
-            "depois da contagem, pra não influenciar quem está contando."
-        )
-        aviso.setWordWrap(True)
-        aviso.setStyleSheet(f"""
-            background:{tokens.ALERTA_CLARO}; color:{tokens.ALERTA_TEXTO};
-            font-size:{tokens.TAMANHO_BASE}px; border-radius:{tokens.RADIUS_SM}px;
-            border-left:4px solid {tokens.ALERTA}; padding:12px 14px;
-        """)
-        layout.addWidget(aviso)
+        colunas = QHBoxLayout()
+        colunas.setSpacing(18)
+        layout.addLayout(colunas)
 
-        # campo grande no mesmo formato do valor da tela de pagamento
-        caixa_valor = QFrame()
-        caixa_valor.setObjectName("caixaValor")
-        caixa_valor.setStyleSheet(f"""
-            QFrame#caixaValor {{
-                background:{tokens.FUNDO}; border:1.5px solid {tokens.BORDA};
-                border-radius:{tokens.RADIUS_MD}px;
-            }}
-        """)
-        linha_valor = QHBoxLayout(caixa_valor)
-        linha_valor.setContentsMargins(20, 6, 20, 6)
-
-        lbl_rs = QLabel("R$")
-        lbl_rs.setStyleSheet(f"""
-            background:transparent; border:none; font-size:24px;
-            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
-        """)
-
-        self.valor_input = QLineEdit()
-        self.valor_input.setPlaceholderText("0,00")
-        self.valor_input.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.valor_input.setMinimumHeight(70)
-        self.valor_input.setStyleSheet(f"""
-            QLineEdit {{
-                font-size:40px; font-weight:800; color:{tokens.TEXTO};
-                border:none; background:transparent;
-            }}
-        """)
-        self.valor_input.returnPressed.connect(self.avancar_para_conferencia)
-
-        linha_valor.addWidget(lbl_rs)
-        linha_valor.addWidget(self.valor_input, 1)
-
-        layout.addWidget(campo_rotulado(
-            "Valor contado em espécie", caixa_valor,
-            "Só o dinheiro (cédulas e moedas). PIX e cartão são conferidos "
-            "na próxima etapa.  ·  Enter continua",
-        ))
-
-        # Vertex 2.0: contar por nota (opcional) -- quantas de cada e o
-        # total vai sozinho pro campo de cima
-        layout.addWidget(titulo_secao("Ou conte por nota"))
+        # esquerda: quantas notas de cada (o total soma sozinho)
+        col_notas = QVBoxLayout()
+        col_notas.setSpacing(10)
+        col_notas.addWidget(_texto("Conte o dinheiro da gaveta", tokens.TAMANHO_MD + 1, tokens.TEXTO, 700))
+        col_notas.addWidget(_texto("Digite quantas notas de cada. O total soma sozinho.",
+                                   tokens.TAMANHO_SM, tokens.TEXTO_SECUNDARIO))
         grade = QGridLayout()
-        grade.setHorizontalSpacing(10)
+        grade.setHorizontalSpacing(8)
         grade.setVerticalSpacing(8)
         self.qtd_notas = {}
-        estilo_spin = f"""
-            QSpinBox {{ background:{tokens.CARD}; border:1px solid {tokens.BORDA_FORTE};
-                        border-radius:{tokens.RADIUS_SM}px; padding:4px 6px;
-                        font-size:{tokens.TAMANHO_LG}px; font-weight:700; color:{tokens.TEXTO}; }}
+        estilo_qtd = f"""
+            QSpinBox, QLineEdit {{ background:{tokens.CARD}; border:1px solid {tokens.BORDA_FORTE};
+                        border-radius:7px; font-size:15px; font-weight:700; color:{tokens.TEXTO}; }}
         """
         for i, nota in enumerate(CEDULAS):
             spin = QSpinBox()
             spin.setRange(0, 9999)
-            spin.setMinimumHeight(38)
-            spin.setStyleSheet(estilo_spin)
+            spin.setButtonSymbols(QSpinBox.NoButtons)
+            spin.setAlignment(Qt.AlignCenter)
+            spin.setFixedSize(58, 34)
+            spin.setStyleSheet(estilo_qtd)
             spin.setAccessibleName(f"Quantidade de notas de {nota} reais")
             spin.valueChanged.connect(self._somar_notas)
             self.qtd_notas[nota] = spin
-            grade.addWidget(campo_rotulado(f"R$ {nota}", spin), i // 4, i % 4)
+            grade.addWidget(_linha_nota(f"R$ {nota}", spin), i // 2, i % 2)
         self.moedas_input = QLineEdit()
         self.moedas_input.setPlaceholderText("0,00")
-        self.moedas_input.setMinimumHeight(38)
-        self.moedas_input.setStyleSheet(estilo_spin.replace("QSpinBox", "QLineEdit"))
+        self.moedas_input.setAlignment(Qt.AlignCenter)
+        self.moedas_input.setFixedSize(76, 34)
+        self.moedas_input.setStyleSheet(estilo_qtd)
+        self.moedas_input.setAccessibleName("Total em moedas")
         self.moedas_input.textChanged.connect(self._somar_notas)
-        grade.addWidget(campo_rotulado("Moedas (R$)", self.moedas_input), 1, 3)
-        for coluna in range(4):
-            grade.setColumnStretch(coluna, 1)
-        layout.addLayout(grade)
+        grade.addWidget(_linha_nota("Moedas R$", self.moedas_input, ""), len(CEDULAS) // 2, 1)
+        col_notas.addLayout(grade)
+        col_notas.addStretch()
+        colunas.addLayout(col_notas, 3)
 
-        layout.addStretch()
+        # direita: o total (da' pra digitar direto, sem contar por nota)
+        col_total = QVBoxLayout()
+        col_total.setSpacing(10)
+        col_total.addWidget(_texto("Total contado", tokens.TAMANHO_MD + 1, tokens.TEXTO, 700))
+
+        caixa_valor = QFrame()
+        caixa_valor.setObjectName("caixaValor")
+        caixa_valor.setStyleSheet(f"""
+            QFrame#caixaValor {{
+                background:{tokens.FUNDO}; border:1.5px solid {tokens.BORDA_FORTE};
+                border-radius:12px;
+            }}
+        """)
+        linha_valor = QHBoxLayout(caixa_valor)
+        linha_valor.setContentsMargins(16, 4, 16, 4)
+        lbl_rs = QLabel("R$")
+        lbl_rs.setStyleSheet(f"""
+            background:transparent; border:none; font-size:22px;
+            font-weight:700; color:{tokens.TEXTO_TERCIARIO};
+        """)
+        self.valor_input = QLineEdit()
+        self.valor_input.setPlaceholderText("0,00")
+        self.valor_input.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.valor_input.setMinimumHeight(64)
+        self.valor_input.setAccessibleName("Valor contado em espécie")
+        self.valor_input.setStyleSheet(f"""
+            QLineEdit {{
+                font-size:34px; font-weight:700; color:{tokens.TEXTO};
+                border:none; background:transparent; font-family:'{familia_titulo()}';
+            }}
+        """)
+        self.valor_input.returnPressed.connect(self.avancar_para_conferencia)
+        linha_valor.addWidget(lbl_rs)
+        linha_valor.addWidget(self.valor_input, 1)
+        col_total.addWidget(caixa_valor)
+        dica = _texto(
+            "Só dinheiro vivo. Pix e cartão aparecem no próximo passo.\n\n"
+            "O Vertex só mostra quanto devia ter depois que você contar, "
+            "pra não influenciar a contagem.  ·  Enter continua",
+            tokens.TAMANHO_SM, tokens.TEXTO_SECUNDARIO)
+        col_total.addWidget(dica)
+        col_total.addStretch()
+        colunas.addLayout(col_total, 2)
 
         return pagina
 
@@ -379,7 +397,7 @@ class FecharCaixaWindow(DialogoPadrao):
         self.preencher_conferencia()
 
         self.cabecalho.definir_texto(
-            "Fechar Caixa", "Etapa 2 de 2 · confira os valores antes de encerrar"
+            "Fechar caixa", "Confira os valores antes de fechar"
         )
         self._marcar_passo_ativo(2)
 
@@ -700,7 +718,7 @@ class FecharCaixaWindow(DialogoPadrao):
     def voltar_para_contagem(self):
 
         self.cabecalho.definir_texto(
-            "Fechar Caixa", "Etapa 1 de 2 · conte o dinheiro em espécie na gaveta"
+            "Fechar caixa", "Conte o dinheiro da gaveta"
         )
         self._marcar_passo_ativo(1)
 
@@ -783,6 +801,7 @@ class FecharCaixaWindow(DialogoPadrao):
             QMessageBox.critical(self, "Erro", erro)
             return
 
+        self._marcar_passo_ativo(3)
         self.imprimir_extrato_dia(movimentos, responsavel, config)
 
         self.accept()

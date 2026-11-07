@@ -411,21 +411,11 @@ class BuscarProdutoDialog(QDialog):
         """)
 
     def parse_quantidade_termo(self, texto):
+        # mesmo "3*codigo" / "0,350*codigo" (peso) do campo do PDV
+        from telas.pdv.comum import _separar_multiplicador
 
-        if "*" in texto:
-
-            qtd_str, _, termo = texto.partition("*")
-
-            try:
-                qtd = int(qtd_str.strip())
-                if qtd < 1:
-                    qtd = 1
-            except ValueError:
-                qtd = 1
-
-            return qtd, termo.strip()
-
-        return 1, texto.strip()
+        qtd, termo = _separar_multiplicador(texto)
+        return qtd, termo.strip()
 
     def agendar_busca(self):
         self.timer_busca.start(250)

@@ -23,7 +23,7 @@ from design.widgets import (
     BotaoPerigo,
     BotaoPrimario,
 )
-from utils.formatacao import formatar_moeda
+from utils.formatacao import formatar_moeda, subtotal_item
 from telas.pdv.comum import _parse_data
 
 
@@ -80,7 +80,7 @@ class VendasSuspensasDialog(QDialog):
         for linha, venda in enumerate(vendas_suspensas):
 
             total = sum(
-                float(item["valor_unitario"]) * item["quantidade"]
+                subtotal_item(item["valor_unitario"], item["quantidade"])
                 for item in venda["itens"]
             )
             hora_texto = _parse_data(venda["data"]).strftime("%H:%M")
@@ -268,6 +268,7 @@ class VendasSuspensasMixin:
                 "nome": item["nome"],
                 "preco": float(item["valor_unitario"]),
                 "quantidade": item["quantidade"],
+                "unidade": item.get("unidade") or "UN",
                 "estoque": item["estoque"] or 0,
             }
             for item in venda["itens"]

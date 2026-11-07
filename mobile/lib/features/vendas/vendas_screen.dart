@@ -533,7 +533,7 @@ class _LinhaVenda extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cancelada = _cancelada(venda);
-    final qtdItens = venda.itens.fold<int>(0, (s, i) => s + i.quantidade);
+    final qtdItens = venda.itens.fold<num>(0, (s, i) => s + i.quantidade);
     final formas = [
       formatarFormaPagamento(venda.formaPagamento),
       if (venda.formaPagamento2 != null)

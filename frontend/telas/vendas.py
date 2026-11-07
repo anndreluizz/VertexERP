@@ -31,7 +31,7 @@ from services.venda_service import (
 from services.loja_service import listar_lojas
 from services.worker import em_paralelo, rodar_em_thread
 from telas.devolucao_dialog import DevolucaoDialog
-from utils.formatacao import NOMES_FORMA, formatar_moeda
+from utils.formatacao import NOMES_FORMA, eh_fracionado, formatar_moeda, formatar_quantidade
 from utils.periodo import intervalo_mes, meses_recentes
 from widgets.tables.standard_table import StandardTable
 
@@ -563,7 +563,7 @@ class Vendas(QWidget):
         for linha, item in enumerate(venda["itens"]):
             valores = [
                 item.get("produto_nome") or f"#{item['produto_id']}",
-                str(item["quantidade"]),
+                formatar_quantidade(item["quantidade"], item.get("unidade")),
                 formatar_moeda(float(item["subtotal"])),
                 str(devolvido.get(item["id"], 0) or ""),
             ]
@@ -642,7 +642,8 @@ class Vendas(QWidget):
 
             itens = [
                 (
-                    f"{item['quantidade']}x "
+                    formatar_quantidade(item["quantidade"], item.get("unidade"))
+                    + ("" if eh_fracionado(item.get("unidade")) else "x") + " "
                     + (item.get("produto_nome") or f"#{item.get('produto_id')}"),
                     float(item["subtotal"]),
                 )

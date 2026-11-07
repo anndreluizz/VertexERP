@@ -1,15 +1,15 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import conint, constr
+from pydantic import constr
 
-from app.schemas.base import Schema
+from app.schemas.base import Quantidade, QuantidadePositiva, Schema
 from app.enums.forma_pagamento import FormaPagamento
 
 
 class ItemDevolucaoCreate(Schema):
     item_venda_id: int
-    quantidade: conint(gt=0)
+    quantidade: QuantidadePositiva
 
 
 class DevolucaoCreate(Schema):
@@ -23,7 +23,7 @@ class ItemDevolucaoResponse(Schema):
     item_venda_id: int
     produto_id: int
     produto_nome: str | None = None
-    quantidade: int
+    quantidade: Quantidade
     valor: Decimal
 
 

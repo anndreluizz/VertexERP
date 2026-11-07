@@ -1,4 +1,5 @@
-from sqlalchemy import ForeignKey, Integer, UniqueConstraint
+from decimal import Decimal
+from sqlalchemy import Numeric, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -32,9 +33,9 @@ class EstoqueLoja(Base):
         nullable=False
     )
 
-    quantidade: Mapped[int] = mapped_column(Integer, default=0)
+    quantidade: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=0)
 
-    estoque_minimo: Mapped[int] = mapped_column(Integer, default=0)
+    estoque_minimo: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=0)
 
     produto = relationship("Produto")
     loja = relationship("Loja")

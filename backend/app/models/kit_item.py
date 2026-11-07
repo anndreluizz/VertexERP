@@ -1,4 +1,5 @@
-from sqlalchemy import ForeignKey, Integer
+from decimal import Decimal
+from sqlalchemy import Numeric, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -27,8 +28,8 @@ class KitItem(Base):
     )
 
     # quantos do componente entram em 1 unidade vendida do kit
-    quantidade: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=1
+    quantidade: Mapped[Decimal] = mapped_column(
+        Numeric(12, 3), nullable=False, default=1
     )
 
     componente = relationship(

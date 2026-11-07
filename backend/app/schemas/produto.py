@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from app.schemas.base import Schema
+from app.schemas.base import Quantidade, Schema
 
 
 class ProdutoBase(Schema):
@@ -21,8 +21,8 @@ class ProdutoBase(Schema):
     preco_promocional: Decimal | None = None
     promocao_inicio: date | None = None
     promocao_fim: date | None = None
-    estoque: int = 0
-    estoque_minimo: int = 0
+    estoque: Quantidade = 0
+    estoque_minimo: Quantidade = 0
     favorito: bool = False
     eh_kit: bool = False
     vitrine_publicar: bool = False
@@ -64,8 +64,8 @@ class ProdutoResponse(Schema):
     promocao_fim: date | None = None
     preco_efetivo: Decimal
     em_promocao: bool = False
-    estoque: int
-    estoque_minimo: int
+    estoque: Quantidade
+    estoque_minimo: Quantidade
     ativo: bool
     favorito: bool = False
     eh_kit: bool = False

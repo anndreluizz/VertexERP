@@ -143,7 +143,7 @@ def test_confirmar_atualiza_produto_existente(client, auth_headers, produto):
                 "codigo": produto.codigo, "nome": "Nome Atualizado via CSV",
                 "categoria": produto.categoria, "codigo_barras": None,
                 "preco_custo": "11.00", "preco_venda": "22.00",
-                "estoque": produto.estoque, "estoque_minimo": produto.estoque_minimo,
+                "estoque": int(produto.estoque), "estoque_minimo": int(produto.estoque_minimo),
                 "unidade": "UN", "produto_id": produto.id,
             }],
         },

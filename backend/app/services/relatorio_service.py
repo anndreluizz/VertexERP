@@ -717,7 +717,7 @@ class RelatorioService:
             itens.append({
                 "produto_id": produto_id,
                 "produto": nome,
-                "quantidade": int(quantidade),
+                "quantidade": quantidade,
                 "total": total,
                 "percentual": round(percentual, 2),
                 "percentual_acumulado": round(acumulado, 2),
@@ -1136,7 +1136,7 @@ class RelatorioService:
         )
 
         return [
-            {"produto": nome, "quantidade": int(quantidade), "total": float(total)}
+            {"produto": nome, "quantidade": quantidade, "total": float(total)}
             for nome, quantidade, total in resultados
         ]
 

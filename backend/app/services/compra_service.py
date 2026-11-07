@@ -1,3 +1,4 @@
+from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy.orm import Session
 
 from app.models.compra import Compra
@@ -70,7 +71,9 @@ class CompraService:
                         f"Produto {item.produto_id} não encontrado."
                     )
 
-                subtotal = item.valor_unitario * item.quantidade
+                subtotal = (item.valor_unitario * item.quantidade).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
 
                 novo_item = ItemCompra(
                     compra_id=compra.id,

@@ -26,7 +26,7 @@ from design.widgets import (
     BotaoPrimario,
     BotaoSecundario,
 )
-from utils.formatacao import formatar_moeda
+from utils.formatacao import formatar_moeda, formatar_quantidade, subtotal_item
 
 
 class OrcamentoMixin:
@@ -90,16 +90,16 @@ class OrcamentoMixin:
         config = configuracoes()
         logo_bytes = comprovante_service.obter_logo_loja()
 
-        subtotal = sum(item["preco"] * item["quantidade"] for item in self.itens)
+        subtotal = sum(subtotal_item(item["preco"], item["quantidade"]) for item in self.itens)
         total = max(0.0, subtotal - self.desconto_valor + self.acrescimo_valor)
 
         linhas_itens = "".join(
             linha_zebra(
                 [
                     item["nome"],
-                    item["quantidade"],
+                    formatar_quantidade(item["quantidade"], item.get("unidade")),
                     formatar_moeda(item["preco"]),
-                    formatar_moeda(item["preco"] * item["quantidade"]),
+                    formatar_moeda(subtotal_item(item["preco"], item["quantidade"])),
                 ],
                 indice,
                 alinhamentos=["left", "center", "right", "right"],

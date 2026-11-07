@@ -27,7 +27,7 @@ from datetime import datetime
 from io import BytesIO
 from urllib.parse import quote
 
-from utils.formatacao import formatar_moeda, linhas_resumo_caixa, nome_forma
+from utils.formatacao import eh_fracionado, formatar_moeda, formatar_quantidade, linhas_resumo_caixa, nome_forma
 
 # ==================================================
 # COMANDOS ESC/POS
@@ -350,11 +350,13 @@ def gerar_comandos_comprovante(dados, config_loja, logo_bytes=None, largura_pape
     unidades = 0
     for item in dados["itens"]:
         qtd = float(item["quantidade"] or 0)
-        unidades += qtd
-        qtd_txt = f"{qtd:g}".replace(".", ",")
+        fracionado = eh_fracionado(item.get("unidade"))
+        # produto por peso conta como 1 unidade no "N itens · N unidades"
+        unidades += 1 if fracionado else qtd
+        qtd_txt = formatar_quantidade(qtd, item.get("unidade"))
         unitario = item.get("valor_unitario")
-        if qtd != 1 and unitario is not None:
-            # Vertex 2.0: com mais de 1, mostra o preco de cada um embaixo
+        if (qtd != 1 or fracionado) and unitario is not None:
+            # Vertex 2.0: com mais de 1 (ou peso), mostra o preco de cada um embaixo
             partes.append(_linhas_quebradas(item["nome"], largura))
             partes.append(_linha_dupla_coluna(
                 f"    {qtd_txt} x {_moeda(unitario)}", _moeda(item["subtotal"]), largura

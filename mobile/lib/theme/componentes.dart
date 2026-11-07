@@ -98,15 +98,18 @@ class Selo extends StatelessWidget {
 }
 
 class SeloStatusCliente extends StatelessWidget {
-  const SeloStatusCliente(this.status, {super.key});
+  const SeloStatusCliente(this.status, {super.key, this.texto});
 
   final StatusCliente status;
+
+  /// sobrescreve o rotulo do status (ex.: AnaliseCliente.textoSelo)
+  final String? texto;
 
   @override
   Widget build(BuildContext context) {
     final (fundo, cor, _) = coresStatusCliente(status);
     return Selo(
-      status.rotulo,
+      texto ?? status.rotulo,
       fundo: fundo,
       cor: cor,
       icone: status == StatusCliente.bomPagador ? Icons.star_rounded : null,

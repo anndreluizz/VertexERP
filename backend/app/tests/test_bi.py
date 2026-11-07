@@ -397,7 +397,7 @@ def test_fechamento_nao_tira_mais_do_que_tem_e_retirada_conta_como_sangria(
 
 
 def test_quem_cobrar_essa_semana(client, auth_headers, db, usuario):
-    """Atrasado 30+ dias, sem pagar nada ha 30 dias e com telefone."""
+    """Atrasado 60+ dias, sem pagar nada ha 60 dias e com telefone."""
     def devedor(nome, telefone, compra_dias, pagou_dias=None):
         c = Cliente(nome=nome, email=f"{nome}@x.com", telefone=telefone, ativo=True)
         db.add(c)
@@ -414,10 +414,12 @@ def test_quem_cobrar_essa_semana(client, auth_headers, db, usuario):
         db.commit()
 
     devedor("Dora", "1199", 60)                 # cobrar
-    devedor("Edu", "1198", 90, pagou_dias=45)   # cobrar: pagou ha muito
+    devedor("Edu", "1198", 100, pagou_dias=70)  # cobrar: pagou ha muito
+    devedor("Ivo", "1195", 100, pagou_dias=45)  # pagou dentro dos 60 dias
     devedor("Fabi", "1197", 60, pagou_dias=5)   # pagou essa semana
     devedor("Gil", None, 60)                    # sem telefone
     devedor("Hugo", "1196", 10)                 # compra recente
+    devedor("Juca", "1194", 45)                 # atrasado, mas ainda bom pagador
 
     cobrar = _resumo(client, auth_headers).json()["fiado"]["cobrar_essa_semana"]
 

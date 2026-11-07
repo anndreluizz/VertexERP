@@ -122,6 +122,7 @@ class _Ficha extends ConsumerWidget {
             _Cabecalho(
               cliente: cliente,
               status: analise?.status,
+              textoStatus: analise?.textoSelo,
               fundo: fundoStatus,
               cor: corStatus,
             ),
@@ -600,12 +601,14 @@ class _Cabecalho extends StatelessWidget {
   const _Cabecalho({
     required this.cliente,
     required this.status,
+    this.textoStatus,
     required this.fundo,
     required this.cor,
   });
 
   final Cliente cliente;
   final StatusCliente? status;
+  final String? textoStatus;
   final Color fundo;
   final Color cor;
 
@@ -651,7 +654,7 @@ class _Cabecalho extends StatelessWidget {
                 ),
                 if (status != null) ...[
                   const SizedBox(height: 6),
-                  SeloStatusCliente(status!),
+                  SeloStatusCliente(status!, texto: textoStatus),
                 ],
               ],
             ),

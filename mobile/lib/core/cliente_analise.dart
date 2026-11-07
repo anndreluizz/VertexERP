@@ -76,6 +76,20 @@ class AnaliseCliente {
           (diasEmAtraso != null && diasEmAtraso! > prazoBomPagadorDias)) &&
       !inadimplente;
 
+  /// compra em aberto ha mais de 2 meses, mas ainda pagando (nao e'
+  /// inadimplente): mesmo selo amarelo "Atrasado · N dias" do Desktop
+  /// (cliente_analise.atrasado_sem_ser_inadimplente)
+  bool get atrasadoSemSerInadimplente =>
+      diasEmAtraso != null &&
+      diasEmAtraso! > prazoBomPagadorDias &&
+      !inadimplente;
+
+  /// texto do selo: o rotulo do status, ou "Atrasado · N dias" quando a
+  /// divida esta velha agora (e nao so' o historico de pagar devagar)
+  String get textoSelo => atrasadoSemSerInadimplente
+      ? 'Atrasado · $diasEmAtraso dias'
+      : status.rotulo;
+
   /// Mesma prioridade do status_financeiro do Desktop, com "Quitado"
   /// separado de "Em dia" (no celular a diferenca importa na lista).
   StatusCliente get status {

@@ -403,6 +403,9 @@ def gerar_comandos_comprovante(dados, config_loja, logo_bytes=None, largura_pape
     else:
         partes.append(_linha(f"Forma de pagamento: {nome_forma(dados['forma_pagamento'])}"))
 
+    if float(dados.get("troco") or 0) > 0:
+        partes.append(_linha_dupla_coluna("Troco", _moeda(dados["troco"]), largura))
+
     situacao = dados.get("situacao") or "PAGO"
     partes.append(_linha(f"Situação: {'EM ABERTO' if situacao == 'FIADO' else 'PAGO'}"))
 

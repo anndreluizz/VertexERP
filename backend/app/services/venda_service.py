@@ -324,6 +324,7 @@ class VendaService:
             "forma_pagamento": venda.forma_pagamento,
             "forma_pagamento_2": venda.forma_pagamento_2,
             "valor_forma_2": venda.valor_forma_2,
+            "troco": venda.troco,
             "observacao": venda.observacao,
             "situacao": "FIADO" if tem_fiado else "PAGO",
             "saldo_devedor_cliente": saldo_devedor,
@@ -411,6 +412,7 @@ class VendaService:
                     if dados.valor_forma_2
                     else None
                 ),
+                troco=getattr(dados, "troco", None) or None,
                 data_vencimento=dados.data_vencimento,
                 status="FINALIZADA",
                 chave_idempotencia=chave,
@@ -557,6 +559,11 @@ class VendaService:
                     "O valor da segunda forma de pagamento precisa "
                     "ser maior que zero e menor que o total da venda."
                 )
+
+            if venda.troco and "DINHEIRO" not in (
+                venda.forma_pagamento, venda.forma_pagamento_2
+            ):
+                raise Exception("Só tem troco em venda paga em dinheiro.")
 
             db.add(venda)
 

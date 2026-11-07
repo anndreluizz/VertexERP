@@ -734,6 +734,7 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
             valor_forma_2=(
                 tela.valor_forma_2 if tela.forma_pagamento_2 else None
             ),
+            troco=tela.troco() if tela.troco() > 0 else None,
             ao_sucesso=self._ao_venda_sucesso,
             ao_erro=self._ao_venda_erro,
             ao_finalizar=self._ao_venda_finalizada,

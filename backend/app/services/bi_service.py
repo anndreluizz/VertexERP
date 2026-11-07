@@ -32,7 +32,7 @@ HISTORICO_MINIMO_DIAS = 60
 DIAS_PRA_SUGERIR_BAIXA = 365  # sem nenhum movimento (compra ou pagamento)
 # faixas de atraso do fiado (dias desde a compra mais antiga ainda em aberto)
 FAIXAS_ATRASO = [(0, 30), (31, 60), (61, 90), (91, 180), (181, None)]
-DIAS_PRA_COBRAR = 30  # atraso minimo e tempo sem pagar nada
+DIAS_PRA_COBRAR = 60  # atraso minimo e tempo sem pagar nada (regra do dono: bom pagador ate 60 dias)
 COBRAR_POR_SEMANA = 10
 # cliente sumido: comprou pelo menos N vezes nos ultimos 180 dias e nao
 # volta ha 30

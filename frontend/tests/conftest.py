@@ -40,6 +40,22 @@ def _qapp():
 
 
 @pytest.fixture(autouse=True)
+def _sem_threads_de_outro_teste(_qapp):
+    """Espera as QThreads de rodar_em_thread() que o teste disparou
+    (ex.: tela que busca dados ao abrir, sem mock) terminarem antes do
+    proximo teste. Sobrando, uma delas entregava o resultado no meio do
+    teste seguinte e o Qt travava (deadlock na criacao de um widget,
+    visto em test_clientes_largura -- a suite 'pendurava' ~1 em 4)."""
+    yield
+    from services.worker import _EM_ANDAMENTO
+
+    limite = time.monotonic() + 10
+    while _EM_ANDAMENTO and time.monotonic() < limite:
+        time.sleep(0.005)  # cede o GIL pra worker (ver esperar_threads)
+        _qapp.processEvents()
+
+
+@pytest.fixture(autouse=True)
 def _valores_visiveis():
     """O app abre com os valores ocultos (olhinho do cabeçalho) -- os
     testes conferem os textos de verdade, então liga a visibilidade."""

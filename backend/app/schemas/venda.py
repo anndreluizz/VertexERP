@@ -40,6 +40,9 @@ class VendaCreate(Schema):
     forma_pagamento_2: FormaPagamento | None = None
     valor_forma_2: Decimal | None = None
 
+    # troco devolvido em dinheiro (so' pra imprimir no cupom)
+    troco: condecimal(ge=0, max_digits=12, decimal_places=2) | None = None
+
     data_vencimento: datetime | None = None
 
     # opcional: mesmo valor em dois envios = mesma venda (ver
@@ -113,6 +116,7 @@ class VendaResponse(Schema):
 
     forma_pagamento_2: FormaPagamento | None = None
     valor_forma_2: Decimal | None = None
+    troco: Decimal | None = None
 
     data_vencimento: datetime | None = None
 
@@ -184,6 +188,7 @@ class ComprovanteVendaResponse(Schema):
     forma_pagamento: str
     forma_pagamento_2: str | None = None
     valor_forma_2: Decimal | None = None
+    troco: Decimal | None = None
     observacao: str | None = None
     situacao: str  # PAGO ou FIADO
     saldo_devedor_cliente: Decimal | None = None

@@ -516,3 +516,48 @@ def test_listar_filtra_por_cliente(client, auth_headers, db, usuario, cliente):
     r = client.get(f"/vendas/?cliente_id={cliente.id}", headers=auth_headers)
     assert r.status_code == 200
     assert [v["cliente_id"] for v in r.json()] == [cliente.id]
+
+
+def _vender(client, auth_headers, produto, **extra):
+    return client.post(
+        "/vendas/",
+        json={
+            "itens": [
+                {"produto_id": produto.id, "quantidade": 2, "valor_unitario": "20.00"}
+            ],
+            **extra,
+        },
+        headers=auth_headers,
+    )
+
+
+def test_troco_vai_pro_comprovante_e_nao_mexe_no_caixa(
+    client, auth_headers, produto, caixa_aberto
+):
+    # cliente deu R$ 50 numa venda de R$ 40
+    response = _vender(
+        client, auth_headers, produto, forma_pagamento="DINHEIRO", troco="10.00"
+    )
+    assert response.status_code == 201
+    venda_id = response.json()["id"]
+
+    comprovante = client.get(
+        f"/vendas/{venda_id}/comprovante", headers=auth_headers
+    ).json()
+    assert float(comprovante["troco"]) == 10.0
+
+    caixa = client.get("/caixa/aberto", headers=auth_headers).json()
+    assert caixa["saldo_final"] == float(caixa_aberto.saldo_inicial) + 40.0
+
+
+def test_troco_so_em_venda_com_dinheiro(client, auth_headers, produto, caixa_aberto):
+    response = _vender(
+        client, auth_headers, produto, forma_pagamento="PIX", troco="5.00"
+    )
+    assert response.status_code == 400
+    assert "troco" in response.json()["detail"].lower()
+
+    negativo = _vender(
+        client, auth_headers, produto, forma_pagamento="DINHEIRO", troco="-1"
+    )
+    assert negativo.status_code == 422

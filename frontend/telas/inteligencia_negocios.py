@@ -248,7 +248,7 @@ class InteligenciaNegocios(QWidget):
         linha3.setSpacing(14)
         self.secao_cobrar = SecaoCard("Quem cobrar essa semana", "message-circle")
         self.secao_cobrar.corpo.addWidget(_texto(
-            "Atrasados há 30 dias ou mais, sem pagar nada nesse tempo.",
+            "Atrasados há 60 dias ou mais, sem pagar nada nesse tempo.",
             tokens.TAMANHO_XS, tokens.TEXTO_TERCIARIO,
         ))
         self.tabela_cobrar = tabela_lista(["Cliente", "Deve", "Atraso", ""])

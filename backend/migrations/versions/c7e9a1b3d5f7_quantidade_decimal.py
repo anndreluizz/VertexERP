@@ -4,7 +4,7 @@ Produto em KG/L vende 0,350 kg: toda quantidade e estoque passam de
 inteiro pra Numeric(12, 3). Valores existentes viram 5.000 etc.
 
 Revision ID: c7e9a1b3d5f7
-Revises: d1f3a5c7e9b2
+Revises: e8b2d4f6a1c3
 Create Date: 2026-10-27
 
 """
@@ -15,7 +15,7 @@ from alembic import op
 
 
 revision: str = 'c7e9a1b3d5f7'
-down_revision: Union[str, Sequence[str], None] = 'd1f3a5c7e9b2'
+down_revision: Union[str, Sequence[str], None] = 'e8b2d4f6a1c3'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

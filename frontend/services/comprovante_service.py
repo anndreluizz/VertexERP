@@ -256,6 +256,11 @@ def gerar_html_comprovante(dados, config, logo_bytes=None):
             f"{nome_forma(dados['forma_pagamento'])}</p>"
         )
 
+    if float(dados.get("troco") or 0) > 0:
+        linha_pagamento += (
+            f"<p style='margin:4px 0;'>Troco: {_formatar_moeda(dados['troco'])}</p>"
+        )
+
     situacao = dados.get("situacao") or "PAGO"
     cor_situacao = "#DC2626" if situacao == "FIADO" else "#16A34A"
     texto_situacao = "Em aberto" if situacao == "FIADO" else "Pago"

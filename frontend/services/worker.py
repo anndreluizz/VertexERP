@@ -90,6 +90,10 @@ class _Limpeza(QObject):
         self._thread = thread
 
     def limpar(self):
+        # thread.finished sai ANTES da QThread acabar de vez (o Qt ainda
+        # roda coisas dela depois). Espera ela sair de verdade antes de
+        # soltar a ultima referencia (o worker e' apagado aqui, na GUI).
+        self._thread.wait()
         # _threads_ativas e' atributo Python do wrapper: ler funciona
         # mesmo se o widget C++ ja foi destruido.
         ativas = getattr(self._dono, "_threads_ativas", [])
@@ -175,7 +179,12 @@ def rodar_em_thread(
         worker.finalizado.connect(ao_finalizar)
 
     worker.finalizado.connect(thread.quit)
-    worker.finalizado.connect(worker.deleteLater)
+    # SEM worker.deleteLater: ele rodava NA worker thread, depois do
+    # thread.finished, e apagar o wrapper Python la' precisa do GIL --
+    # se a GUI estivesse com o GIL criando um widget (que tambem pega
+    # trava interna do Qt), um esperava o outro pra sempre (travamento
+    # visto na suite de testes, ~1 em 4 rodadas). O worker morre junto
+    # com thread._worker, na thread da GUI, depois do wait() em _Limpeza.
     thread.finished.connect(thread.deleteLater)
 
     if not hasattr(parent, "_threads_ativas"):

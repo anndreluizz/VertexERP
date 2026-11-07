@@ -312,3 +312,12 @@ def test_cupom_mostra_unitario_contagem_e_economia():
     assert "1 x R$ 29,90" not in texto
     assert "2 itens · 3 unidades" in texto
     assert "Você economizou R$ 9,70!" in texto
+
+
+def test_comprovante_mostra_troco_so_quando_tem():
+    com_troco = {**DADOS_VENDA, "forma_pagamento": "DINHEIRO", "troco": 7.0}
+    texto = svc.gerar_comandos_comprovante(com_troco, CONFIG_LOJA)
+    assert b"Troco" in texto and b"7,00" in texto
+
+    sem_troco = svc.gerar_comandos_comprovante({**DADOS_VENDA, "troco": None}, CONFIG_LOJA)
+    assert b"Troco" not in sem_troco

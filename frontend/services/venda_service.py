@@ -117,6 +117,7 @@ def finalizar_venda(
     forma_pagamento_2=None,
     valor_forma_2=None,
     chave_idempotencia=None,
+    troco=None,
 ):
 
     dados = {
@@ -127,6 +128,7 @@ def finalizar_venda(
         "forma_pagamento": forma_pagamento,
         "forma_pagamento_2": forma_pagamento_2,
         "valor_forma_2": valor_forma_2,
+        "troco": troco,
         "data_vencimento": data_vencimento,
         "itens": [],
     }

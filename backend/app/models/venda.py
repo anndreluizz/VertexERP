@@ -83,6 +83,14 @@ class Venda(Base):
         nullable=True,
     )
 
+    # troco devolvido em dinheiro (o cliente deu mais do que a parte em
+    # dinheiro). So' informativo: pro cupom/2a via; o caixa ja conta so'
+    # o valor da venda. None = venda sem troco (ou anterior ao campo).
+    troco: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
+        nullable=True,
+    )
+
     # NOVO
     data_vencimento: Mapped[datetime | None] = mapped_column(
         DateTime,

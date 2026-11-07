@@ -338,7 +338,7 @@ class _LinhaCliente extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                SeloStatusCliente(analise.status),
+                SeloStatusCliente(analise.status, texto: analise.textoSelo),
               ],
             ),
           ],

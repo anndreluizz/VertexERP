@@ -103,4 +103,25 @@ void main() {
     expect(a.saldoDevedor, 0);
     expect(a.diasEmAtraso, isNull);
   });
+
+  test('selo amarelo "Atrasado" igual ao Desktop', () {
+    // pagando, mas a compra mais antiga em aberto passou dos 60 dias
+    final atrasado = _agr([_mov('COMPRA', 450.96, 93), _mov('PAGAMENTO', 150, 0)]);
+    expect(atrasado.atrasadoSemSerInadimplente, isTrue);
+    expect(atrasado.textoSelo, 'Atrasado · 93 dias');
+
+    // so' paga devagar no historico, divida atual recente: rotulo normal
+    final devagar = _agr([
+      _mov('COMPRA', 100, 120),
+      _mov('COMPRA', 100, 20),
+      _mov('PAGAMENTO', 100, 10),
+    ]);
+    expect(devagar.atrasadoSemSerInadimplente, isFalse);
+    expect(devagar.textoSelo, 'Paga com atraso');
+
+    // inadimplente fica com o proprio rotulo (vermelho)
+    final inad = _agr([_mov('COMPRA', 100, 120)]);
+    expect(inad.atrasadoSemSerInadimplente, isFalse);
+    expect(inad.textoSelo, 'Inadimplente');
+  });
 }

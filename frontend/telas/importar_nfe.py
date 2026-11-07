@@ -781,7 +781,7 @@ class ImportarNFeDialog(DialogoPadrao):
                 "codigo": original["codigo"],
                 "descricao": original["descricao"],
                 "codigo_barras": original.get("codigo_barras"),
-                "quantidade": int(quantidade),
+                "quantidade": quantidade,  # KG/L vem fracionado na nota
                 "custo": f"{custo:.2f}",
                 "preco_venda": f"{venda:.2f}",
                 # o backend só troca o preço de venda de produto já

@@ -62,3 +62,31 @@ def test_janela_de_peso_devolve_valor_digitado():
         assert pedir_peso(None, _PICANHA) == 0.346
     with mock.patch.object(QInputDialog, "exec", return_value=0):
         assert pedir_peso(None, _PICANHA) is None
+
+
+def test_cupom_mostra_peso_e_preco_do_quilo():
+    from services import impressora_termica_service as svc
+
+    dados = {
+        "venda_id": 1, "data": "2026-11-07T10:00:00", "usuario_nome": "Ana",
+        "itens": [
+            {"nome": "Carne moida", "quantidade": 0.347, "unidade": "KG",
+             "valor_unitario": 39.9, "subtotal": 13.85},
+            {"nome": "Arroz", "quantidade": 2, "valor_unitario": 5.0, "subtotal": 10.0},
+        ],
+        "desconto": 0, "valor_total": 23.85, "forma_pagamento": "DINHEIRO",
+    }
+    cupom = svc.gerar_comandos_comprovante(dados, {"nome_loja": "Loja"})
+
+    assert svc._codificar_texto("0,347 kg x R$ 39,90") in cupom
+    # o peso conta como 1 unidade, nao 0,347
+    assert svc._codificar_texto("2 itens · 3 unidades") in cupom
+
+
+def test_busca_de_produto_aceita_peso_antes_do_asterisco():
+    from telas.buscar_produto import BuscarProdutoDialog
+
+    parse = BuscarProdutoDialog.parse_quantidade_termo
+    assert parse(None, "0,350*carne") == (0.35, "carne")
+    assert parse(None, "3*arroz") == (3, "arroz")
+    assert parse(None, "arroz") == (1, "arroz")

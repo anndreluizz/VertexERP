@@ -348,7 +348,8 @@ class TransferenciaEstoque(QWidget):
             return
 
         try:
-            quantidade = int(self.quantidade.text())
+            # 0,350 pra produto por peso (o backend recusa fracao em UN)
+            quantidade = float(self.quantidade.text().replace(",", "."))
             if quantidade <= 0:
                 raise ValueError
 

@@ -100,6 +100,7 @@ class _Limpeza(QObject):
         if self._thread in ativas:
             ativas.remove(self._thread)
         _EM_ANDAMENTO.discard(self._thread)
+        self._thread.deleteLater()
         self._dono = self._thread = None
         self.deleteLater()
 
@@ -185,7 +186,9 @@ def rodar_em_thread(
     # trava interna do Qt), um esperava o outro pra sempre (travamento
     # visto na suite de testes, ~1 em 4 rodadas). O worker morre junto
     # com thread._worker, na thread da GUI, depois do wait() em _Limpeza.
-    thread.finished.connect(thread.deleteLater)
+    # SEM thread.deleteLater aqui tambem: competia com _Limpeza.limpar e as
+    # vezes apagava a QThread antes do wait() (RuntimeError a cada 40 s no
+    # log da loja, 09/11). Quem apaga agora e' o proprio limpar, no fim.
 
     if not hasattr(parent, "_threads_ativas"):
         parent._threads_ativas = []

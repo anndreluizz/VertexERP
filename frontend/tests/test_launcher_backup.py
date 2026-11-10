@@ -43,7 +43,20 @@ def test_relogio_adiantado_nao_apaga_todos_os_backups(launcher):
     assert mantidos == {c for c, _ in arquivos[: launcher.MINIMO_BACKUPS_MANTIDOS]}
 
 
-def test_entre_7_e_30_dias_fica_o_ultimo_de_cada_dia(launcher):
+def test_janela_de_desligamento_fecha_o_banco_so_no_fim_de_verdade(launcher):
+    chamadas = []
+    janela = launcher._criar_janela_de_desligamento(lambda: chamadas.append(1))
+    assert janela
+
+    # wParam 0 = desligamento cancelado: o banco tem que continuar de pe
+    launcher._user32.SendMessageW(janela, launcher._WM_ENDSESSION, 0, 0)
+    assert chamadas == []
+
+    launcher._user32.SendMessageW(janela, launcher._WM_ENDSESSION, 1, 0)
+    assert chamadas == [1]
+
+
+def test_depois_dos_dias_completos_fica_o_ultimo_de_cada_dia(launcher):
     agora = datetime(2026, 9, 26, 12, 0)
     recentes = _backups(agora, range(0, 12))  # piso de 10 + folga
     dia_antigo = agora - timedelta(days=10)

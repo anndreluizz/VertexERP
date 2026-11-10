@@ -276,6 +276,117 @@ def parar_postgres():
     )
 
 
+# ==========================================
+# DESLIGAMENTO DO WINDOWS -- sem isso o Postgres era morto pelo Windows
+# com o banco aberto toda vez que o PC desligava (pgdata_log.txt: "was
+# not properly shut down; automatic recovery" em todo boot). O launcher
+# e' --noconsole e sem janela, entao o Windows nao avisava ele de nada:
+# uma janela escondida e' o jeito de receber o WM_ENDSESSION.
+# ==========================================
+
+_WM_ENDSESSION = 0x0016
+
+_WNDPROC = ctypes.WINFUNCTYPE(
+    ctypes.c_ssize_t,
+    ctypes.wintypes.HWND,
+    ctypes.wintypes.UINT,
+    ctypes.wintypes.WPARAM,
+    ctypes.wintypes.LPARAM,
+)
+
+
+class _WNDCLASSW(ctypes.Structure):
+    _fields_ = [
+        ("style", ctypes.wintypes.UINT),
+        ("lpfnWndProc", _WNDPROC),
+        ("cbClsExtra", ctypes.c_int),
+        ("cbWndExtra", ctypes.c_int),
+        ("hInstance", ctypes.wintypes.HINSTANCE),
+        ("hIcon", ctypes.wintypes.HANDLE),
+        ("hCursor", ctypes.wintypes.HANDLE),
+        ("hbrBackground", ctypes.wintypes.HANDLE),
+        ("lpszMenuName", ctypes.wintypes.LPCWSTR),
+        ("lpszClassName", ctypes.wintypes.LPCWSTR),
+    ]
+
+
+# instancia propria (nao ctypes.windll.user32): os argtypes abaixo nao
+# podem vazar pras outras chamadas do arquivo (MessageBoxW etc.)
+_user32 = ctypes.WinDLL("user32")
+_user32.DefWindowProcW.restype = ctypes.c_ssize_t
+_user32.DefWindowProcW.argtypes = _user32.SendMessageW.argtypes = [
+    ctypes.wintypes.HWND,
+    ctypes.wintypes.UINT,
+    ctypes.wintypes.WPARAM,
+    ctypes.wintypes.LPARAM,
+]
+_user32.SendMessageW.restype = ctypes.c_ssize_t
+_user32.CreateWindowExW.restype = ctypes.wintypes.HWND
+_user32.CreateWindowExW.argtypes = [
+    ctypes.wintypes.DWORD,
+    ctypes.wintypes.LPCWSTR,
+    ctypes.wintypes.LPCWSTR,
+    ctypes.wintypes.DWORD,
+    ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+    ctypes.wintypes.HWND,
+    ctypes.wintypes.HMENU,
+    ctypes.wintypes.HINSTANCE,
+    ctypes.wintypes.LPVOID,
+]
+
+# o callback precisa continuar referenciado enquanto a janela existir
+_callbacks_de_janela = []
+
+
+def _criar_janela_de_desligamento(ao_desligar):
+    """Janela escondida que chama ao_desligar() quando o Windows avisa
+    que a sessao VAI MESMO acabar (WM_ENDSESSION com wParam verdadeiro
+    -- nao no WM_QUERYENDSESSION, que ainda pode ser cancelado e
+    deixaria a loja aberta com o banco parado). Tem que ser janela de
+    verdade: as message-only nao recebem esse aviso."""
+
+    def tratar(hwnd, mensagem, wparam, lparam):
+        if mensagem == _WM_ENDSESSION and wparam:
+            ao_desligar()
+            return 0
+        return _user32.DefWindowProcW(hwnd, mensagem, wparam, lparam)
+
+    callback = _WNDPROC(tratar)
+    _callbacks_de_janela.append(callback)
+
+    classe = _WNDCLASSW()
+    classe.lpfnWndProc = callback
+    classe.lpszClassName = f"VertexERPDesligamento{len(_callbacks_de_janela)}"
+    _user32.RegisterClassW(ctypes.byref(classe))
+
+    return _user32.CreateWindowExW(
+        0, classe.lpszClassName, "Vertex ERP", 0,
+        0, 0, 0, 0, None, None, None, None,
+    )
+
+
+def _vigiar_desligamento():
+    try:
+        if not _criar_janela_de_desligamento(parar_postgres):
+            return
+
+        # 0x3FF = avisado antes dos outros programas (o padrao e' 0x280),
+        # pra dar tempo do banco fechar antes do Windows matar o postgres
+        ctypes.windll.kernel32.SetProcessShutdownParameters(0x3FF, 0)
+
+        mensagem = ctypes.wintypes.MSG()
+        while _user32.GetMessageW(ctypes.byref(mensagem), None, 0, 0) > 0:
+            _user32.DispatchMessageW(ctypes.byref(mensagem))
+    except Exception:
+        # so' um cuidado a mais no desligamento: nunca pode derrubar o
+        # launcher (o Postgres se recupera sozinho de um corte seco)
+        pass
+
+
+def iniciar_vigia_desligamento():
+    threading.Thread(target=_vigiar_desligamento, daemon=True).start()
+
+
 def garantir_banco_vertexerp():
     env = os.environ.copy()
     env["PGPASSWORD"] = _senha_banco()
@@ -510,7 +621,9 @@ DIAS_PARA_MANTER_BACKUP = 30
 # DIAS_PARA_MANTER_BACKUP fica so' o ultimo backup de cada dia -- sem
 # isso, rodando de hora em hora, a pasta (e a copia no OneDrive, que tem
 # cota) cresceria muito mais rapido do que com o backup diario de antes.
-DIAS_COM_TODOS_OS_BACKUPS = 7
+# Eram 7: com fotos de produto cada dump passou de 40 MB e 7 dias de
+# backups de hora em hora ocupavam 3,5 GB dos 5 GB do OneDrive da loja.
+DIAS_COM_TODOS_OS_BACKUPS = 2
 
 # 1h: se o PC-Servidor morrer, perde no maximo 1 hora de movimento (era
 # 24h, depois 4h -- issue #4: a matriz perdeu dados em 25/09). Backup
@@ -932,6 +1045,7 @@ def main():
         modo_servidor = _ler_env("VERTEXERP_HOST") == "0.0.0.0"
         inicializar_cluster_se_necessario()
         iniciar_postgres()
+        iniciar_vigia_desligamento()
         garantir_banco_vertexerp()
 
         # Backup ANTES do backend subir: o backend roda `alembic upgrade

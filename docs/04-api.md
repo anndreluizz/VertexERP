@@ -104,7 +104,7 @@ Exemplo: `GET /produtos/?skip=100&limit=50` retorna os registros 101–150. Sem 
 |---|---|---|
 | GET | `/vendas/` 📄 | Lista |
 | GET | `/vendas/{id}` | Busca (404) |
-| POST | `/vendas/` | Cria (`201`) com itens; **baixa o estoque**; erro se estoque insuficiente; se `forma_pagamento="PRAZO"`, gera uma `ContaReceber` |
+| POST | `/vendas/` | Cria (`201`) com itens; **baixa o estoque**; erro se estoque insuficiente; se `forma_pagamento="PRAZO"`, gera um `MovimentoFiado` direto (`ContaReceber` é tabela legada, não é mais alimentada) |
 | DELETE | `/vendas/{id}` 🔒 | Cancela: **devolve o estoque** e faz hard-delete |
 
 Mesmo formato de payload das compras, mas com `cliente_id` (opcional) e `desconto`.

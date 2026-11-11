@@ -3,6 +3,8 @@ porque este e' o job de CI que roda em Windows -- launcher.py usa
 ctypes.windll). Foi um backup quebrado que fez a loja perder 3
 semanas de dados: essa logica nao pode regredir calada."""
 
+import ctypes
+import ctypes.wintypes
 import importlib.util
 import os
 import sys
@@ -47,13 +49,19 @@ def test_janela_de_desligamento_fecha_o_banco_so_no_fim_de_verdade(launcher):
     chamadas = []
     janela = launcher._criar_janela_de_desligamento(lambda: chamadas.append(1))
     assert janela
+    try:
+        # wParam 0 = desligamento cancelado: o banco tem que continuar de pe
+        launcher._user32.SendMessageW(janela, launcher._WM_ENDSESSION, 0, 0)
+        assert chamadas == []
 
-    # wParam 0 = desligamento cancelado: o banco tem que continuar de pe
-    launcher._user32.SendMessageW(janela, launcher._WM_ENDSESSION, 0, 0)
-    assert chamadas == []
-
-    launcher._user32.SendMessageW(janela, launcher._WM_ENDSESSION, 1, 0)
-    assert chamadas == [1]
+        launcher._user32.SendMessageW(janela, launcher._WM_ENDSESSION, 1, 0)
+        assert chamadas == [1]
+    finally:
+        # a janela vive na thread do pytest: se ficar, o processEvents() do Qt
+        # dos testes seguintes entrega mensagens a ela e o processo cai com
+        # "access violation" (visto no CI da main, 11/11)
+        launcher._user32.DestroyWindow.argtypes = [ctypes.wintypes.HWND]
+        launcher._user32.DestroyWindow(janela)
 
 
 def test_depois_dos_dias_completos_fica_o_ultimo_de_cada_dia(launcher):

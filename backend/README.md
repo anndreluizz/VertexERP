@@ -69,7 +69,7 @@ Estrutura em camadas, um arquivo por entidade por camada:
 
 ```
 app/models/<entidade>.py         # SQLAlchemy (Mapped/mapped_column)
-app/schemas/<entidade>.py        # Pydantic (v1) Create/Update/Response
+app/schemas/<entidade>.py        # Pydantic (v2) Create/Update/Response
 app/repositories/<entidade>_repository.py   # métodos estáticos, só acesso a dados
 app/services/<entidade>_service.py          # métodos estáticos, regra de negócio
 app/api/v1/<entidade>.py         # APIRouter, registrado em main.py

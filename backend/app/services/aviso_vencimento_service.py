@@ -12,6 +12,8 @@ from app.services.notificacao_service import NotificacaoService
 # hora do aviso diario -- antes era "24h depois do backend ligar", o
 # que caia em qualquer hora (ou antes de lancarem as contas do dia)
 _HORA_AVISO = 8
+# quantos nomes de conta cabem no corpo da notificacao
+_MAX_NOMES = 3
 
 
 def segundos_ate_proximo_aviso(agora: datetime) -> float:
@@ -49,20 +51,23 @@ def verificar_vencimentos_e_notificar(db) -> None:
     ]
 
     for filtro, titulo, texto in avisos:
-        qtd, valor = (
-            db.query(
-                func.count(ContaPagar.id),
-                func.coalesce(func.sum(ContaPagar.valor), 0),
-            )
+        contas = (
+            db.query(ContaPagar)
             .filter(ContaPagar.status == StatusContaPagar.PENDENTE.value, filtro)
-            .one()
+            .order_by(ContaPagar.data_vencimento)
+            .all()
         )
 
-        if qtd:
+        if contas:
+            valor = sum(c.valor for c in contas)
+            nomes = [c.descricao or "Despesa" for c in contas[:_MAX_NOMES]]
+            if len(contas) > _MAX_NOMES:
+                nomes.append(f"e mais {len(contas) - _MAX_NOMES}")
             NotificacaoService.enviar_para_admins(
                 db,
                 titulo,
-                f"{qtd} conta(s) {texto} — {_moeda(float(valor))}",
+                f"{len(contas)} conta(s) {texto} — {_moeda(float(valor))}: "
+                + ", ".join(nomes),
             )
 
     # luz e parecidas: valor copiado do mes anterior que ninguem confirmou

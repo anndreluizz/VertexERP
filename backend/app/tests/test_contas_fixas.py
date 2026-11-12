@@ -317,6 +317,6 @@ def test_aviso_diario_inclui_boleto_que_vence_hoje(db, monkeypatch):
 
     aviso_vencimento_service.verificar_vencimentos_e_notificar(db)
 
-    assert avisos["Contas vencendo hoje"] == "1 conta(s) vencendo hoje — R$ 796,25"
-    assert avisos["Contas vencidas"] == "1 conta(s) vencida(s) — R$ 10,00"
-    assert avisos["Contas vencendo amanhã"] == "1 conta(s) vencendo amanhã — R$ 30,00"
+    assert avisos["Contas vencendo hoje"] == "1 conta(s) vencendo hoje — R$ 796,25: Boleto"
+    assert avisos["Contas vencidas"] == "1 conta(s) vencida(s) — R$ 10,00: Boleto"
+    assert avisos["Contas vencendo amanhã"] == "1 conta(s) vencendo amanhã — R$ 30,00: Boleto"

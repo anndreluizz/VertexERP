@@ -52,12 +52,16 @@ def valores_rapidos(saldo):
     return opcoes[:5]
 
 
-def texto_resta(saldo, texto_valor):
+def texto_resta(saldo, texto_valor, forma="DINHEIRO"):
     try:
         pago = ler_moeda(texto_valor)
     except ValueError:
         return "Digite o valor que o cliente está pagando."
     resta = saldo - pago
+    if resta < -0.009 and forma == "DINHEIRO":
+        return (
+            f"Quita tudo. Troco a devolver: <b>{formatar_moeda(-resta)}</b>"
+        )
     if resta > 0.009:
         return f"Depois deste pagamento fica devendo <b>{formatar_moeda(resta)}</b>"
     if resta < -0.009:
@@ -347,8 +351,15 @@ class RegistrarPagamentoDialog(DialogoPadrao):
                 cor=cor_texto, tamanho=17,
             ))
 
+        # o texto de troco depende da forma; no __init__ o label ainda
+        # pode nao existir na primeira selecao
+        if hasattr(self, "lbl_resta"):
+            self._atualizar_resta()
+
     def _atualizar_resta(self):
-        self.lbl_resta.setText(texto_resta(self._saldo_devedor, self.valor.text()))
+        self.lbl_resta.setText(
+            texto_resta(self._saldo_devedor, self.valor.text(), self.forma_pagamento)
+        )
 
     def confirmar(self):
 
@@ -367,6 +378,11 @@ class RegistrarPagamentoDialog(DialogoPadrao):
             return
 
         data_iso = _dia_com_hora_atual(self.data.date())
+
+        # dinheiro a mais que a divida: o resto e' troco, nao credito --
+        # registra so' o que quitou a conta
+        if self.forma_pagamento == "DINHEIRO" and valor > self._saldo_devedor + 0.009 > 0.009:
+            valor = round(self._saldo_devedor, 2)
 
         self._pagamento_valor_pendente = valor
         self.bt_confirmar.setEnabled(False)

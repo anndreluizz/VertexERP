@@ -28,3 +28,8 @@ def test_valores_rapidos_e_resta():
     assert valores_rapidos(0) == []
     assert "fica devendo <b>R$ 220,00</b>" in texto_resta(320, "100,00")
     assert "Quita tudo" in texto_resta(1234.5, "1.234,50")
+
+
+def test_troco_so_no_dinheiro():
+    assert "Troco a devolver: <b>R$ 20,00</b>" in texto_resta(80, "100,00", "DINHEIRO")
+    assert "a favor do cliente" in texto_resta(80, "100,00", "PIX")

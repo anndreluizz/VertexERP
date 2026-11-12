@@ -37,3 +37,33 @@ def test_sem_pagamento_conta_da_ultima_compra(db, cliente, usuario):
     _mov(db, cliente, usuario, "COMPRA", 50, 10)  # ultima compra recente
     assert _parados(db, cliente) == []
     assert _parados(db, cliente, dias=5) == [cliente.id]
+
+
+def test_lembrete_usa_template_do_coexy(db, cliente, usuario, monkeypatch):
+    from unittest.mock import MagicMock
+
+    from app.services import whatsapp_lembrete_service as svc
+    from app.services import whatsapp_service
+    from app.services.configuracao_service import ConfiguracaoService
+
+    config = ConfiguracaoService.buscar(db)
+    config.whatsapp_ativo = True
+    config.whatsapp_lembrete_fiado_ativo = True
+    db.commit()
+
+    monkeypatch.setenv("COEXY_CHANNEL_TOKEN", "tok")
+    monkeypatch.setenv("COEXY_PHONE_NUMBER_ID", "123")
+    post = MagicMock(return_value=MagicMock(status_code=200))
+    monkeypatch.setattr(whatsapp_service.requests, "post", post)
+
+    _mov(db, cliente, usuario, "COMPRA", 100, 90)
+    svc.verificar_fiados_parados_e_notificar(db)
+
+    url = post.call_args.args[0]
+    corpo = post.call_args.kwargs["json"]
+    assert url.endswith("/meta-proxy/123/messages")
+    assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer tok"
+    assert corpo["template"]["name"] == "cobranca_fiado"
+    assert corpo["to"] == "5511999999999"
+    textos = [p["text"] for p in corpo["template"]["components"][0]["parameters"]]
+    assert textos == ["Cliente", "R$ 100,00"]

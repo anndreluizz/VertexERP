@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 from datetime import datetime
@@ -6,7 +7,14 @@ from app.database.session import SessionLocal
 from app.models.cliente import Cliente
 from app.repositories.movimento_fiado_repository import MovimentoFiadoRepository
 from app.services.configuracao_service import ConfiguracaoService
-from app.services.whatsapp_service import WhatsappService
+from app.services.whatsapp_service import WhatsappService, coexy_configurado
+
+# Template cadastrado em Coexy > Templates (categoria Utilidade, idioma
+# pt_BR), corpo com 2 variaveis posicionais:
+#   Olá {{1}}! Passando para lembrar que você tem um saldo em aberto de
+#   {{2}} conosco. Quando puder, dê uma passadinha para regularizar.
+#   Obrigado!
+TEMPLATE_COBRANCA = "cobranca_fiado"
 
 # 24h -- mesmo intervalo do aviso_vencimento_service.py, roda uma vez
 # por dia.
@@ -65,14 +73,24 @@ def verificar_fiados_parados_e_notificar(db) -> None:
             if dias_desde_aviso < dias_limite:
                 continue
 
-        texto = (
-            f"Olá {_primeiro_nome(cliente.nome)}! Passando pra lembrar "
-            f"que você tem um saldo em aberto de {_moeda(float(saldo))} "
-            f"conosco. Quando puder, dá uma passadinha pra regularizar. "
-            f"Obrigado! 🙂"
-        )
+        nome = _primeiro_nome(cliente.nome)
+        valor = _moeda(float(saldo))
 
-        enviado = WhatsappService.enviar_mensagem(db, cliente.telefone, texto)
+        if coexy_configurado():
+            # texto do template aprovado na Meta (ver TEMPLATE_COBRANCA)
+            enviado = WhatsappService.enviar_template(
+                db, cliente.telefone,
+                os.getenv("COEXY_TEMPLATE_COBRANCA", TEMPLATE_COBRANCA),
+                [nome, valor],
+            )
+        else:
+            texto = (
+                f"Olá {nome}! Passando pra lembrar "
+                f"que você tem um saldo em aberto de {valor} "
+                f"conosco. Quando puder, dá uma passadinha pra regularizar. "
+                f"Obrigado! 🙂"
+            )
+            enviado = WhatsappService.enviar_mensagem(db, cliente.telefone, texto)
 
         if enviado:
             cliente.whatsapp_fiado_avisado_em = agora

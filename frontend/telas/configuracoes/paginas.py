@@ -205,7 +205,7 @@ class PaginasMixin:
 
         self.whatsapp_lembrete_fiado_dias = QSpinBox()
         self.whatsapp_lembrete_fiado_dias.setRange(1, 365)
-        self.whatsapp_lembrete_fiado_dias.setValue(30)
+        self.whatsapp_lembrete_fiado_dias.setValue(60)
         self.whatsapp_lembrete_fiado_dias.setMinimumHeight(36)
         self.whatsapp_lembrete_fiado_dias.setStyleSheet(f"""
             QSpinBox {{
@@ -215,7 +215,7 @@ class PaginasMixin:
             }}
         """)
         self.whatsapp_lembrete_fiado_dias.setFixedWidth(110)
-        self._linha(layout, "Avisar depois de quantos dias parado", "", self.whatsapp_lembrete_fiado_dias)
+        self._linha(layout, "Avisar depois de quantos dias sem pagar", "Conta do último pagamento (sem pagamento, da última compra)", self.whatsapp_lembrete_fiado_dias)
 
         self.whatsapp_comprovante_venda_ativo = self._interruptor(
             layout, "Mandar comprovante da venda", "Vai sozinho pro WhatsApp do cliente")

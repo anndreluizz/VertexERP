@@ -828,10 +828,21 @@ class FichaClienteDialog(WhatsAppMixin, ObservacoesMixin, HistoricoMixin, Extrat
         )
 
         self.kpi_pago.definir_valor(formatar_moeda(total_pago))
-        self.kpi_pago.definir_legenda(
-            f"último em {_data_curta(agr['ultimo_pagamento'])}"
-            if agr["ultimo_pagamento"] else "nenhum pagamento ainda"
-        )
+        # mesma regra do lembrete de WhatsApp: dias desde o ultimo
+        # pagamento; sem pagamento nenhum, desde a ultima compra
+        if agr["ultimo_pagamento"]:
+            legenda_pago = (
+                f"{_ha_dias(agr['dias_desde_ultimo_pagamento'])} · "
+                f"{_data_curta(agr['ultimo_pagamento'])}"
+            )
+        elif agr["ultima_compra"]:
+            legenda_pago = (
+                f"nunca pagou · última compra "
+                f"{_ha_dias(agr['dias_desde_ultima_compra']).lower()}"
+            )
+        else:
+            legenda_pago = "nenhum pagamento ainda"
+        self.kpi_pago.definir_legenda(legenda_pago)
 
         self.kpi_ultima_compra.definir_valor(_ha_dias(agr["dias_desde_ultima_compra"]))
         self.kpi_ultima_compra.definir_legenda(

@@ -124,7 +124,7 @@ class Configuracao(Base):
 
     whatsapp_lembrete_fiado_dias: Mapped[int] = mapped_column(
         Integer,
-        default=30
+        default=60
     )
 
     whatsapp_comprovante_venda_ativo: Mapped[bool] = mapped_column(

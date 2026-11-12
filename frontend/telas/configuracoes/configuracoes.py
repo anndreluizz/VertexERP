@@ -487,7 +487,7 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
             bool(dados.get("whatsapp_lembrete_fiado_ativo"))
         )
         self.whatsapp_lembrete_fiado_dias.setValue(
-            dados.get("whatsapp_lembrete_fiado_dias") or 30
+            dados.get("whatsapp_lembrete_fiado_dias") or 60
         )
         self.whatsapp_comprovante_venda_ativo.setChecked(
             bool(dados.get("whatsapp_comprovante_venda_ativo"))

@@ -69,13 +69,15 @@ class MovimentoFiadoRepository:
 
     @staticmethod
     def listar_parados(db: Session, dias_limite: int):
-        """Um cliente por linha (cliente_id, saldo, ultima_movimentacao)
-        pra quem tem saldo devedor > 0 e nao mexe no fiado ha pelo
-        menos `dias_limite` dias -- usado pelo lembrete automatico de
-        WhatsApp (ver whatsapp_lembrete_service.py). Feito com HAVING
-        em vez de trazer tudo pra memoria e filtrar em Python, porque
-        essa lista pode crescer bastante numa loja com muitos
-        clientes fiado."""
+        """Um cliente por linha (cliente_id, saldo, data_de_referencia)
+        pra quem tem saldo devedor > 0 e esta ha pelo menos
+        `dias_limite` dias sem pagar -- usado pelo lembrete automatico
+        de WhatsApp (ver whatsapp_lembrete_service.py). A contagem
+        parte do ULTIMO PAGAMENTO; se o cliente nunca pagou, da ULTIMA
+        COMPRA (uma compra nova nao zera o relogio de quem ja paga).
+        Feito com HAVING em vez de trazer tudo pra memoria e filtrar em
+        Python, porque essa lista pode crescer bastante numa loja com
+        muitos clientes fiado."""
 
         valor_assinado = case(
             (MovimentoFiado.tipo == "COMPRA", MovimentoFiado.valor),
@@ -88,15 +90,23 @@ class MovimentoFiadoRepository:
         # entre timestamp naive e now() (timestamptz).
         limite = datetime.now() - timedelta(days=dias_limite)
 
+        ultimo_pagamento = func.max(
+            case((MovimentoFiado.tipo == "PAGAMENTO", MovimentoFiado.data))
+        )
+        ultima_compra = func.max(
+            case((MovimentoFiado.tipo == "COMPRA", MovimentoFiado.data))
+        )
+        referencia = func.coalesce(ultimo_pagamento, ultima_compra)
+
         return (
             db.query(
                 MovimentoFiado.cliente_id,
                 func.sum(valor_assinado).label("saldo"),
-                func.max(MovimentoFiado.data).label("ultima_movimentacao"),
+                referencia.label("referencia"),
             )
             .group_by(MovimentoFiado.cliente_id)
             .having(func.sum(valor_assinado) > 0)
-            .having(func.max(MovimentoFiado.data) <= limite)
+            .having(referencia <= limite)
             .all()
         )
 

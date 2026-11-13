@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
+from design.alteracoes import ProtegeAlteracoes
 from design import tokens
 from design.widgets import (
     BotaoPrimario, CampoTexto, DialogoPadrao, campo_rotulado, grade_formulario,
@@ -18,7 +19,7 @@ from widgets.fields.phone_field import PhoneField
 from widgets.fields.email_field import EmailField
 
 
-class CadastroFornecedorDialog(DialogoPadrao):
+class CadastroFornecedorDialog(ProtegeAlteracoes, DialogoPadrao):
     """Novo e Editar fornecedor -- mesmo molde do cadastro de cliente:
     duas colunas agrupadas em Empresa / Contato e endereço / Compras."""
 

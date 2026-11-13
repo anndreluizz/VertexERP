@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
+from design.alteracoes import ProtegeAlteracoes
 from design import tokens
 from design.icons import icone
 from design.widgets import (
@@ -66,7 +67,7 @@ def _foto_redonda(pixmap, lado=_TAMANHO_FOTO):
     return resultado
 
 
-class CadastroClienteDialog(DialogoPadrao):
+class CadastroClienteDialog(ProtegeAlteracoes, DialogoPadrao):
     """Novo cliente e Editar cliente usam a mesma tela: formulário em
     duas colunas agrupado em Dados pessoais e contato / Endereço /
     Fiado, com a foto ao lado do nome."""

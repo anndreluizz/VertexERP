@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import (
@@ -812,7 +813,7 @@ class ImportarNFeDialog(DialogoPadrao):
                 f"\n\nATENÇÃO: {len(abaixo_do_custo)} item(ns) vendendo a preço de "
                 "custo ou abaixo (sem lucro):\n" + "\n".join(f"   – {d}" for d in abaixo_do_custo[:5])
             )
-        if QMessageBox.question(self, "Confirmar importação", resumo) != QMessageBox.Yes:
+        if perguntar(self, "Confirmar importação", resumo, sim="Importar", nao="Cancelar") != QMessageBox.Yes:
             return
 
         fornecedor = self.preview["fornecedor"]

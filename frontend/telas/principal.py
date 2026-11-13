@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QPushButton,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from design import tokens
 from design.icons import icone
 from design.busca_rapida import BuscaRapida
@@ -454,13 +455,12 @@ class PrincipalWindow(QMainWindow):
     def _ao_versao_terminal(self, versao):
         if not versao:
             return
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self, "Atualização do Vertex ERP",
             f"O servidor da loja já está na versão {versao}.\n\n"
             "Atualizar este computador agora? O Vertex fecha e abre de novo "
             "sozinho em cerca de 1 minuto. (\"Não\" pergunta de novo na "
-            "próxima vez que abrir.)",
-        )
+            "próxima vez que abrir.)", sim="Atualizar agora", nao="Depois")
         if resposta == QMessageBox.Yes:
             rodar_em_thread(
                 self, atualizacao_terminal.baixar_e_preparar, versao,
@@ -565,12 +565,10 @@ class PrincipalWindow(QMainWindow):
 
     def _fazer_logout(self):
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Sair",
-            "Deseja realmente encerrar a sessão?",
-            QMessageBox.Yes | QMessageBox.No,
-        )
+            "Deseja realmente encerrar a sessão?", sim="Encerrar sessão", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return
@@ -596,13 +594,11 @@ class PrincipalWindow(QMainWindow):
         # salvar a preferencia nao muda nada visualmente ate reiniciar
         salvar_tema_escuro(escuro)
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Reiniciar o Vertex ERP",
             "O tema só é aplicado depois de reiniciar o programa.\n\n"
-            "Reiniciar agora?",
-            QMessageBox.Yes | QMessageBox.No,
-        )
+            "Reiniciar agora?", sim="Reiniciar agora", nao="Depois")
 
         if resposta == QMessageBox.Yes:
             self._reiniciar_app()

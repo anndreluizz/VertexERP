@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services.cliente_service import (
     listar_observacoes_cliente,
     criar_observacao_cliente,
@@ -201,9 +202,8 @@ class ObservacoesMixin:
 
     def excluir_observacao(self, observacao_id):
 
-        resposta = QMessageBox.question(
-            self, "Excluir Observação", "Deseja excluir esta observação?"
-        )
+        resposta = perguntar(
+            self, "Excluir Observação", "Deseja excluir esta observação?", sim="Excluir observação", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return

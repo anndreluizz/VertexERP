@@ -195,7 +195,7 @@ def test_contas_fixas_mudar_valor_e_parar(_qapp, esperar_threads):
         assert atualizar.call_args.args == (4, {"valor": 1500.0})
 
         dialogo.tabela.selectRow(0)
-        with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
+        with mock.patch("widgets.dialogs.message_dialog._executar", return_value=QMessageBox.Yes), \
              mock.patch("telas.contas_fixas.parar_conta_fixa", return_value=_Resposta()) as parar:
             dialogo.parar()
             esperar_threads(dialogo)

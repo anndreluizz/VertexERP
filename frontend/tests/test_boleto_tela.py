@@ -202,7 +202,7 @@ def test_janela_de_parcelamento(_qapp, esperar_threads):
     assert dialogo.card_falta.lbl_valor.text() == "R$ 200,00"
     assert "1 de 3" in dialogo.lbl_resumo.text()
 
-    with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
+    with mock.patch("widgets.dialogs.message_dialog._executar", return_value=QMessageBox.Yes), \
          mock.patch("telas.parcelamento.cancelar_parcelas_restantes", return_value=_Resposta()) as cancelar, \
          mock.patch("telas.parcelamento.listar_parcelamento", return_value=parcelas):
         dialogo.cancelar_restantes()
@@ -243,7 +243,7 @@ def test_boleto_de_parcela_guarda_o_codigo_nela(_qapp, esperar_threads):
     dialogo = _dialogo()
     lido = dict(_LIDO, parcela_sugerida=dict(_PARCELA_2))
 
-    with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.Yes) as pergunta, \
+    with mock.patch("widgets.dialogs.message_dialog._executar", return_value=QMessageBox.Yes) as pergunta, \
          mock.patch.object(cadastro_despesa, "atualizar_conta_pagar", return_value=_Resposta()) as atualizar, \
          mock.patch.object(cadastro_despesa, "cadastrar_conta_pagar") as cadastrar:
         dialogo._aplicar_boleto(lido)
@@ -263,7 +263,7 @@ def test_boleto_de_parcela_recusado_vira_despesa_normal(_qapp):
     dialogo = _dialogo()
     lido = dict(_LIDO, parcela_sugerida=dict(_PARCELA_2))
 
-    with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.No), \
+    with mock.patch("widgets.dialogs.message_dialog._executar", return_value=QMessageBox.No), \
          mock.patch.object(cadastro_despesa, "atualizar_conta_pagar") as atualizar:
         dialogo._aplicar_boleto(lido)
 
@@ -320,7 +320,7 @@ def test_bipar_boleto_de_outro_valor_pergunta_antes(_qapp, esperar_threads):
 
     with mock.patch("telas.parcelamento.pedir_texto", return_value=(_LIDO["codigo_barras"], True)), \
          mock.patch("telas.parcelamento.ler_boleto", return_value=_Resposta(200, dict(_LIDO, valor="999.00"))), \
-         mock.patch.object(QMessageBox, "question", return_value=QMessageBox.No), \
+         mock.patch("widgets.dialogs.message_dialog._executar", return_value=QMessageBox.No), \
          mock.patch("telas.parcelamento.atualizar_conta_pagar") as atualizar:
         dialogo.bipar_codigo(dialogo.parcelas[1])
 

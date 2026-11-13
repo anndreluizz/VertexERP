@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto
@@ -599,13 +600,12 @@ class Fornecedores(QWidget):
 
     def _excluir(self, fornecedor):
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Excluir fornecedor",
             f"Excluir o fornecedor \"{fornecedor.get('razao_social')}\"?\n\n"
             "O histórico de compras dele é mantido -- ele só deixa de "
-            "aparecer nas listas pra novas compras/importações.",
-        )
+            "aparecer nas listas pra novas compras/importações.", sim="Excluir fornecedor", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return

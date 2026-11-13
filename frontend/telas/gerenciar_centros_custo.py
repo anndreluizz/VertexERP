@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QMessageBox
 
+from widgets.dialogs.message_dialog import perguntar
 from services.centro_custo_service import (
     listar_centros_custo,
     cadastrar_centro_custo,
@@ -168,11 +169,10 @@ class GerenciarCentrosCustoDialog(DialogoGerenciar):
         if centro is None:
             return
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Excluir centro de custo",
-            f"Excluir o centro de custo \"{centro.get('nome')}\"?",
-        )
+            f"Excluir o centro de custo \"{centro.get('nome')}\"?", sim="Excluir centro de custo", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return

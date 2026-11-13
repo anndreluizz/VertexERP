@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from design import tokens
 from design.icons import icone_pixmap
 from design.responsive import tamanho_fixo_seguro
@@ -168,7 +169,7 @@ class ConectarServidorDialog(QDialog):
         de segurança que justifica não confiar automaticamente sem
         perguntar, diferente do primeiro contato."""
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Certificado do servidor mudou",
             "O certificado deste servidor é diferente do que estava "
@@ -177,9 +178,7 @@ class ConectarServidorDialog(QDialog):
             "de computador recentemente. Se você não fez nenhuma "
             "mudança assim, pode ser um problema de segurança na "
             "rede.\n\n"
-            "Confiar no certificado atual mesmo assim?",
-            QMessageBox.Yes | QMessageBox.No,
-        )
+            "Confiar no certificado atual mesmo assim?", sim="Confiar no certificado", nao="Não confiar")
 
         if resposta != QMessageBox.Yes:
             self._status(

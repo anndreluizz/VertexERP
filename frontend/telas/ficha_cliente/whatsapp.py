@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QMenu,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services import api
 from services.venda_service import listar_vendas
 from services.movimento_fiado_service import (
@@ -174,12 +175,11 @@ class WhatsAppMixin:
 
         data = str(dados.get("data", "")).replace("T", " ")[:16]
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Enviar Último Comprovante",
             f"Enviar pelo WhatsApp o comprovante da venda #{dados['venda_id']}"
-            f" ({data}, {formatar_moeda(dados['valor_total'])})?",
-        )
+            f" ({data}, {formatar_moeda(dados['valor_total'])})?", sim="Enviar comprovante", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return
@@ -265,12 +265,11 @@ class WhatsAppMixin:
         except Exception:
             erro = response.text
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Falha no envio automático",
             f"Não consegui enviar automaticamente:\n\n{erro}\n\n"
-            "Quer abrir o WhatsApp manualmente com a mensagem pronta?",
-        )
+            "Quer abrir o WhatsApp manualmente com a mensagem pronta?", sim="Abrir WhatsApp", nao="Agora não")
 
         if resposta == QMessageBox.Yes:
             self._abrir_fallback_whatsapp(telefone, texto)

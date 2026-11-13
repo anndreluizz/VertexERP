@@ -79,7 +79,7 @@ def test_trocar_agora_registra_em_dinheiro(_qapp, esperar_threads):
     dialogo = DevolucaoDialog(_venda(forma_pagamento="PRAZO"), [])
     dialogo.spins[0].setValue(1)
 
-    with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
+    with mock.patch("widgets.dialogs.message_dialog._executar", return_value=QMessageBox.Yes), \
          mock.patch(
              "telas.devolucao_dialog.registrar_devolucao",
              return_value=_Resposta(200, {"valor_total": 15.0}),
@@ -98,7 +98,7 @@ def test_so_devolver_usa_a_forma_escolhida(_qapp, esperar_threads):
     dialogo.spins[0].setValue(2)
     dialogo.forma.setCurrentIndex(dialogo.forma.findData("PIX"))
 
-    with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
+    with mock.patch("widgets.dialogs.message_dialog._executar", return_value=QMessageBox.Yes), \
          mock.patch(
              "telas.devolucao_dialog.registrar_devolucao",
              return_value=_Resposta(200, {"valor_total": 30.0}),
@@ -116,7 +116,7 @@ def test_erro_do_servidor_mantem_a_janela_aberta(_qapp, esperar_threads):
     dialogo.show()
     dialogo.spins[0].setValue(1)
 
-    with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
+    with mock.patch("widgets.dialogs.message_dialog._executar", return_value=QMessageBox.Yes), \
          mock.patch.object(QMessageBox, "warning") as aviso, \
          mock.patch(
              "telas.devolucao_dialog.registrar_devolucao",
@@ -240,7 +240,7 @@ def test_cancelar_carrinho_vazio_tira_o_credito_da_troca(_qapp):
     pdv = _tela_pdv()
     pdv.iniciar_troca(30.0)
 
-    with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
+    with mock.patch("widgets.dialogs.message_dialog._executar", return_value=QMessageBox.Yes), \
          mock.patch.object(QMessageBox, "information") as aviso:
         pdv.cancelar_venda()
 

@@ -352,7 +352,7 @@ def test_alternar_2fa_liga_pra_usuario_desativado(esperar_threads):
     tela._carregando = False
 
     with mock.patch("telas.gerenciar_usuarios.atualizar_usuario") as atualizar_mock, \
-         mock.patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
+         mock.patch("widgets.dialogs.message_dialog._executar", return_value=QMessageBox.Yes), \
          mock.patch.object(GerenciarUsuariosDialog, "carregar") as carregar_mock:
 
         atualizar_mock.return_value = _RespostaFalsa(200, {})

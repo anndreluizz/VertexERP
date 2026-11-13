@@ -4,6 +4,7 @@ from PySide6.QtCore import QObject, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QInputDialog, QMessageBox
 
+from widgets.dialogs.message_dialog import perguntar
 from services import comprovante_service, impressora_termica_service, preferencias_service
 from services.api import configuracoes
 from services.worker import rodar_em_thread
@@ -92,11 +93,10 @@ def imprimir(venda_id, parent):
             if ok:
                 return
 
-            resposta = QMessageBox.question(
+            resposta = perguntar(
                 parent,
                 "Falha na impressora térmica",
-                f"{erro_imp}\n\nQuer tentar imprimir pela janela normal do Windows?",
-            )
+                f"{erro_imp}\n\nQuer tentar imprimir pela janela normal do Windows?", sim="Imprimir pelo Windows", nao="Não imprimir")
 
             if resposta != QMessageBox.Yes:
                 return
@@ -141,12 +141,11 @@ def _abrir_fallback_whatsapp(html, dados, telefone, legenda, parent):
         QUrl(f"https://wa.me/{digitos}?text={quote(legenda)}")
     )
 
-    resposta = QMessageBox.question(
+    resposta = perguntar(
         parent,
         "Compartilhar PDF",
         "Abri o WhatsApp com a mensagem pronta.\n\n"
-        "Quer salvar o PDF agora pra anexar manualmente na conversa?",
-    )
+        "Quer salvar o PDF agora pra anexar manualmente na conversa?", sim="Salvar PDF", nao="Agora não")
 
     if resposta == QMessageBox.Yes:
         comprovante_service.salvar_pdf(
@@ -212,12 +211,11 @@ def enviar_whatsapp(venda_id, parent):
 
             erro_resp = _extrair_erro(response)
 
-            resposta = QMessageBox.question(
+            resposta = perguntar(
                 parent,
                 "Falha no envio automático",
                 f"Não consegui enviar automaticamente:\n\n{erro_resp}\n\n"
-                "Quer abrir o WhatsApp manualmente com a mensagem pronta?",
-            )
+                "Quer abrir o WhatsApp manualmente com a mensagem pronta?", sim="Abrir WhatsApp", nao="Agora não")
 
             if resposta == QMessageBox.Yes:
                 _abrir_fallback_whatsapp(html, dados, telefone, legenda, parent)

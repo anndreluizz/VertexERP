@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services import api
 from services.movimento_fiado_service import (
     saldo_cliente,
@@ -176,11 +177,10 @@ class ExtratoMixin:
             if ok:
                 return
 
-            resposta = QMessageBox.question(
+            resposta = perguntar(
                 self,
                 "Falha na impressora térmica",
-                f"{erro}\n\nQuer tentar imprimir pela janela normal do Windows?",
-            )
+                f"{erro}\n\nQuer tentar imprimir pela janela normal do Windows?", sim="Imprimir pelo Windows", nao="Não imprimir")
 
             if resposta != QMessageBox.Yes:
                 return

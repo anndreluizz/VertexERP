@@ -30,8 +30,7 @@ def test_nao_imprime_recibo_se_usuario_recusar(esperar_threads):
 
     with mock.patch(
         "telas.ficha_cliente.registrar_pagamento.registrar_pagamento", return_value=_RespostaOk()
-    ), mock.patch.object(
-        QMessageBox, "question", return_value=QMessageBox.No
+    ), mock.patch("widgets.dialogs.message_dialog._executar", return_value=QMessageBox.No
     ), mock.patch.object(
         dialogo, "_imprimir_recibo_pagamento"
     ) as mock_imprimir:
@@ -47,8 +46,7 @@ def test_imprime_recibo_apenas_se_usuario_confirmar(esperar_threads):
 
     with mock.patch(
         "telas.ficha_cliente.registrar_pagamento.registrar_pagamento", return_value=_RespostaOk()
-    ), mock.patch.object(
-        QMessageBox, "question", return_value=QMessageBox.Yes
+    ), mock.patch("widgets.dialogs.message_dialog._executar", return_value=QMessageBox.Yes
     ), mock.patch.object(
         dialogo, "_imprimir_recibo_pagamento"
     ) as mock_imprimir:

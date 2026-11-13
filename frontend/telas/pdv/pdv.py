@@ -9,6 +9,7 @@ from telas.selecionar_cliente import (
     situacao_fiado,
     texto_situacao_cliente,
 )
+from widgets.dialogs.message_dialog import perguntar
 from services.venda_service import (
     finalizar_venda as enviar_venda,
 )
@@ -565,13 +566,10 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
         if not self.itens and not self.credito_troca:
             return
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Cancelar Venda",
-            "Deseja cancelar esta venda?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
+            "Deseja cancelar esta venda?", sim="Cancelar venda", nao="Voltar", padrao_sim=False)
 
         if resposta == QMessageBox.No:
             return

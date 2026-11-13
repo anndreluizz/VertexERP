@@ -6,6 +6,7 @@ from telas.cadastro_produto import CadastroProdutoWindow
 from telas.produto_criado import ProdutoCriadoDialog
 from telas.importar_produtos_csv import ImportarProdutosCsvDialog
 
+from widgets.dialogs.message_dialog import perguntar
 from services.categoria_service import listar_categorias
 from services.produto_service import (
     listar_produtos,
@@ -1123,11 +1124,10 @@ class Produtos(QWidget):
         if len(selecionados) > 3:
             nomes += f" e mais {len(selecionados) - 3}"
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Excluir Produtos",
-            f"Deseja excluir {len(selecionados)} produto(s)?\n\n{nomes}",
-        )
+            f"Deseja excluir {len(selecionados)} produto(s)?\n\n{nomes}", sim="Excluir produtos", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return
@@ -1440,11 +1440,10 @@ class Produtos(QWidget):
 
     def _excluir_um(self, produto):
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Excluir Produto",
-            f"Deseja excluir o produto\n\n{produto['nome']} ?"
-        )
+            f"Deseja excluir o produto\n\n{produto['nome']} ?", sim="Excluir produto", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return

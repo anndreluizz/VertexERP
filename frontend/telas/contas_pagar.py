@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QToolTip,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services.categoria_despesa_service import listar_categorias_despesa
 from services.loja_service import listar_lojas
 from services.conta_pagar_service import (
@@ -1062,11 +1063,10 @@ class ContasPagar(QWidget):
 
     def excluir_despesa(self, conta):
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Excluir despesa",
-            f"Excluir a despesa \"{conta.get('descricao')}\"?",
-        )
+            f"Excluir a despesa \"{conta.get('descricao')}\"?", sim="Excluir despesa", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return

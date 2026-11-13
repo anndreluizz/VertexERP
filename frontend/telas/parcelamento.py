@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from design import tokens
 from design.icons import icone
 from design.widgets import (
@@ -203,13 +204,11 @@ class ParcelamentoDialog(DialogoPadrao):
 
         valor_boleto = lido.get("valor")
         if valor_boleto is not None and abs(float(valor_boleto) - float(parcela["valor"])) > 0.005:
-            resposta = QMessageBox.question(
+            resposta = perguntar(
                 self, "Valor diferente",
                 f"O boleto é de {formatar_moeda(float(valor_boleto))}, mas a parcela "
                 f"{numero} é de {formatar_moeda(float(parcela['valor']))}.\n\n"
-                "Guardar mesmo assim? O valor da parcela passa a ser o do boleto.",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
-            )
+                "Guardar mesmo assim? O valor da parcela passa a ser o do boleto.", sim="Guardar mesmo assim", nao="Cancelar", padrao_sim=False)
             if resposta != QMessageBox.Yes:
                 return
             payload["valor"] = str(valor_boleto)
@@ -231,15 +230,12 @@ class ParcelamentoDialog(DialogoPadrao):
         if not pendentes:
             return
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Cancelar parcelas",
             f"Cancelar as {len(pendentes)} parcela(s) que faltam "
             f"({formatar_moeda(sum(float(p['valor']) for p in pendentes))})? "
-            "As que já foram pagas continuam como estão.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
+            "As que já foram pagas continuam como estão.", sim="Cancelar parcelas", nao="Voltar", padrao_sim=False)
         if resposta != QMessageBox.Yes:
             return
 

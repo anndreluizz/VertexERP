@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QMessageBox
 from telas.cadastro_cliente import CadastroClienteDialog
 from telas.ficha_cliente import FichaClienteDialog
 
+from widgets.dialogs.message_dialog import perguntar
 from services.caixa_service import entradas_caixa
 from services.cliente_service import listar_clientes, reativar_cliente
 from services.preferencias_service import carregar_loja_id
@@ -1349,11 +1350,10 @@ class Clientes(QWidget):
 
     def reativar_cliente(self, cliente):
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Reativar Cliente",
-            f"Reativar \"{cliente.get('nome')}\"?",
-        )
+            f"Reativar \"{cliente.get('nome')}\"?", sim="Reativar cliente", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return

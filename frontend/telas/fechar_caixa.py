@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services.caixa_service import caixa_aberto, resumo_caixa, fechar_caixa, listar_movimentos_caixa
 from services import api, comprovante_service, impressora_termica_service, preferencias_service
 from services.worker import rodar_em_thread, em_paralelo
@@ -760,12 +761,11 @@ class FecharCaixaWindow(DialogoPadrao):
             )
             return
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Fechar Caixa",
             "Confirmar o fechamento do caixa? Esta ação não "
-            "pode ser desfeita.",
-        )
+            "pode ser desfeita.", sim="Fechar caixa", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return
@@ -936,11 +936,10 @@ def imprimir_fechamento(parent, caixa, resumo, movimentos, valor_contado, observ
         if ok:
             return
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             parent,
             "Falha na impressora térmica",
-            f"{erro}\n\nQuer tentar imprimir pela janela normal do Windows?",
-        )
+            f"{erro}\n\nQuer tentar imprimir pela janela normal do Windows?", sim="Imprimir pelo Windows", nao="Não imprimir")
 
         if resposta != QMessageBox.Yes:
             return

@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from design import tokens
 from design.widgets import BotaoPerigo, BotaoSecundario, DialogoPadrao
 from services.conta_pagar_service import (
@@ -158,15 +159,12 @@ class ContasFixasDialog(DialogoPadrao):
         if fixa is None:
             return
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Parar de repetir",
             f"\"{fixa['descricao']}\" não vai mais ser criada nos próximos "
             "meses. As contas que já estão em Boletos continuam lá.\n\n"
-            "Parar de repetir?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
+            "Parar de repetir?", sim="Parar de repetir", nao="Cancelar", padrao_sim=False)
         if resposta != QMessageBox.Yes:
             return
 

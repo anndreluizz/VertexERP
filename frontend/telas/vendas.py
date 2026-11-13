@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, Card, CardKPI
@@ -614,10 +615,9 @@ class Vendas(QWidget):
         if ok:
             return
         # se falhar, oferece a janela normal do Windows (igual fechar_caixa.py)
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self, "Falha na impressora térmica",
-            f"{erro}\n\nQuer tentar imprimir pela janela normal do Windows?",
-        )
+            f"{erro}\n\nQuer tentar imprimir pela janela normal do Windows?", sim="Imprimir pelo Windows", nao="Não imprimir")
         if resposta == QMessageBox.Yes:
             comprovante_service.imprimir(self._html_relatorio(relatorio), self)
 

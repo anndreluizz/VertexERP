@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 
 import base64
 
+from widgets.dialogs.message_dialog import perguntar
 from services.produto_service import (
     obter_foto_produto,
 )
@@ -276,9 +277,8 @@ class FotosMixin:
 
     def _remover_foto_extra(self, foto_id):
 
-        resposta = QMessageBox.question(
-            self, "Remover foto", "Remover essa foto do produto?"
-        )
+        resposta = perguntar(
+            self, "Remover foto", "Remover essa foto do produto?", sim="Remover foto", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return

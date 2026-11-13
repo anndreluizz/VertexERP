@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QComboBox,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services import preferencias_service
 from services import loja_service
 from services.worker import rodar_em_thread
@@ -194,12 +195,11 @@ class LojasMixin:
     def _alternar_loja_ativa(self, loja):
 
         if loja["ativa"]:
-            resposta = QMessageBox.question(
+            resposta = perguntar(
                 self,
                 "Desativar loja",
                 f"Desativar \"{loja['nome']}\"? Ela some das listas de "
-                "escolha, mas as vendas e contas dela continuam guardadas.",
-            )
+                "escolha, mas as vendas e contas dela continuam guardadas.", sim="Desativar loja", nao="Cancelar")
             if resposta != QMessageBox.Yes:
                 return
 

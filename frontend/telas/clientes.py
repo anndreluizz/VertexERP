@@ -486,7 +486,7 @@ class PainelCliente(Card):
                 bt.clicked.connect(lambda: self.lancar.emit(cliente))
                 botoes.append(bt)
             if cliente.get("telefone") and saldo > 0.009:
-                bt = BotaoSucesso("Cobrar no WhatsApp", icone_nome="message-circle")
+                bt = BotaoSecundario("Cobrar no WhatsApp", icone_nome="message-circle")
                 bt.setToolTip("Enviar mensagem de cobrança pelo WhatsApp")
                 bt.clicked.connect(lambda: self.cobrar.emit(cliente))
                 botoes.append(bt)

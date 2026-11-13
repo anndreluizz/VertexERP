@@ -160,7 +160,7 @@ ALERTA_ESCURA = "#7A4E09"
 # RAIO DE BORDA
 # ==========================================
 
-RADIUS_LG = 16
+RADIUS_LG = 12  # era 16; escala do Stripe: cartao 12, campo/botao 8
 RADIUS_MD = 12
 RADIUS_SM = 8
 RADIUS_PILL = 999

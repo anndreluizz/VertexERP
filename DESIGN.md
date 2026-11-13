@@ -31,13 +31,14 @@ Regras: texto nunca preto puro; todo par texto/fundo >= 4,5:1 nos DOIS temas
 
 ## Forma e profundidade
 
-- Raio: 8 (campos, botoes), 12, 16 (cartoes), pilula so em chip/selo.
+- Raio: 8 (campos, botoes), 12 (cartoes e paineis), pilula so em chip/selo.
 - Cartao: borda 1px BORDA + sombra azulada leve (SOMBRA_COR, blur 24, alpha 18).
 - Cartao "destaque" (cor cheia) = no maximo um por grade de KPIs.
+- Seta de menu: icone chevron-down desenhado, nunca caractere unicode (falta na Figtree).
 
 ## Componentes
 
-- Uma acao cheia por area; as demais em contorno (BotaoSecundario).
+- Uma acao cheia por area; as demais em contorno (BotaoSecundario). Ficha do cliente: Receber cheio, Cobrar no WhatsApp em contorno.
 - Botao: hover anima a cor, foco por teclado desenha anel por dentro.
 - Campo: 44px de altura, borda BORDA_CAMPO, foco troca para PRIMARIA.
 - Dialogo: DialogoPadrao (560/760/860), Cancelar + acao principal a direita.

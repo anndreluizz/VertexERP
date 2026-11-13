@@ -49,3 +49,10 @@ def test_numeros_tabulares_na_fonte_do_app():
     _app()
     m = QFontMetricsF(fonte(20))
     assert m.horizontalAdvance("1111") == m.horizontalAdvance("8888")
+
+
+def test_menu_do_topo_sem_caractere_de_seta_unicode():
+    import inspect
+    import design.menu_topo as m
+
+    assert "\u25be" not in inspect.getsource(m)

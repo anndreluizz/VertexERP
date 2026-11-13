@@ -1,4 +1,6 @@
 from PySide6.QtCore import Qt
+
+from design.teclado import tornar_acionavel
 from PySide6.QtGui import QColor, QCursor
 from PySide6.QtWidgets import (
     QFrame,
@@ -82,6 +84,7 @@ class Card(QFrame):
 
         if ao_clicar is not None:
             self.setCursor(QCursor(Qt.PointingHandCursor))
+            tornar_acionavel(self, ao_clicar, str(titulo))
 
     def _texto_variacao(self, variacao):
         seta = "▲" if variacao >= 0 else "▼"

@@ -1045,7 +1045,6 @@ class PagamentoWindow(QDialog):
         bt_remover.setIcon(icone("trash-2", cor=tokens.ERRO, tamanho=16))
         bt_remover.setFixedSize(32, 32)
         bt_remover.setAutoDefault(False)
-        bt_remover.setFocusPolicy(Qt.NoFocus)
         bt_remover.setCursor(Qt.PointingHandCursor)
         bt_remover.setToolTip("Remover este pagamento")
         bt_remover.setStyleSheet(f"""

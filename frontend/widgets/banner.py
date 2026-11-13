@@ -1,6 +1,8 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFrame, QLabel, QHBoxLayout, QVBoxLayout
 
+from design.teclado import tornar_acionavel
+
 
 class Banner(QFrame):
 
@@ -11,6 +13,7 @@ class Banner(QFrame):
         super().__init__()
 
         self.setCursor(Qt.PointingHandCursor)
+        tornar_acionavel(self, self.clicado.emit, titulo, cor_anel="white")
         self.setMinimumHeight(64)
 
         self.setStyleSheet(f"""

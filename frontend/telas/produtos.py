@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone, icone_pixmap
+from design.teclado import tornar_acionavel
 from design.widgets import (
     Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI, estilo_checkbox,
 )
@@ -85,6 +86,7 @@ class _CardKPIClicavel(CardKPI):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setCursor(Qt.PointingHandCursor)
+        tornar_acionavel(self, self.clicado.emit, str(args[0]), cor_anel=tokens.PRIMARIA)
 
     def mousePressEvent(self, event):
         self.clicado.emit()

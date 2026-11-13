@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from design.teclado import tornar_acionavel
 from utils.acessibilidade import movimento_reduzido
 
 
@@ -31,6 +32,7 @@ class NavCard(QFrame):
 
         self.setMinimumHeight(160)
         self.setCursor(Qt.PointingHandCursor)
+        tornar_acionavel(self, self.clicado.emit, titulo, cor_anel="white")
 
         self.setStyleSheet(f"""
             QFrame {{

@@ -182,6 +182,8 @@ class PrincipalWindow(QMainWindow):
 
         self.setWindowTitle("Vertex ERP")
         self.resize(1400, 800)
+        # abaixo disso a sidebar e os cards cortam; telas de 1366x768 cabem
+        self.setMinimumSize(1180, 680)
         # abre maximizada, igual a tela de login -- quem cria a janela
         # so' chama show(), e esse estado ja vale pra ele
         self.setWindowState(Qt.WindowMaximized)

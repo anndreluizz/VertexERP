@@ -299,7 +299,7 @@ class PagamentoWindow(QDialog):
             }}
         """)
         lbl_rotulo.setStyleSheet(
-            f"background:transparent; border:none; font-size:11px; "
+            f"background:transparent; border:none; font-size:12px; "
             f"font-weight:800; color:{cor};"
         )
         lbl_valor.setStyleSheet(
@@ -352,7 +352,7 @@ class PagamentoWindow(QDialog):
 
         lbl = QLabel(texto)
         lbl.setStyleSheet(
-            f"background:transparent; border:none; font-size:11px; "
+            f"background:transparent; border:none; font-size:12px; "
             f"font-weight:bold; color:{tokens.TEXTO_SECUNDARIO};"
         )
         return lbl
@@ -383,7 +383,7 @@ class PagamentoWindow(QDialog):
 
         lbl_rotulo = QLabel("CLIENTE")
         lbl_rotulo.setStyleSheet(
-            f"background:transparent; border:none; font-size:10px; "
+            f"background:transparent; border:none; font-size:12px; "
             f"font-weight:bold; color:{tokens.TEXTO_TERCIARIO};"
         )
         col_cliente.addWidget(lbl_rotulo)
@@ -481,7 +481,7 @@ class PagamentoWindow(QDialog):
 
         self.lbl_dica_valor = QLabel("Enter lança o pagamento  ·  Esc volta pras formas")
         self.lbl_dica_valor.setStyleSheet(
-            f"background:transparent; font-size:11px; color:{tokens.TEXTO_TERCIARIO};"
+            f"background:transparent; font-size:12px; color:{tokens.TEXTO_TERCIARIO};"
         )
         bloco_layout.addWidget(self.lbl_dica_valor)
 
@@ -640,12 +640,12 @@ class PagamentoWindow(QDialog):
         badge_tecla.setStyleSheet(f"""
             background:{tokens.CARD}; color:{tokens.TEXTO_SECUNDARIO};
             border:1px solid {tokens.BORDA}; border-radius:4px;
-            font-size:10px; font-weight:700; padding: 0 6px;
+            font-size:12px; font-weight:700; padding: 0 6px;
         """)
 
         lbl_rotulo = QLabel(rotulo)
         lbl_rotulo.setStyleSheet(
-            f"background:transparent; border:none; color:{tokens.TEXTO_TERCIARIO}; font-size:11px;"
+            f"background:transparent; border:none; color:{tokens.TEXTO_TERCIARIO}; font-size:12px;"
         )
 
         item.addWidget(badge_tecla)
@@ -1045,7 +1045,6 @@ class PagamentoWindow(QDialog):
         bt_remover.setIcon(icone("trash-2", cor=tokens.ERRO, tamanho=16))
         bt_remover.setFixedSize(32, 32)
         bt_remover.setAutoDefault(False)
-        bt_remover.setFocusPolicy(Qt.NoFocus)
         bt_remover.setCursor(Qt.PointingHandCursor)
         bt_remover.setToolTip("Remover este pagamento")
         bt_remover.setStyleSheet(f"""

@@ -86,7 +86,7 @@ def test_exportar_com_erro_mostra_mensagem_sem_abrir_dialogo_de_salvar():
 def test_remover_com_confirmacao_chama_o_servico_e_fecha_a_ficha():
     tela = _tela()
 
-    with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
+    with mock.patch("widgets.dialogs.message_dialog._executar", return_value=QMessageBox.Yes), \
          mock.patch(
              "services.cliente_service.remover_dados_lgpd",
              return_value=_RespostaFalsa(
@@ -105,7 +105,7 @@ def test_remover_com_confirmacao_chama_o_servico_e_fecha_a_ficha():
 def test_remover_cancelar_confirmacao_nao_chama_a_api():
     tela = _tela()
 
-    with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.No), \
+    with mock.patch("widgets.dialogs.message_dialog._executar", return_value=QMessageBox.No), \
          mock.patch("services.cliente_service.remover_dados_lgpd") as remover_mock:
 
         tela.remover_dados_lgpd_atual()
@@ -116,7 +116,7 @@ def test_remover_cancelar_confirmacao_nao_chama_a_api():
 def test_remover_com_saldo_devedor_mostra_erro_sem_fechar_a_ficha():
     tela = _tela()
 
-    with mock.patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
+    with mock.patch("widgets.dialogs.message_dialog._executar", return_value=QMessageBox.Yes), \
          mock.patch(
              "services.cliente_service.remover_dados_lgpd",
              return_value=_RespostaFalsa(400, {"detail": "saldo devedor de R$ 50.00"}),

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services.extrato_bancario_service import (
     preview_extrato,
     importar_extrato,
@@ -256,12 +257,11 @@ class ConciliacaoBancaria(QWidget):
             )
             return
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self, "Importar extrato",
             f"{preview['total_novas']} transações novas, "
             f"{preview['total_ja_importadas']} já importadas antes. "
-            "Importar as novas?",
-        )
+            "Importar as novas?", sim="Importar novas", nao="Cancelar")
         if resposta != QMessageBox.Yes:
             return
 
@@ -315,11 +315,10 @@ class ConciliacaoBancaria(QWidget):
         if transacao is None:
             return
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self, "Ignorar transação",
             "Ignorar essa transação? Ela não vai mais aparecer nas "
-            "pendentes.",
-        )
+            "pendentes.", sim="Ignorar transação", nao="Cancelar")
         if resposta != QMessageBox.Yes:
             return
 
@@ -337,10 +336,9 @@ class ConciliacaoBancaria(QWidget):
         if transacao is None:
             return
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self, "Desconciliar",
-            "Desfazer a conciliação dessa transação?",
-        )
+            "Desfazer a conciliação dessa transação?", sim="Desfazer conciliação", nao="Cancelar")
         if resposta != QMessageBox.Yes:
             return
 

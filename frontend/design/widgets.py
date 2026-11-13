@@ -437,7 +437,7 @@ class _BotaoAnimado(QPushButton):
                 max(tokens.RADIUS_SM - 3, 2),
                 max(tokens.RADIUS_SM - 3, 2),
             )
-            cor_anel = self._cor_atual if self._contorno else QColor(tokens.TEXTO_CLARO)
+            cor_anel = self._cor_atual if self._contorno else QColor(tokens.TEXTO_SOBRE_COR)
             caneta_foco = QPen(cor_anel)
             caneta_foco.setWidthF(2)
             painter.setPen(caneta_foco)
@@ -453,7 +453,7 @@ class BotaoPrimario(_BotaoAnimado):
             texto, icone_nome, parent,
             cor_normal=tokens.PRIMARIA,
             cor_hover=tokens.PRIMARIA_HOVER,
-            cor_texto=tokens.TEXTO_CLARO,
+            cor_texto=tokens.TEXTO_SOBRE_COR,
         )
 
 
@@ -463,7 +463,7 @@ class BotaoSucesso(_BotaoAnimado):
             texto, icone_nome, parent,
             cor_normal=tokens.SECUNDARIA,
             cor_hover=tokens.SECUNDARIA_HOVER,
-            cor_texto=tokens.TEXTO_CLARO,
+            cor_texto=tokens.TEXTO_SOBRE_COR,
         )
 
 
@@ -473,7 +473,7 @@ class BotaoPerigo(_BotaoAnimado):
             texto, icone_nome, parent,
             cor_normal=tokens.ERRO,
             cor_hover=tokens.ERRO_HOVER,
-            cor_texto=tokens.TEXTO_CLARO,
+            cor_texto=tokens.TEXTO_SOBRE_COR,
         )
 
 
@@ -703,7 +703,7 @@ class CampoTexto(QLineEdit):
         self.setMinimumHeight(44)
         self.setStyleSheet(f"""
             QLineEdit {{
-                border: 1.5px solid {tokens.BORDA};
+                border: 1.5px solid {tokens.BORDA_CAMPO};
                 border-radius: {tokens.RADIUS_SM}px;
                 padding: 0 14px;
                 font-size: {tokens.TAMANHO_MD}px;

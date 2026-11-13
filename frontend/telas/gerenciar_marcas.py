@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QMessageBox
 
+from widgets.dialogs.message_dialog import perguntar
 from services.marca_service import (
     listar_marcas,
     criar_marca,
@@ -173,13 +174,12 @@ class GerenciarMarcasDialog(DialogoGerenciar):
         if marca is None:
             return
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Excluir marca",
             f"Excluir a marca \"{marca.get('nome')}\"?\n\n"
             "Produtos que já usam essa marca não são alterados "
-            "-- ela só deixa de aparecer na lista pra novos cadastros.",
-        )
+            "-- ela só deixa de aparecer na lista pra novos cadastros.", sim="Excluir marca", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return

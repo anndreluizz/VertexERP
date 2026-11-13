@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services.contagem_estoque_service import (
     contagem_aberta,
     abrir_contagem,
@@ -479,13 +480,12 @@ class ContagemEstoque(QWidget):
         if self.contagem is None:
             return
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Finalizar contagem",
             "Finalizar essa contagem? Produtos com diferença entre a "
             "quantidade contada e o sistema terão o estoque ajustado "
-            "automaticamente. Produtos não contados ficam como estão.",
-        )
+            "automaticamente. Produtos não contados ficam como estão.", sim="Finalizar contagem", nao="Voltar")
 
         if resposta != QMessageBox.Yes:
             return
@@ -517,12 +517,11 @@ class ContagemEstoque(QWidget):
         if self.contagem is None:
             return
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Cancelar contagem",
             "Cancelar essa contagem? Nenhum ajuste de estoque será feito "
-            "e as quantidades contadas até agora serão descartadas.",
-        )
+            "e as quantidades contadas até agora serão descartadas.", sim="Descartar contagem", nao="Voltar")
 
         if resposta != QMessageBox.Yes:
             return

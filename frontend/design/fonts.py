@@ -56,4 +56,7 @@ def fonte(tamanho_px):
 
     f = QFont(_familia_carregada)
     f.setPixelSize(tamanho_px)
+    # numeros tabulares (como o Stripe nas celulas de dinheiro): todo digito
+    # com a mesma largura, entao valores em coluna alinham nas casas
+    f.setFeature(QFont.Tag("tnum"), 1)
     return f

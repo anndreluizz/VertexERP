@@ -2,6 +2,7 @@ from PySide6.QtGui import QPalette, QColor
 
 from design import tokens
 from design.fonts import carregar_fonte_inter, fonte
+from design import teclado
 
 
 def aplicar_tema(app, escuro: bool = False):
@@ -93,5 +94,7 @@ def aplicar_tema(app, escuro: bool = False):
             background: {tokens.CARD};
         }}
     """)
+
+    teclado.instalar(app)
 
     return familia_fonte

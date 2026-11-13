@@ -69,7 +69,7 @@ class VendaConcluidaDialog(QDialog):
         subtitulo = QLabel(f"VENDA #{venda_id} FINALIZADA")
         subtitulo.setAlignment(Qt.AlignCenter)
         subtitulo.setStyleSheet(
-            f"background:transparent; font-size:11px; color:{tokens.TEXTO_SECUNDARIO}; "
+            f"background:transparent; font-size:12px; color:{tokens.TEXTO_SECUNDARIO}; "
             "font-weight:bold;"
         )
 

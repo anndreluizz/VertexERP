@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services import api
 from services.movimento_fiado_service import (
     saldo_cliente,
@@ -516,12 +517,11 @@ class FichaClienteDialog(WhatsAppMixin, ObservacoesMixin, HistoricoMixin, Extrat
         nome = self.cliente["nome"]
         try:
             if self.cliente.get("negativado"):
-                resposta = QMessageBox.question(
+                resposta = perguntar(
                     self, "Desbloquear cliente",
                     f"Desbloquear {nome}? Ele volta a poder comprar.\n\n"
                     "A dívida baixada continua como perda. Para cobrar de novo, "
-                    "exclua o lançamento \"Perda\" no histórico.",
-                )
+                    "exclua o lançamento \"Perda\" no histórico.", sim="Desbloquear cliente", nao="Cancelar")
                 if resposta != QMessageBox.Yes:
                     return
                 atualizado = desbloquear_cliente(self.cliente["id"])
@@ -599,11 +599,10 @@ class FichaClienteDialog(WhatsAppMixin, ObservacoesMixin, HistoricoMixin, Extrat
 
         from services.cliente_service import excluir_cliente
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Excluir Cliente",
-            f"Deseja desativar o cliente\n\n{self.cliente['nome']} ?"
-        )
+            f"Deseja desativar o cliente\n\n{self.cliente['nome']} ?", sim="Desativar cliente", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return
@@ -685,7 +684,7 @@ class FichaClienteDialog(WhatsAppMixin, ObservacoesMixin, HistoricoMixin, Extrat
 
         from services.cliente_service import remover_dados_lgpd
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Remover dados pessoais (LGPD)",
             "Isso vai apagar PERMANENTEMENTE os dados pessoais de "
@@ -695,8 +694,7 @@ class FichaClienteDialog(WhatsAppMixin, ObservacoesMixin, HistoricoMixin, Extrat
             "O histórico de vendas e fiado continua guardado (sem "
             "identificar mais a pessoa), pra manter os registros "
             "contábeis da loja.\n\n"
-            "Tem certeza que quer continuar?",
-        )
+            "Tem certeza que quer continuar?", sim="Apagar dados pessoais", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return

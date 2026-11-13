@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from design import tokens
 from design.widgets import BotaoPrimario, BotaoSecundario, CampoTexto
 from services.venda_service import registrar_devolucao
@@ -217,13 +218,10 @@ class DevolucaoDialog(QDialog):
         forma = "DINHEIRO" if troca else self.forma.currentData()
         rotulo = "Dinheiro (crédito da troca)" if troca else self.forma.currentText()
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Confirmar devolução",
-            f"Devolver {formatar_moeda(self._total)} por {rotulo}?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
+            f"Devolver {formatar_moeda(self._total)} por {rotulo}?", sim="Confirmar devolução", nao="Cancelar", padrao_sim=False)
         if resposta != QMessageBox.Yes:
             return
 

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services import api
 from services.movimento_fiado_service import (
     editar_movimento,
@@ -157,11 +158,10 @@ class HistoricoMixin:
 
     def _excluir_movimento_fiado(self, mov):
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Excluir Lançamento",
-            "Excluir este lançamento do fiado? Essa ação não pode ser desfeita.",
-        )
+            "Excluir este lançamento do fiado? Essa ação não pode ser desfeita.", sim="Excluir lançamento", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return

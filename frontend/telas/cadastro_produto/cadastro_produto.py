@@ -27,6 +27,7 @@ from services.produto_service import (
 )
 from services.worker import rodar_em_thread
 from widgets.tables.standard_table import StandardTable
+from design.alteracoes import ProtegeAlteracoes
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.responsive import tamanho_fixo_seguro
@@ -43,7 +44,7 @@ from telas.cadastro_produto.fotos import FotosMixin
 from telas.cadastro_produto.kit_variacoes import KitVariacoesMixin
 
 
-class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoesMixin, BuscaExternaMixin, FotosMixin, QDialog):
+class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoesMixin, BuscaExternaMixin, FotosMixin, ProtegeAlteracoes, QDialog):
     """Cadastro de produto em duas colunas: à esquerda os dados
     (Identificação, Preço e estoque, Promoção e -- editando -- Kit e
     Variações), à direita a foto e um resumo ao vivo de preço, custo,

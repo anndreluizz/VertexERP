@@ -371,10 +371,10 @@ class BuscarProdutoDialog(QDialog):
         rodape = QHBoxLayout()
 
         dica_esquerda = QLabel("↑↓ Navegar    |    Enter Selecionar")
-        dica_esquerda.setStyleSheet(f"font-size:11px; color:{tokens.TEXTO_SECUNDARIO};")
+        dica_esquerda.setStyleSheet(f"font-size:12px; color:{tokens.TEXTO_SECUNDARIO};")
 
         dica_direita = QLabel("Esc Fechar")
-        dica_direita.setStyleSheet(f"font-size:11px; color:{tokens.TEXTO_SECUNDARIO};")
+        dica_direita.setStyleSheet(f"font-size:12px; color:{tokens.TEXTO_SECUNDARIO};")
 
         rodape.addWidget(dica_esquerda)
         rodape.addStretch()

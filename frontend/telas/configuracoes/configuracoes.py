@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services.api import configuracoes, atualizar_configuracoes, usuario_e_admin
 from services.comprovante_service import obter_logo_loja
 from services.worker import rodar_em_thread
@@ -584,11 +585,10 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
 
     def _voltar(self):
         if self._alterado:
-            resposta = QMessageBox.question(
+            resposta = perguntar(
                 self, "Alterações não salvas",
                 "Você mudou configurações e ainda não salvou.\n\n"
-                "Sair mesmo assim e perder as alterações?",
-            )
+                "Sair mesmo assim e perder as alterações?", sim="Sair sem salvar", nao="Continuar editando")
             if resposta != QMessageBox.Yes:
                 return
             self._descartar()

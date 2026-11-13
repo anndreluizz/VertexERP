@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services.perfil_service import (
     listar_perfis,
     listar_permissoes_disponiveis,
@@ -344,10 +345,9 @@ class GerenciarPerfisDialog(DialogoPadrao):
             QMessageBox.warning(self, "Aviso", "Selecione um perfil.")
             return
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self, "Excluir perfil",
-            f"Excluir o perfil \"{self.nome.text()}\"?",
-        )
+            f"Excluir o perfil \"{self.nome.text()}\"?", sim="Excluir perfil", nao="Cancelar")
         if resposta != QMessageBox.Yes:
             return
 

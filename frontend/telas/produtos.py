@@ -6,6 +6,7 @@ from telas.cadastro_produto import CadastroProdutoWindow
 from telas.produto_criado import ProdutoCriadoDialog
 from telas.importar_produtos_csv import ImportarProdutosCsvDialog
 
+from widgets.dialogs.message_dialog import perguntar
 from services.categoria_service import listar_categorias
 from services.produto_service import (
     listar_produtos,
@@ -43,6 +44,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone, icone_pixmap
+from design.teclado import tornar_acionavel
 from design.widgets import (
     Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI, estilo_checkbox,
 )
@@ -85,6 +87,7 @@ class _CardKPIClicavel(CardKPI):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setCursor(Qt.PointingHandCursor)
+        tornar_acionavel(self, self.clicado.emit, str(args[0]), cor_anel=tokens.PRIMARIA)
 
     def mousePressEvent(self, event):
         self.clicado.emit()
@@ -1121,11 +1124,10 @@ class Produtos(QWidget):
         if len(selecionados) > 3:
             nomes += f" e mais {len(selecionados) - 3}"
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Excluir Produtos",
-            f"Deseja excluir {len(selecionados)} produto(s)?\n\n{nomes}",
-        )
+            f"Deseja excluir {len(selecionados)} produto(s)?\n\n{nomes}", sim="Excluir produtos", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return
@@ -1438,11 +1440,10 @@ class Produtos(QWidget):
 
     def _excluir_um(self, produto):
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Excluir Produto",
-            f"Deseja excluir o produto\n\n{produto['nome']} ?"
-        )
+            f"Deseja excluir o produto\n\n{produto['nome']} ?", sim="Excluir produto", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from utils.validacao import email_valido
 from services.user_service import (
     listar_usuarios,
@@ -803,7 +804,7 @@ class GerenciarUsuariosDialog(DialogoPadrao):
 
         novo_status = not usuario.get("ativo", True)
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Confirmar",
             (
@@ -812,8 +813,7 @@ class GerenciarUsuariosDialog(DialogoPadrao):
                 "reativada. O histórico de vendas continua guardado."
                 if not novo_status
                 else f"Reativar o acesso de {usuario['nome']}?"
-            ),
-        )
+            ), sim="Desativar acesso" if not novo_status else "Reativar acesso", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return
@@ -859,7 +859,7 @@ class GerenciarUsuariosDialog(DialogoPadrao):
 
         novo_admin = not usuario.get("admin", False)
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Confirmar",
             (
@@ -869,8 +869,7 @@ class GerenciarUsuariosDialog(DialogoPadrao):
                 if novo_admin
                 else f"Remover {usuario['nome']} da administração?\n\n"
                 "A pessoa passa a ter só o que o perfil dela permite."
-            ),
-        )
+            ), sim="Tornar administrador" if novo_admin else "Remover administração", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return
@@ -928,7 +927,7 @@ class GerenciarUsuariosDialog(DialogoPadrao):
 
         novo_valor = not usuario.get("dois_fatores_ativo", False)
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Confirmar",
             (
@@ -938,8 +937,7 @@ class GerenciarUsuariosDialog(DialogoPadrao):
                 if novo_valor
                 else f"Desativar a verificação em duas etapas (2FA) "
                 f"de {usuario['nome']}?"
-            ),
-        )
+            ), sim="Ativar 2FA" if novo_valor else "Desativar 2FA", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return

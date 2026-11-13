@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services.conta_pagar_service import (
     cadastrar_conta_pagar,
     cadastrar_conta_fixa,
@@ -583,10 +584,8 @@ class CadastroDespesaDialog(DialogoPadrao):
         if venc_boleto and venc_boleto != venc_parcela:
             texto += f"\n\nO vencimento da parcela passa para {venc_boleto.strftime('%d/%m/%Y')}, como está no boleto."
 
-        resposta = QMessageBox.question(
-            self, "Parcela encontrada", texto,
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes,
-        )
+        resposta = perguntar(
+            self, "Parcela encontrada", texto, sim="Usar essa parcela", nao="Lançar despesa nova")
         if resposta != QMessageBox.Yes:
             return
 

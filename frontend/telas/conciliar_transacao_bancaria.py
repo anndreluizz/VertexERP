@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services.extrato_bancario_service import (
     sugerir_candidatos,
     conciliar_transacao,
@@ -163,10 +164,9 @@ class ConciliarTransacaoDialog(QDialog):
 
     def _conciliar_com(self, tipo, conta_id):
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self, "Conciliar",
-            "Conciliar essa transação com a conta selecionada?",
-        )
+            "Conciliar essa transação com a conta selecionada?", sim="Conciliar", nao="Cancelar")
         if resposta != QMessageBox.Yes:
             return
 

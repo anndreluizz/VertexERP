@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services.plano_conta_service import (
     listar_planos_conta,
     cadastrar_plano_conta,
@@ -393,11 +394,10 @@ class GerenciarPlanoContasDialog(DialogoPadrao):
         if conta is None:
             return
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self, "Excluir conta",
             f"Excluir \"{conta['nome']}\"? Contas com subcontas ativas "
-            "não podem ser excluídas.",
-        )
+            "não podem ser excluídas.", sim="Excluir conta", nao="Cancelar")
         if resposta != QMessageBox.Yes:
             return
 

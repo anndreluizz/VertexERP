@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLay
 
 from design import tokens
 from design.header import _BlocoClicavel, _Popover
-from design.icons import icone
+from design.icons import icone, icone_pixmap
 from utils.acessibilidade import movimento_reduzido
 
 # (rotulo, icone, [chaves de ITENS_MENU]) -- grupo com 1 tela vira botao
@@ -173,7 +173,7 @@ class BarraMenu(QFrame):
                     painel.itens[chave] = item
                 self.paineis[rotulo] = painel
 
-            bt = QPushButton(f" {rotulo}  ▾" if painel else f" {rotulo}")
+            bt = QPushButton(f" {rotulo}")
             bt.setCheckable(True)
             bt.setCursor(Qt.PointingHandCursor)
             bt.setFixedHeight(40)
@@ -188,6 +188,15 @@ class BarraMenu(QFrame):
                 QPushButton:checked {{ background: {tokens.SIDEBAR_ATIVO}; color: white; }}
             """)
             if painel:
+                # seta desenhada (caractere unicode de seta nao existe na Figtree e vira quadrado)
+                bt.setStyleSheet(bt.styleSheet().replace("padding: 0 10px;", "padding: 0 28px 0 10px;"))
+                seta = QLabel(bt)
+                seta.setPixmap(icone_pixmap("chevron-down", cor=tokens.TEXTO_SIDEBAR, tamanho=13))
+                seta.setAttribute(Qt.WA_TransparentForMouseEvents)
+                lay_seta = QHBoxLayout(bt)
+                lay_seta.setContentsMargins(0, 0, 9, 0)
+                lay_seta.addStretch()
+                lay_seta.addWidget(seta)
                 bt.clicked.connect(lambda _=False, b=bt, p=painel: self._abrir_painel(b, p))
             else:
                 bt.clicked.connect(lambda _=False, c=visiveis[0]: self.item_clicado.emit(c))

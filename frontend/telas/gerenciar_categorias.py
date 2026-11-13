@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QMessageBox
 
+from widgets.dialogs.message_dialog import perguntar
 from services.categoria_service import (
     listar_categorias,
     criar_categoria,
@@ -173,13 +174,12 @@ class GerenciarCategoriasDialog(DialogoGerenciar):
         if categoria is None:
             return
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Excluir categoria",
             f"Excluir a categoria \"{categoria.get('nome')}\"?\n\n"
             "Produtos que já usam essa categoria não são alterados "
-            "-- ela só deixa de aparecer na lista pra novos cadastros.",
-        )
+            "-- ela só deixa de aparecer na lista pra novos cadastros.", sim="Excluir categoria", nao="Cancelar")
 
         if resposta != QMessageBox.Yes:
             return

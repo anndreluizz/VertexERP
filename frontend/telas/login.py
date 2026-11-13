@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from requests.exceptions import ConnectionError
 
+from widgets.dialogs.message_dialog import perguntar
 from design import tokens
 from design.animations import fade_in, slide_up
 from design.fonts import familia_titulo
@@ -404,13 +405,11 @@ class LoginWindow(QWidget):
         escuro_novo = not carregar_tema_escuro()
         salvar_tema_escuro(escuro_novo)
 
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Reiniciar o Vertex ERP",
             "O tema só é aplicado depois de reiniciar o programa.\n\n"
-            "Reiniciar agora?",
-            QMessageBox.Yes | QMessageBox.No,
-        )
+            "Reiniciar agora?", sim="Reiniciar agora", nao="Depois")
 
         if resposta == QMessageBox.Yes:
             self._reiniciar_app()

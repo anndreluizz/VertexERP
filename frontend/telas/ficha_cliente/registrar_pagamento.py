@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
+from widgets.dialogs.message_dialog import perguntar
 from services.movimento_fiado_service import (
     listar_movimentos_cliente,
     registrar_pagamento,
@@ -420,12 +421,11 @@ class RegistrarPagamentoDialog(DialogoPadrao):
         # o recibo NAO sai mais sozinho -- só imprime se o usuário
         # pedir aqui, na hora (pedido direto: tava saindo automático
         # demais, sem perguntar nada).
-        resposta = QMessageBox.question(
+        resposta = perguntar(
             self,
             "Pagamento Registrado",
             "Pagamento registrado com sucesso!\n\n"
-            "Deseja imprimir o recibo de pagamento?",
-        )
+            "Deseja imprimir o recibo de pagamento?", sim="Imprimir recibo", nao="Não imprimir")
 
         if resposta == QMessageBox.Yes:
             self._imprimir_recibo_pagamento(self._pagamento_valor_pendente)
@@ -477,11 +477,10 @@ class RegistrarPagamentoDialog(DialogoPadrao):
             if ok:
                 return
 
-            resposta = QMessageBox.question(
+            resposta = perguntar(
                 self,
                 "Falha na impressora térmica",
-                f"{erro}\n\nQuer tentar imprimir pela janela normal do Windows?",
-            )
+                f"{erro}\n\nQuer tentar imprimir pela janela normal do Windows?", sim="Imprimir pelo Windows", nao="Não imprimir")
 
             if resposta != QMessageBox.Yes:
                 return

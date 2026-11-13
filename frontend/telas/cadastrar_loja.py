@@ -63,7 +63,7 @@ class CadastrarLojaDialog(QDialog):
 
         lbl_campo = QLabel("NOME DA LOJA")
         lbl_campo.setStyleSheet(
-            f"background:transparent; font-size:10px; "
+            f"background:transparent; font-size:12px; "
             f"font-weight:bold; color:{tokens.TEXTO_TERCIARIO};"
         )
 

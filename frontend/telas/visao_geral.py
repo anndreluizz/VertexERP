@@ -195,7 +195,7 @@ class CardMetrica(QFrame):
 
         lbl_titulo = QLabel(titulo)
         lbl_titulo.setStyleSheet(
-            f"background:transparent; border:none; font-size:11px; "
+            f"background:transparent; border:none; font-size:12px; "
             f"font-weight:bold; color:{tokens.TEXTO_TERCIARIO}; letter-spacing:1px;"
         )
 
@@ -207,7 +207,7 @@ class CardMetrica(QFrame):
 
         self.lbl_variacao = QLabel("")
         self.lbl_variacao.setStyleSheet(
-            "background:transparent; border:none; font-size:11px; "
+            "background:transparent; border:none; font-size:12px; "
             "font-weight:bold;"
         )
 
@@ -227,7 +227,7 @@ class CardMetrica(QFrame):
         cor = tokens.SUCESSO if variacao_percentual >= 0 else tokens.ERRO
 
         self.lbl_variacao.setStyleSheet(
-            f"background:transparent; border:none; font-size:11px; "
+            f"background:transparent; border:none; font-size:12px; "
             f"font-weight:bold; color:{cor};"
         )
         self.lbl_variacao.setText(
@@ -298,7 +298,7 @@ class VisaoGeral(QWidget):
 
         subtitulo = QLabel("LOJA OPERACIONAL")
         subtitulo.setStyleSheet(
-            f"background:transparent; font-size:11px; "
+            f"background:transparent; font-size:12px; "
             f"color:{tokens.SECUNDARIA}; font-weight:bold;"
         )
 
@@ -390,7 +390,7 @@ class VisaoGeral(QWidget):
                     border:1px solid {tokens.BORDA};
                     border-radius:17px;
                     padding:0 16px;
-                    font-size:11px;
+                    font-size:12px;
                     font-weight:bold;
                 }}
                 QPushButton:checked {{
@@ -499,7 +499,7 @@ class VisaoGeral(QWidget):
                 background:{tokens.CARD};
                 color:{tokens.TEXTO_TERCIARIO};
                 font-weight:bold;
-                font-size:11px;
+                font-size:12px;
                 padding:6px;
                 border:none;
                 border-bottom:1px solid {tokens.BORDA};

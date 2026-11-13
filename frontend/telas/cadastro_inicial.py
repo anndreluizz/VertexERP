@@ -69,7 +69,7 @@ class CadastroInicialWindow(QWidget):
         subtitulo = QLabel("CRIE SUA CONTA NO VERTEX ERP")
         subtitulo.setAlignment(Qt.AlignCenter)
         subtitulo.setStyleSheet(
-            f"background:transparent; font-size:11px; "
+            f"background:transparent; font-size:12px; "
             f"font-weight:bold; color:{tokens.TEXTO_TERCIARIO};"
         )
 
@@ -158,7 +158,7 @@ class CadastroInicialWindow(QWidget):
 
         lbl = QLabel(rotulo)
         lbl.setStyleSheet(
-            f"background:transparent; font-size:10px; "
+            f"background:transparent; font-size:12px; "
             f"font-weight:bold; color:{tokens.TEXTO_TERCIARIO}; margin-top:8px;"
         )
 

@@ -34,7 +34,7 @@ class Banner(QFrame):
 
         lbl_categoria = QLabel(categoria)
         lbl_categoria.setStyleSheet(
-            "font-size:10px; font-weight:bold;"
+            "font-size:12px; font-weight:bold;"
         )
 
         lbl_titulo = QLabel(titulo)

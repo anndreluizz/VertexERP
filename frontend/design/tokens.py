@@ -22,10 +22,10 @@ _CLARO = {
     "SECUNDARIA": "#0D7D6C",
     "SECUNDARIA_HOVER": "#095F52",
 
-    "SUCESSO": "#149174",
+    "SUCESSO": "#0F7A61",  # era #149174 (3,94:1 com texto branco); agora 5,28:1
     "SUCESSO_CLARO": "#E7F5F1",
 
-    "ALERTA": "#B4750F",
+    "ALERTA": "#9C6509",  # era #B4750F (3,82:1 com texto branco); agora 4,91:1
     "ALERTA_CLARO": "#FBF1E1",
     "ALERTA_TEXTO": "#8A5A0C",
 
@@ -43,6 +43,10 @@ _CLARO = {
     "CARD": "#FFFFFF",
     "BORDA": "#D6CFC1",
     "BORDA_FORTE": "#BDB4A2",
+    # borda de campo de formulario: WCAG 1.4.11 pede 3:1 (3,82:1 sobre CARD)
+    "BORDA_CAMPO": "#8A826E",
+    # texto sobre fundo preenchido (botoes, chips): branco no claro
+    "TEXTO_SOBRE_COR": "#FFFFFF",
 
     "TEXTO": "#0E1830",
     "TEXTO_SECUNDARIO": "#3F4C63",
@@ -74,8 +78,8 @@ _CLARO = {
 # escala) -- SIDEBAR já nascia escuro mesmo no tema claro, então quase
 # não muda entre os dois.
 _ESCURO = {
-    "PRIMARIA": "#4C7FC9",
-    "PRIMARIA_HOVER": "#6E9CDA",
+    "PRIMARIA": "#6B9AD8",  # era #4C7FC9 (3,99:1 como texto sobre CARD)
+    "PRIMARIA_HOVER": "#8DB2E6",
     "PRIMARIA_CLARA": "#1C2A3F",
 
     "SECUNDARIA": "#2FA88F",
@@ -100,6 +104,9 @@ _ESCURO = {
     "CARD": "#182130",
     "BORDA": "#29334A",
     "BORDA_FORTE": "#39445E",
+    "BORDA_CAMPO": "#667391",  # 3,41:1 sobre CARD escuro
+    # no escuro os fundos preenchidos sao claros: texto escuro (>= 4,5:1)
+    "TEXTO_SOBRE_COR": "#0E1420",
 
     "TEXTO": "#ECE7DC",
     "TEXTO_SECUNDARIO": "#9AA3B0",

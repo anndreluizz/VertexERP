@@ -40,3 +40,12 @@ def test_botoes_padrao_do_qt_em_portugues():
     caixa = QMessageBox()
     caixa.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
     assert "Sim" in caixa.button(QMessageBox.Yes).text()
+
+
+def test_numeros_tabulares_na_fonte_do_app():
+    from PySide6.QtGui import QFontMetricsF
+    from design.fonts import fonte
+
+    _app()
+    m = QFontMetricsF(fonte(20))
+    assert m.horizontalAdvance("1111") == m.horizontalAdvance("8888")

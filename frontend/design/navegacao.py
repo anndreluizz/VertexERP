@@ -153,13 +153,15 @@ class BarraAbas(QFrame):
         self._layout.addStretch()
 
         if pode_abrir("pdv"):
+            # no tema escuro o verde e' claro: texto branco nao tem contraste
+            cor_texto = tokens.FUNDO if tokens.ESCURO_ATIVO else "white"
             self.bt_venda = QPushButton("  Nova venda  F3")
             self.bt_venda.setMinimumWidth(self.bt_venda.sizeHint().width() + 24)
             self.bt_venda.setCursor(Qt.PointingHandCursor)
             self.bt_venda.setFixedHeight(38)
-            self.bt_venda.setIcon(icone("plus", cor="white", tamanho=18))
+            self.bt_venda.setIcon(icone("plus", cor=cor_texto, tamanho=18))
             self.bt_venda.setStyleSheet(f"""
-                QPushButton {{ background: {tokens.SUCESSO}; color: white; border: none;
+                QPushButton {{ background: {tokens.SUCESSO}; color: {cor_texto}; border: none;
                                border-radius: {tokens.RADIUS_SM + 2}px; padding: 0 16px;
                                font-size: {tokens.TAMANHO_BASE}px; font-weight: 700; }}
                 QPushButton:hover {{ background: {tokens.SECUNDARIA_HOVER}; }}

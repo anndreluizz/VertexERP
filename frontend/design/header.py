@@ -369,16 +369,15 @@ class Header(QFrame):
 
     def __init__(self, nome_loja, nome_usuario, cargo, admin=False, parent=None,
                  na_barra=False):
-        """na_barra=True (Vertex 2.0): vira so' o bloco da direita da barra
-        azul do topo (olhinho, tema, sino, perfil, aviso de conexao) --
-        titulo, busca e relogio ficam escondidos e as cores sao as da
-        barra escura (ver design/menu_topo.py)."""
+        """na_barra=True: vira so' o bloco da direita da barra clara do
+        topo (olhinho, sino, perfil, aviso de conexao) -- titulo, busca,
+        relogio e tema ficam escondidos (ver design/navegacao.py)."""
 
         super().__init__(parent)
 
         self._na_barra = na_barra
-        self._cor_icone = tokens.TEXTO_SIDEBAR if na_barra else tokens.TEXTO_SECUNDARIO
-        self._fundo_hover = tokens.SIDEBAR_HOVER if na_barra else tokens.FUNDO
+        self._cor_icone = tokens.TEXTO_SECUNDARIO
+        self._fundo_hover = tokens.FUNDO
 
         # reflete o tema que ja esta ativo (ver design.tokens.aplicar,
         # chamado no arranque do app) -- sem isso o botao sempre
@@ -593,13 +592,13 @@ class Header(QFrame):
 
         lbl_nome = QLabel(nome_usuario)
         lbl_nome.setStyleSheet(f"""
-            background:transparent; color:{"white" if na_barra else tokens.TEXTO};
+            background:transparent; color:{tokens.TEXTO};
             font-size:{tokens.TAMANHO_SM}px; font-weight:600;
         """)
 
         lbl_cargo = QLabel(cargo)
         lbl_cargo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SIDEBAR if na_barra else tokens.TEXTO_TERCIARIO};
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
             font-size:{tokens.TAMANHO_XS}px;
         """)
 

@@ -1,0 +1,389 @@
+"""Navegação do Vertex (redesign): barra fina no topo, abas das telas abertas
+e a tela inicial de módulos (grade de blocos).
+
+- BarraTopo: logo (volta ao início), busca Ctrl+K, "Nova venda" e o bloco do
+  Header (sino, perfil...). Substitui o antigo BarraMenu de painéis suspensos.
+- BarraAbas: uma aba por tela aberta; a tela em si continua sendo um widget
+  único dentro da PilhaPaginas -- fechar a aba só tira ela da barra.
+- TelaModulos: o "Início" -- um bloco por tela, agrupado como no menu antigo.
+"""
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import (
+    QFrame, QGraphicsDropShadowEffect, QGridLayout, QHBoxLayout, QLabel,
+    QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
+)
+
+from design import tokens
+from design.icons import icone
+
+# (rotulo, [chaves de ITENS_MENU]) -- toda tela do menu tem que estar aqui
+# (ver tests/test_navegacao.py), senão fica sem bloco no Início.
+GRUPOS = [
+    ("Painel", ["dashboard"]),
+    ("Vender", ["pdv", "vendas", "caixa"]),
+    ("Estoque", ["produtos", "ajuste_estoque", "transferencia_estoque",
+                 "contagem_estoque", "vitrine"]),
+    ("Pessoas", ["clientes", "fornecedores"]),
+    ("Financeiro", ["contas_pagar", "conciliacao_bancaria",
+                    "visao_geral", "relatorios"]),
+    ("Inteligência", ["inteligencia"]),
+    ("Ajustes", ["config"]),
+]
+
+DESCRICOES = {
+    "dashboard": "Resumo do dia, gráficos e o que fazer hoje",
+    "pdv": "Vender no balcão · F3",
+    "vendas": "Histórico, troca, reimprimir",
+    "caixa": "Abrir, sangria, fechar",
+    "produtos": "Cadastro, preços e fotos",
+    "ajuste_estoque": "Entrada, saída e perda",
+    "transferencia_estoque": "Matriz e filial",
+    "contagem_estoque": "Conferir o estoque físico",
+    "vitrine": "O que aparece no site da loja",
+    "clientes": "Fichas, fiado e cobrança",
+    "fornecedores": "Contatos e compras",
+    "contas_pagar": "Vencimentos e contas fixas",
+    "conciliacao_bancaria": "Conferir Pix e cartão",
+    "visao_geral": "Entrou, saiu e sobrou",
+    "relatorios": "Vendas, caixa e estoque",
+    "inteligencia": "O que vende, o que parou, o que repor",
+    "config": "Loja, usuários, backup",
+}
+
+CHAVE_INICIO = "modulos"
+
+
+def _sombra(widget):
+    s = QGraphicsDropShadowEffect(widget)
+    s.setBlurRadius(tokens.SOMBRA_CARD_BLUR)
+    s.setOffset(0, tokens.SOMBRA_CARD_Y)
+    cor = QColor(tokens.SOMBRA_COR)
+    cor.setAlpha(tokens.SOMBRA_CARD_ALPHA)
+    s.setColor(cor)
+    widget.setGraphicsEffect(s)
+
+
+# ==========================================
+# BARRA DO TOPO
+# ==========================================
+
+class BarraTopo(QFrame):
+
+    item_clicado = Signal(str)
+    busca_pedida = Signal()
+
+    def __init__(self, nome_loja, pode_abrir, parent=None):
+        super().__init__(parent)
+
+        self.setObjectName("barraTopo")
+        self.setFixedHeight(60)
+        self.setStyleSheet(
+            f"QFrame#barraTopo {{ background: {tokens.CARD}; "
+            f"border-bottom: 1px solid {tokens.BORDA}; }}"
+        )
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(20, 0, 16, 0)
+        layout.setSpacing(10)
+
+        self.bt_logo = QPushButton("V")
+        self.bt_logo.setFixedSize(36, 36)
+        self.bt_logo.setCursor(Qt.PointingHandCursor)
+        self.bt_logo.setToolTip(f"{nome_loja} · voltar ao início")
+        self.bt_logo.setStyleSheet(f"""
+            QPushButton {{ background: {tokens.PRIMARIA}; color: white; border: none;
+                           border-radius: {tokens.RADIUS_SM + 2}px; font-size: 19px; font-weight: 800; }}
+            QPushButton:hover {{ background: {tokens.PRIMARIA_HOVER}; }}
+        """)
+        self.bt_logo.clicked.connect(lambda: self.item_clicado.emit(CHAVE_INICIO))
+        layout.addWidget(self.bt_logo)
+
+        layout.addStretch()
+
+        self.bt_busca = QPushButton("  Buscar    Ctrl K")
+        self.bt_busca.setCursor(Qt.PointingHandCursor)
+        self.bt_busca.setFixedSize(280, 38)
+        self.bt_busca.setToolTip("Achar cliente, produto ou tela (Ctrl+K)")
+        self.bt_busca.setIcon(icone("search", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        self.bt_busca.setStyleSheet(f"""
+            QPushButton {{ background: {tokens.FUNDO}; color: {tokens.TEXTO_TERCIARIO};
+                           border: 1px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM + 2}px;
+                           padding: 0 12px; font-size: {tokens.TAMANHO_SM}px; text-align: left; }}
+            QPushButton:hover {{ border-color: {tokens.PRIMARIA}; }}
+        """)
+        self.bt_busca.clicked.connect(self.busca_pedida)
+        layout.addWidget(self.bt_busca)
+
+        if pode_abrir("pdv"):
+            self.bt_venda = QPushButton("  Nova venda  F3")
+            self.bt_venda.setMinimumWidth(self.bt_venda.sizeHint().width() + 24)
+            self.bt_venda.setCursor(Qt.PointingHandCursor)
+            self.bt_venda.setFixedHeight(38)
+            self.bt_venda.setIcon(icone("plus", cor="white", tamanho=18))
+            self.bt_venda.setStyleSheet(f"""
+                QPushButton {{ background: {tokens.SUCESSO}; color: white; border: none;
+                               border-radius: {tokens.RADIUS_SM + 2}px; padding: 0 16px;
+                               font-size: {tokens.TAMANHO_BASE}px; font-weight: 700; }}
+                QPushButton:hover {{ background: {tokens.SECUNDARIA_HOVER}; }}
+            """)
+            self.bt_venda.clicked.connect(lambda: self.item_clicado.emit("pdv"))
+            layout.addWidget(self.bt_venda)
+
+    def anexar(self, widget):
+        """Bloco extra no fim da barra (o Header em modo na_barra)."""
+        self.layout().addWidget(widget)
+
+    def definir_nome_loja(self, nome_loja):
+        self.bt_logo.setToolTip(f"{nome_loja} · voltar ao início")
+        janela = self.window()
+        if janela is not self:
+            janela.setWindowTitle(f"Vertex ERP · {nome_loja}")
+
+
+# ==========================================
+# ABAS DAS TELAS ABERTAS
+# ==========================================
+
+class _Aba(QFrame):
+
+    clicada = Signal(str)
+    fechada = Signal(str)
+
+    def __init__(self, chave, titulo, icone_nome, fechavel):
+        super().__init__()
+        self.chave, self._icone, self._fechavel = chave, icone_nome, fechavel
+        self.setObjectName("aba")
+        self.setFixedHeight(36)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 0, 6 if fechavel else 12, 0)
+        layout.setSpacing(4)
+
+        self.bt = QPushButton(f"  {titulo}")
+        self.bt.setCursor(Qt.PointingHandCursor)
+        self.bt.setIconSize(QSize(16, 16))
+        self.bt.clicked.connect(lambda: self.clicada.emit(chave))
+        layout.addWidget(self.bt)
+
+        if fechavel:
+            x = QPushButton()
+            x.setFixedSize(22, 22)
+            x.setCursor(Qt.PointingHandCursor)
+            x.setToolTip("Fechar aba (Ctrl+W)")
+            x.setIcon(icone("x", cor=tokens.TEXTO_TERCIARIO, tamanho=14))
+            x.setStyleSheet(
+                f"QPushButton {{ border: none; border-radius: 11px; background: transparent; }}"
+                f"QPushButton:hover {{ background: {tokens.BORDA}; }}"
+            )
+            x.clicked.connect(lambda: self.fechada.emit(chave))
+            layout.addWidget(x)
+
+        self.definir_ativa(False)
+
+    def definir_ativa(self, ativa):
+        cor = tokens.PRIMARIA if ativa else tokens.TEXTO_SECUNDARIO
+        self.bt.setIcon(icone(self._icone, cor=cor, tamanho=16))
+        self.bt.setStyleSheet(
+            f"QPushButton {{ border: none; background: transparent; color: {cor}; "
+            f"font-size: {tokens.TAMANHO_SM}px; font-weight: {700 if ativa else 500}; }}"
+        )
+        self.setStyleSheet(f"""
+            QFrame#aba {{ background: {tokens.CARD if ativa else 'transparent'};
+                          border: 1px solid {tokens.BORDA if ativa else 'transparent'};
+                          border-bottom: none;
+                          border-top-left-radius: {tokens.RADIUS_SM + 2}px;
+                          border-top-right-radius: {tokens.RADIUS_SM + 2}px; }}
+            QFrame#aba:hover {{ background: {tokens.CARD if ativa else tokens.PRIMARIA_CLARA}; }}
+        """)
+
+
+class BarraAbas(QFrame):
+
+    aba_clicada = Signal(str)
+    aba_fechada = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("barraAbas")
+        self.setFixedHeight(44)
+        self.setStyleSheet(
+            f"QFrame#barraAbas {{ background: {tokens.FUNDO}; "
+            f"border-bottom: 1px solid {tokens.BORDA}; }}"
+        )
+        self._layout = QHBoxLayout(self)
+        self._layout.setContentsMargins(20, 8, 20, 0)
+        self._layout.setSpacing(4)
+        self._layout.addStretch()
+        self._abas = {}   # chave -> _Aba, na ordem em que foram abertas
+        self._atual = None
+
+    @property
+    def abertas(self):
+        return list(self._abas)
+
+    @property
+    def atual(self):
+        return self._atual
+
+    def abrir(self, chave, titulo, icone_nome):
+        if chave not in self._abas:
+            aba = _Aba(chave, titulo, icone_nome, fechavel=chave != CHAVE_INICIO)
+            aba.clicada.connect(self.aba_clicada)
+            aba.fechada.connect(self.aba_fechada)
+            self._layout.insertWidget(self._layout.count() - 1, aba)
+            self._abas[chave] = aba
+        self.selecionar(chave)
+
+    def selecionar(self, chave):
+        self._atual = chave
+        for c, aba in self._abas.items():
+            aba.definir_ativa(c == chave)
+
+    def fechar(self, chave):
+        """Tira a aba e devolve a chave da vizinha que deve ficar na tela
+        (a anterior; o início nunca fecha)."""
+        if chave == CHAVE_INICIO or chave not in self._abas:
+            return self._atual
+        ordem = self.abertas
+        vizinha = ordem[max(0, ordem.index(chave) - 1)]
+        aba = self._abas.pop(chave)
+        aba.hide()
+        aba.setParent(None)
+        aba.deleteLater()
+        if self._atual == chave:
+            self._atual = vizinha
+        return vizinha
+
+
+# ==========================================
+# TELA INICIAL: GRADE DE MÓDULOS
+# ==========================================
+
+class _Bloco(QFrame):
+
+    clicado = Signal(str)
+
+    def __init__(self, chave, titulo, descricao, icone_nome):
+        super().__init__()
+        self.chave = chave
+        self.setObjectName("bloco")
+        self.setMinimumHeight(132)
+        # largura vem so' das colunas da grade (blocos iguais, sem depender do texto)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setAccessibleName(f"{titulo}: {descricao}")
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setStyleSheet(f"""
+            QFrame#bloco {{ background: {tokens.CARD}; border: 1px solid {tokens.BORDA};
+                            border-radius: {tokens.RADIUS_LG}px; }}
+            QFrame#bloco:hover, QFrame#bloco:focus {{ border: 1.5px solid {tokens.PRIMARIA}; }}
+        """)
+        _sombra(self)
+
+        v = QVBoxLayout(self)
+        v.setContentsMargins(18, 16, 18, 16)
+        v.setSpacing(2)
+
+        ic = QLabel()
+        ic.setFixedSize(44, 44)
+        ic.setAlignment(Qt.AlignCenter)
+        ic.setPixmap(icone(icone_nome, cor=tokens.PRIMARIA, tamanho=24).pixmap(24, 24))
+        ic.setStyleSheet(
+            f"background: {tokens.PRIMARIA_CLARA}; border: none; border-radius: {tokens.RADIUS_MD}px;"
+        )
+        v.addWidget(ic)
+        v.addStretch()
+
+        t = QLabel(titulo)
+        t.setWordWrap(True)
+        t.setStyleSheet(
+            f"background: transparent; border: none; color: {tokens.TEXTO}; "
+            f"font-size: {tokens.TAMANHO_LG}px; font-weight: 700;"
+        )
+        d = QLabel(descricao)
+        d.setWordWrap(True)
+        d.setStyleSheet(
+            f"background: transparent; border: none; color: {tokens.TEXTO_SECUNDARIO}; "
+            f"font-size: {tokens.TAMANHO_SM}px;"
+        )
+        v.addWidget(t)
+        v.addWidget(d)
+        for filho in (ic, t, d):
+            filho.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+    def mousePressEvent(self, evento):
+        if evento.button() == Qt.LeftButton:
+            self.clicado.emit(self.chave)
+
+    def keyPressEvent(self, evento):
+        if evento.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            self.clicado.emit(self.chave)
+        else:
+            super().keyPressEvent(evento)
+
+
+class TelaModulos(QScrollArea):
+
+    escolhido = Signal(str)
+    COLUNAS = 4
+
+    def __init__(self, nome_usuario, itens_menu, pode_abrir, parent=None):
+        """itens_menu/pode_abrir: ITENS_MENU e pode_abrir_tela de
+        telas.principal (passados de fora pra evitar import circular)."""
+        super().__init__(parent)
+        self.setWidgetResizable(True)
+        self.setFrameShape(QFrame.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setStyleSheet(f"QScrollArea {{ background: {tokens.FUNDO}; border: none; }}")
+
+        info = {chave: (icone_nome, titulo) for chave, icone_nome, titulo in itens_menu}
+        self.blocos = {}
+
+        corpo = QWidget()
+        corpo.setObjectName("corpoModulos")
+        corpo.setStyleSheet(f"QWidget#corpoModulos {{ background: {tokens.FUNDO}; }}")
+        v = QVBoxLayout(corpo)
+        v.setContentsMargins(36, 28, 36, 28)
+        v.setSpacing(6)
+
+        primeiro = nome_usuario.split()[0] if nome_usuario else ""
+        saudacao = QLabel(f"Olá, {primeiro}" if primeiro else "Olá")
+        saudacao.setStyleSheet(
+            f"background: transparent; color: {tokens.TEXTO}; "
+            f"font-size: {tokens.TAMANHO_XXL}px; font-weight: 700;"
+        )
+        pergunta = QLabel("O que você quer fazer agora?")
+        pergunta.setStyleSheet(
+            f"background: transparent; color: {tokens.TEXTO_SECUNDARIO}; "
+            f"font-size: {tokens.TAMANHO_BASE}px;"
+        )
+        v.addWidget(saudacao)
+        v.addWidget(pergunta)
+
+        for rotulo, chaves in GRUPOS:
+            visiveis = [c for c in chaves if c in info and pode_abrir(c)]
+            if not visiveis:
+                continue
+            titulo = QLabel(rotulo.upper())
+            titulo.setStyleSheet(
+                f"background: transparent; color: {tokens.TEXTO_TERCIARIO}; "
+                f"font-size: {tokens.TAMANHO_XS}px; font-weight: 700; letter-spacing: 1px;"
+            )
+            titulo.setContentsMargins(2, 18, 0, 4)
+            v.addWidget(titulo)
+
+            grade = QGridLayout()
+            grade.setSpacing(16)
+            for n, chave in enumerate(visiveis):
+                icone_nome, nome = info[chave]
+                bloco = _Bloco(chave, nome, DESCRICOES.get(chave, ""), icone_nome)
+                bloco.clicado.connect(self.escolhido)
+                grade.addWidget(bloco, n // self.COLUNAS, n % self.COLUNAS)
+                self.blocos[chave] = bloco
+            for c in range(self.COLUNAS):
+                grade.setColumnStretch(c, 1)
+            v.addLayout(grade)
+
+        v.addStretch()
+        self.setWidget(corpo)

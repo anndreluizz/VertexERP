@@ -41,7 +41,7 @@ from widgets.dialogs.message_dialog import perguntar
 from design import tokens
 from design.icons import icone
 from design.busca_rapida import BuscaRapida
-from design.menu_topo import BarraMenu
+from design.navegacao import BarraAbas, BarraTopo, CHAVE_INICIO, TelaModulos
 from design.header import Header
 from design.janela import pintar_barra_titulo
 from design.widgets import BotaoSecundario, PilhaPaginas
@@ -156,7 +156,7 @@ def pode_abrir_tela(chave):
 # (chave, ícone lucide, rótulo) — única fonte de verdade pra montar tanto
 # os itens do menu do topo quanto o título mostrado no header.
 ITENS_MENU = [
-    ("dashboard", "home", "Início"),
+    ("dashboard", "home", "Painel do dia"),
     ("pdv", "shopping-cart", "PDV"),
     ("vendas", "file-text", "Vendas"),
     ("produtos", "package", "Produtos"),
@@ -189,9 +189,8 @@ class PrincipalWindow(QMainWindow):
         # so' chama show(), e esse estado ja vale pra ele
         self.setWindowState(Qt.WindowMaximized)
         self.setStyleSheet(f"QMainWindow {{ background: {tokens.FUNDO}; }}")
-        # barra de título do Windows na cor do menu lateral (era a branca
-        # padrão, destoando do menu azul-escuro logo abaixo)
-        pintar_barra_titulo(self, tokens.SIDEBAR, tokens.TEXTO_CLARO)
+        # barra de título do Windows na cor da barra do topo
+        pintar_barra_titulo(self, tokens.CARD, tokens.TEXTO)
 
         # info_usuario/config podem vir ja' prontos de quem chamou (ver
         # telas/login.py e telas/cadastro_inicial.py, que buscam isso
@@ -221,16 +220,22 @@ class PrincipalWindow(QMainWindow):
         layout.setSpacing(0)
 
         # ======================
-        # MENU DO TOPO (Vertex 2.0 -- era o menu lateral)
+        # BARRA DO TOPO + ABAS DAS TELAS ABERTAS
         # ======================
 
-        self.menu = BarraMenu(nome_loja, ITENS_MENU, pode_abrir_tela)
+        self.menu = BarraTopo(nome_loja, pode_abrir_tela)
 
         self._titulos = {chave: titulo for chave, _, titulo in ITENS_MENU}
+        self._icones = {chave: icone_nome for chave, icone_nome, _ in ITENS_MENU}
 
         self.menu.item_clicado.connect(self._navegar)
 
         layout.addWidget(self.menu)
+
+        self.abas = BarraAbas()
+        self.abas.aba_clicada.connect(self._navegar)
+        self.abas.aba_fechada.connect(self._fechar_aba)
+        layout.addWidget(self.abas)
 
         # ======================
         # ÁREA CENTRAL (header + páginas)
@@ -260,6 +265,9 @@ class PrincipalWindow(QMainWindow):
         self.paginas = PilhaPaginas()
         layout_central.addWidget(self.paginas, stretch=1)
 
+        self.modulos = TelaModulos(nome_usuario, ITENS_MENU, pode_abrir_tela)
+        self.modulos.escolhido.connect(self._navegar)
+
         self.dashboard = Inicio(usuario_id=info_usuario.get("id"))
         self.pdv = PDV()
         self.vendas = Vendas()
@@ -287,6 +295,7 @@ class PrincipalWindow(QMainWindow):
 
         self.config = Configuracoes()
 
+        self.paginas.addWidget(self.modulos)
         self.paginas.addWidget(self.dashboard)
         self.paginas.addWidget(self.pdv)
         self.paginas.addWidget(self.vendas)
@@ -313,50 +322,51 @@ class PrincipalWindow(QMainWindow):
 
         self.dashboard.tarefa_escolhida.connect(self._abrir_tarefa)
 
-        self.pdv.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
-        )
+        self.pdv.voltar.connect(self._fechar_atual)
 
-        self.produtos.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
-        )
+        self.produtos.voltar.connect(self._fechar_atual)
 
-        self.vitrine.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
-        )
+        self.vitrine.voltar.connect(self._fechar_atual)
 
-        self.vendas.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
-        )
+        self.vendas.voltar.connect(self._fechar_atual)
         self.vendas.troca_iniciada.connect(self._iniciar_troca)
 
-        self.clientes.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
-        )
+        self.clientes.voltar.connect(self._fechar_atual)
 
-        self.fornecedores.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
-        )
+        self.fornecedores.voltar.connect(self._fechar_atual)
 
-        self.config.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
-        )
+        self.config.voltar.connect(self._fechar_atual)
 
         self.config.loja_atualizada.connect(self.menu.definir_nome_loja)
 
-        self.relatorios.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
-        )
+        self.relatorios.voltar.connect(self._fechar_atual)
 
-        self.contas_pagar.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
-        )
+        self.contas_pagar.voltar.connect(self._fechar_atual)
 
-        self.visao_geral.voltar.connect(
-            lambda: self._exibir_pagina("dashboard", self.dashboard)
-        )
+        self.visao_geral.voltar.connect(self._fechar_atual)
 
-        self._exibir_pagina("dashboard", self.dashboard)
+        self._paginas = {
+            CHAVE_INICIO: self.modulos,
+            "dashboard": self.dashboard,
+            "pdv": self.pdv,
+            "produtos": self.produtos,
+            "vitrine": self.vitrine,
+            "vendas": self.vendas,
+            "ajuste_estoque": self.ajuste_estoque,
+            "transferencia_estoque": self.transferencia_estoque,
+            "contagem_estoque": self.contagem_estoque,
+            "conciliacao_bancaria": self.conciliacao_bancaria,
+            "clientes": self.clientes,
+            "fornecedores": self.fornecedores,
+            "caixa": self.caixa,
+            "contas_pagar": self.contas_pagar,
+            "visao_geral": self.visao_geral,
+            "relatorios": self.relatorios,
+            "inteligencia": self.inteligencia,
+            "config": self.config,
+        }
+
+        self._exibir_pagina(CHAVE_INICIO, self.modulos)
 
         # ======================
         # ATALHOS
@@ -366,6 +376,7 @@ class PrincipalWindow(QMainWindow):
         self.atalho_pdv.activated.connect(self.atalho_f3)
 
         QShortcut(QKeySequence("Ctrl+K"), self).activated.connect(self.abrir_busca)
+        QShortcut(QKeySequence("Ctrl+W"), self).activated.connect(self._fechar_atual)
         self._cache_busca = ([], [])
 
         # ======================
@@ -530,7 +541,10 @@ class PrincipalWindow(QMainWindow):
 
         self.paginas.setCurrentWidget(pagina)
         self.header.definir_titulo(self._titulos.get(chave, ""))
-        self.menu.selecionar(chave)
+        self.abas.abrir(
+            chave, "Início" if chave == CHAVE_INICIO else self._titulos.get(chave, ""),
+            "home" if chave == CHAVE_INICIO else self._icones.get(chave, "file-text"),
+        )
 
     def _navegar(self, chave):
 
@@ -546,22 +560,17 @@ class PrincipalWindow(QMainWindow):
             despachantes[chave]()
             return
 
-        paginas = {
-            "dashboard": self.dashboard,
-            "produtos": self.produtos,
-            "vitrine": self.vitrine,
-            "vendas": self.vendas,
-            "ajuste_estoque": self.ajuste_estoque,
-            "transferencia_estoque": self.transferencia_estoque,
-            "contagem_estoque": self.contagem_estoque,
-            "conciliacao_bancaria": self.conciliacao_bancaria,
-            "clientes": self.clientes,
-            "fornecedores": self.fornecedores,
-            "caixa": self.caixa,
-            "config": self.config,
-        }
+        self._exibir_pagina(chave, self._paginas[chave])
 
-        self._exibir_pagina(chave, paginas[chave])
+    def _fechar_aba(self, chave):
+        atual = self.abas.atual
+        vizinha = self.abas.fechar(chave)
+        if chave == atual:
+            self._exibir_pagina(vizinha, self._paginas[vizinha])
+
+    def _fechar_atual(self):
+        # "Voltar" das telas e Ctrl+W: fecha a aba aberta (o início nunca fecha)
+        self._fechar_aba(self.abas.atual)
 
     def _fazer_logout(self):
 

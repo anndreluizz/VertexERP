@@ -43,15 +43,25 @@ class BarraProgresso(QFrame):
         self.setStyleSheet(
             f"background:{tokens.BORDA}; border:none; border-radius:{altura // 2}px;"
         )
-        self._cor = cor
         self._pct = max(0.0, min(100.0, float(percentual)))
         self._preenchimento = QFrame(self)
         self._preenchimento.setStyleSheet(
             f"background:{cor}; border:none; border-radius:{altura // 2}px;"
         )
 
+    def definir(self, percentual, cor=None):
+        self._pct = max(0.0, min(100.0, float(percentual)))
+        if cor:
+            self._preenchimento.setStyleSheet(
+                f"background:{cor}; border:none; border-radius:{self.height() // 2}px;"
+            )
+        self._ajustar()
+
     def resizeEvent(self, evento):
         super().resizeEvent(evento)
+        self._ajustar()
+
+    def _ajustar(self):
         largura = int(self.width() * self._pct / 100)
         # um fio visivel mesmo com 1%: 0 de verdade fica sem preenchimento
         self._preenchimento.setGeometry(

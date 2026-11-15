@@ -741,9 +741,13 @@ class Caixa(QWidget):
 
         self.carregar()
 
+    def _esperado_ou_none(self):
+        # Vendedor nao ve totais da gaveta: o dialogo fica so' com o formulario
+        return self._esperado if self._ve_totais else None
+
     def sangria(self):
 
-        janela = SangriaWindow()
+        janela = SangriaWindow(self._esperado_ou_none())
 
         if janela.exec() != QDialog.Accepted:
             return
@@ -764,7 +768,7 @@ class Caixa(QWidget):
 
     def suprimento(self):
 
-        janela = SuprimentoWindow()
+        janela = SuprimentoWindow(self._esperado_ou_none())
 
         if janela.exec() != QDialog.Accepted:
             return

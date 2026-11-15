@@ -610,14 +610,21 @@ class CabecalhoDialogo(QFrame):
         fechavel=False,
         ao_fechar=None,
         parent=None,
+        cor_fim=None,
     ):
 
         super().__init__(parent)
 
         # Vertex 2.0: cabecalho azul-escuro (mesma cor da barra do topo)
-        # em toda subtela -- da' pra ver de longe que abriu uma janela
+        # em toda subtela -- da' pra ver de longe que abriu uma janela.
+        # cor_fim (opcional): degrade do azul-escuro ate' essa cor, pra
+        # dar o tom da acao (verde abrir/suprimento, vermelho sangria)
         self.setObjectName("cabecalhoDialogo")
-        self.setStyleSheet(f"#cabecalhoDialogo {{ background:{tokens.SIDEBAR}; border:none; }}")
+        fundo = (
+            f"qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {tokens.SIDEBAR}, stop:1 {cor_fim})"
+            if cor_fim else tokens.SIDEBAR
+        )
+        self.setStyleSheet(f"#cabecalhoDialogo {{ background:{fundo}; border:none; }}")
 
         layout_externo = QVBoxLayout(self)
         layout_externo.setContentsMargins(0, 0, 0, 0)
@@ -855,7 +862,7 @@ class DialogoPadrao(QDialog):
 
     def __init__(
         self, titulo, subtitulo, icone_nome,
-        cor=None, cor_fundo=None, largura=MEDIO, parent=None,
+        cor=None, cor_fundo=None, largura=MEDIO, parent=None, cor_fim=None,
     ):
 
         super().__init__(parent)
@@ -873,7 +880,7 @@ class DialogoPadrao(QDialog):
 
         self.cabecalho = CabecalhoDialogo(
             icone_nome, cor or tokens.PRIMARIA, cor_fundo or tokens.PRIMARIA_CLARA,
-            titulo, subtitulo, fechavel=True, ao_fechar=self.reject,
+            titulo, subtitulo, fechavel=True, ao_fechar=self.reject, cor_fim=cor_fim,
         )
         raiz.addWidget(self.cabecalho)
 

@@ -312,11 +312,11 @@ class CaixaMixin:
             self.tabela_caixa.setItem(linha, 5, item_dif)
 
             if aberto:
-                texto_sit, cor_sit = "● Em aberto", tokens.ALERTA
+                texto_sit, cor_sit = "Em aberto", tokens.ALERTA
             elif diferenca is None or abs(diferenca) < 0.01:
-                texto_sit, cor_sit = "● Conferido", tokens.SECUNDARIA_HOVER
+                texto_sit, cor_sit = "Conferido", tokens.SECUNDARIA_HOVER
             else:
-                texto_sit = "● Sobra" if diferenca > 0 else "● Falta"
+                texto_sit = "Sobra" if diferenca > 0 else "Falta"
                 cor_sit = tokens.PRIMARIA if diferenca > 0 else tokens.ERRO
             item_sit = QTableWidgetItem(texto_sit)
             item_sit.setForeground(QColor(cor_sit))

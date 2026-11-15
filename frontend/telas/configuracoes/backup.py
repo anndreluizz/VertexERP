@@ -158,12 +158,12 @@ class BackupMixin:
         self._pasta_backups_atual = dados["pasta"]
 
         alerta = dados.get("alerta")
-        self.lbl_alerta_backup.setText(f"⚠ {alerta}" if alerta else "")
+        self.lbl_alerta_backup.setText(alerta if alerta else "")
         self.lbl_alerta_backup.setVisible(bool(alerta))
 
         copia_externa = dados.get("copia_externa")
         self.lbl_copia_externa.setText(
-            f"✓ Cada backup também é copiado para {copia_externa}"
+            f"Cada backup também é copiado para {copia_externa}"
             if copia_externa else ""
         )
         self.lbl_copia_externa.setVisible(bool(copia_externa))

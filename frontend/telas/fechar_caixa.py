@@ -232,8 +232,8 @@ class FecharCaixaWindow(DialogoPadrao):
         for n, lbl in ((1, self.lbl_passo_1), (2, self.lbl_passo_2), (3, self.lbl_passo_3)):
             ativo = n == numero
             lbl.setStyleSheet(f"""
-                background:{'#149174' if ativo else '#1C3357'};
-                color:{'#FFFFFF' if ativo else tokens.TEXTO_SIDEBAR};
+                background:{tokens.SUCESSO if ativo else tokens.SIDEBAR_HOVER};
+                color:{tokens.TEXTO_CLARO if ativo else tokens.TEXTO_SIDEBAR};
                 border-radius:13px; padding:5px 10px;
                 font-size:{tokens.TAMANHO_SM}px; font-weight:{700 if ativo else 500};
             """)
@@ -694,7 +694,7 @@ class FecharCaixaWindow(DialogoPadrao):
 
         if abs(diferenca) < 0.01:
             cor, fundo = tokens.SECUNDARIA_HOVER, tokens.SUCESSO_CLARO
-            texto, extra = "R$ 0,00", "Confere ✓"
+            texto, extra = "R$ 0,00", "Confere"
         elif diferenca > 0:
             cor, fundo = tokens.PRIMARIA, tokens.PRIMARIA_CLARA
             texto, extra = f"+ {formatar_moeda(diferenca)}", "Sobrando na gaveta"

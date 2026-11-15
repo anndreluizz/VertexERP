@@ -425,7 +425,7 @@ class Header(QFrame):
         # periodica de fundo, nunca precisa de acao do usuario.
         # ======================
 
-        self.lbl_status_conexao = QLabel("⏺  Sem conexão com o servidor — tentando reconectar…")
+        self.lbl_status_conexao = QLabel("Sem conexão com o servidor — tentando reconectar…")
         self.lbl_status_conexao.setStyleSheet(f"""
             background: {tokens.ERRO_CLARO};
             color: {tokens.ERRO};

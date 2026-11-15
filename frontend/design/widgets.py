@@ -295,15 +295,20 @@ class _BotaoAnimado(QPushButton):
         texto="",
         icone_nome=None,
         parent=None,
-        cor_normal="#2563EB",
-        cor_hover="#1D4ED8",
-        cor_texto="#FFFFFF",
+        cor_normal=None,
+        cor_hover=None,
+        cor_texto=None,
         cor_desabilitado=None,
         contorno=False,
         altura=44,
     ):
 
         super().__init__(texto, parent)
+
+        # padroes vem do tema (lidos agora, nao no import: a paleta pode mudar)
+        cor_normal = cor_normal or tokens.PRIMARIA
+        cor_hover = cor_hover or tokens.PRIMARIA_HOVER
+        cor_texto = cor_texto or tokens.TEXTO_CLARO
 
         self._cor_normal = QColor(cor_normal)
         self._cor_hover = QColor(cor_hover)

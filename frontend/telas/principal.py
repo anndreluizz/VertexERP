@@ -117,7 +117,7 @@ class FaixaAvisoBackup(QFrame):
 
     def definir_status(self, dados):
         alerta = dados.get("alerta") if isinstance(dados, dict) else None
-        self.lbl_mensagem.setText(f"⚠ Backup: {alerta}" if alerta else "")
+        self.lbl_mensagem.setText(f"Backup: {alerta}" if alerta else "")
         self.setVisible(bool(alerta))
 
 

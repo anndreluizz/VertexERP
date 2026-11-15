@@ -226,10 +226,9 @@ class PrincipalWindow(QMainWindow):
         self._titulos = {chave: titulo for chave, _, titulo in ITENS_MENU}
         self._icones = {chave: icone_nome for chave, icone_nome, _ in ITENS_MENU}
 
-        self.abas = BarraAbas(pode_abrir_tela)
+        self.abas = BarraAbas()
         self.abas.aba_clicada.connect(self._navegar)
         self.abas.aba_fechada.connect(self._fechar_aba)
-        self.abas.nova_venda.connect(self.ir_para_pdv)
         layout.addWidget(self.abas)
 
         # ======================

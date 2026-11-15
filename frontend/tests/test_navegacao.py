@@ -1,5 +1,5 @@
 """Navegação: barra do topo, abas das telas abertas e tela de módulos."""
-from design.navegacao import CHAVE_INICIO, GRUPOS, BarraAbas, BarraTopo, TelaModulos
+from design.navegacao import CHAVE_INICIO, GRUPOS, SO_NA_BUSCA, BarraAbas, BarraTopo, TelaModulos
 from telas.principal import ITENS_MENU, PERMISSAO_TELA
 
 
@@ -7,7 +7,8 @@ def test_toda_tela_do_menu_esta_num_grupo():
     # sem grupo a tela fica sem bloco no Início (inalcancavel)
     nos_grupos = [c for _, chaves in GRUPOS for c in chaves]
     assert len(nos_grupos) == len(set(nos_grupos))
-    assert set(nos_grupos) == {c for c, _, _ in ITENS_MENU}
+    assert set(nos_grupos) | SO_NA_BUSCA == {c for c, _, _ in ITENS_MENU}
+    assert not set(nos_grupos) & SO_NA_BUSCA
 
 
 def test_vendedor_nao_ve_blocos_de_admin():

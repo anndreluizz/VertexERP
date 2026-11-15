@@ -1,7 +1,7 @@
 """Navegação do Vertex (redesign): barra fina no topo, abas das telas abertas
 e a tela inicial de módulos (grade de blocos).
 
-- BarraTopo: logo (volta ao início), busca Ctrl+K, "Nova venda" e o bloco do
+- BarraTopo: logo (volta ao início), "Nova venda" e o bloco do
   Header (sino, perfil...). Substitui o antigo BarraMenu de painéis suspensos.
 - BarraAbas: uma aba por tela aberta; a tela em si continua sendo um widget
   único dentro da PilhaPaginas -- fechar a aba só tira ela da barra.
@@ -18,18 +18,21 @@ from design import tokens
 from design.icons import icone
 
 # (rotulo, [chaves de ITENS_MENU]) -- toda tela do menu tem que estar aqui
-# (ver tests/test_navegacao.py), senão fica sem bloco no Início.
+# (ou em SO_NA_BUSCA) -- ver tests/test_navegacao.py.
 GRUPOS = [
     ("Painel", ["dashboard"]),
     ("Vender", ["pdv", "vendas", "caixa"]),
-    ("Estoque", ["produtos", "ajuste_estoque", "transferencia_estoque",
-                 "contagem_estoque", "vitrine"]),
+    ("Estoque", ["produtos", "vitrine"]),
     ("Pessoas", ["clientes", "fornecedores"]),
     ("Financeiro", ["contas_pagar", "conciliacao_bancaria",
                     "visao_geral", "relatorios"]),
     ("Inteligência", ["inteligencia"]),
     ("Ajustes", ["config"]),
 ]
+
+# telas sem bloco no Início (pouco usadas): continuam no ITENS_MENU e abrem
+# pela busca Ctrl+K
+SO_NA_BUSCA = {"ajuste_estoque", "transferencia_estoque", "contagem_estoque"}
 
 DESCRICOES = {
     "dashboard": "Resumo do dia, gráficos e o que fazer hoje",
@@ -71,8 +74,6 @@ def _sombra(widget):
 class BarraTopo(QFrame):
 
     item_clicado = Signal(str)
-    busca_pedida = Signal()
-
     def __init__(self, nome_loja, pode_abrir, parent=None):
         super().__init__(parent)
 
@@ -100,20 +101,6 @@ class BarraTopo(QFrame):
         layout.addWidget(self.bt_logo)
 
         layout.addStretch()
-
-        self.bt_busca = QPushButton("  Buscar    Ctrl K")
-        self.bt_busca.setCursor(Qt.PointingHandCursor)
-        self.bt_busca.setFixedSize(280, 38)
-        self.bt_busca.setToolTip("Achar cliente, produto ou tela (Ctrl+K)")
-        self.bt_busca.setIcon(icone("search", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
-        self.bt_busca.setStyleSheet(f"""
-            QPushButton {{ background: {tokens.FUNDO}; color: {tokens.TEXTO_TERCIARIO};
-                           border: 1px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM + 2}px;
-                           padding: 0 12px; font-size: {tokens.TAMANHO_SM}px; text-align: left; }}
-            QPushButton:hover {{ border-color: {tokens.PRIMARIA}; }}
-        """)
-        self.bt_busca.clicked.connect(self.busca_pedida)
-        layout.addWidget(self.bt_busca)
 
         if pode_abrir("pdv"):
             self.bt_venda = QPushButton("  Nova venda  F3")

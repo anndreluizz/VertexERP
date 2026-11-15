@@ -261,105 +261,12 @@ class PrincipalWindow(QMainWindow):
         self.modulos = TelaModulos(nome_usuario, ITENS_MENU, pode_abrir_tela)
         self.modulos.escolhido.connect(self._navegar)
 
-        self.dashboard = Inicio(usuario_id=info_usuario.get("id"))
-        self.pdv = PDV()
-        self.vendas = Vendas()
-        self.produtos = Produtos()
-        self.vitrine = Vitrine()
-        self.ajuste_estoque = AjusteEstoque()
-        self.transferencia_estoque = TransferenciaEstoque()
-        self.contagem_estoque = ContagemEstoque()
-
-        self.clientes = Clientes()
-
-        self.fornecedores = Fornecedores()
-
-        self.caixa = Caixa()
-
-        self.contas_pagar = ContasPagar()
-
-        self.conciliacao_bancaria = ConciliacaoBancaria()
-
-        self.visao_geral = VisaoGeral()
-
-        self.relatorios = Relatorios()
-
-        self.inteligencia = InteligenciaNegocios()
-
-        self.config = Configuracoes()
-
+        # as demais telas sao criadas so' na 1a vez que abrem (ver __getattr__):
+        # criar as 17 de uma vez travava o arranque por ~5 s ("nao esta respondendo")
+        self._usuario_id = info_usuario.get("id")
         self.paginas.addWidget(self.modulos)
-        self.paginas.addWidget(self.dashboard)
-        self.paginas.addWidget(self.pdv)
-        self.paginas.addWidget(self.vendas)
-        self.paginas.addWidget(self.produtos)
-        self.paginas.addWidget(self.vitrine)
-        self.paginas.addWidget(self.ajuste_estoque)
-        self.paginas.addWidget(self.transferencia_estoque)
-        self.paginas.addWidget(self.contagem_estoque)
-        self.paginas.addWidget(self.clientes)
-        self.paginas.addWidget(self.fornecedores)
-        self.paginas.addWidget(self.caixa)
-        self.paginas.addWidget(self.contas_pagar)
-        self.paginas.addWidget(self.conciliacao_bancaria)
-        self.paginas.addWidget(self.visao_geral)
-        self.paginas.addWidget(self.relatorios)
-        self.paginas.addWidget(self.inteligencia)
-        self.paginas.addWidget(self.config)
 
         layout.addWidget(area_central, stretch=1)
-
-        # ======================
-        # EVENTOS
-        # ======================
-
-        self.dashboard.tarefa_escolhida.connect(self._abrir_tarefa)
-
-        self.pdv.voltar.connect(self._fechar_atual)
-
-        self.produtos.voltar.connect(self._fechar_atual)
-
-        self.vitrine.voltar.connect(self._fechar_atual)
-
-        self.vendas.voltar.connect(self._fechar_atual)
-        self.vendas.troca_iniciada.connect(self._iniciar_troca)
-
-        self.clientes.voltar.connect(self._fechar_atual)
-
-        self.fornecedores.voltar.connect(self._fechar_atual)
-
-        self.config.voltar.connect(self._fechar_atual)
-
-        self.config.loja_atualizada.connect(
-            lambda nome: self.setWindowTitle(f"Vertex ERP · {nome}")
-        )
-
-        self.relatorios.voltar.connect(self._fechar_atual)
-
-        self.contas_pagar.voltar.connect(self._fechar_atual)
-
-        self.visao_geral.voltar.connect(self._fechar_atual)
-
-        self._paginas = {
-            CHAVE_INICIO: self.modulos,
-            "dashboard": self.dashboard,
-            "pdv": self.pdv,
-            "produtos": self.produtos,
-            "vitrine": self.vitrine,
-            "vendas": self.vendas,
-            "ajuste_estoque": self.ajuste_estoque,
-            "transferencia_estoque": self.transferencia_estoque,
-            "contagem_estoque": self.contagem_estoque,
-            "conciliacao_bancaria": self.conciliacao_bancaria,
-            "clientes": self.clientes,
-            "fornecedores": self.fornecedores,
-            "caixa": self.caixa,
-            "contas_pagar": self.contas_pagar,
-            "visao_geral": self.visao_geral,
-            "relatorios": self.relatorios,
-            "inteligencia": self.inteligencia,
-            "config": self.config,
-        }
 
         self._exibir_pagina(CHAVE_INICIO, self.modulos)
 
@@ -403,6 +310,65 @@ class PrincipalWindow(QMainWindow):
             QTimer.singleShot(
                 _ATRASO_PRIMEIRA_CHECAGEM_BACKUP_MS, self._checar_backup
             )
+
+    # ======================
+    # TELAS CRIADAS SOB DEMANDA
+    # ======================
+
+    # nome do atributo (= chave da tela) -> como criar. A 1a vez que alguem
+    # le self.clientes, self.pdv etc., __getattr__ cria a tela, poe na pilha
+    # e liga os sinais; depois e' um atributo comum.
+    _FABRICAS = {
+        "dashboard": lambda s: Inicio(usuario_id=s._usuario_id),
+        "pdv": lambda s: PDV(),
+        "vendas": lambda s: Vendas(),
+        "produtos": lambda s: Produtos(),
+        "vitrine": lambda s: Vitrine(),
+        "ajuste_estoque": lambda s: AjusteEstoque(),
+        "transferencia_estoque": lambda s: TransferenciaEstoque(),
+        "contagem_estoque": lambda s: ContagemEstoque(),
+        "clientes": lambda s: Clientes(),
+        "fornecedores": lambda s: Fornecedores(),
+        "caixa": lambda s: Caixa(),
+        "contas_pagar": lambda s: ContasPagar(),
+        "conciliacao_bancaria": lambda s: ConciliacaoBancaria(),
+        "visao_geral": lambda s: VisaoGeral(),
+        "relatorios": lambda s: Relatorios(),
+        "inteligencia": lambda s: InteligenciaNegocios(),
+        "config": lambda s: Configuracoes(),
+    }
+
+    def __getattr__(self, nome):
+        # so' chega aqui quando o atributo normal nao existe
+        fabrica = PrincipalWindow._FABRICAS.get(nome)
+        if fabrica is None:
+            raise AttributeError(nome)
+        pagina = fabrica(self)
+        setattr(self, nome, pagina)
+        self.paginas.addWidget(pagina)
+        self._ligar_pagina(nome, pagina)
+        return pagina
+
+    def _pagina(self, chave):
+        return self.modulos if chave == CHAVE_INICIO else getattr(self, chave)
+
+    def _ligar_pagina(self, nome, pagina):
+
+        if nome == "dashboard":
+            pagina.tarefa_escolhida.connect(self._abrir_tarefa)
+        elif nome == "vendas":
+            pagina.troca_iniciada.connect(self._iniciar_troca)
+        elif nome == "config":
+            pagina.loja_atualizada.connect(
+                lambda loja: self.setWindowTitle(f"Vertex ERP · {loja}")
+            )
+
+        # "Voltar" das telas fecha a aba
+        if nome in (
+            "pdv", "produtos", "vitrine", "vendas", "clientes", "fornecedores",
+            "config", "relatorios", "contas_pagar", "visao_geral",
+        ):
+            pagina.voltar.connect(self._fechar_atual)
 
     # ======================
     # BUSCA RAPIDA (Ctrl K)
@@ -555,13 +521,13 @@ class PrincipalWindow(QMainWindow):
             despachantes[chave]()
             return
 
-        self._exibir_pagina(chave, self._paginas[chave])
+        self._exibir_pagina(chave, self._pagina(chave))
 
     def _fechar_aba(self, chave):
         atual = self.abas.atual
         vizinha = self.abas.fechar(chave)
         if chave == atual:
-            self._exibir_pagina(vizinha, self._paginas[vizinha])
+            self._exibir_pagina(vizinha, self._pagina(vizinha))
 
     def _fechar_atual(self):
         # "Voltar" das telas e Ctrl+W: fecha a aba aberta (o início nunca fecha)

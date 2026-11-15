@@ -52,3 +52,14 @@ def test_aba_inicio_nunca_fecha():
     abas.abrir(CHAVE_INICIO, "Início", "home")
     assert abas.fechar(CHAVE_INICIO) == CHAVE_INICIO
     assert abas.abertas == [CHAVE_INICIO]
+
+
+def test_muitas_abas_nao_estouram_a_faixa():
+    abas = BarraAbas(lambda c: True)
+    abas.resize(900, 56)
+    for i in range(20):
+        abas.abrir(f"t{i}", f"Tela com nome bem comprido {i}", "home")
+    abas.show()
+    assert abas.abertas[-1] == "t19" and abas.atual == "t19"
+    # o botao Nova venda continua visivel na direita, nao e' empurrado pra fora
+    assert abas.bt_venda.geometry().right() <= abas.width()

@@ -84,7 +84,10 @@ class _Aba(QFrame):
         layout.setContentsMargins(12, 0, 6 if fechavel else 12, 0)
         layout.setSpacing(4)
 
-        self.bt = QPushButton(f"  {titulo}")
+        self.setMaximumWidth(190)
+        self.setToolTip(titulo)
+        self.bt = QPushButton()
+        self.bt.setText(self.bt.fontMetrics().elidedText(f"  {titulo}", Qt.ElideRight, 130))
         self.bt.setCursor(Qt.PointingHandCursor)
         self.bt.setIconSize(QSize(16, 16))
         self.bt.clicked.connect(lambda: self.clicada.emit(chave))
@@ -142,15 +145,26 @@ class BarraAbas(QFrame):
         self._layout.setContentsMargins(20, 0, 16, 0)
         self._layout.setSpacing(10)
 
-        # abas coladas na base da faixa (a aba ativa "abre" pra pagina embaixo)
-        coluna = QVBoxLayout()
+        # abas coladas na base da faixa (a aba ativa "abre" pra pagina embaixo);
+        # com muitas abas a faixa rola na horizontal (roda do mouse) em vez de
+        # empurrar o Nova venda e o perfil pra fora da tela
+        self._rolagem = QScrollArea()
+        self._rolagem.setWidgetResizable(True)
+        self._rolagem.setFrameShape(QFrame.NoFrame)
+        self._rolagem.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._rolagem.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._rolagem.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        miolo = QWidget()
+        miolo.setStyleSheet("background: transparent;")
+        coluna = QVBoxLayout(miolo)
         coluna.setContentsMargins(0, 0, 0, 0)
         coluna.addStretch()
         self._abas_layout = QHBoxLayout()
         self._abas_layout.setSpacing(4)
+        self._abas_layout.addStretch()
         coluna.addLayout(self._abas_layout)
-        self._layout.addLayout(coluna)
-        self._layout.addStretch()
+        self._rolagem.setWidget(miolo)
+        self._layout.addWidget(self._rolagem, stretch=1)
 
         if pode_abrir("pdv"):
             # no tema escuro o verde e' claro: texto branco nao tem contraste
@@ -189,7 +203,7 @@ class BarraAbas(QFrame):
             aba = _Aba(chave, titulo, icone_nome, fechavel=chave != CHAVE_INICIO)
             aba.clicada.connect(self.aba_clicada)
             aba.fechada.connect(self.aba_fechada)
-            self._abas_layout.addWidget(aba)
+            self._abas_layout.insertWidget(self._abas_layout.count() - 1, aba)
             self._abas[chave] = aba
         self.selecionar(chave)
 
@@ -197,6 +211,8 @@ class BarraAbas(QFrame):
         self._atual = chave
         for c, aba in self._abas.items():
             aba.definir_ativa(c == chave)
+        if chave in self._abas:
+            self._rolagem.ensureWidgetVisible(self._abas[chave])
 
     def fechar(self, chave):
         """Tira a aba e devolve a chave da vizinha que deve ficar na tela

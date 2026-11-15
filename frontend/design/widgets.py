@@ -522,10 +522,14 @@ class Badge(QLabel):
 
         super().__init__(texto, parent)
 
+        self.setAlignment(Qt.AlignCenter)
+        self.definir_variante(variante)
+
+    def definir_variante(self, variante):
+
         variantes = Badge.variantes()
         fundo, cor_texto = variantes.get(variante, variantes["neutro"])
 
-        self.setAlignment(Qt.AlignCenter)
         self.setStyleSheet(f"""
             background: {fundo};
             color: {cor_texto};

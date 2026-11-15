@@ -71,7 +71,7 @@ class BarraProgresso(QFrame):
 
 class FaixaAtencao(QFrame):
     """Faixa amarela "Atenção hoje". definir([(texto, rotulo_botao, callback)])
-    -- lista vazia esconde a faixa."""
+    -- lista vazia esconde a faixa; rotulo None mostra so' o texto."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -118,6 +118,9 @@ class FaixaAtencao(QFrame):
                 f"font-size:{tokens.TAMANHO_SM}px; font-weight:500;"
             )
             self._layout.addWidget(lbl)
+
+            if rotulo is None:     # so' informa (ex.: quem nao pode fazer a acao)
+                continue
 
             bt = QPushButton(rotulo)
             bt.setCursor(Qt.PointingHandCursor)

@@ -65,7 +65,7 @@ def selo_sessao(sessao):
     return f"Sobrou {formatar_moeda(diferenca)}", "alerta"
 
 
-def _quando(texto):
+def quando(texto):
     """'Hoje' / 'Ontem' / '13/11' a partir da data da abertura."""
 
     try:
@@ -351,7 +351,7 @@ class AbrirCaixaWindow(DialogoPadrao):
         coluna = QVBoxLayout()
         coluna.setSpacing(0)
 
-        quem = QLabel(f"{nome} · {_quando(sessao.get('data_abertura'))}")
+        quem = QLabel(f"{nome} · {quando(sessao.get('data_abertura'))}")
         quem.setStyleSheet(
             f"background:transparent; border:none; color:{tokens.TEXTO}; "
             f"font-size:{tokens.TAMANHO_SM}px; font-weight:700;"

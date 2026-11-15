@@ -35,10 +35,11 @@ def test_lista_mostra_a_forma(_qapp):
     dono = QWidget()
     tela = SimpleNamespace(lista_movimentos=QVBoxLayout(dono), lbl_sem_movimentos=QLabel())
     caixa.Caixa.carregar_movimentos(tela, MOVIMENTOS)
-    textos = [tela.lista_movimentos.itemAt(i).widget().findChildren(QLabel)[2].text()
+    # cada linha: hora, icone, descricao, "Tipo · Forma", valor
+    textos = [[l.text() for l in tela.lista_movimentos.itemAt(i).widget().findChildren(QLabel)]
               for i in range(4)]
-    assert textos[0] == "Venda #151 · Dinheiro"
-    assert textos[1] == "Venda #148 · não mexe no dinheiro do caixa"
+    assert textos[0][2:4] == ["Venda #151", "Venda · Dinheiro"]
+    assert textos[1][2:4] == ["Venda #148 · não mexe no dinheiro do caixa", "Venda fiado"]
 
     # recarregar (botao Atualizar) troca as linhas, nao empilha
     caixa.Caixa.carregar_movimentos(tela, MOVIMENTOS[:1])

@@ -286,7 +286,7 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
         self.bt_descartar = QPushButton("Descartar")
         self.bt_descartar.setCursor(Qt.PointingHandCursor)
         self.bt_descartar.setStyleSheet(f"""
-            QPushButton {{ background:transparent; color:#FFFFFF; border:1px solid #7C89A3;
+            QPushButton {{ background:transparent; color:{tokens.TEXTO_CLARO}; border:1px solid {tokens.TEXTO_SIDEBAR_APAGADO};
                            border-radius:9px; padding:0 14px; font-weight:600;
                            font-size:{tokens.TAMANHO_MD}px; }}
             QPushButton:hover {{ background:rgba(255,255,255,0.1); }}
@@ -552,7 +552,7 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
         self.barra_salvar.setVisible(secao in _SECOES_DO_RODAPE or self._alterado)
 
         fundo = borda = tokens.SIDEBAR
-        cor_texto = "#FFFFFF"
+        cor_texto = tokens.TEXTO_CLARO
         if self._alterado:
             texto = "Você mudou configurações e ainda não salvou."
         else:

@@ -46,7 +46,7 @@ class ItemMenuConfig(QPushButton):
         self.setIconSize(QSize(17, 17))
         # Vertex 2.0: escolhido = azul cheio, icone branco
         self.toggled.connect(lambda marcado: self.setIcon(
-            icone(icone_nome, cor="#FFFFFF" if marcado else cor_icone, tamanho=17)))
+            icone(icone_nome, cor=tokens.TEXTO_CLARO if marcado else cor_icone, tamanho=17)))
 
         if habilitado:
             self.setStyleSheet(f"""
@@ -56,7 +56,7 @@ class ItemMenuConfig(QPushButton):
                     color:{tokens.TEXTO}; font-size:{tokens.TAMANHO_MD}px; font-weight:600;
                 }}
                 QPushButton:hover {{ background:{tokens.CARD}; }}
-                QPushButton:checked {{ background:{tokens.PRIMARIA}; color:#FFFFFF; }}
+                QPushButton:checked {{ background:{tokens.PRIMARIA}; color:{tokens.TEXTO_CLARO}; }}
             """)
         else:
             self.setStyleSheet(f"""

@@ -45,6 +45,7 @@ from telas.relatorios import (
     NOMES_FORMA_PAGAMENTO,
 )
 from design import tokens
+from design.icons import icone
 from utils.formatacao import formatar_moeda
 from utils.periodo import inicio_historico, intervalo_mes, meses_anteriores
 
@@ -310,7 +311,9 @@ class VisaoGeral(QWidget):
         cabecalho.addLayout(col_titulo)
         cabecalho.addStretch()
 
-        bt_atualizar = QPushButton("🔄")
+        bt_atualizar = QPushButton()
+        bt_atualizar.setToolTip("Atualizar")
+        bt_atualizar.setIcon(icone("refresh-cw", cor=tokens.TEXTO, tamanho=18))
         bt_atualizar.setFixedSize(38, 38)
         bt_atualizar.setCursor(Qt.PointingHandCursor)
         bt_atualizar.setStyleSheet(f"""
@@ -327,7 +330,8 @@ class VisaoGeral(QWidget):
         """)
         bt_atualizar.clicked.connect(self.carregar)
 
-        bt_imprimir = QPushButton("🖨  Imprimir BI")
+        bt_imprimir = QPushButton("  Imprimir BI")
+        bt_imprimir.setIcon(icone("printer", cor=tokens.TEXTO_CLARO, tamanho=18))
         bt_imprimir.setStyleSheet(f"""
             QPushButton {{
                 background:{tokens.SIDEBAR};

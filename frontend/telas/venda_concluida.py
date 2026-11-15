@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
 )
 
 from design import tokens
+from design.icons import icone_pixmap
 from design.animations import fade_in
 from design.responsive import tamanho_fixo_seguro
 from design.widgets import BotaoPrimario, BotaoSecundario, BotaoSucesso
@@ -48,7 +49,8 @@ class VendaConcluidaDialog(QDialog):
         layout.setSpacing(12)
         layout.setAlignment(Qt.AlignHCenter)
 
-        selo = QLabel("✓")
+        selo = QLabel()
+        selo.setPixmap(icone_pixmap("check", cor=tokens.TEXTO_CLARO, tamanho=44))
         selo.setFixedSize(80, 80)
         selo.setAlignment(Qt.AlignCenter)
         selo.setStyleSheet(f"""

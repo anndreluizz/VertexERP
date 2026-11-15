@@ -156,7 +156,7 @@ class _PainelSenha:
         if not confirmar:
             self.lbl_confere.setText("")
         elif confirmar == self.senha.text():
-            self.lbl_confere.setText("✓ As senhas conferem")
+            self.lbl_confere.setText("As senhas conferem")
             self._pintar(self.lbl_confere, tokens.SECUNDARIA_HOVER)
         else:
             self.lbl_confere.setText("As senhas não conferem")
@@ -740,7 +740,7 @@ class GerenciarUsuariosDialog(DialogoPadrao):
             self.tabela.setItem(linha, 1, item_perfil)
 
             ativo = usuario.get("ativo", True)
-            item_status = QTableWidgetItem("● Ativo" if ativo else "● Inativo")
+            item_status = QTableWidgetItem("Ativo" if ativo else "Inativo")
             item_status.setForeground(QColor(tokens.SECUNDARIA_HOVER if ativo else tokens.ERRO))
             self.tabela.setItem(linha, 2, item_status)
 

@@ -599,7 +599,7 @@ class ImportarNFeDialog(DialogoPadrao):
             novo = item.get("produto_id") is None
             preco_atual = item.get("preco_atual")
 
-            item_status = self._item("● Novo" if novo else "● Cadastrado")
+            item_status = self._item("Novo" if novo else "Cadastrado")
             item_status.setForeground(QColor(tokens.ALERTA if novo else tokens.PRIMARIA))
 
             # já cadastrado mantém o preço da loja; novo usa a sugestão

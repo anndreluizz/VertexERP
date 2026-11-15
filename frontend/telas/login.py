@@ -138,7 +138,7 @@ def _icone_check_arquivo():
 
     caminho = os.path.join(tempfile.gettempdir(), "vertexerp_check_branco.png")
     if not os.path.exists(caminho):
-        icone_pixmap("check", cor="#FFFFFF", tamanho=14).save(caminho, "PNG")
+        icone_pixmap("check", cor=tokens.TEXTO_CLARO, tamanho=14).save(caminho, "PNG")
     return caminho.replace("\\", "/")
 
 
@@ -216,13 +216,13 @@ class LoginWindow(QWidget):
 
         rodape = QHBoxLayout()
         endereco = api.URL.split("://", 1)[-1]
-        lbl_servidor = QLabel(f"●  Servidor: {endereco}")
+        lbl_servidor = QLabel(f"Servidor: {endereco}")
         lbl_servidor.setStyleSheet("background:transparent; color: rgba(255, 255, 255, 0.55); font-size:12px;")
         bt_config_servidor = self._link(
-            "Configurar servidor", "rgba(255, 255, 255, 0.7)", "#FFFFFF",
+            "Configurar servidor", "rgba(255, 255, 255, 0.7)", tokens.TEXTO_CLARO,
             tamanho=tokens.TAMANHO_SM, peso=500,
         )
-        bt_config_servidor.setIcon(icone("settings", cor="#C7D2E3", tamanho=14))
+        bt_config_servidor.setIcon(icone("settings", cor=tokens.TEXTO_SIDEBAR, tamanho=14))
         bt_config_servidor.clicked.connect(self.configurar_servidor)
         rodape.addWidget(lbl_servidor)
         rodape.addStretch()
@@ -385,16 +385,16 @@ class LoginWindow(QWidget):
         nome_icone = "moon" if not escuro_atual else "sun"
 
         bt = QPushButton(texto)
-        bt.setIcon(icone(nome_icone, cor="#C7D2E3", tamanho=15))
+        bt.setIcon(icone(nome_icone, cor=tokens.TEXTO_SIDEBAR, tamanho=15))
         bt.setCursor(Qt.PointingHandCursor)
         bt.setAutoDefault(False)
         bt.setStyleSheet(f"""
             QPushButton {{
                 background:transparent; border:none;
-                color:#C7D2E3; font-size:{tokens.TAMANHO_SM}px;
+                color:{tokens.TEXTO_SIDEBAR}; font-size:{tokens.TAMANHO_SM}px;
                 padding: 6px 8px;
             }}
-            QPushButton:hover {{ color:#FFFFFF; }}
+            QPushButton:hover {{ color:{tokens.TEXTO_CLARO}; }}
         """)
         bt.clicked.connect(self._alternar_tema)
 

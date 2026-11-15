@@ -551,13 +551,13 @@ class CadastroDespesaDialog(DialogoPadrao):
                 repetido["status"], repetido["status"].lower()
             )
             self._mostrar_faixa_boleto(
-                f"⚠ Esse boleto já foi lançado: {repetido.get('descricao') or 'Despesa'} "
+                f"Esse boleto já foi lançado: {repetido.get('descricao') or 'Despesa'} "
                 f"— {formatar_moeda(float(repetido['valor']))} ({situacao}). "
                 "Confira antes de salvar para não pagar duas vezes.",
                 "erro",
             )
         else:
-            self._mostrar_faixa_boleto("✓ Boleto lido: " + " · ".join(partes), "sucesso")
+            self._mostrar_faixa_boleto("Boleto lido: " + " · ".join(partes), "sucesso")
 
         self._atualizar_valor_final()
         self._atualizar_repeticao()
@@ -615,7 +615,7 @@ class CadastroDespesaDialog(DialogoPadrao):
             return
 
         if lido["tipo"] == "chave":
-            self._mostrar_faixa(self.lbl_pix, f"✓ {lido['tipo_chave']}: {lido['copiar']}", "sucesso")
+            self._mostrar_faixa(self.lbl_pix, f"{lido['tipo_chave']}: {lido['copiar']}", "sucesso")
             return
 
         self.pix.setCursorPosition(0)
@@ -631,7 +631,7 @@ class CadastroDespesaDialog(DialogoPadrao):
             partes.append(formatar_moeda(lido["valor"]))
         self._mostrar_faixa(
             self.lbl_pix,
-            "✓ Pix copia e cola" + (": " + " · ".join(partes) if partes else ""),
+            "Pix copia e cola" + (": " + " · ".join(partes) if partes else ""),
             "sucesso",
         )
 

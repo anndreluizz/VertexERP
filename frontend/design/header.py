@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -369,16 +370,16 @@ class Header(QFrame):
 
     def __init__(self, nome_loja, nome_usuario, cargo, admin=False, parent=None,
                  na_barra=False):
-        """na_barra=True (Vertex 2.0): vira so' o bloco da direita da barra
-        azul do topo (olhinho, tema, sino, perfil, aviso de conexao) --
-        titulo, busca e relogio ficam escondidos e as cores sao as da
-        barra escura (ver design/menu_topo.py)."""
+        """na_barra=True: vira so' o bloco da direita da barra clara do
+        topo (olhinho, sino, perfil, aviso de conexao) -- titulo, busca,
+        relogio e tema ficam escondidos (ver design/navegacao.py)."""
 
         super().__init__(parent)
 
         self._na_barra = na_barra
-        self._cor_icone = tokens.TEXTO_SIDEBAR if na_barra else tokens.TEXTO_SECUNDARIO
-        self._fundo_hover = tokens.SIDEBAR_HOVER if na_barra else tokens.FUNDO
+        self._cor_icone = tokens.TEXTO_SECUNDARIO
+        # na faixa de abas o fundo ja' e' FUNDO: o hover precisa de outro tom
+        self._fundo_hover = tokens.BORDA if na_barra else tokens.FUNDO
 
         # reflete o tema que ja esta ativo (ver design.tokens.aplicar,
         # chamado no arranque do app) -- sem isso o botao sempre
@@ -392,6 +393,10 @@ class Header(QFrame):
         self._admin = admin
 
         self.setFixedHeight(56 if na_barra else 64)
+        if na_barra:
+            # so' o tamanho dos botoes -- sem isso o bloco disputa a folga da barra
+            # com o stretch e o avatar nao cola na direita
+            self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
         self.setStyleSheet(
             "Header { background: transparent; border: none; }" if na_barra else f"""
             Header {{
@@ -420,7 +425,7 @@ class Header(QFrame):
         # periodica de fundo, nunca precisa de acao do usuario.
         # ======================
 
-        self.lbl_status_conexao = QLabel("⏺  Sem conexão com o servidor — tentando reconectar…")
+        self.lbl_status_conexao = QLabel("Sem conexão com o servidor — tentando reconectar…")
         self.lbl_status_conexao.setStyleSheet(f"""
             background: {tokens.ERRO_CLARO};
             color: {tokens.ERRO};
@@ -593,13 +598,13 @@ class Header(QFrame):
 
         lbl_nome = QLabel(nome_usuario)
         lbl_nome.setStyleSheet(f"""
-            background:transparent; color:{"white" if na_barra else tokens.TEXTO};
+            background:transparent; color:{tokens.TEXTO};
             font-size:{tokens.TAMANHO_SM}px; font-weight:600;
         """)
 
         lbl_cargo = QLabel(cargo)
         lbl_cargo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SIDEBAR if na_barra else tokens.TEXTO_TERCIARIO};
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
             font-size:{tokens.TAMANHO_XS}px;
         """)
 

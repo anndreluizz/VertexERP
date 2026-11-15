@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 from services.api import atualizar_configuracoes
 from services.worker import rodar_em_thread
 from design import tokens
+from design.icons import icone as icone_svg, icone_pixmap
 from design.responsive import tamanho_fixo_seguro
 
 
@@ -30,7 +31,8 @@ class CadastrarLojaDialog(QDialog):
         layout.setContentsMargins(32, 32, 32, 28)
         layout.setSpacing(6)
 
-        icone = QLabel("🏠")
+        icone = QLabel()
+        icone.setPixmap(icone_pixmap("store", cor=tokens.PRIMARIA, tamanho=28))
         icone.setFixedSize(56, 56)
         icone.setAlignment(Qt.AlignCenter)
         icone.setStyleSheet(f"""
@@ -104,7 +106,8 @@ class CadastrarLojaDialog(QDialog):
         """)
         bt_cancelar.clicked.connect(self.pular)
 
-        self.bt_salvar = QPushButton("SALVAR LOJA  ✓")
+        self.bt_salvar = QPushButton("  SALVAR LOJA")
+        self.bt_salvar.setIcon(icone_svg("check", cor=tokens.TEXTO_CLARO, tamanho=18))
         self.bt_salvar.setMinimumHeight(46)
         self.bt_salvar.setAutoDefault(False)
         self.bt_salvar.setStyleSheet(f"""

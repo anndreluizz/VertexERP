@@ -41,7 +41,7 @@ from widgets.dialogs.message_dialog import perguntar
 from design import tokens
 from design.icons import icone
 from design.busca_rapida import BuscaRapida
-from design.navegacao import BarraAbas, BarraTopo, CHAVE_INICIO, TelaModulos
+from design.navegacao import BarraAbas, CHAVE_INICIO, TelaModulos
 from design.header import Header
 from design.janela import pintar_barra_titulo
 from design.widgets import BotaoSecundario, PilhaPaginas
@@ -189,8 +189,8 @@ class PrincipalWindow(QMainWindow):
         # so' chama show(), e esse estado ja vale pra ele
         self.setWindowState(Qt.WindowMaximized)
         self.setStyleSheet(f"QMainWindow {{ background: {tokens.FUNDO}; }}")
-        # barra de título do Windows na cor da barra do topo
-        pintar_barra_titulo(self, tokens.CARD, tokens.TEXTO)
+        # barra de título do Windows na cor da faixa de abas
+        pintar_barra_titulo(self, tokens.FUNDO, tokens.TEXTO)
 
         # info_usuario/config podem vir ja' prontos de quem chamou (ver
         # telas/login.py e telas/cadastro_inicial.py, que buscam isso
@@ -223,18 +223,13 @@ class PrincipalWindow(QMainWindow):
         # BARRA DO TOPO + ABAS DAS TELAS ABERTAS
         # ======================
 
-        self.menu = BarraTopo(nome_loja, pode_abrir_tela)
-
         self._titulos = {chave: titulo for chave, _, titulo in ITENS_MENU}
         self._icones = {chave: icone_nome for chave, icone_nome, _ in ITENS_MENU}
 
-        self.menu.item_clicado.connect(self._navegar)
-
-        layout.addWidget(self.menu)
-
-        self.abas = BarraAbas()
+        self.abas = BarraAbas(pode_abrir_tela)
         self.abas.aba_clicada.connect(self._navegar)
         self.abas.aba_fechada.connect(self._fechar_aba)
+        self.abas.nova_venda.connect(self.ir_para_pdv)
         layout.addWidget(self.abas)
 
         # ======================
@@ -255,7 +250,7 @@ class PrincipalWindow(QMainWindow):
         self.header.solicitou_logout.connect(self._fazer_logout)
         self.header.solicitou_trocar_senha.connect(self._abrir_trocar_senha)
         self.header.tema_alternado.connect(self._alternar_tema)
-        self.menu.anexar(self.header)
+        self.abas.anexar(self.header)
 
         self.faixa_backup = FaixaAvisoBackup()
         self.faixa_backup.ver_backups.connect(self._abrir_aba_backup)
@@ -336,7 +331,9 @@ class PrincipalWindow(QMainWindow):
 
         self.config.voltar.connect(self._fechar_atual)
 
-        self.config.loja_atualizada.connect(self.menu.definir_nome_loja)
+        self.config.loja_atualizada.connect(
+            lambda nome: self.setWindowTitle(f"Vertex ERP · {nome}")
+        )
 
         self.relatorios.voltar.connect(self._fechar_atual)
 

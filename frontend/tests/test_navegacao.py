@@ -1,5 +1,5 @@
 """Navegação: barra do topo, abas das telas abertas e tela de módulos."""
-from design.navegacao import CHAVE_INICIO, GRUPOS, SO_NA_BUSCA, BarraAbas, BarraTopo, TelaModulos
+from design.navegacao import CHAVE_INICIO, GRUPOS, SO_NA_BUSCA, BarraAbas, TelaModulos
 from telas.principal import ITENS_MENU, PERMISSAO_TELA
 
 
@@ -19,15 +19,18 @@ def test_vendedor_nao_ve_blocos_de_admin():
 
 def test_bloco_e_barra_emitem_a_tela():
     tela = TelaModulos("Ana", ITENS_MENU, lambda c: True)
-    barra = BarraTopo("Loja", lambda c: True)
+    barra = BarraAbas(lambda c: True)
     abertas = []
     tela.escolhido.connect(abertas.append)
-    barra.item_clicado.connect(abertas.append)
+    barra.nova_venda.connect(lambda: abertas.append("pdv"))
 
     tela.blocos["clientes"].clicado.emit("clientes")
     barra.bt_venda.click()
-    barra.bt_logo.click()
-    assert abertas == ["clientes", "pdv", CHAVE_INICIO]
+    assert abertas == ["clientes", "pdv"]
+
+
+def test_vendedor_sem_pdv_nao_ve_nova_venda():
+    assert not hasattr(BarraAbas(lambda c: c != "pdv"), "bt_venda")
 
 
 def test_abas_abrir_nao_duplica_e_fechar_volta_pra_vizinha():

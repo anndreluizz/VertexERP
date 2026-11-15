@@ -1,8 +1,6 @@
-"""Navegação do Vertex (redesign): barra fina no topo, abas das telas abertas
-e a tela inicial de módulos (grade de blocos).
+"""Navegação do Vertex (redesign): faixa única no topo com as abas das telas
+abertas e a tela inicial de módulos (grade de blocos).
 
-- BarraTopo: logo (volta ao início), "Nova venda" e o bloco do
-  Header (sino, perfil...). Substitui o antigo BarraMenu de painéis suspensos.
 - BarraAbas: uma aba por tela aberta; a tela em si continua sendo um widget
   único dentro da PilhaPaginas -- fechar a aba só tira ela da barra.
 - TelaModulos: o "Início" -- um bloco por tela, agrupado como no menu antigo.
@@ -24,15 +22,15 @@ GRUPOS = [
     ("Vender", ["pdv", "vendas", "caixa"]),
     ("Estoque", ["produtos", "vitrine"]),
     ("Pessoas", ["clientes", "fornecedores"]),
-    ("Financeiro", ["contas_pagar", "conciliacao_bancaria",
-                    "visao_geral", "relatorios"]),
+    ("Financeiro", ["contas_pagar", "visao_geral", "relatorios"]),
     ("Inteligência", ["inteligencia"]),
     ("Ajustes", ["config"]),
 ]
 
 # telas sem bloco no Início (pouco usadas): continuam no ITENS_MENU e abrem
 # pela busca Ctrl+K
-SO_NA_BUSCA = {"ajuste_estoque", "transferencia_estoque", "contagem_estoque"}
+SO_NA_BUSCA = {"ajuste_estoque", "transferencia_estoque", "contagem_estoque",
+               "conciliacao_bancaria"}
 
 DESCRICOES = {
     "dashboard": "Resumo do dia, gráficos e o que fazer hoje",
@@ -65,67 +63,6 @@ def _sombra(widget):
     cor.setAlpha(tokens.SOMBRA_CARD_ALPHA)
     s.setColor(cor)
     widget.setGraphicsEffect(s)
-
-
-# ==========================================
-# BARRA DO TOPO
-# ==========================================
-
-class BarraTopo(QFrame):
-
-    item_clicado = Signal(str)
-    def __init__(self, nome_loja, pode_abrir, parent=None):
-        super().__init__(parent)
-
-        self.setObjectName("barraTopo")
-        self.setFixedHeight(60)
-        self.setStyleSheet(
-            f"QFrame#barraTopo {{ background: {tokens.CARD}; "
-            f"border-bottom: 1px solid {tokens.BORDA}; }}"
-        )
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(20, 0, 16, 0)
-        layout.setSpacing(10)
-
-        self.bt_logo = QPushButton("V")
-        self.bt_logo.setFixedSize(36, 36)
-        self.bt_logo.setCursor(Qt.PointingHandCursor)
-        self.bt_logo.setToolTip(f"{nome_loja} · voltar ao início")
-        self.bt_logo.setStyleSheet(f"""
-            QPushButton {{ background: {tokens.PRIMARIA}; color: white; border: none;
-                           border-radius: {tokens.RADIUS_SM + 2}px; font-size: 19px; font-weight: 800; }}
-            QPushButton:hover {{ background: {tokens.PRIMARIA_HOVER}; }}
-        """)
-        self.bt_logo.clicked.connect(lambda: self.item_clicado.emit(CHAVE_INICIO))
-        layout.addWidget(self.bt_logo)
-
-        layout.addStretch()
-
-        if pode_abrir("pdv"):
-            self.bt_venda = QPushButton("  Nova venda  F3")
-            self.bt_venda.setMinimumWidth(self.bt_venda.sizeHint().width() + 24)
-            self.bt_venda.setCursor(Qt.PointingHandCursor)
-            self.bt_venda.setFixedHeight(38)
-            self.bt_venda.setIcon(icone("plus", cor="white", tamanho=18))
-            self.bt_venda.setStyleSheet(f"""
-                QPushButton {{ background: {tokens.SUCESSO}; color: white; border: none;
-                               border-radius: {tokens.RADIUS_SM + 2}px; padding: 0 16px;
-                               font-size: {tokens.TAMANHO_BASE}px; font-weight: 700; }}
-                QPushButton:hover {{ background: {tokens.SECUNDARIA_HOVER}; }}
-            """)
-            self.bt_venda.clicked.connect(lambda: self.item_clicado.emit("pdv"))
-            layout.addWidget(self.bt_venda)
-
-    def anexar(self, widget):
-        """Bloco extra no fim da barra (o Header em modo na_barra)."""
-        self.layout().addWidget(widget)
-
-    def definir_nome_loja(self, nome_loja):
-        self.bt_logo.setToolTip(f"{nome_loja} · voltar ao início")
-        janela = self.window()
-        if janela is not self:
-            janela.setWindowTitle(f"Vertex ERP · {nome_loja}")
 
 
 # ==========================================
@@ -186,24 +123,56 @@ class _Aba(QFrame):
 
 
 class BarraAbas(QFrame):
+    """Única faixa do topo: abas das telas abertas à esquerda; Nova venda e
+    o bloco do Header (olhinho, sino, perfil) à direita."""
 
     aba_clicada = Signal(str)
     aba_fechada = Signal(str)
+    nova_venda = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, pode_abrir=lambda chave: True, parent=None):
         super().__init__(parent)
         self.setObjectName("barraAbas")
-        self.setFixedHeight(44)
+        self.setFixedHeight(56)
         self.setStyleSheet(
             f"QFrame#barraAbas {{ background: {tokens.FUNDO}; "
             f"border-bottom: 1px solid {tokens.BORDA}; }}"
         )
         self._layout = QHBoxLayout(self)
-        self._layout.setContentsMargins(20, 8, 20, 0)
-        self._layout.setSpacing(4)
+        self._layout.setContentsMargins(20, 0, 16, 0)
+        self._layout.setSpacing(10)
+
+        # abas coladas na base da faixa (a aba ativa "abre" pra pagina embaixo)
+        coluna = QVBoxLayout()
+        coluna.setContentsMargins(0, 0, 0, 0)
+        coluna.addStretch()
+        self._abas_layout = QHBoxLayout()
+        self._abas_layout.setSpacing(4)
+        coluna.addLayout(self._abas_layout)
+        self._layout.addLayout(coluna)
         self._layout.addStretch()
+
+        if pode_abrir("pdv"):
+            self.bt_venda = QPushButton("  Nova venda  F3")
+            self.bt_venda.setMinimumWidth(self.bt_venda.sizeHint().width() + 24)
+            self.bt_venda.setCursor(Qt.PointingHandCursor)
+            self.bt_venda.setFixedHeight(38)
+            self.bt_venda.setIcon(icone("plus", cor="white", tamanho=18))
+            self.bt_venda.setStyleSheet(f"""
+                QPushButton {{ background: {tokens.SUCESSO}; color: white; border: none;
+                               border-radius: {tokens.RADIUS_SM + 2}px; padding: 0 16px;
+                               font-size: {tokens.TAMANHO_BASE}px; font-weight: 700; }}
+                QPushButton:hover {{ background: {tokens.SECUNDARIA_HOVER}; }}
+            """)
+            self.bt_venda.clicked.connect(self.nova_venda)
+            self._layout.addWidget(self.bt_venda)
+
         self._abas = {}   # chave -> _Aba, na ordem em que foram abertas
         self._atual = None
+
+    def anexar(self, widget):
+        """Bloco no fim da barra (o Header em modo na_barra)."""
+        self._layout.addWidget(widget)
 
     @property
     def abertas(self):
@@ -218,7 +187,7 @@ class BarraAbas(QFrame):
             aba = _Aba(chave, titulo, icone_nome, fechavel=chave != CHAVE_INICIO)
             aba.clicada.connect(self.aba_clicada)
             aba.fechada.connect(self.aba_fechada)
-            self._layout.insertWidget(self._layout.count() - 1, aba)
+            self._abas_layout.addWidget(aba)
             self._abas[chave] = aba
         self.selecionar(chave)
 

@@ -378,7 +378,8 @@ class Header(QFrame):
 
         self._na_barra = na_barra
         self._cor_icone = tokens.TEXTO_SECUNDARIO
-        self._fundo_hover = tokens.FUNDO
+        # na faixa de abas o fundo ja' e' FUNDO: o hover precisa de outro tom
+        self._fundo_hover = tokens.BORDA if na_barra else tokens.FUNDO
 
         # reflete o tema que ja esta ativo (ver design.tokens.aplicar,
         # chamado no arranque do app) -- sem isso o botao sempre

@@ -15,9 +15,9 @@ saber nada sobre tema."""
 # ==========================================
 
 _CLARO = {
-    "PRIMARIA": "#1B4B8F",
-    "PRIMARIA_HOVER": "#123A73",
-    "PRIMARIA_CLARA": "#E8EEF9",
+    "PRIMARIA": "#1D5FD1",
+    "PRIMARIA_HOVER": "#164EB0",
+    "PRIMARIA_CLARA": "#E7EFFC",
 
     "SECUNDARIA": "#0D7D6C",
     "SECUNDARIA_HOVER": "#095F52",
@@ -33,22 +33,22 @@ _CLARO = {
     "ERRO_HOVER": "#8A2B21",
     "ERRO_CLARO": "#FBEBE8",
 
-    # 06/11: "tela muito branca" -- fundo um tom mais escuro pra os cartoes
-    # brancos se destacarem, bordas e textos cinza mais fortes
-    "FUNDO": "#EAE6DD",
-    "SIDEBAR": "#101F38",
+    # redesign (15/11): fundo cinza-azulado frio no lugar do bege, azul mais
+    # vivo, bordas leves -- cartoes brancos continuam se destacando
+    "FUNDO": "#F2F4F8",
+    "SIDEBAR": "#0E1A33",
     "SIDEBAR_HOVER": "#1C3357",
     "SIDEBAR_ATIVO": "#24406B",
 
     "CARD": "#FFFFFF",
-    "BORDA": "#D6CFC1",
-    "BORDA_FORTE": "#BDB4A2",
-    # borda de campo de formulario: WCAG 1.4.11 pede 3:1 (3,82:1 sobre CARD)
-    "BORDA_CAMPO": "#8A826E",
+    "BORDA": "#E2E6EE",
+    "BORDA_FORTE": "#C9D0DD",
+    # borda de campo de formulario: WCAG 1.4.11 pede 3:1 sobre CARD
+    "BORDA_CAMPO": "#738096",
     # texto sobre fundo preenchido (botoes, chips): branco no claro
     "TEXTO_SOBRE_COR": "#FFFFFF",
 
-    "TEXTO": "#0E1830",
+    "TEXTO": "#0F1B33",
     "TEXTO_SECUNDARIO": "#3F4C63",
     # era #8B96AC (~2,98:1 sobre CARD branco -- reprova WCAG AA, que
     # exige 4,5:1 pra texto normal). Usado em 38 das ~39 telas (legenda

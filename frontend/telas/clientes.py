@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone, icone_pixmap
+from design.lista import FaixaAtencao
 from design.fonts import familia_titulo
 from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, BotaoSucesso, CampoTexto, Card, CardKPI
 from services.worker import rodar_em_thread, em_paralelo
@@ -637,6 +638,9 @@ class Clientes(QWidget):
 
         layout.addLayout(cabecalho)
 
+        self.faixa_atencao = FaixaAtencao()
+        layout.addWidget(self.faixa_atencao)
+
         # ======================
         # CARDS DE RESUMO
         # ======================
@@ -1046,6 +1050,13 @@ class Clientes(QWidget):
 
         for chave, botao in self.botoes_status.items():
             botao.setText(f"{botao.property('rotulo')}  {contagem.get(chave, 0)}")
+
+        inadimplentes = contagem["INADIMPLENTES"]
+        self.faixa_atencao.definir([(
+            f"{inadimplentes} cliente{'s' if inadimplentes != 1 else ''} há mais de "
+            f"{self.prazo_inadimplencia} dias sem pagar",
+            "Ver lista", lambda: self.selecionar_status("INADIMPLENTES"),
+        )] if inadimplentes else [])
 
     # ==========================================
     # FILTRO DE STATUS

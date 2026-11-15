@@ -349,6 +349,13 @@ class PrincipalWindow(QMainWindow):
         self._ligar_pagina(nome, pagina)
         return pagina
 
+    def _ajustar_estoque(self, produto):
+        """Botao 'Ajustar estoque' da ficha rapida de Produtos."""
+        if not pode_abrir_tela("ajuste_estoque"):
+            return
+        self._exibir_pagina("ajuste_estoque", self.ajuste_estoque)
+        self.ajuste_estoque.definir_produto(produto)
+
     def _pagina(self, chave):
         return self.modulos if chave == CHAVE_INICIO else getattr(self, chave)
 
@@ -358,6 +365,8 @@ class PrincipalWindow(QMainWindow):
             pagina.tarefa_escolhida.connect(self._abrir_tarefa)
         elif nome == "vendas":
             pagina.troca_iniciada.connect(self._iniciar_troca)
+        elif nome == "produtos":
+            pagina.ajustar_estoque.connect(self._ajustar_estoque)
         elif nome == "config":
             pagina.loja_atualizada.connect(
                 lambda loja: self.setWindowTitle(f"Vertex ERP · {loja}")

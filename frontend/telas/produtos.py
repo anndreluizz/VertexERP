@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone, icone_pixmap
-from design.lista import FaixaAtencao, PainelDetalhe
+from design.lista import BarraProgresso, FaixaAtencao, PainelDetalhe
 from design.teclado import tornar_acionavel
 from design.widgets import (
     Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI, estilo_checkbox,
@@ -129,6 +129,8 @@ ORDENACOES = [
 class Produtos(QWidget):
 
     voltar = Signal()
+    # ficha rapida -> 'Ajustar estoque': a janela principal abre a aba de Ajuste
+    ajustar_estoque = Signal(dict)
 
     def __init__(self):
         super().__init__()
@@ -391,7 +393,7 @@ class Produtos(QWidget):
         # "Produto" (3) absorve o espaco que sobra; as demais tem largura
         # propria -- com a ficha rapida aberta a tabela fica mais estreita
         # e os nomes nao podem quebrar em 3 linhas
-        for coluna, largura in ((2, 110), (4, 130), (5, 80), (6, 130), (7, 90)):
+        for coluna, largura in ((2, 110), (4, 130), (5, 90), (6, 130), (7, 90)):
             self.tabela.horizontalHeader().setSectionResizeMode(coluna, QHeaderView.Fixed)
             self.tabela.setColumnWidth(coluna, largura)
 
@@ -1038,15 +1040,15 @@ class Produtos(QWidget):
         estoque_minimo = produto.get("estoque_minimo", 0)
 
         if estoque <= 0:
-            variante_estoque = "erro"
+            variante_estoque, cor_barra = "erro", tokens.ERRO
         elif estoque <= estoque_minimo:
-            variante_estoque = "alerta"
+            variante_estoque, cor_barra = "alerta", tokens.ALERTA
         else:
-            variante_estoque = "sucesso"
+            variante_estoque, cor_barra = "sucesso", tokens.SUCESSO
 
         self.tabela.setCellWidget(
             linha, 5,
-            self._badge_centralizado(str(estoque), variante_estoque)
+            self._celula_estoque(estoque, estoque_minimo, variante_estoque, cor_barra)
         )
 
         ativo = produto.get("ativo", True)
@@ -1104,6 +1106,11 @@ class Produtos(QWidget):
         barra = ("Estoque em relação ao mínimo", estoque / base * 100, cor_barra)
 
         acoes = [("Editar produto", "primario", "edit-2", lambda p=produto: self._abrir_edicao(p))]
+        if api.usuario_tem_permissao("estoque.ajustar"):
+            acoes.append((
+                "Ajustar estoque", "secundario", "refresh-cw",
+                lambda p=produto: self.ajustar_estoque.emit(p),
+            ))
         if self._pode_excluir_produto:
             acoes.append(("Excluir produto", "perigo", "trash-2", lambda p=produto: self._excluir_um(p)))
 
@@ -1112,6 +1119,26 @@ class Produtos(QWidget):
         subtitulo = " · ".join(x for x in (str(codigo), categoria) if x)
 
         self.painel_detalhe.mostrar(produto["nome"], subtitulo, badge, campos, acoes, barra)
+
+    def _celula_estoque(self, estoque, minimo, variante, cor_barra):
+        """Quantidade em selo + barra fina: estoque contra 3x o minimo (sem
+        minimo cadastrado, so' cheia/vazia)."""
+
+        container = QWidget()
+        container.setStyleSheet("background:transparent;")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(5)
+        layout.setAlignment(Qt.AlignCenter)
+
+        layout.addWidget(Badge(str(estoque), variante), 0, Qt.AlignHCenter)
+
+        base = minimo * 3 if minimo > 0 else max(estoque, 1)
+        barra = BarraProgresso(estoque / base * 100, cor_barra, altura=4)
+        barra.setFixedWidth(56)
+        layout.addWidget(barra, 0, Qt.AlignHCenter)
+
+        return container
 
     def _badge_centralizado(self, texto, variante):
 

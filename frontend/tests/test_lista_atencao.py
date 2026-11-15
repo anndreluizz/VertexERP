@@ -59,3 +59,21 @@ def test_produtos_clique_na_linha_abre_ficha_e_checkbox_nao(monkeypatch):
     # repopular a tabela (filtro, busca) fecha a ficha: ela ficaria desatualizada
     w.filtrar_produtos()
     assert w.painel_detalhe.isHidden()
+
+
+def test_ficha_do_produto_oferece_ajustar_estoque_so_com_permissao(monkeypatch):
+    monkeypatch.setattr(tela.api, "usuario_tem_permissao", lambda p: p == "estoque.ajustar")
+    w = Produtos()
+    w._ao_carregar_sucesso(([_produto(1, "A", 3)], []))
+    pedidos = []
+    w.ajustar_estoque.connect(pedidos.append)
+
+    w._ao_clicar_linha(0, 3)
+    botoes = [b.text().strip() for b in w.painel_detalhe.findChildren(tela.BotaoSecundario)]
+    assert "Ajustar estoque" in botoes
+    next(b for b in w.painel_detalhe.findChildren(tela.BotaoSecundario) if "Ajustar" in b.text()).click()
+    assert pedidos and pedidos[0]["id"] == 1
+
+    monkeypatch.setattr(tela.api, "usuario_tem_permissao", lambda p: False)
+    w._ao_clicar_linha(0, 3)
+    assert not [b for b in w.painel_detalhe.findChildren(tela.BotaoSecundario) if "Ajustar" in b.text()]

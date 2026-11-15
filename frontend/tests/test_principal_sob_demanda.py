@@ -12,6 +12,7 @@ class _TelaFalsa(QWidget):
     tarefa_escolhida = Signal(str)
     troca_iniciada = Signal(float, object)
     loja_atualizada = Signal(str)
+    ajustar_estoque = Signal(dict)
 
     criadas = []
 
@@ -21,6 +22,9 @@ class _TelaFalsa(QWidget):
 
     def carregar(self, *a, **k):
         pass
+
+    def definir_produto(self, produto):
+        self.produto_definido = produto
 
 
 def _janela(monkeypatch):
@@ -69,3 +73,13 @@ def test_atributo_desconhecido_continua_dando_attribute_error(monkeypatch):
     except AttributeError:
         return
     raise AssertionError("deveria levantar AttributeError")
+
+
+def test_ajustar_estoque_da_ficha_abre_a_aba_com_o_produto(monkeypatch):
+    j = _janela(monkeypatch)
+    produto = {"id": 7, "nome": "Caderno", "estoque": 3}
+
+    j.produtos.ajustar_estoque.emit(produto)
+
+    assert j.abas.atual == "ajuste_estoque"
+    assert j.ajuste_estoque.produto_definido == produto

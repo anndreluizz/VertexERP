@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -391,6 +392,10 @@ class Header(QFrame):
         self._admin = admin
 
         self.setFixedHeight(56 if na_barra else 64)
+        if na_barra:
+            # so' o tamanho dos botoes -- sem isso o bloco disputa a folga da barra
+            # com o stretch e o avatar nao cola na direita
+            self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
         self.setStyleSheet(
             "Header { background: transparent; border: none; }" if na_barra else f"""
             Header {{

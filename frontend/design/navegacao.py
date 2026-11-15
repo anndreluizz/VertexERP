@@ -335,7 +335,13 @@ class TelaModulos(QScrollArea):
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.NoFrame)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setStyleSheet(f"QScrollArea {{ background: {tokens.FUNDO}; border: none; }}")
+        self.setStyleSheet(f"""
+            QScrollArea {{ background: {tokens.FUNDO}; border: none; }}
+            QScrollBar:vertical {{ width: 10px; background: transparent; margin: 2px; }}
+            QScrollBar::handle:vertical {{ background: {tokens.BORDA_FORTE}; border-radius: 4px; min-height: 40px; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+        """)
 
         info = {chave: (icone_nome, titulo) for chave, icone_nome, titulo in itens_menu}
         self.blocos = {}

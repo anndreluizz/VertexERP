@@ -858,7 +858,9 @@ class GerenciarUsuariosDialog(DialogoPadrao):
 
     def novo_usuario(self):
 
-        dialogo = NovoUsuarioDialog(self.perfis, parent=self)
+        from telas.cadastros_etapas import novo_usuario_assistente
+
+        dialogo = novo_usuario_assistente(self.perfis, self)
 
         if dialogo.exec() != QDialog.Accepted:
             return

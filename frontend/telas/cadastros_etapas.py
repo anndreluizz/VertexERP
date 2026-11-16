@@ -321,6 +321,80 @@ def nova_despesa_assistente(parent=None):
     return assistente
 
 
+# ----------------------------------------------------------------------
+# USUÁRIO
+# ----------------------------------------------------------------------
+
+def novo_usuario_assistente(perfis=None, parent=None):
+    from telas.gerenciar_usuarios import SENHA_MINIMA, NovoUsuarioDialog
+
+    interno = NovoUsuarioDialog(perfis, parent=parent)
+    campos = {}
+
+    def etapa_dados():
+        campos["nome"] = CampoTexto("Ex.: Maria da Silva")
+        campos["email"] = EmailField("email@exemplo.com")
+        return [
+            CampoEtapa("Nome completo", campos["nome"], obrigatorio=True),
+            CampoEtapa(
+                "E-mail (é o login)", campos["email"], obrigatorio=True,
+                valida=lambda w: None if "@" in w.text() and email_valido(w.text()) else "Esse e-mail parece incompleto (ex.: nome@exemplo.com).",
+            ),
+        ]
+
+    def etapa_senha():
+        # os campos de senha do cadastro original (com o olhinho de mostrar)
+        campos["senha"], campos["confirmar"] = interno.senha, interno.confirmar
+        return [
+            CampoEtapa(
+                "Senha", interno.senha, obrigatorio=True,
+                valida=lambda w: None if len(w.text()) >= SENHA_MINIMA else f"A senha precisa ter pelo menos {SENHA_MINIMA} caracteres.",
+                dica=f"Mínimo de {SENHA_MINIMA} caracteres.",
+            ),
+            CampoEtapa(
+                "Confirmar senha", interno.confirmar, obrigatorio=True,
+                valida=lambda w: None if w.text() == interno.senha.text() else "A confirmação não é igual à senha.",
+            ),
+        ]
+
+    def etapa_perfil():
+        campos["perfil"] = Escolha(
+            [interno.perfil.itemText(i) for i in range(interno.perfil.count())], max_botoes=0,
+        )
+        return [CampoEtapa("Perfil de acesso", campos["perfil"], dica="Dá pra trocar depois.")]
+
+    def resumo():
+        return [
+            ("Nome", campos["nome"].text()),
+            ("E-mail (login)", campos["email"].text()),
+            ("Senha", "•" * len(interno.senha.text())),
+            ("Perfil", campos["perfil"].texto()),
+        ]
+
+    def concluir(assistente):
+        interno.nome.setText(campos["nome"].text().strip())
+        interno.email.setText(campos["email"].text().strip())
+        interno.perfil.setCurrentIndex(max(interno.perfil.findText(campos["perfil"].texto()), 0))
+        interno.criar()
+        assistente.aguardar_salvamento(interno.bt_criar)
+
+    passos = [
+        dict(nome="Dados", titulo="Quem vai usar o sistema?", campos=etapa_dados,
+             dica="O e-mail é o login do funcionário."),
+        dict(nome="Senha", titulo="Crie uma senha de acesso", campos=etapa_senha,
+             dica="Ele pode trocar depois, em Trocar senha."),
+        dict(nome="Perfil", titulo="O que ele pode fazer?", campos=etapa_perfil,
+             dica="O perfil define as telas e ações liberadas."),
+        dict(nome="Revisão", titulo="Tudo certo?", revisao=True, resumo=resumo,
+             dica="Confira antes de cadastrar."),
+    ]
+    assistente = AssistenteDialogo(
+        "Novo usuário", "user", passos, "Cadastrar usuário", concluir, interno=interno, parent=parent,
+    )
+    interno.accepted.connect(assistente.accept)
+    return assistente
+
+
 def _agrupar(opcoes, rotulo_extra, extra):
     """Opções + (quando aparece) um campo extra logo abaixo."""
     from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget

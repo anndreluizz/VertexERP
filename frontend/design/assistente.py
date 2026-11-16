@@ -131,7 +131,7 @@ class Escolha(QWidget):
 
     MAX_BOTOES = 5
 
-    def __init__(self, itens, atual=None, rotulo_nova=None, ao_criar=None):
+    def __init__(self, itens, atual=None, rotulo_nova=None, ao_criar=None, max_botoes=None):
         super().__init__()
         self.setStyleSheet("background:transparent;")
         self._ao_criar = ao_criar
@@ -145,7 +145,7 @@ class Escolha(QWidget):
                 "Nenhuma cadastrada ainda. Você cria depois, em Editar.",
                 tokens.TAMANHO_SM, tokens.TEXTO_TERCIARIO,
             ))
-        self._botoes = len(itens) <= self.MAX_BOTOES
+        self._botoes = len(itens) <= (self.MAX_BOTOES if max_botoes is None else max_botoes)
         if self._botoes:
             self._opcoes = Opcoes(itens, itens.index(atual) if atual in itens else 0)
             lay.addWidget(self._opcoes)

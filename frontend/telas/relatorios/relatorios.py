@@ -84,14 +84,14 @@ class Relatorios(FinanceiroMixin, CaixaMixin, EstoqueMixin, IndicadoresMixin, Me
 
         titulo = QLabel("Relatórios")
         titulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XL}px;
-            font-weight:800; color:{tokens.TEXTO};
+            background:transparent; font-size:{tokens.TAMANHO_XXL}px;
+            font-weight:700; color:{tokens.TEXTO};
         """)
 
-        subtitulo = QLabel("Gerenciamento e inteligência")
+        subtitulo = QLabel("Números da loja para decidir e para o contador")
         subtitulo.setStyleSheet(f"""
-            background:transparent; font-size:{tokens.TAMANHO_XS}px;
-            color:{tokens.TEXTO_TERCIARIO}; font-weight:700;
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            color:{tokens.TEXTO_SECUNDARIO};
         """)
 
         col_titulo.addWidget(titulo)
@@ -114,14 +114,10 @@ class Relatorios(FinanceiroMixin, CaixaMixin, EstoqueMixin, IndicadoresMixin, Me
 
         barra_abas = QFrame()
         barra_abas.setObjectName("barraAbas")
-        barra_abas.setStyleSheet(f"""
-            QFrame#barraAbas {{
-                background:{tokens.BORDA}; border-radius:{tokens.RADIUS_MD}px;
-            }}
-        """)
+        barra_abas.setStyleSheet("QFrame#barraAbas { background:transparent; border:none; }")
         abas_layout = QHBoxLayout(barra_abas)
-        abas_layout.setContentsMargins(4, 4, 4, 4)
-        abas_layout.setSpacing(4)
+        abas_layout.setContentsMargins(0, 0, 0, 0)
+        abas_layout.setSpacing(8)
 
         self.bt_aba_financeiro = self._botao_aba("Financeiro", "dollar-sign")
         self.bt_aba_caixa = self._botao_aba("Caixa", "wallet")
@@ -218,16 +214,19 @@ class Relatorios(FinanceiroMixin, CaixaMixin, EstoqueMixin, IndicadoresMixin, Me
         botao = QPushButton(texto)
         botao.setCheckable(True)
         botao.setCursor(Qt.PointingHandCursor)
-        botao.setMinimumHeight(38)
-        botao.icone_nome = icone_nome
+        botao.setFixedHeight(34)
+        botao.icone_nome = None  # abas em chips: só texto
         botao.setStyleSheet(f"""
             QPushButton {{
-                background:transparent; border:none; border-radius:{tokens.RADIUS_SM}px;
-                color:{tokens.TEXTO_SECUNDARIO}; font-size:{tokens.TAMANHO_MD}px;
-                font-weight:700; padding:0 18px;
+                padding:0 18px; border-radius:17px; font-weight:600;
+                font-size:{tokens.TAMANHO_SM}px; color:{tokens.TEXTO_SECUNDARIO};
+                background:{tokens.CARD}; border:1px solid {tokens.BORDA};
             }}
-            QPushButton:hover {{ color:{tokens.TEXTO}; }}
-            QPushButton:checked {{ background:{tokens.CARD}; color:{tokens.PRIMARIA}; }}
+            QPushButton:hover {{ background:{tokens.FUNDO}; }}
+            QPushButton:checked {{
+                font-weight:700; color:{tokens.PRIMARIA};
+                background:{tokens.PRIMARIA_CLARA}; border-color:{tokens.PRIMARIA_CLARA};
+            }}
         """)
         return botao
 

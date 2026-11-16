@@ -253,11 +253,15 @@ class AjusteEstoque(QWidget):
         if tela.exec() != QDialog.Accepted:
             return
 
-        self.produto_id = tela.selecionado["id"]
+        self.definir_produto(tela.selecionado)
+
+    def definir_produto(self, produto):
+        """Escolhe o produto do ajuste -- pela pesquisa ou pre-selecionado
+        (ex.: botao 'Ajustar estoque' da ficha rapida de Produtos)."""
+        self.produto_id = produto["id"]
 
         self.produto.setText(
-            f"{tela.selecionado['nome']} "
-            f"(estoque atual: {tela.selecionado['estoque']})"
+            f"{produto['nome']} (estoque atual: {produto['estoque']})"
         )
 
     def _ao_pesquisar_produto_erro(self, erro):

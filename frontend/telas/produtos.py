@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
 
 from design import tokens
 from design.icons import icone, icone_pixmap
+from design.lista import BarraProgresso, FaixaAtencao, PainelDetalhe
 from design.teclado import tornar_acionavel
 from design.widgets import (
     Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI, estilo_checkbox,
@@ -128,6 +129,8 @@ ORDENACOES = [
 class Produtos(QWidget):
 
     voltar = Signal()
+    # ficha rapida -> 'Ajustar estoque': a janela principal abre a aba de Ajuste
+    ajustar_estoque = Signal(dict)
 
     def __init__(self):
         super().__init__()
@@ -220,6 +223,9 @@ class Produtos(QWidget):
         cabecalho.addWidget(self.bt_novo)
 
         layout.addLayout(cabecalho)
+
+        self.faixa_atencao = FaixaAtencao()
+        layout.addWidget(self.faixa_atencao)
 
         # Sem rolagem da página inteira: cabeçalho, números e filtros
         # ficam fixos e só a tabela rola. Antes a página toda rolava e
@@ -384,6 +390,13 @@ class Produtos(QWidget):
         )
         self.tabela.setColumnWidth(8, 90)
 
+        # "Produto" (3) absorve o espaco que sobra; as demais tem largura
+        # propria -- com a ficha rapida aberta a tabela fica mais estreita
+        # e os nomes nao podem quebrar em 3 linhas
+        for coluna, largura in ((2, 110), (4, 130), (5, 90), (6, 130), (7, 90)):
+            self.tabela.horizontalHeader().setSectionResizeMode(coluna, QHeaderView.Fixed)
+            self.tabela.setColumnWidth(coluna, largura)
+
         self.tabela.setAlternatingRowColors(True)
 
         # os widgets das celulas (foto, badges, acoes) so' sao criados nas
@@ -434,7 +447,13 @@ class Produtos(QWidget):
         """)
 
         self.tabela.setMinimumHeight(200)
-        conteudo_layout.addWidget(self.tabela, stretch=1)
+        # tabela + ficha rapida do produto clicado (some ate clicar numa linha)
+        self.painel_detalhe = PainelDetalhe()
+        corpo_tabela = QHBoxLayout()
+        corpo_tabela.setSpacing(16)
+        corpo_tabela.addWidget(self.tabela, stretch=1)
+        corpo_tabela.addWidget(self.painel_detalhe, 0, Qt.AlignTop)
+        conteudo_layout.addLayout(corpo_tabela, stretch=1)
 
         self.painel_erro = PainelErro()
         self.painel_erro.tentar_novamente.connect(self.carregar)
@@ -498,6 +517,8 @@ class Produtos(QWidget):
         # ==========================================
 
         self.pesquisa.returnPressed.connect(self._buscar_agora)
+
+        self.tabela.cellClicked.connect(self._ao_clicar_linha)
 
         self.tabela.doubleClicked.connect(
             lambda index: self.editar_produto()
@@ -697,6 +718,19 @@ class Produtos(QWidget):
         }
         for chave, botao in self.botoes_status.items():
             botao.setText(f"{botao.property('rotulo')}  {contagem.get(chave, 0)}")
+
+        avisos = []
+        if sem_estoque:
+            avisos.append((
+                f"{sem_estoque} produto{'s' if sem_estoque != 1 else ''} sem estoque",
+                "Ver lista", lambda: self.selecionar_status("SEM_ESTOQUE"),
+            ))
+        if estoque_baixo:
+            avisos.append((
+                f"{estoque_baixo} abaixo do mínimo",
+                "Ver lista", lambda: self.selecionar_status("ESTOQUE_BAIXO"),
+            ))
+        self.faixa_atencao.definir(avisos)
 
         # sem selo de variação (ex.: "↑ 12%") aqui de propósito -- a
         # API não guarda um retrato de "produtos/valor em estoque de
@@ -916,6 +950,7 @@ class Produtos(QWidget):
     def preencher_tabela(self, produtos):
 
         self.produtos_exibidos = produtos
+        self.painel_detalhe.hide()
 
         self.tabela.blockSignals(True)
 
@@ -1005,15 +1040,15 @@ class Produtos(QWidget):
         estoque_minimo = produto.get("estoque_minimo", 0)
 
         if estoque <= 0:
-            variante_estoque = "erro"
+            variante_estoque, cor_barra = "erro", tokens.ERRO
         elif estoque <= estoque_minimo:
-            variante_estoque = "alerta"
+            variante_estoque, cor_barra = "alerta", tokens.ALERTA
         else:
-            variante_estoque = "sucesso"
+            variante_estoque, cor_barra = "sucesso", tokens.SUCESSO
 
         self.tabela.setCellWidget(
             linha, 5,
-            self._badge_centralizado(str(estoque), variante_estoque)
+            self._celula_estoque(estoque, estoque_minimo, variante_estoque, cor_barra)
         )
 
         ativo = produto.get("ativo", True)
@@ -1028,6 +1063,82 @@ class Produtos(QWidget):
         self.tabela.setCellWidget(
             linha, 8, self._widget_acoes(produto)
         )
+
+    # ==========================================
+    # FICHA RAPIDA (clique na linha)
+    # ==========================================
+
+    def _ao_clicar_linha(self, linha, coluna):
+
+        # coluna 0 e' o checkbox da selecao em massa, 8 sao as acoes da linha
+        if coluna in (0, 8) or not (0 <= linha < len(self.produtos_exibidos)):
+            return
+
+        self._mostrar_detalhe(self.produtos_exibidos[linha])
+
+    def _mostrar_detalhe(self, produto):
+
+        estoque = produto["estoque"]
+        minimo = produto.get("estoque_minimo", 0) or 0
+        venda = float(produto.get("preco_venda") or 0)
+        custo = float(produto.get("preco_custo") or 0)
+
+        if estoque <= 0:
+            badge, tom_estoque, cor_barra = ("Sem estoque", "erro"), "erro", tokens.ERRO
+        elif estoque <= minimo:
+            badge, tom_estoque, cor_barra = ("Estoque baixo", "alerta"), "alerta", tokens.ALERTA
+        else:
+            badge, tom_estoque, cor_barra = ("Em estoque", "sucesso"), None, tokens.SUCESSO
+
+        if not produto.get("ativo", True):
+            badge = ("Inativo", "neutro")
+
+        campos = [("Preço de venda", formatar_moeda(venda), None)]
+        if custo > 0:
+            campos.append(("Custo", formatar_moeda(custo), None))
+            if venda > 0:
+                campos.append(("Margem", f"{round((venda - custo) / venda * 100)}%", None))
+        campos.append(("Estoque", f"{estoque} un", tom_estoque))
+        campos.append(("Estoque mínimo", f"{minimo} un", None))
+
+        # barra: estoque contra 3x o minimo (sem minimo cadastrado, so' cheia/vazia)
+        base = minimo * 3 if minimo > 0 else max(estoque, 1)
+        barra = ("Estoque em relação ao mínimo", estoque / base * 100, cor_barra)
+
+        acoes = [("Editar produto", "primario", "edit-2", lambda p=produto: self._abrir_edicao(p))]
+        if api.usuario_tem_permissao("estoque.ajustar"):
+            acoes.append((
+                "Ajustar estoque", "secundario", "refresh-cw",
+                lambda p=produto: self.ajustar_estoque.emit(p),
+            ))
+        if self._pode_excluir_produto:
+            acoes.append(("Excluir produto", "perigo", "trash-2", lambda p=produto: self._excluir_um(p)))
+
+        codigo = produto.get("codigo_barras") or produto.get("codigo") or ""
+        categoria = produto.get("categoria") or ""
+        subtitulo = " · ".join(x for x in (str(codigo), categoria) if x)
+
+        self.painel_detalhe.mostrar(produto["nome"], subtitulo, badge, campos, acoes, barra)
+
+    def _celula_estoque(self, estoque, minimo, variante, cor_barra):
+        """Quantidade em selo + barra fina: estoque contra 3x o minimo (sem
+        minimo cadastrado, so' cheia/vazia)."""
+
+        container = QWidget()
+        container.setStyleSheet("background:transparent;")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(5)
+        layout.setAlignment(Qt.AlignCenter)
+
+        layout.addWidget(Badge(str(estoque), variante), 0, Qt.AlignHCenter)
+
+        base = minimo * 3 if minimo > 0 else max(estoque, 1)
+        barra = BarraProgresso(estoque / base * 100, cor_barra, altura=4)
+        barra.setFixedWidth(56)
+        layout.addWidget(barra, 0, Qt.AlignHCenter)
+
+        return container
 
     def _badge_centralizado(self, texto, variante):
 

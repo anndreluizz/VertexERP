@@ -36,6 +36,7 @@ from telas.parcelamento import copiar_codigo_boleto
 
 from design import tokens
 from design.icons import icone, icone_pixmap
+from design.lista import FaixaAtencao
 from design.privacidade import privacidade
 from design.widgets import Badge, BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
 from utils.formatacao import formatar_moeda
@@ -461,6 +462,9 @@ class ContasPagar(QWidget):
 
         layout.addLayout(cabecalho)
 
+        self.faixa_atencao = FaixaAtencao()
+        layout.addWidget(self.faixa_atencao)
+
         # ======================
         # KPIS
         # ======================
@@ -808,6 +812,19 @@ class ContasPagar(QWidget):
         }
         for chave, botao in self.botoes_status.items():
             botao.setText(f"{botao.property('rotulo')}  {contagem.get(chave, 0)}")
+
+        # so' contagens: o olhinho do Header esconde valores em dinheiro
+        # (cliente no balcao), a faixa nao pode revelar o numero
+        avisos = []
+        if vencidas_lista:
+            n = len(vencidas_lista)
+            avisos.append((
+                f"{n} conta{'s' if n != 1 else ''} vencida{'s' if n != 1 else ''}",
+                "Ver lista", lambda: self._filtrar_status("VENCIDA"),
+            ))
+        if vence_hoje_total:
+            avisos.append(("Tem conta que vence hoje", "Ver lista", lambda: self._filtrar_status("PENDENTE")))
+        self.faixa_atencao.definir(avisos)
 
     def _cards_do_mes(self, contas_validas, data_pagamento):
         """Com um mes escolhido no filtro ("Este mes" ou "Novembro/2026"),

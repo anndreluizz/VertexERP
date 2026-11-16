@@ -155,6 +155,7 @@ aplicar(escuro=False)
 PRIMARIA_ESCURA = "#0F2E57"
 SECUNDARIA_ESCURA = "#084A40"
 ALERTA_ESCURA = "#7A4E09"
+ERRO_ESCURA = "#7A2A22"
 
 # ==========================================
 # RAIO DE BORDA

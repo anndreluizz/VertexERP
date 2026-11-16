@@ -48,7 +48,7 @@ def test_caixa_do_vendedor_nao_busca_os_totais(monkeypatch):
     assert tela_caixa._buscar_dados_caixa(False) == ({"id": 7}, {}, ["mov"])
 
 
-def test_tela_caixa_do_vendedor_esconde_saldo_e_conferencia(_qapp, monkeypatch):
+def test_tela_caixa_do_vendedor_esconde_saldo_e_totais(_qapp, monkeypatch):
     from telas.caixa import Caixa
 
     monkeypatch.setattr(api, "_INFO_USUARIO_CACHE", {"admin": False, "permissoes": []})
@@ -56,7 +56,9 @@ def test_tela_caixa_do_vendedor_esconde_saldo_e_conferencia(_qapp, monkeypatch):
     tela = Caixa()
 
     assert tela._ve_totais is False
-    assert tela.secao_kpis.isHidden() and tela.cartao_conferir.isHidden()
+    # sem saldo, sem entradas por forma; a conferencia da gaveta fica no Fechar caixa
+    assert tela.secao_kpis.isHidden() and tela.cartao_formas.isHidden()
+    assert not hasattr(tela, "cartao_conferir")
     assert tela.bt_caixas_anteriores.isHidden()
     assert not tela.bt_sangria.isHidden() and not tela.bt_suprimento.isHidden()
 

@@ -19,18 +19,11 @@ def test_vendedor_nao_ve_blocos_de_admin():
 
 def test_bloco_e_barra_emitem_a_tela():
     tela = TelaModulos("Ana", ITENS_MENU, lambda c: True)
-    barra = BarraAbas(lambda c: True)
     abertas = []
     tela.escolhido.connect(abertas.append)
-    barra.nova_venda.connect(lambda: abertas.append("pdv"))
 
     tela.blocos["clientes"].clicado.emit("clientes")
-    barra.bt_venda.click()
-    assert abertas == ["clientes", "pdv"]
-
-
-def test_vendedor_sem_pdv_nao_ve_nova_venda():
-    assert not hasattr(BarraAbas(lambda c: c != "pdv"), "bt_venda")
+    assert abertas == ["clientes"]
 
 
 def test_abas_abrir_nao_duplica_e_fechar_volta_pra_vizinha():
@@ -55,11 +48,11 @@ def test_aba_inicio_nunca_fecha():
 
 
 def test_muitas_abas_nao_estouram_a_faixa():
-    abas = BarraAbas(lambda c: True)
+    abas = BarraAbas()
     abas.resize(900, 56)
     for i in range(20):
         abas.abrir(f"t{i}", f"Tela com nome bem comprido {i}", "home")
     abas.show()
     assert abas.abertas[-1] == "t19" and abas.atual == "t19"
-    # o botao Nova venda continua visivel na direita, nao e' empurrado pra fora
-    assert abas.bt_venda.geometry().right() <= abas.width()
+    # a faixa nao cresce alem da largura: as abas rolam
+    assert abas._rolagem.width() <= abas.width()

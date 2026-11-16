@@ -126,14 +126,13 @@ class _Aba(QFrame):
 
 
 class BarraAbas(QFrame):
-    """Única faixa do topo: abas das telas abertas à esquerda; Nova venda e
-    o bloco do Header (olhinho, sino, perfil) à direita."""
+    """Única faixa do topo: abas das telas abertas à esquerda e o bloco do
+    Header (olhinho, sino, perfil) à direita. Nova venda: botão do PDV e F3."""
 
     aba_clicada = Signal(str)
     aba_fechada = Signal(str)
-    nova_venda = Signal()
 
-    def __init__(self, pode_abrir=lambda chave: True, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("barraAbas")
         self.setFixedHeight(56)
@@ -165,23 +164,6 @@ class BarraAbas(QFrame):
         coluna.addLayout(self._abas_layout)
         self._rolagem.setWidget(miolo)
         self._layout.addWidget(self._rolagem, stretch=1)
-
-        if pode_abrir("pdv"):
-            # no tema escuro o verde e' claro: texto branco nao tem contraste
-            cor_texto = tokens.FUNDO if tokens.ESCURO_ATIVO else "white"
-            self.bt_venda = QPushButton("  Nova venda  F3")
-            self.bt_venda.setMinimumWidth(self.bt_venda.sizeHint().width() + 24)
-            self.bt_venda.setCursor(Qt.PointingHandCursor)
-            self.bt_venda.setFixedHeight(38)
-            self.bt_venda.setIcon(icone("plus", cor=cor_texto, tamanho=18))
-            self.bt_venda.setStyleSheet(f"""
-                QPushButton {{ background: {tokens.SUCESSO}; color: {cor_texto}; border: none;
-                               border-radius: {tokens.RADIUS_SM + 2}px; padding: 0 16px;
-                               font-size: {tokens.TAMANHO_BASE}px; font-weight: 700; }}
-                QPushButton:hover {{ background: {tokens.SECUNDARIA_HOVER}; }}
-            """)
-            self.bt_venda.clicked.connect(self.nova_venda)
-            self._layout.addWidget(self.bt_venda)
 
         self._abas = {}   # chave -> _Aba, na ordem em que foram abertas
         self._atual = None

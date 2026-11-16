@@ -446,6 +446,11 @@ def me():
     return {}
 
 
+def nome_usuario():
+    """Nome do usuario logado (do cache de me(), sem rede); "" se ainda nao carregou."""
+    return _INFO_USUARIO_CACHE.get("nome") or ""
+
+
 def usuario_e_admin():
     """Se o usuário logado é administrador -- usado pra esconder ações
     restritas (cancelar venda, gerenciar usuários etc.) de quem não

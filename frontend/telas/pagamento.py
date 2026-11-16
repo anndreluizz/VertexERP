@@ -52,6 +52,14 @@ MAX_FORMAS = 2
 # tolerancia de meio-centavo pra comparacao de valores em ponto flutuante
 EPSILON = 0.005
 
+# resumo da venda: coluna sempre escura (como o cartao do total do PDV),
+# entao estes tons nao trocam com o tema
+VERDE_NO_ESCURO = "#4ADE80"
+AMBAR_NO_ESCURO = "#FBBF24"
+VERMELHO_NO_ESCURO = "#FCA5A5"
+# quantos itens da venda aparecem listados no resumo (o resto vira "+ N itens")
+ITENS_NO_RESUMO = 6
+
 
 def _texto_para_valor(texto):
     """Aceita '50', '50,5', '1.234,56' e '1234.56'."""
@@ -165,7 +173,7 @@ class PagamentoWindow(QDialog):
         self._timer_pix.timeout.connect(self.gerar_qrcode_pix)
 
         self.setWindowTitle("Pagamento")
-        tamanho_fixo_seguro(self, 1140, 800)
+        tamanho_fixo_seguro(self, 1280, 800)
         self.setStyleSheet(f"background:{tokens.CARD};")
 
         raiz = QVBoxLayout(self)
@@ -173,7 +181,6 @@ class PagamentoWindow(QDialog):
         raiz.setSpacing(0)
 
         raiz.addWidget(self._construir_cabecalho())
-        raiz.addWidget(self._construir_faixa_totais())
 
         if self.credito_troca > 0:
             aviso = QLabel(
@@ -193,6 +200,7 @@ class PagamentoWindow(QDialog):
 
         corpo.addWidget(self._construir_coluna_formas())
         corpo.addWidget(self._construir_coluna_valor(), stretch=1)
+        corpo.addWidget(self._construir_resumo())
 
         raiz.addLayout(corpo, stretch=1)
 
@@ -243,67 +251,147 @@ class PagamentoWindow(QDialog):
 
         return cabecalho
 
-    def _construir_faixa_totais(self):
-        """TOTAL / PAGO / FALTA (vira TROCO) -- os 3 numeros que o
-        operador olha, grandes e sempre no mesmo lugar."""
+    def _construir_resumo(self):
+        """Coluna escura da direita: itens da venda, subtotal/desconto/
+        acrescimo e os 3 numeros que o operador olha -- TOTAL, PAGO e
+        FALTA (vira TROCO) --, grandes e sempre no mesmo lugar."""
 
-        faixa = QFrame()
-        faixa.setStyleSheet(
-            f"background:{tokens.FUNDO}; border-bottom:1px solid {tokens.BORDA};"
+        coluna = QFrame()
+        coluna.setObjectName("resumoVenda")
+        coluna.setFixedWidth(330)
+        coluna.setStyleSheet(
+            f"QFrame#resumoVenda {{ background:{tokens.SIDEBAR}; border:none; }}"
         )
 
-        layout = QHBoxLayout(faixa)
-        layout.setContentsMargins(24, 14, 24, 14)
-        layout.setSpacing(14)
+        layout = QVBoxLayout(coluna)
+        layout.setContentsMargins(22, 18, 22, 18)
+        layout.setSpacing(4)
 
-        caixa_total, _rot, self.lbl_total = self._caixa_numero("TOTAL")
-        caixa_pago, _rot, self.lbl_pago = self._caixa_numero("PAGO")
-        self.caixa_falta, self.lbl_falta_rotulo, self.lbl_falta = self._caixa_numero("FALTA")
+        layout.addWidget(self._texto_resumo(
+            "RESUMO DA VENDA", tokens.TEXTO_SIDEBAR_APAGADO, tokens.TAMANHO_XS, 700,
+        ))
+        layout.addSpacing(4)
+
+        for item in self.itens[:ITENS_NO_RESUMO]:
+            layout.addLayout(self._linha_resumo(
+                f"{item['quantidade']}×  {item.get('nome') or 'Item'}",
+                f"R$ {_fmt(subtotal_item(item['preco'], item['quantidade']))}",
+            ))
+        restantes = len(self.itens) - ITENS_NO_RESUMO
+        if restantes > 0:
+            layout.addWidget(self._texto_resumo(
+                f"+ {restantes} {'item' if restantes == 1 else 'itens'}",
+                tokens.TEXTO_SIDEBAR_APAGADO, tokens.TAMANHO_SM, 600,
+            ))
+
+        divisor = QFrame()
+        divisor.setFixedHeight(1)
+        divisor.setStyleSheet(f"background:{tokens.SIDEBAR_HOVER}; border:none;")
+        layout.addSpacing(6)
+        layout.addWidget(divisor)
+        layout.addSpacing(4)
+
+        layout.addLayout(self._linha_resumo("Subtotal", f"R$ {_fmt(self.subtotal)}"))
+        if self.desconto > EPSILON:
+            layout.addLayout(self._linha_resumo(
+                "Desconto", f"− R$ {_fmt(self.desconto)}", VERMELHO_NO_ESCURO,
+            ))
+        if self.acrescimo > EPSILON:
+            layout.addLayout(self._linha_resumo(
+                "Acréscimo", f"+ R$ {_fmt(self.acrescimo)}", VERDE_NO_ESCURO,
+            ))
+
+        layout.addStretch()
+
+        caixa_total, _rot, self.lbl_total = self._caixa_numero("TOTAL", 36)
+        caixa_pago, _rot, self.lbl_pago = self._caixa_numero("PAGO", 22)
+        self.caixa_falta, self.lbl_falta_rotulo, self.lbl_falta = self._caixa_numero("FALTA", 28)
 
         self.lbl_total.setText(f"R$ {_fmt(self.total)}")
 
-        layout.addWidget(caixa_total, 1)
-        layout.addWidget(caixa_pago, 1)
-        layout.addWidget(self.caixa_falta, 1)
+        layout.addWidget(caixa_total)
+        layout.addWidget(caixa_pago)
+        layout.addSpacing(6)
+        layout.addWidget(self.caixa_falta)
 
-        return faixa
+        return coluna
 
-    def _caixa_numero(self, rotulo):
+    def _texto_resumo(self, texto, cor, tamanho, peso):
+
+        lbl = QLabel(texto)
+        lbl.setStyleSheet(
+            f"background:transparent; border:none; color:{cor}; "
+            f"font-size:{tamanho}px; font-weight:{peso};"
+        )
+        return lbl
+
+    def _linha_resumo(self, rotulo, valor, cor_valor=None):
+
+        linha = QHBoxLayout()
+        linha.setSpacing(10)
+
+        lbl_rotulo = self._texto_resumo(rotulo, tokens.TEXTO_SIDEBAR, tokens.TAMANHO_SM, 500)
+        # nome de produto comprido nao pode empurrar o valor pra fora
+        lbl_rotulo.setMinimumWidth(10)
+        lbl_rotulo.setText(
+            lbl_rotulo.fontMetrics().elidedText(rotulo, Qt.ElideRight, 190)
+        )
+        lbl_rotulo.setToolTip(rotulo)
+
+        linha.addWidget(lbl_rotulo, 1)
+        linha.addWidget(self._texto_resumo(
+            valor, cor_valor or tokens.TEXTO_SIDEBAR, tokens.TAMANHO_SM, 700,
+        ))
+
+        return linha
+
+    def _caixa_numero(self, rotulo, tamanho=28):
 
         caixa = QFrame()
         caixa.setObjectName("caixaNumero")
 
         layout = QVBoxLayout(caixa)
-        layout.setContentsMargins(16, 10, 16, 10)
+        # so' o FALTA/TROCO tem caixa com fundo (precisa de folga); TOTAL e PAGO
+        # alinham com as linhas do resumo
+        layout.setContentsMargins(*((14, 8, 14, 8) if rotulo == "FALTA" else (0, 4, 0, 4)))
         layout.setSpacing(0)
 
         lbl_rotulo = QLabel(rotulo)
         lbl_valor = QLabel("R$ 0,00")
-        lbl_valor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        lbl_valor.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         layout.addWidget(lbl_rotulo)
         layout.addWidget(lbl_valor)
 
-        self._pintar_caixa_numero(caixa, lbl_rotulo, lbl_valor, tokens.CARD, tokens.TEXTO)
+        self._pintar_caixa_numero(
+            caixa, lbl_rotulo, lbl_valor, "transparent",
+            VERDE_NO_ESCURO if rotulo == "TOTAL" else tokens.TEXTO_CLARO, tamanho,
+        )
 
         return caixa, lbl_rotulo, lbl_valor
 
     @staticmethod
-    def _pintar_caixa_numero(caixa, lbl_rotulo, lbl_valor, fundo, cor):
+    def _pintar_caixa_numero(caixa, lbl_rotulo, lbl_valor, fundo, cor, tamanho=None):
+
+        # o tamanho do numero e' guardado na propria caixa pra repintar
+        # (troco/falta) sem precisar repetir
+        if tamanho is None:
+            tamanho = caixa.property("tamanho") or 28
+        caixa.setProperty("tamanho", tamanho)
 
         caixa.setStyleSheet(f"""
             QFrame#caixaNumero {{
                 background:{fundo};
-                border:1px solid {tokens.BORDA};
+                border:none;
                 border-radius:{tokens.RADIUS_MD}px;
             }}
         """)
         lbl_rotulo.setStyleSheet(
-            f"background:transparent; border:none; font-size:12px; "
-            f"font-weight:800; color:{cor};"
+            f"background:transparent; border:none; font-size:{tokens.TAMANHO_XS}px; "
+            f"font-weight:700; color:{tokens.TEXTO_SIDEBAR_APAGADO};"
         )
         lbl_valor.setStyleSheet(
-            f"background:transparent; border:none; font-size:28px; "
+            f"background:transparent; border:none; font-size:{tamanho}px; "
             f"font-weight:800; color:{cor};"
         )
 
@@ -899,21 +987,21 @@ class PagamentoWindow(QDialog):
             self.lbl_falta.setText(f"R$ {_fmt(troco)}")
             self._pintar_caixa_numero(
                 self.caixa_falta, self.lbl_falta_rotulo, self.lbl_falta,
-                tokens.SUCESSO_CLARO, tokens.SECUNDARIA_HOVER,
+                tokens.SIDEBAR_HOVER, VERDE_NO_ESCURO,
             )
         elif self.quitado():
             self.lbl_falta_rotulo.setText("FALTA")
             self.lbl_falta.setText(f"R$ {_fmt(0)}")
             self._pintar_caixa_numero(
                 self.caixa_falta, self.lbl_falta_rotulo, self.lbl_falta,
-                tokens.SUCESSO_CLARO, tokens.SECUNDARIA_HOVER,
+                tokens.SIDEBAR_HOVER, VERDE_NO_ESCURO,
             )
         else:
             self.lbl_falta_rotulo.setText("FALTA")
             self.lbl_falta.setText(f"R$ {_fmt(self.falta())}")
             self._pintar_caixa_numero(
                 self.caixa_falta, self.lbl_falta_rotulo, self.lbl_falta,
-                tokens.ALERTA_CLARO, tokens.ALERTA_TEXTO,
+                tokens.SIDEBAR_HOVER, AMBAR_NO_ESCURO,
             )
 
         # ---- aviso do meio: o que fazer agora ----

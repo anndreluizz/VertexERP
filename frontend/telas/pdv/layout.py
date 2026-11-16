@@ -31,7 +31,6 @@ from design.widgets import (
     Badge,
     BotaoSucesso,
     CampoTexto,
-    estilo_botao_forma,
 )
 from utils.formatacao import formatar_moeda
 
@@ -182,7 +181,7 @@ class LayoutMixin:
 
         bt = QPushButton(texto)
         bt.setCursor(Qt.PointingHandCursor)
-        bt.setMinimumHeight(38)
+        bt.setMinimumHeight(40)
 
         if icone_nome:
             bt.setIcon(icone(icone_nome, cor=tokens.TEXTO_SECUNDARIO, tamanho=15))
@@ -190,13 +189,15 @@ class LayoutMixin:
 
         bt.setStyleSheet(f"""
             QPushButton {{
-                background:transparent; border:none; border-radius:{tokens.RADIUS_SM}px;
-                padding:0 12px; color:{tokens.TEXTO_SECUNDARIO};
+                background:{tokens.CARD}; border:1px solid {tokens.BORDA_FORTE};
+                border-radius:{tokens.RADIUS_SM + 2}px;
+                padding:0 14px; color:{tokens.TEXTO};
                 font-size:{tokens.TAMANHO_SM}px; font-weight:700;
             }}
             QPushButton:hover:enabled {{ background:{tokens.FUNDO}; }}
             QPushButton:disabled {{
                 background:transparent; color:{tokens.TEXTO_TERCIARIO};
+                border-color:{tokens.BORDA};
             }}
         """)
 
@@ -266,9 +267,9 @@ class LayoutMixin:
         badge_tecla.setAlignment(Qt.AlignCenter)
         badge_tecla.setFixedHeight(20)
         badge_tecla.setStyleSheet(f"""
-            background:{tokens.CARD}; color:{tokens.TEXTO_SECUNDARIO};
-            border:none; border-radius:4px;
-            font-size:{tokens.TAMANHO_XS}px; font-weight:700; padding: 0 6px;
+            background:{tokens.CARD}; color:{tokens.TEXTO};
+            border:1px solid {tokens.BORDA_FORTE}; border-radius:5px;
+            font-size:{tokens.TAMANHO_XS}px; font-weight:700; padding: 0 7px;
         """)
 
         lbl_rotulo = QLabel(rotulo)
@@ -803,30 +804,49 @@ class LayoutMixin:
 
         layout = QVBoxLayout(estado)
         layout.setAlignment(Qt.AlignCenter)
-        layout.setSpacing(6)
+        layout.setSpacing(8)
 
-        lbl_titulo = QLabel("CAIXA LIVRE")
+        bola = QLabel()
+        bola.setFixedSize(72, 72)
+        bola.setAlignment(Qt.AlignCenter)
+        bola.setPixmap(icone_pixmap("shopping-cart", cor=tokens.PRIMARIA, tamanho=34))
+        bola.setStyleSheet(f"background:{tokens.PRIMARIA_CLARA}; border-radius:36px;")
+        layout.addWidget(bola, alignment=Qt.AlignCenter)
+
+        lbl_titulo = QLabel("Caixa livre")
         lbl_titulo.setAlignment(Qt.AlignCenter)
         lbl_titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.SECUNDARIA};
-            font-size:40px; font-weight:900; letter-spacing: 3px;
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_XL}px; font-weight:800;
         """)
         layout.addWidget(lbl_titulo)
 
-        lbl_dica = QLabel(
-            "Passe o código de barras ou pressione "
-            f"{self.atalhos['busca']} para buscar pelo nome."
-        )
+        lbl_dica = QLabel("Bipe um produto ou digite o nome para começar a venda.")
         lbl_dica.setAlignment(Qt.AlignCenter)
         lbl_dica.setWordWrap(True)
         lbl_dica.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_SM}px;
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_BASE}px;
         """)
         # largura FIXA (não máxima): com quebra de linha e só largura
         # máxima, o Qt calculava a altura de 1 linha e cortava o resto
         lbl_dica.setFixedWidth(420)
         layout.addWidget(lbl_dica, alignment=Qt.AlignCenter)
+
+        # dicas de atalho como teclas (mesmo visual da barra de baixo)
+        dicas = QHBoxLayout()
+        dicas.setSpacing(18)
+        dicas.addStretch()
+        for tecla, rotulo in (
+            (self.atalhos["busca"], "buscar pelo nome"),
+            ("3*", "3 unidades"),
+            ("F2", "escolher cliente"),
+        ):
+            _, item = self._item_atalho(tecla, rotulo)
+            dicas.addLayout(item)
+        dicas.addStretch()
+        layout.addSpacing(8)
+        layout.addLayout(dicas)
 
         return estado
 
@@ -989,13 +1009,22 @@ class LayoutMixin:
         grade.setSpacing(8)
         self.botoes_forma_pdv = {}
         for i, (rotulo, valor, icone_nome) in enumerate(FORMAS):
-            estilo, cor = estilo_botao_forma(valor, False, "font-size:14px; font-weight:700;")
             bt = QPushButton(f" {rotulo}")
             bt.setCursor(Qt.PointingHandCursor)
             bt.setFocusPolicy(Qt.NoFocus)
             bt.setMinimumHeight(50)
-            bt.setIcon(icone(icone_nome, cor=cor, tamanho=16))
-            bt.setStyleSheet(estilo)
+            bt.setIcon(icone(icone_nome, cor=tokens.TEXTO_SECUNDARIO, tamanho=17))
+            bt.setStyleSheet(f"""
+                QPushButton {{
+                    background:{tokens.CARD}; color:{tokens.TEXTO};
+                    border:1px solid {tokens.BORDA_FORTE}; border-radius:{tokens.RADIUS_SM + 2}px;
+                    font-size:14px; font-weight:600;
+                }}
+                QPushButton:hover {{
+                    background:{tokens.PRIMARIA_CLARA}; color:{tokens.PRIMARIA};
+                    border-color:{tokens.PRIMARIA};
+                }}
+            """)
             bt.setToolTip(f"Pagar com {rotulo}")
             bt.clicked.connect(lambda _=False, v=valor: self.finalizar_venda(v))
             grade.addWidget(bt, i // 3, i % 3)

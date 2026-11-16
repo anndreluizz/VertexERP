@@ -48,9 +48,9 @@ O Vertex ERP roda todos os dias numa loja de varejo: o computador do balcão é 
 
 ## O sistema
 
-| Frente de caixa | Ficha do cliente (fiado) |
+| Frente de caixa | Clientes e fiado |
 |---|---|
-| ![PDV](docs/imagens/desktop-pdv.png) | ![Ficha do cliente](docs/imagens/desktop-ficha-cliente.png) |
+| ![PDV](docs/imagens/desktop-pdv.png) | ![Clientes e fiado](docs/imagens/desktop-clientes.png) |
 | **Contas a pagar** | **Tema escuro** |
 | ![Contas a pagar](docs/imagens/desktop-contas-pagar.png) | ![Tema escuro](docs/imagens/desktop-inicio-escuro.png) |
 

@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QDateEdit,
     QGridLayout,
     QHBoxLayout,
+    QHeaderView,
     QInputDialog,
     QLabel,
     QMessageBox,
@@ -21,7 +22,7 @@ from widgets.dialogs.message_dialog import perguntar
 from design.seletor import Seletor
 from design import tokens
 from design.icons import icone, icone_pixmap
-from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, Card, CardKPI
+from design.widgets import Avatar, Badge, BotaoPerigo, BotaoPrimario, BotaoSecundario, Card, CardKPI
 from services import (
     api, comprovante_service, impressora_termica_service, preferencias_service,
 )
@@ -60,6 +61,44 @@ def _forma_da_venda(venda):
             venda["forma_pagamento_2"], venda["forma_pagamento_2"]
         )
     return forma
+
+
+_VARIANTE_FORMA = {"PIX": "info", "CARTAO": "info", "DINHEIRO": "sucesso", "PRAZO": "alerta"}
+_VARIANTE_STATUS = {"FINALIZADA": "sucesso", "CANCELADA": "erro"}
+
+
+def _celula_selo(texto, variante):
+    """Selo colorido dentro da célula (o clique passa pra linha)."""
+    w = QWidget()
+    w.setAttribute(Qt.WA_TransparentForMouseEvents)
+    h = QHBoxLayout(w)
+    h.setContentsMargins(6, 0, 6, 0)
+    h.addWidget(Badge(texto, variante), 0, Qt.AlignVCenter)
+    h.addStretch()
+    return w
+
+
+def _celula_pessoa(nome):
+    w = QWidget()
+    w.setAttribute(Qt.WA_TransparentForMouseEvents)
+    h = QHBoxLayout(w)
+    h.setContentsMargins(6, 0, 6, 0)
+    h.setSpacing(8)
+    h.addWidget(Avatar(nome if nome != "—" else "?", 28))
+    lbl = QLabel(nome)
+    lbl.setStyleSheet(f"background:transparent; border:none; font-weight:600; color:{tokens.TEXTO};")
+    h.addWidget(lbl, 1)
+    return w
+
+
+def _contexto(card, texto):
+    """Linha de contexto abaixo do valor do cartão (ex.: ticket médio)."""
+    card.lbl_variacao.setText(texto)
+    card.lbl_variacao.setStyleSheet(
+        f"background:transparent; font-size:{tokens.TAMANHO_XS}px; "
+        f"color:{'rgba(255,255,255,0.8)' if getattr(card, '_destaque', False) else tokens.TEXTO_TERCIARIO};"
+    )
+    card.lbl_variacao.show()
 
 
 def _estilo_data(campo):
@@ -128,6 +167,12 @@ class Vendas(QWidget):
             ["Nº", "Data", "Loja", "Cliente", "Vendedora", "Pagamento", "Total", "Situação"]
         )
         self.tabela.itemSelectionChanged.connect(self._ao_selecionar)
+        # selos são widgets de célula: largura fixa pra não cortar o texto
+        cab = self.tabela.horizontalHeader()
+        cab.setSectionResizeMode(3, QHeaderView.Stretch)  # cliente leva a folga
+        for coluna, largura in ((0, 72), (1, 92), (2, 90), (4, 100), (5, 125), (6, 115), (7, 120)):
+            cab.setSectionResizeMode(coluna, QHeaderView.Fixed)
+            self.tabela.setColumnWidth(coluna, largura)
         corpo.addWidget(self.tabela, stretch=3)
 
         lateral = QVBoxLayout()
@@ -297,7 +342,12 @@ class Vendas(QWidget):
         self.tabela_vendedoras = StandardTable(
             ["Vendedora", "Vendas", "Vendido", "Devolvido", "Líquido"]
         )
-        self.tabela_vendedoras.setFixedHeight(100)
+        self.tabela_vendedoras.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
+        self.tabela_vendedoras.setColumnWidth(0, 112)
+        self.tabela_vendedoras.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
+        self.tabela_vendedoras.setColumnWidth(1, 68)
+        self.tabela_vendedoras.setFixedHeight(130)
+        self.tabela_vendedoras.verticalHeader().setDefaultSectionSize(40)
         layout.addWidget(self.tabela_vendedoras)
 
         return card
@@ -309,8 +359,14 @@ class Vendas(QWidget):
         layout.setContentsMargins(16, 14, 16, 14)
         layout.setSpacing(10)
 
+        topo_detalhe = QHBoxLayout()
         self.lbl_detalhe = self._titulo_card("Selecione uma venda")
-        layout.addWidget(self.lbl_detalhe)
+        topo_detalhe.addWidget(self.lbl_detalhe)
+        topo_detalhe.addStretch()
+        self.selo_detalhe = Badge("", "neutro")
+        self.selo_detalhe.hide()
+        topo_detalhe.addWidget(self.selo_detalhe)
+        layout.addLayout(topo_detalhe)
 
         self.lbl_detalhe_info = QLabel()
         self.lbl_detalhe_info.setWordWrap(True)
@@ -449,7 +505,9 @@ class Vendas(QWidget):
                 formatar_moeda(float(item["total_liquido"])),
             ]
             for coluna, texto in enumerate(valores):
-                self.tabela_vendedoras.setItem(linha, coluna, QTableWidgetItem(texto))
+                self.tabela_vendedoras.setItem(
+                    linha, coluna, QTableWidgetItem("" if coluna == 0 else texto))
+            self.tabela_vendedoras.setCellWidget(linha, 0, _celula_pessoa(valores[0]))
 
         self.card_total.definir_valor(
             formatar_moeda(sum(float(i["total_liquido"]) for i in self.resumo))
@@ -457,9 +515,15 @@ class Vendas(QWidget):
         self.card_quantidade.definir_valor(
             str(sum(i["quantidade_vendas"] for i in self.resumo))
         )
-        self.card_devolvido.definir_valor(
-            formatar_moeda(sum(float(i["total_devolvido"]) for i in self.resumo))
-        )
+        total_devolvido = sum(float(i["total_devolvido"]) for i in self.resumo)
+        self.card_devolvido.definir_valor(formatar_moeda(total_devolvido))
+        qtd = sum(i["quantidade_vendas"] for i in self.resumo)
+        bruto = sum(float(i["total_vendido"]) for i in self.resumo)
+        _contexto(self.card_total, f"{qtd} vendas no período")
+        _contexto(self.card_quantidade,
+                  f"ticket médio {formatar_moeda(bruto / qtd)}" if qtd else "nenhuma venda")
+        _contexto(self.card_devolvido,
+                  f"{total_devolvido / bruto * 100:.1f}% do vendido".replace(".", ",") if bruto else "sem devoluções")
 
     def _vendas_filtradas(self):
         usuario_id = self.filtro_vendedora.currentData()
@@ -487,20 +551,25 @@ class Vendas(QWidget):
                 _NOMES_STATUS.get(venda["status"], venda["status"]),
             ]
             for coluna, texto in enumerate(valores):
-                item = QTableWidgetItem(texto)
+                # pagamento e situação viram selo (widget); o item vazio segura a seleção
+                item = QTableWidgetItem("" if coluna in (5, 7) else texto)
                 item.setData(Qt.UserRole, venda["id"])
                 if venda["status"] == "CANCELADA":
                     item.setForeground(Qt.gray)
-                elif coluna == 7:
-                    item.setForeground(QColor(
-                        tokens.SUCESSO if venda["status"] == "FINALIZADA" else tokens.ALERTA))
-                if coluna in (6, 7):
+                if coluna == 6:
                     f = item.font()
                     f.setBold(True)
                     item.setFont(f)
                 if coluna == 6:
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.tabela.setItem(linha, coluna, item)
+
+            self.tabela.setCellWidget(linha, 5, _celula_selo(
+                _forma_da_venda(venda), _VARIANTE_FORMA.get(venda["forma_pagamento"], "neutro")))
+            self.tabela.setCellWidget(linha, 7, _celula_selo(
+                _NOMES_STATUS.get(venda["status"], venda["status"]),
+                _VARIANTE_STATUS.get(venda["status"], "alerta")))
+            self.tabela.verticalHeader().setDefaultSectionSize(46)
 
         self.tabela.blockSignals(False)
         self.tabela.clearSelection()
@@ -544,6 +613,7 @@ class Vendas(QWidget):
 
         if venda is None:
             self.venda_atual = None
+            self.selo_detalhe.hide()
             self.lbl_detalhe.setText("Selecione uma venda")
             self.lbl_detalhe_info.setText("Clique numa venda da lista para ver os itens.")
             self.tabela_itens.setRowCount(0)
@@ -557,6 +627,9 @@ class Vendas(QWidget):
                 )
 
         self.lbl_detalhe.setText(f"Venda #{venda['id']}")
+        self.selo_detalhe.setText(_NOMES_STATUS.get(venda["status"], venda["status"]))
+        self.selo_detalhe.definir_variante(_VARIANTE_STATUS.get(venda["status"], "alerta"))
+        self.selo_detalhe.show()
 
         info = [
             datetime.fromisoformat(venda["data"]).strftime("%d/%m/%Y %H:%M"),

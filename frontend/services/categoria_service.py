@@ -12,11 +12,11 @@ def listar_categorias(recentes=False):
     return response.json()
 
 
-def criar_categoria(nome: str):
+def criar_categoria(nome: str, descricao: str | None = None):
 
     return post(
         "/categorias/",
-        {"nome": nome, "descricao": None},
+        {"nome": nome, "descricao": descricao},
     )
 
 

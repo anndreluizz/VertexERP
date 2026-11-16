@@ -9,10 +9,9 @@ from PySide6.QtCore import QDate, QTimer
 
 from design.assistente import (
     AssistenteDialogo, CampoEtapa, Contador, DataRapida, Escolha, Opcoes,
-    ValoresRapidos, campo_dinheiro,
+    ValoresRapidos, campo_dinheiro, campo_percentual,
 )
 from design.widgets import CampoTexto
-from services.worker import rodar_em_thread
 from utils.formatacao import formatar_moeda
 from utils.validacao import email_valido
 from widgets.fields.cpf_field import CpfCnpjField
@@ -72,9 +71,11 @@ def novo_cliente_assistente(parent=None):
 
     def etapa_credito():
         campos["limite"] = ValoresRapidos([100, 200, 500, 1000])
+        campos["limite"].setValue(200)  # sugestão: troque ou toque noutro valor
         return [CampoEtapa(
-            "Limite de crédito (fiado)", campos["limite"],
-            dica="Quanto ele pode dever ao mesmo tempo. Você muda quando quiser na ficha dele.",
+            "Limite de crédito (fiado)", campos["limite"], obrigatorio=True,
+            dica="Quanto ele pode dever ao mesmo tempo. Sem limite o fiado não trava nunca; "
+                 "você muda quando quiser na ficha dele.",
         )]
 
     def resumo():
@@ -91,8 +92,7 @@ def novo_cliente_assistente(parent=None):
         interno.whatsapp.setText(campos["whatsapp"].text())
         interno.cpf.setText(campos["cpf"].text())
         interno.email.setText(campos["email"].text().strip())
-        if campos["limite"].value() > 0:
-            interno.limite_credito.setText(_decimal_br(campos["limite"].value()))
+        interno.limite_credito.setText(_decimal_br(campos["limite"].value()))
         interno.salvar()
         assistente.aguardar_salvamento(interno.bt_salvar)
 
@@ -102,7 +102,7 @@ def novo_cliente_assistente(parent=None):
         dict(nome="Documentos", titulo="Quer guardar documento e e-mail?", campos=etapa_documentos,
              opcional=True, dica="Opcional. Se preencher, conferimos o formato."),
         dict(nome="Crédito", titulo="Qual o limite do fiado?", campos=etapa_credito,
-             opcional=True, dica="Toque num valor ou digite. Ele vale para as compras fiado."),
+             dica="Toque num valor ou digite. Ele vale para as compras fiado."),
         dict(nome="Revisão", titulo="Tudo certo?", revisao=True, resumo=resumo,
              dica="Confira antes de cadastrar."),
     ]
@@ -152,9 +152,7 @@ def novo_produto_assistente(parent=None):
 
     def etapa_venda():
         def criar_categoria(nome):
-            rodar_em_thread(
-                assistente, _criar_categoria_com_nome, nome.upper(), ao_sucesso=categoria_criada,
-            )
+            assistente.executar(_criar_categoria_com_nome, nome.upper(), ao_sucesso=categoria_criada)
 
         def categoria_criada(resultado):
             resposta, nome = resultado
@@ -318,6 +316,162 @@ def nova_despesa_assistente(parent=None):
         "Novo boleto", "wallet", passos, "Cadastrar boleto", concluir, interno=interno, parent=parent,
     )
     interno.accepted.connect(assistente.accept)
+    return assistente
+
+
+# ----------------------------------------------------------------------
+# FORNECEDOR
+# ----------------------------------------------------------------------
+
+def novo_fornecedor_assistente(parent=None):
+    from telas.cadastro_fornecedor import CadastroFornecedorDialog
+
+    interno = CadastroFornecedorDialog(parent=parent)
+    campos = {}
+
+    def etapa_empresa():
+        campos["razao"] = CampoTexto("Nome Ltda")
+        campos["fantasia"] = CampoTexto("Como a loja chama o fornecedor")
+        return [
+            CampoEtapa("Razão social", campos["razao"], obrigatorio=True),
+            CampoEtapa("Nome fantasia", campos["fantasia"]),
+        ]
+
+    def etapa_documento():
+        campos["cnpj"] = CpfCnpjField("00.000.000/0000-00")
+        campos["telefone"] = PhoneField("(00) 00000-0000")
+        return [
+            CampoEtapa(
+                "CNPJ", campos["cnpj"], obrigatorio=True,
+                valida=lambda w: None if len(_digitos(w.text())) == 14 and w.valido else "Informe um CNPJ válido (14 números).",
+            ),
+            CampoEtapa(
+                "Telefone", campos["telefone"],
+                valida=lambda w: None if len(w.digitos) >= 10 else "O número precisa ter DDD + telefone.",
+            ),
+        ]
+
+    def etapa_contato():
+        campos["email"] = EmailField("email@exemplo.com")
+        campos["cidade"] = CampoTexto("Cidade")
+        return [
+            CampoEtapa(
+                "E-mail", campos["email"],
+                valida=lambda w: None if email_valido(w.text()) else "Esse e-mail parece incompleto (ex.: nome@exemplo.com).",
+            ),
+            CampoEtapa("Cidade", campos["cidade"]),
+        ]
+
+    def etapa_compras():
+        campos["uf"] = CampoTexto("UF")
+        campos["uf"].setMaxLength(2)
+        campos["margem"] = campo_percentual()
+        return [
+            CampoEtapa("UF", campos["uf"]),
+            CampoEtapa(
+                "Margem padrão de venda", campos["margem"],
+                dica="Sugerida no preço de venda dos produtos importados de NF-e.",
+            ),
+        ]
+
+    def resumo():
+        return [
+            ("Razão social", campos["razao"].text()),
+            ("Nome fantasia", campos["fantasia"].text()),
+            ("CNPJ", campos["cnpj"].text()),
+            ("Telefone", campos["telefone"].text()),
+            ("E-mail", campos["email"].text()),
+            ("Cidade / UF", " / ".join(p for p in (campos["cidade"].text(), campos["uf"].text()) if p)),
+            ("Margem padrão", f"{campos['margem'].value():.2f} %".replace(".", ",")),
+        ]
+
+    def concluir(assistente):
+        interno.razao_social.setText(campos["razao"].text().strip())
+        interno.nome_fantasia.setText(campos["fantasia"].text().strip())
+        interno.cnpj.setText(campos["cnpj"].text())
+        interno.telefone.setText(campos["telefone"].text())
+        interno.email.setText(campos["email"].text().strip())
+        interno.cidade.setText(campos["cidade"].text().strip())
+        interno.estado.setText(campos["uf"].text().strip())
+        interno.margem_padrao.setValue(campos["margem"].value())
+        interno.salvar()
+        assistente.aguardar_salvamento(interno.bt_salvar)
+
+    passos = [
+        dict(nome="Empresa", titulo="Quem é o fornecedor?", campos=etapa_empresa,
+             dica="Só a razão social é obrigatória."),
+        dict(nome="Documento", titulo="CNPJ e telefone", campos=etapa_documento,
+             dica="O CNPJ é obrigatório. O Vertex confere os números."),
+        dict(nome="Contato", titulo="Como falar com ele?", campos=etapa_contato, opcional=True,
+             dica="Opcional. Dá pra completar depois."),
+        dict(nome="Compras", titulo="Estado e margem", campos=etapa_compras, opcional=True,
+             dica="A margem ajuda no preço dos produtos que chegam por NF-e."),
+        dict(nome="Revisão", titulo="Tudo certo?", revisao=True, resumo=resumo,
+             dica="Confira antes de cadastrar."),
+    ]
+    assistente = AssistenteDialogo(
+        "Novo fornecedor", "truck", passos, "Cadastrar fornecedor", concluir, interno=interno, parent=parent,
+    )
+    interno.accepted.connect(assistente.accept)
+    return assistente
+
+
+# ----------------------------------------------------------------------
+# CATEGORIA DE PRODUTO
+# ----------------------------------------------------------------------
+
+def _criar_categoria(nome, descricao):
+    from services.categoria_service import criar_categoria
+
+    return criar_categoria(nome, descricao), nome
+
+
+def nova_categoria_assistente(parent=None):
+    """Cria a categoria e fica com o nome em `nome_criado`."""
+    campos = {}
+
+    def etapa_nome():
+        campos["nome"] = CampoTexto("Ex.: Papelaria")
+        campos["descricao"] = CampoTexto("Para que serve (opcional)")
+        return [
+            CampoEtapa("Nome da categoria", campos["nome"], obrigatorio=True),
+            CampoEtapa("Descrição", campos["descricao"]),
+        ]
+
+    def resumo():
+        return [("Nome", campos["nome"].text().strip().upper()), ("Descrição", campos["descricao"].text().strip())]
+
+    def criada(resultado):
+        from PySide6.QtWidgets import QMessageBox
+
+        resposta, nome = resultado
+        if resposta.status_code in (200, 201):
+            assistente.nome_criado = nome
+            assistente.accept()
+            return
+        try:
+            erro = resposta.json()["detail"]
+        except Exception:
+            erro = resposta.text
+        QMessageBox.critical(assistente, "Erro", str(erro))
+        assistente.liberar()
+
+    def concluir(a):
+        a.executar(
+            _criar_categoria, campos["nome"].text().strip().upper(),
+            campos["descricao"].text().strip() or None, ao_sucesso=criada,
+        )
+
+    passos = [
+        dict(nome="Categoria", titulo="Como se chama a categoria?", campos=etapa_nome,
+             dica="O nome fica em maiúsculas, como as outras."),
+        dict(nome="Revisão", titulo="Tudo certo?", revisao=True, resumo=resumo,
+             dica="Confira antes de criar."),
+    ]
+    assistente = AssistenteDialogo(
+        "Nova categoria", "package", passos, "Criar categoria", concluir, parent=parent,
+    )
+    assistente.nome_criado = None
     return assistente
 
 

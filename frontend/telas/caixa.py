@@ -36,7 +36,7 @@ from design import tokens
 from design.animations import contar
 from design.icons import icone, icone_pixmap
 from design.lista import FaixaAtencao
-from design.privacidade import botao_olho, privacidade
+from design.privacidade import privacidade
 from design.widgets import Badge, BotaoPerigo, BotaoSecundario, BotaoSucesso, cor_forma_pagamento
 from services.worker import rodar_em_thread, em_paralelo
 from services import api
@@ -678,7 +678,6 @@ class Caixa(QWidget):
         for bt in (self.bt_suprimento, self.bt_sangria, self.bt_encerrar):
             bt.setMinimumHeight(42)
             topo.addWidget(bt, 0, Qt.AlignVCenter)
-        topo.addWidget(botao_olho(tokens.TEXTO_SECUNDARIO, tamanho=40, tamanho_icone=20), 0, Qt.AlignVCenter)
         layout.addLayout(topo)
 
         self.faixa_atencao = FaixaAtencao()

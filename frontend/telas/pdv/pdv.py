@@ -413,7 +413,9 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
 
     def abrir_novo_produto(self):
 
-        dialog = CadastroProdutoWindow()
+        from telas.cadastros_etapas import novo_produto_assistente
+
+        dialog = novo_produto_assistente(self)
 
         if dialog.exec() != QDialog.Accepted:
             return

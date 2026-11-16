@@ -219,12 +219,14 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
 
         # decimais (0 ou 3) seguem a unidade, ver selecionar_modo
         self.estoque = QDoubleSpinBox()
+        self.estoque.setButtonSymbols(QDoubleSpinBox.NoButtons)
         self.estoque.setDecimals(0)
         self.estoque.setMaximum(999999)
         self.estoque.setMinimumHeight(44)
         self.estoque.setStyleSheet(self._estilo_input("QDoubleSpinBox"))
 
         self.estoque_minimo = QDoubleSpinBox()
+        self.estoque_minimo.setButtonSymbols(QDoubleSpinBox.NoButtons)
         self.estoque_minimo.setDecimals(0)
         self.estoque_minimo.setMaximum(999999)
         self.estoque_minimo.setMinimumHeight(44)

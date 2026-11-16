@@ -4,6 +4,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
+    QAbstractSpinBox,
     QDoubleSpinBox,
     QPushButton,
     QDateEdit,
@@ -39,6 +40,7 @@ class FormularioMixin:
         campo.setMaximum(999999.99)
         campo.setDecimals(2)
         campo.setPrefix("R$ ")
+        campo.setButtonSymbols(QAbstractSpinBox.NoButtons)
         campo.setMinimumHeight(44)
         campo.setStyleSheet(self._estilo_input("QDoubleSpinBox"))
         return campo

@@ -53,6 +53,29 @@ from telas.ficha_cliente.registrar_pagamento import RegistrarPagamentoDialog
 from telas.ficha_cliente.whatsapp import WhatsAppMixin
 
 
+class _BarraLimite(QFrame):
+    """Barra fina do uso do limite de crédito (dentro do cartão azul)."""
+
+    def __init__(self):
+        super().__init__()
+        self.setFixedHeight(8)
+        self.setStyleSheet("background:rgba(255,255,255,0.25); border-radius:4px;")
+        self._fill = QFrame(self)
+        self._fill.setStyleSheet("background:#FFFFFF; border-radius:4px;")
+        self._fracao = 0.0
+
+    def definir_fracao(self, fracao):
+        self._fracao = max(0.0, min(1.0, fracao))
+        self._ajustar()
+
+    def _ajustar(self):
+        self._fill.setGeometry(0, 0, int(self.width() * self._fracao), self.height())
+
+    def resizeEvent(self, evento):
+        super().resizeEvent(evento)
+        self._ajustar()
+
+
 class FichaClienteDialog(WhatsAppMixin, ObservacoesMixin, HistoricoMixin, ExtratoMixin, QDialog):
 
     _TIMELINE_PAGINA = 30  # scroll incremental: 30 lançamentos por vez
@@ -238,6 +261,11 @@ class FichaClienteDialog(WhatsAppMixin, ObservacoesMixin, HistoricoMixin, Extrat
         self.kpi_pago = CardKPI("Total pago", "check", tokens.SECUNDARIA)
         self.kpi_ultima_compra = CardKPI("Última compra", "calendar", tokens.ALERTA)
 
+        # barra do uso do limite de crédito, dentro do cartão do saldo
+        self.barra_limite = _BarraLimite()
+        self.barra_limite.hide()
+        self.kpi_saldo.layout().addWidget(self.barra_limite)
+
         for coluna, card in enumerate((
             self.kpi_saldo, self.kpi_comprado, self.kpi_pago, self.kpi_ultima_compra,
         )):
@@ -385,12 +413,51 @@ class FichaClienteDialog(WhatsAppMixin, ObservacoesMixin, HistoricoMixin, Extrat
         linha_toggle.addWidget(self.bt_recolher_painel)
 
         layout_wrapper.addLayout(linha_toggle)
+        layout_wrapper.addWidget(self._construir_aviso_cobranca())
         layout_wrapper.addWidget(self.scroll_painel_lateral, stretch=1)
 
         self._painel_lateral_wrapper = wrapper
         self._atualizar_detalhes_cadastro(self.cliente)
 
         return wrapper
+
+    def _construir_aviso_cobranca(self):
+        """Aviso âmbar: saldo em aberto e sem pagar há mais de 60 dias, com a
+        cobrança pelo WhatsApp a um clique. Só aparece quando há o que cobrar."""
+
+        self.aviso_cobranca = QFrame()
+        self.aviso_cobranca.setObjectName("avisoCobranca")
+        self.aviso_cobranca.setStyleSheet(
+            f"QFrame#avisoCobranca {{ background:{tokens.ALERTA_CLARO};"
+            f" border-radius:{tokens.RADIUS_MD}px; }}"
+        )
+        layout = QVBoxLayout(self.aviso_cobranca)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(6)
+
+        self.lbl_cobranca_titulo = QLabel()
+        self.lbl_cobranca_titulo.setStyleSheet(f"""
+            background:transparent; border:none; color:{tokens.ALERTA_TEXTO};
+            font-size:{tokens.TAMANHO_BASE}px; font-weight:700;
+        """)
+        layout.addWidget(self.lbl_cobranca_titulo)
+
+        self.lbl_cobranca_texto = QLabel()
+        self.lbl_cobranca_texto.setWordWrap(True)
+        self.lbl_cobranca_texto.setStyleSheet(f"""
+            background:transparent; border:none; color:{tokens.ALERTA_TEXTO};
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
+        layout.addWidget(self.lbl_cobranca_texto)
+
+        self.bt_cobrar_whatsapp = BotaoSucesso("Cobrar no WhatsApp", icone_nome="message-circle")
+        self.bt_cobrar_whatsapp.setAutoDefault(False)
+        self.bt_cobrar_whatsapp.clicked.connect(self.enviar_cobranca_whatsapp)
+        layout.addWidget(self.bt_cobrar_whatsapp)
+
+        self._cobranca_pendente = False
+        self.aviso_cobranca.hide()
+        return self.aviso_cobranca
 
     def _botao_discreto(self, texto, icone_nome, cor, callback):
 
@@ -415,6 +482,8 @@ class FichaClienteDialog(WhatsAppMixin, ObservacoesMixin, HistoricoMixin, Extrat
         self.painel_lateral_expandido = not self.painel_lateral_expandido
 
         self.scroll_painel_lateral.setVisible(self.painel_lateral_expandido)
+        self.aviso_cobranca.setVisible(
+            self.painel_lateral_expandido and self._cobranca_pendente)
 
         if self.painel_lateral_expandido:
             self._painel_lateral_wrapper.setFixedWidth(self._LARGURA_PAINEL_LATERAL)
@@ -759,6 +828,9 @@ class FichaClienteDialog(WhatsAppMixin, ObservacoesMixin, HistoricoMixin, Extrat
         else:
             legenda_saldo = "Sem limite de crédito definido"
         self.kpi_saldo.definir_legenda(legenda_saldo)
+        self.barra_limite.setVisible(saldo > 0 and limite > 0)
+        if limite > 0:
+            self.barra_limite.definir_fracao(saldo / limite)
 
         self.bt_pagar.setEnabled(saldo > 0)
 
@@ -883,6 +955,22 @@ class FichaClienteDialog(WhatsAppMixin, ObservacoesMixin, HistoricoMixin, Extrat
             self.lbl_aviso_status.show()
         else:
             self.lbl_aviso_status.hide()
+
+        # aviso de cobrança na lateral: saldo em aberto + mais de 60 dias sem pagar
+        dias_sem_pagar = (
+            agr["dias_desde_ultimo_pagamento"]
+            if agr["dias_desde_ultimo_pagamento"] is not None
+            else agr["dias_desde_ultima_compra"]
+        )
+        cobrar = saldo_atual > 0 and dias_sem_pagar is not None and dias_sem_pagar > 60
+        self._cobranca_pendente = cobrar
+        self.aviso_cobranca.setVisible(cobrar and self.painel_lateral_expandido)
+        if cobrar:
+            primeiro_nome = (self.cliente.get("nome") or "").split(" ")[0] or "o cliente"
+            self.lbl_cobranca_titulo.setText(f"Sem pagar há {dias_sem_pagar} dias")
+            self.lbl_cobranca_texto.setText(
+                f"Passou dos 60 dias. Que tal lembrar {primeiro_nome} com uma mensagem gentil?"
+            )
 
         # painel Detalhes
         self.lbl_resumo_cliente_desde.setText(_data_curta(agr["criado_em"]))

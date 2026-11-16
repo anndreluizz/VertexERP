@@ -639,6 +639,29 @@ class Clientes(QWidget):
 
         layout.addLayout(cabecalho)
 
+        # tudo abaixo do cabeçalho rola junto: os cards somem ao descer a
+        # lista em vez de ficarem fixos ocupando a tela
+        rolagem_pagina = QScrollArea()
+        rolagem_pagina.setWidgetResizable(True)
+        rolagem_pagina.setFrameShape(QFrame.NoFrame)
+        rolagem_pagina.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        rolagem_pagina.setStyleSheet(f"""
+            QScrollArea {{ border:none; background:transparent; }}
+            QScrollBar:vertical {{ background:transparent; width:10px; margin:0; }}
+            QScrollBar::handle:vertical {{
+                background:{tokens.BORDA_FORTE}; border-radius:5px; min-height:30px;
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background:transparent; }}
+        """)
+        conteudo_pagina = QWidget()
+        conteudo_pagina.setStyleSheet("background:transparent;")
+        rolagem_pagina.setWidget(conteudo_pagina)
+        layout.addWidget(rolagem_pagina, stretch=1)
+        layout = QVBoxLayout(conteudo_pagina)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
+
         self.faixa_atencao = FaixaAtencao()
         layout.addWidget(self.faixa_atencao)
 
@@ -806,12 +829,6 @@ class Clientes(QWidget):
         lista_layout = QVBoxLayout(self.card_lista)
         lista_layout.setContentsMargins(0, 6, 0, 6)
 
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setStyleSheet(
-            "QScrollArea { border: none; background: transparent; }"
-        )
-
         self.grid_widget = QWidget()
         self.grid_widget.setStyleSheet("background:transparent;")
         # grid de 1 coluna (e não QVBoxLayout) só pra continuar
@@ -821,8 +838,7 @@ class Clientes(QWidget):
         self.grid_layout.setSpacing(0)
         self.grid_layout.setAlignment(Qt.AlignTop)
 
-        self.scroll.setWidget(self.grid_widget)
-        lista_layout.addWidget(self.scroll)
+        lista_layout.addWidget(self.grid_widget)
 
         self.painel = PainelCliente()
         self.painel.abrir_ficha.connect(self.ver_ficha)
@@ -910,9 +926,12 @@ class Clientes(QWidget):
         self.area_lista.setVisible(True)
         self._definir_controles_carregando(True)
 
-        self._descartar_linhas()
-        cartoes_esqueleto(self.grid_layout, n=7, colunas=1, altura=58)
-        self.lbl_contagem.setText("Carregando...")
+        # já tem lista na tela: deixa ela lá e atualiza por trás (sem
+        # esqueleto), assim voltar pra Clientes é instantâneo
+        if not self.clientes:
+            self._descartar_linhas()
+            cartoes_esqueleto(self.grid_layout, n=7, colunas=1, altura=58)
+            self.lbl_contagem.setText("Carregando...")
 
         loja_id = self.combo_loja_filtro.currentData()
 
@@ -942,12 +961,27 @@ class Clientes(QWidget):
         # os controles, mas nada trocava o skeleton por conteudo real
         # nem avisava o usuario que algo deu errado)
         try:
+            antigos = {
+                c["id"]: (c, self.agregados_por_cliente.get(c["id"]))
+                for c in self.clientes
+            }
             (
                 self.clientes,
                 self.agregados_por_cliente,
                 self.recebido_fiado_total,
                 self.movimentos_por_cliente,
             ) = dados
+
+            # montar as linhas é o que pesa: só refaz as de quem mudou
+            novos = {
+                c["id"]: (c, self.agregados_por_cliente.get(c["id"]))
+                for c in self.clientes
+            }
+            mudaram = [cid for cid in self._linhas if novos.get(cid) != antigos.get(cid)]
+            for cid in mudaram:
+                self._linhas.pop(cid).deleteLater()
+            if mudaram:
+                self._ordem_grid = []
 
             self.atualizar_cards_resumo()
             self.filtrar_clientes()

@@ -121,3 +121,31 @@ def test_boleto_em_etapas_preenche_o_cadastro(_qapp, monkeypatch):
     a.avancar()  # Cadastrar boleto
     assert visto["descricao"] == "Energia" and visto["valor"] == "612,00"
     assert visto["repeticao"] == "PARCELADO"
+
+
+def test_usuario_em_etapas_valida_senha_e_preenche_o_cadastro(_qapp, monkeypatch):
+    _sem_rede(monkeypatch)
+    from telas import gerenciar_usuarios
+    from telas.cadastros_etapas import novo_usuario_assistente
+
+    visto = []
+    monkeypatch.setattr(gerenciar_usuarios.NovoUsuarioDialog, "criar", lambda s: visto.append((s.nome.text(), s.email.text(), s.senha.text())))
+    a = novo_usuario_assistente([{"id": 3, "nome": "Gerente"}])
+
+    a._campos[0].w.setText("Maria")
+    a._campos[1].w.setText("maria@loja.com")
+    a.avancar()
+    # senha curta: erro só na senha
+    a._campos[0].w.setText("123")
+    a._campos[1].w.setText("123")
+    a.avancar()
+    assert a._i == 1 and a._campos[0].erro.isVisibleTo(a) and not a._campos[1].erro.isVisibleTo(a)
+    a._campos[0].w.setText("segredo1")
+    a._campos[1].w.setText("outra123")  # não confere
+    a.avancar()
+    assert a._i == 1 and a._campos[1].erro.isVisibleTo(a)
+    a._campos[1].w.setText("segredo1")
+    a.avancar()
+    a.avancar()  # perfil
+    a.avancar()  # Cadastrar usuário
+    assert visto == [("MARIA", "maria@loja.com", "segredo1")] or visto[0][1:] == ("maria@loja.com", "segredo1")

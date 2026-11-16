@@ -17,6 +17,10 @@ def test_so_monta_widgets_das_linhas_visiveis_e_rolar_monta_o_resto(monkeypatch)
     assert w.tabela.cellWidget(999, 8) is None
     assert w.tabela.item(999, 3).text() == w.produtos_exibidos[999]["nome"]  # o texto ja' esta' la' (busca, selecao)
 
-    w.tabela.scrollToBottom()
+    # a página rola, não a tabela: força o layout (sem event loop) antes de rolar
+    w._conteudo_pagina.layout().activate()
+    w.rolagem_pagina.widget().resize(w.rolagem_pagina.viewport().width(), w.rolagem_pagina.widget().sizeHint().height())
+    barra = w.rolagem_pagina.verticalScrollBar()
+    barra.setValue(barra.maximum())
     assert w.tabela.cellWidget(999, 8) is not None
     assert len(w._linhas_montadas) < 100

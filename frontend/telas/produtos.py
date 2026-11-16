@@ -15,7 +15,7 @@ from services.produto_service import (
     excluir_produto,
     obter_foto_produto,
 )
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QPoint, Qt, QTimer, Signal
 
 from PySide6.QtGui import (
     QShortcut,
@@ -28,6 +28,8 @@ from PySide6.QtGui import (
 
 from PySide6.QtWidgets import (
     QApplication,
+    QFrame,
+    QScrollArea,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
@@ -228,10 +230,30 @@ class Produtos(QWidget):
         self.faixa_atencao = FaixaAtencao()
         layout.addWidget(self.faixa_atencao)
 
-        # Sem rolagem da página inteira: cabeçalho, números e filtros
-        # ficam fixos e só a tabela rola. Antes a página toda rolava e
-        # a tabela (o conteúdo principal) ficava espremida lá embaixo.
-        conteudo_layout = layout
+        # Tudo abaixo do cabeçalho rola junto (os cards somem ao descer a
+        # lista); a tabela ocupa a altura toda das linhas e só o rodapé
+        # fica fixo. Os widgets das linhas continuam sendo montados só
+        # nas que aparecem (ver _montar_visiveis).
+        self.rolagem_pagina = QScrollArea()
+        self.rolagem_pagina.setWidgetResizable(True)
+        self.rolagem_pagina.setFrameShape(QFrame.NoFrame)
+        self.rolagem_pagina.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.rolagem_pagina.setStyleSheet(f"""
+            QScrollArea {{ border:none; background:transparent; }}
+            QScrollBar:vertical {{ background:transparent; width:10px; margin:0; }}
+            QScrollBar::handle:vertical {{
+                background:{tokens.BORDA_FORTE}; border-radius:5px; min-height:30px;
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background:transparent; }}
+        """)
+        self._conteudo_pagina = QWidget()
+        self._conteudo_pagina.setStyleSheet("background:transparent;")
+        self.rolagem_pagina.setWidget(self._conteudo_pagina)
+        layout.addWidget(self.rolagem_pagina, stretch=1)
+        conteudo_layout = QVBoxLayout(self._conteudo_pagina)
+        conteudo_layout.setContentsMargins(0, 0, 0, 0)
+        conteudo_layout.setSpacing(16)
 
         # ======================
         # CARDS DE RESUMO
@@ -402,8 +424,11 @@ class Produtos(QWidget):
 
         # os widgets das celulas (foto, badges, acoes) so' sao criados nas
         # linhas que aparecem: rolar ou aumentar a janela monta as demais
-        self.tabela.verticalScrollBar().valueChanged.connect(self._montar_visiveis)
-        self.tabela.verticalScrollBar().rangeChanged.connect(self._montar_visiveis)
+        self.tabela.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.rolagem_pagina.verticalScrollBar().valueChanged.connect(self._montar_visiveis)
+        self.rolagem_pagina.verticalScrollBar().rangeChanged.connect(self._montar_visiveis)
+        self.tabela.model().rowsInserted.connect(self._ajustar_altura_tabela)
+        self.tabela.model().rowsRemoved.connect(self._ajustar_altura_tabela)
 
         self.tabela.setSelectionBehavior(
             QTableWidget.SelectRows
@@ -447,7 +472,7 @@ class Produtos(QWidget):
             }}
         """)
 
-        self.tabela.setMinimumHeight(200)
+        self._ajustar_altura_tabela()
         # tabela + ficha rapida do produto clicado (some ate clicar numa linha)
         self.painel_detalhe = PainelDetalhe()
         corpo_tabela = QHBoxLayout()
@@ -511,7 +536,7 @@ class Produtos(QWidget):
         rodape.addSpacing(12)
         rodape.addWidget(self.bt_atualizar)
 
-        conteudo_layout.addLayout(rodape)
+        layout.addLayout(rodape)
 
         # ==========================================
         # EVENTOS
@@ -1007,6 +1032,16 @@ class Produtos(QWidget):
 
         self._atualizar_texto_selecionados()
 
+    def _ajustar_altura_tabela(self, *_):
+        """A tabela mostra todas as linhas (quem rola é a página)."""
+
+        altura = (
+            self.tabela.horizontalHeader().height()
+            + self.tabela.verticalHeader().defaultSectionSize() * self.tabela.rowCount()
+            + 2
+        )
+        self.tabela.setFixedHeight(max(altura, 200))
+
     def _montar_visiveis(self, *_):
 
         produtos = getattr(self, "produtos_exibidos", [])
@@ -1014,9 +1049,14 @@ class Produtos(QWidget):
             return
 
         altura_linha = self.tabela.verticalHeader().defaultSectionSize()
-        primeira = max(self.tabela.rowAt(0), 0)
+        # a tabela tem a altura toda; o que aparece depende da rolagem da
+        # página: topo da tabela dentro do conteúdo x posição da rolagem
+        topo_tabela = self.tabela.mapTo(self._conteudo_pagina, QPoint(0, 0)).y()
+        cabecalho = self.tabela.horizontalHeader().height()
+        rolado = self.rolagem_pagina.verticalScrollBar().value() - topo_tabela - cabecalho
+        primeira = max(rolado // altura_linha, 0)
         # janela ainda sem altura (antes do show): monta uma tela cheia
-        cabem = max(self.tabela.viewport().height() // altura_linha, 20)
+        cabem = max(self.rolagem_pagina.viewport().height() // altura_linha, 20)
 
         for linha in range(primeira, min(primeira + cabem + 5, len(produtos))):
             if linha not in self._linhas_montadas:

@@ -420,6 +420,7 @@ class CadastroDespesaDialog(DialogoPadrao):
         spin.setValue(valor)
         spin.setSuffix(sufixo)
         spin.setMinimumHeight(44)
+        spin.setButtonSymbols(QSpinBox.NoButtons)  # digita-se o número, sem setinhas
         spin.setStyleSheet(f"""
             QSpinBox {{
                 border: 1.5px solid {tokens.BORDA}; border-radius: {tokens.RADIUS_SM}px;

@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from design import tokens
 from design.fonts import familia_titulo, fonte
 from design.icons import icone, icone_pixmap
+from design.lista import BarraProgresso
 from design.widgets import (
     Badge,
     BotaoSucesso,
@@ -135,6 +136,12 @@ class LayoutMixin:
         self.bt_orcamento = self._botao_ghost_cabecalho("Orçamento", icone_nome="printer")
         self.bt_orcamento.clicked.connect(self.imprimir_orcamento)
 
+        # desfaz a última coisa lida (item novo sai, item repetido volta
+        # uma leitura); só vale enquanto houver o que desfazer
+        self.bt_desfazer = self._botao_ghost_cabecalho("Desfazer último  Ctrl+Z", icone_nome="chevron-left")
+        self.bt_desfazer.setEnabled(False)
+        self.bt_desfazer.clicked.connect(self.desfazer_ultimo)
+
         # contorno vermelho (e não botão vermelho cheio): é uma ação
         # destrutiva e rara -- não pode ser a coisa mais chamativa da
         # tela, competindo com o Finalizar Venda
@@ -168,6 +175,7 @@ class LayoutMixin:
         cabecalho.addWidget(self.bt_retomar)
         cabecalho.addWidget(self.bt_suspender)
         cabecalho.addWidget(self.bt_orcamento)
+        cabecalho.addWidget(self.bt_desfazer)
         # Cancelar venda desceu pro fim do painel da direita (prototipo)
 
         return cabecalho
@@ -471,6 +479,7 @@ class LayoutMixin:
         lbl_icone = QLabel()
         lbl_icone.setStyleSheet("background:transparent;")
         lbl_icone.setPixmap(icone_pixmap("users", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
+        self.lbl_icone_cliente = lbl_icone  # vira o avatar do cliente escolhido
         layout.addWidget(lbl_icone, alignment=Qt.AlignTop)
 
         col_cliente = QVBoxLayout()
@@ -499,6 +508,12 @@ class LayoutMixin:
         col_cliente.addWidget(lbl_rotulo)
         col_cliente.addWidget(self.lbl_cliente)
         col_cliente.addWidget(self.lbl_cliente_info)
+
+        # quanto do limite de crédito já está usado (só com cliente que tem limite)
+        self.barra_limite_cliente = BarraProgresso(0, tokens.PRIMARIA, altura=6)
+        self.barra_limite_cliente.hide()
+        col_cliente.addSpacing(2)
+        col_cliente.addWidget(self.barra_limite_cliente)
 
         self.lbl_cliente_info.setWordWrap(True)
         layout.addLayout(col_cliente, stretch=1)

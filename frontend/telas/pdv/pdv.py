@@ -39,6 +39,8 @@ from PySide6.QtWidgets import (
 )
 from design import tokens
 from design.animations import fade_in
+from design.icons import icone_pixmap
+from design.widgets import Avatar
 from utils.formatacao import eh_fracionado, formatar_moeda, formatar_quantidade
 from telas.pdv.carrinho import CarrinhoMixin
 from telas.pdv.comum import (
@@ -75,6 +77,8 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
         # destaque "ultimo item lido" -- id do produto, nao indice da
         # linha, pra continuar certo quando outra linha e' removida
         self._id_ultimo_item = None
+        # (id do produto, quantidade lida, era item novo) -- pro Desfazer último
+        self._ultima_adicao = None
         self._fotos_cache = {}
 
         _eu = me() or {}
@@ -185,6 +189,10 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
         # F2 (cliente) e F6 (desconto/acréscimo) não conflitam com
         # nenhum atalho existente e já têm uma ação óbvia associada —
         # F3 (pagar) continua tratado globalmente por PrincipalWindow.
+        self.atalho_desfazer = QShortcut(QKeySequence("Ctrl+Z"), self)
+        self.atalho_desfazer.setContext(contexto)
+        self.atalho_desfazer.activated.connect(self.desfazer_ultimo)
+
         self.atalho_f2 = QShortcut(QKeySequence("F2"), self)
         self.atalho_f2.setContext(contexto)
         self.atalho_f2.activated.connect(self.abrir_selecionar_cliente)
@@ -387,6 +395,8 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
             self._mostrar_status_busca(mensagem, erro=True)
             return False
 
+        self._ultima_adicao = (produto["id"], quantidade, item_existente is None)
+
         if item_existente:
             item_existente["quantidade"] = round(item_existente["quantidade"] + quantidade, 3)
         else:
@@ -481,10 +491,25 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
         self.bt_selecionar_cliente.setText("Trocar  F2")
         self.bt_limpar_cliente.setVisible(True)
 
+        self.lbl_icone_cliente.setPixmap(Avatar(cliente["nome"], 32).grab())
+        self._mostrar_limite_cliente(cliente, cor if cor != tokens.TEXTO_SECUNDARIO else tokens.PRIMARIA)
+
+    def _mostrar_limite_cliente(self, cliente, cor):
+        saldo = float((cliente.get("_agr") or {}).get("saldo_devedor", 0) or 0)
+        limite = float(cliente.get("limite_credito") or 0)
+        if limite <= 0:
+            self.barra_limite_cliente.hide()
+            return
+        self.barra_limite_cliente.definir(max(0.0, min(100.0, saldo / limite * 100)), cor)
+        self.barra_limite_cliente.show()
+
     def limpar_cliente(self):
 
         self.cliente_id = None
         self.cliente_nome = None
+
+        self.barra_limite_cliente.hide()
+        self.lbl_icone_cliente.setPixmap(icone_pixmap("users", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
 
         self.lbl_cliente.setText("Balcão (sem cliente)")
         self.lbl_cliente.setStyleSheet(f"""
@@ -612,6 +637,7 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
         self._chave_venda = None
         self.itens.clear()
         self._id_ultimo_item = None
+        self._ultima_adicao = None
         self._atualizar_ultimo_item()
 
         self.tabela.setRowCount(0)

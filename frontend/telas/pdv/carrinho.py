@@ -66,6 +66,8 @@ class CarrinhoMixin:
         else:
             self._id_ultimo_item = None
 
+        self.bt_desfazer.setEnabled(bool(self.itens) and self._ultima_adicao is not None)
+
         self.pilha_carrinho.setCurrentWidget(
             self.tabela if self.itens else self.pilha_carrinho.widget(0)
         )
@@ -330,6 +332,31 @@ class CarrinhoMixin:
         self._id_ultimo_item = item["id"]
 
         self.atualizar_tabela()
+
+    def desfazer_ultimo(self):
+        """Desfaz a última leitura: produto novo sai do cupom; produto que
+        já estava lá volta à quantidade de antes."""
+
+        ultima, self._ultima_adicao = self._ultima_adicao, None
+        if not ultima:
+            self.atualizar_tabela()
+            return
+
+        produto_id, quantidade, novo = ultima
+        linha = next((i for i, it in enumerate(self.itens) if it["id"] == produto_id), None)
+        if linha is None:
+            self.atualizar_tabela()
+            return
+
+        item = self.itens[linha]
+        restante = round(item["quantidade"] - quantidade, 3)
+        self._mostrar_status_busca(f"Desfeito: {item['nome']}", erro=False)
+        if novo or restante <= 0:
+            self.remover_item(linha)
+        else:
+            item["quantidade"] = restante
+            self._id_ultimo_item = produto_id
+            self.atualizar_tabela()
 
     def remover_item(self, linha):
 

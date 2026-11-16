@@ -27,3 +27,17 @@ def test_filtro_ignora_estilo_da_tela_e_campo_aceita(_qapp):
     f.setStyleSheet("QComboBox { color: red; }")
     c.setStyleSheet("QComboBox { color: red; }")
     assert f.styleSheet() == antes and "red" in c.styleSheet()
+
+
+def test_engrenagem_do_header_so_para_admin(_qapp):
+    from unittest import mock
+    from design import header as h
+    with mock.patch.object(h.Header, "_atualizar_contagem_notificacoes"), \
+         mock.patch.object(h.Header, "_atualizar_contagem_aprovacoes"):
+        admin = h.Header("Loja", "Ana", "Admin", admin=True, na_barra=True)
+        vend = h.Header("Loja", "Bia", "Vendedor", admin=False, na_barra=True)
+        admin.show(); vend.show()
+        avisos = []
+        admin.solicitou_configuracoes.connect(lambda: avisos.append(1))
+        admin.bt_config.click()
+        assert avisos == [1] and admin.bt_config.isVisible() and not vend.bt_config.isVisible()

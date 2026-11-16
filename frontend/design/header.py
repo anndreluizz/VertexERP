@@ -367,6 +367,7 @@ class Header(QFrame):
     tema_alternado = Signal(bool)
     solicitou_logout = Signal()
     solicitou_trocar_senha = Signal()
+    solicitou_configuracoes = Signal()
 
     def __init__(self, nome_loja, nome_usuario, cargo, admin=False, parent=None,
                  na_barra=False):
@@ -566,6 +567,14 @@ class Header(QFrame):
             self._atualizar_contagem_notificacoes
         )
         self._timer_notificacoes.start(_INTERVALO_POLL_NOTIFICACOES_MS)
+
+        # engrenagem: atalho pra Configurações (só admin -- é quem pode abrir)
+        self.bt_config = self._botao_icone("settings")
+        self.bt_config.setToolTip("Configurações")
+        self.bt_config.setAccessibleName("Configurações")
+        self.bt_config.clicked.connect(self.solicitou_configuracoes.emit)
+        self.bt_config.setVisible(bool(self._admin))
+        layout.addWidget(self.bt_config)
 
         divisor = QFrame()
         divisor.setFixedSize(1, 32)

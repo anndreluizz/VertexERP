@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta
 from html import escape
 
 from PySide6.QtCore import QDate, Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
@@ -198,6 +199,13 @@ class Vendas(QWidget):
         cabecalho.addLayout(col_titulo)
         cabecalho.addStretch()
 
+        bt_imprimir = BotaoSecundario("Imprimir", icone_nome="printer")
+        bt_imprimir.setToolTip("Imprime as vendas da lista, com os itens de cada uma")
+        bt_imprimir.clicked.connect(self.imprimir)
+        # imprime o total por forma de pagamento
+        bt_imprimir.setVisible(api.usuario_tem_permissao("financeiro.ver"))
+        cabecalho.addWidget(bt_imprimir)
+
         return cabecalho
 
     def _construir_filtros(self):
@@ -205,9 +213,22 @@ class Vendas(QWidget):
         filtros = QHBoxLayout()
         filtros.setSpacing(10)
 
+        self.chips_periodo = {}
         for rotulo, dias in (("Hoje", 0), ("7 dias", 6), ("30 dias", 29)):
-            bt = BotaoSecundario(rotulo)
+            bt = QPushButton(rotulo)
+            bt.setCheckable(True)
+            bt.setFixedHeight(34)
+            bt.setCursor(Qt.PointingHandCursor)
+            bt.setStyleSheet(f"""
+                QPushButton {{ padding:0 16px; border-radius:17px; font-weight:600;
+                    font-size:{tokens.TAMANHO_SM}px; color:{tokens.TEXTO_SECUNDARIO};
+                    background:{tokens.CARD}; border:1px solid {tokens.BORDA}; }}
+                QPushButton:hover {{ background:{tokens.FUNDO}; }}
+                QPushButton:checked {{ font-weight:700; color:{tokens.PRIMARIA};
+                    background:{tokens.PRIMARIA_CLARA}; border-color:{tokens.PRIMARIA_CLARA}; }}
+            """)
             bt.clicked.connect(lambda _=False, d=dias: self._periodo_rapido(d))
+            self.chips_periodo[dias] = bt
             filtros.addWidget(bt)
 
         # mes fechado: preenche as datas de/ate
@@ -250,13 +271,6 @@ class Vendas(QWidget):
         bt_buscar = BotaoPrimario("Buscar", icone_nome="search")
         bt_buscar.clicked.connect(self.carregar)
         filtros.addWidget(bt_buscar)
-
-        bt_imprimir = BotaoSecundario("Imprimir", icone_nome="printer")
-        bt_imprimir.setToolTip("Imprime as vendas da lista, com os itens de cada uma")
-        bt_imprimir.clicked.connect(self.imprimir)
-        # imprime o total por forma de pagamento
-        bt_imprimir.setVisible(api.usuario_tem_permissao("financeiro.ver"))
-        filtros.addWidget(bt_imprimir)
 
         filtros.addStretch()
 
@@ -337,6 +351,9 @@ class Vendas(QWidget):
             self.combo_mes.blockSignals(True)
             self.combo_mes.setCurrentIndex(0)
             self.combo_mes.blockSignals(False)
+        if hasattr(self, "chips_periodo"):
+            for d, bt in self.chips_periodo.items():
+                bt.setChecked(d == dias)
         hoje = date.today()
         self.data_fim.setDate(QDate(hoje.year, hoje.month, hoje.day))
         inicio = hoje - timedelta(days=dias)
@@ -348,6 +365,8 @@ class Vendas(QWidget):
         mes = intervalo_mes(rotulo)
         if not mes:
             return
+        for bt in self.chips_periodo.values():
+            bt.setChecked(False)
         for campo, dia in ((self.data_inicio, mes[0]), (self.data_fim, mes[1])):
             campo.setDate(QDate(dia.year, dia.month, dia.day))
         self.carregar()
@@ -471,6 +490,15 @@ class Vendas(QWidget):
                 item.setData(Qt.UserRole, venda["id"])
                 if venda["status"] == "CANCELADA":
                     item.setForeground(Qt.gray)
+                elif coluna == 7:
+                    item.setForeground(QColor(
+                        tokens.SUCESSO if venda["status"] == "FINALIZADA" else tokens.ALERTA))
+                if coluna in (6, 7):
+                    f = item.font()
+                    f.setBold(True)
+                    item.setFont(f)
+                if coluna == 6:
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.tabela.setItem(linha, coluna, item)
 
         self.tabela.blockSignals(False)

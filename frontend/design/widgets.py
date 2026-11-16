@@ -102,14 +102,14 @@ class CardKPI(Card):
             self._destaque = False
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 18, 20, 18)
-        layout.setSpacing(10)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(4)
 
         topo = QHBoxLayout()
         topo.setSpacing(8)
 
         badge_icone = QLabel()
-        badge_icone.setFixedSize(36, 36)
+        badge_icone.setFixedSize(30, 30)
         badge_icone.setAlignment(Qt.AlignCenter)
 
         if cor_icone_badge is None:
@@ -122,7 +122,7 @@ class CardKPI(Card):
             background: {cor_icone_badge};
             border-radius: {tokens.RADIUS_SM}px;
         """)
-        badge_icone.setPixmap(icone_pixmap(icone_nome, cor=cor_icone, tamanho=18))
+        badge_icone.setPixmap(icone_pixmap(icone_nome, cor=cor_icone, tamanho=16))
 
         self.lbl_titulo = lbl_titulo = QLabel(titulo)
         lbl_titulo.setWordWrap(True)
@@ -139,7 +139,7 @@ class CardKPI(Card):
         self.lbl_valor = QLabel("—")
         self.lbl_valor.setStyleSheet(f"""
             background:transparent; color:{cor_valor};
-            font-size:{tokens.TAMANHO_XXL}px; font-weight:800;
+            font-size:{tokens.TAMANHO_XL}px; font-weight:800;
         """)
         layout.addWidget(self.lbl_valor)
 

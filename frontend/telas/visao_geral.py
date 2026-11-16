@@ -46,6 +46,7 @@ from telas.relatorios import (
 )
 from design.seletor import Seletor
 from design import tokens
+from design.widgets import BotaoSecundario
 from design.icons import icone
 from utils.formatacao import formatar_moeda
 from utils.periodo import inicio_historico, intervalo_mes, meses_anteriores
@@ -189,28 +190,32 @@ class CardMetrica(QFrame):
 
         super().__init__()
 
-        self.setStyleSheet("QFrame { background:transparent; border:none; }")
+        self.setObjectName("cardMetrica")
+        self.setStyleSheet(
+            f"QFrame#cardMetrica {{ background:{tokens.CARD}; border:1px solid {tokens.BORDA};"
+            f" border-radius:{tokens.RADIUS_LG}px; }}"
+        )
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(18, 14, 18, 14)
         layout.setSpacing(2)
 
         lbl_titulo = QLabel(titulo)
         lbl_titulo.setStyleSheet(
-            f"background:transparent; border:none; font-size:12px; "
-            f"font-weight:bold; color:{tokens.TEXTO_TERCIARIO}; letter-spacing:1px;"
+            f"background:transparent; border:none; font-size:{tokens.TAMANHO_SM}px; "
+            f"font-weight:600; color:{tokens.TEXTO_SECUNDARIO};"
         )
 
         self.lbl_valor = QLabel("R$ 0,00")
         self.lbl_valor.setStyleSheet(
-            f"background:transparent; border:none; font-size:22px; "
-            f"font-weight:bold; color:{tokens.TEXTO_CLARO};"
+            f"background:transparent; border:none; font-size:24px; "
+            f"font-weight:700; color:{tokens.TEXTO};"
         )
 
         self.lbl_variacao = QLabel("")
         self.lbl_variacao.setStyleSheet(
-            "background:transparent; border:none; font-size:12px; "
-            "font-weight:bold;"
+            f"background:transparent; border:none; font-size:{tokens.TAMANHO_XS}px; "
+            "font-weight:600;"
         )
 
         layout.addWidget(lbl_titulo)
@@ -225,7 +230,7 @@ class CardMetrica(QFrame):
             self.lbl_variacao.setText("")
             return
 
-        seta = "↑" if variacao_percentual >= 0 else "↓"
+        seta = "▲" if variacao_percentual >= 0 else "▼"
         cor = tokens.SUCESSO if variacao_percentual >= 0 else tokens.ERRO
 
         self.lbl_variacao.setStyleSheet(
@@ -233,7 +238,7 @@ class CardMetrica(QFrame):
             f"font-weight:bold; color:{cor};"
         )
         self.lbl_variacao.setText(
-            f"{seta} {abs(variacao_percentual):.1f}%"
+            f"{seta} {abs(variacao_percentual):.1f}% sobre o período anterior"
         )
 
 
@@ -272,17 +277,18 @@ class VisaoGeral(QWidget):
 
         cabecalho = QHBoxLayout()
 
-        self.bt_voltar = QPushButton("← Voltar")
+        self.bt_voltar = QPushButton()
+        self.bt_voltar.setFixedSize(36, 36)
+        self.bt_voltar.setCursor(Qt.PointingHandCursor)
+        self.bt_voltar.setIcon(icone("chevron-left", cor=tokens.TEXTO_SECUNDARIO, tamanho=18))
+        self.bt_voltar.setToolTip("Voltar")
+        self.bt_voltar.setAccessibleName("Voltar")
         self.bt_voltar.setStyleSheet(f"""
             QPushButton {{
-                background:transparent;
-                color:{tokens.TEXTO_TERCIARIO};
-                border:none;
-                font-size:13px;
+                background:{tokens.CARD}; border:1px solid {tokens.BORDA};
+                border-radius:{tokens.RADIUS_SM}px;
             }}
-            QPushButton:hover {{
-                color:{tokens.TEXTO};
-            }}
+            QPushButton:hover {{ background:{tokens.FUNDO}; }}
         """)
         self.bt_voltar.clicked.connect(self.voltar.emit)
 
@@ -294,14 +300,14 @@ class VisaoGeral(QWidget):
 
         titulo = QLabel(nome_loja)
         titulo.setStyleSheet(
-            f"background:transparent; font-size:20px; "
-            f"font-weight:bold; color:{tokens.TEXTO};"
+            f"background:transparent; font-size:{tokens.TAMANHO_XXL}px; "
+            f"font-weight:700; color:{tokens.TEXTO};"
         )
 
-        subtitulo = QLabel("LOJA OPERACIONAL")
+        subtitulo = QLabel("Visão geral · como a loja está indo")
         subtitulo.setStyleSheet(
-            f"background:transparent; font-size:12px; "
-            f"color:{tokens.SECUNDARIA}; font-weight:bold;"
+            f"background:transparent; font-size:{tokens.TAMANHO_SM}px; "
+            f"color:{tokens.TEXTO_SECUNDARIO};"
         )
 
         col_titulo.addWidget(titulo)
@@ -331,20 +337,7 @@ class VisaoGeral(QWidget):
         """)
         bt_atualizar.clicked.connect(self.carregar)
 
-        bt_imprimir = QPushButton("  Imprimir BI")
-        bt_imprimir.setIcon(icone("printer", cor=tokens.TEXTO_CLARO, tamanho=18))
-        bt_imprimir.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.SIDEBAR};
-                color:{tokens.TEXTO_CLARO};
-                border-radius:8px;
-                padding:10px 16px;
-                font-weight:bold;
-            }}
-            QPushButton:hover {{
-                background:{tokens.SIDEBAR_HOVER};
-            }}
-        """)
+        bt_imprimir = BotaoSecundario("Imprimir BI", icone_nome="printer")
 
         cabecalho.addWidget(bt_atualizar)
         cabecalho.addSpacing(8)
@@ -384,7 +377,7 @@ class VisaoGeral(QWidget):
 
         for periodo in self.PERIODOS:
 
-            botao = QPushButton(periodo.upper())
+            botao = QPushButton(periodo)
             botao.setCheckable(True)
             botao.setCursor(Qt.PointingHandCursor)
             botao.setMinimumHeight(34)
@@ -395,13 +388,15 @@ class VisaoGeral(QWidget):
                     border:1px solid {tokens.BORDA};
                     border-radius:17px;
                     padding:0 16px;
-                    font-size:12px;
-                    font-weight:bold;
+                    font-size:{tokens.TAMANHO_SM}px;
+                    font-weight:600;
                 }}
+                QPushButton:hover {{ background:{tokens.FUNDO}; }}
                 QPushButton:checked {{
-                    background:{tokens.SECUNDARIA};
-                    color:{tokens.TEXTO_CLARO};
-                    border:1px solid {tokens.SECUNDARIA};
+                    background:{tokens.PRIMARIA_CLARA};
+                    color:{tokens.PRIMARIA};
+                    border:1px solid {tokens.PRIMARIA_CLARA};
+                    font-weight:700;
                 }}
             """)
             botao.clicked.connect(
@@ -431,30 +426,19 @@ class VisaoGeral(QWidget):
         # BARRA ESCURA DE MÉTRICAS
         # ======================
 
-        barra_metricas = QFrame()
-        barra_metricas.setStyleSheet(f"""
-            QFrame {{
-                background:{tokens.SIDEBAR};
-                border-radius:12px;
-            }}
-        """)
+        metricas_layout = QHBoxLayout()
+        metricas_layout.setSpacing(14)
 
-        metricas_layout = QHBoxLayout(barra_metricas)
-        metricas_layout.setContentsMargins(24, 18, 24, 18)
-        metricas_layout.setSpacing(40)
+        self.card_faturamento = CardMetrica("Faturamento")
+        self.card_lucro = CardMetrica("Lucro líquido (estimado)")
+        self.card_despesas = CardMetrica("Despesas e saídas")
+        self.card_ticket = CardMetrica("Ticket médio")
 
-        self.card_faturamento = CardMetrica("FATURAMENTO TOTAL")
-        self.card_lucro = CardMetrica("LUCRO LÍQUIDO (EST.)")
-        self.card_despesas = CardMetrica("DESPESAS / SAÍDAS")
-        self.card_ticket = CardMetrica("TICKET MÉDIO")
+        for card in (self.card_faturamento, self.card_lucro,
+                     self.card_despesas, self.card_ticket):
+            metricas_layout.addWidget(card, 1)
 
-        metricas_layout.addWidget(self.card_faturamento)
-        metricas_layout.addWidget(self.card_lucro)
-        metricas_layout.addWidget(self.card_despesas)
-        metricas_layout.addWidget(self.card_ticket)
-        metricas_layout.addStretch()
-
-        conteudo_layout.addWidget(barra_metricas)
+        conteudo_layout.addLayout(metricas_layout)
 
         # ======================
         # GRÁFICO DE DESEMPENHO

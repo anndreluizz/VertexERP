@@ -37,7 +37,7 @@ from telas.parcelamento import copiar_codigo_boleto
 from design.seletor import Seletor
 from design import tokens
 from design.icons import icone, icone_pixmap
-from design.lista import FaixaAtencao
+from design.lista import BarraProgresso, FaixaAtencao, _limpar as _limpar_layout
 from design.privacidade import privacidade
 from design.widgets import Badge, BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
 from utils.formatacao import formatar_moeda
@@ -151,11 +151,12 @@ class DespesaLinha(QFrame):
     ver_comprovante_solicitado = Signal(dict)
     ver_parcelamento_solicitado = Signal(dict)
 
-    COR_STATUS = {
-        "PAGO": "SECUNDARIA",
-        "PENDENTE": "ALERTA",
-        "VENCIDA": "ERRO",
-        "CANCELADO": "BORDA_FORTE",
+    # status -> (icone, cor do icone, fundo do quadradinho)
+    ICONE_STATUS = {
+        "PAGO": ("check", "SUCESSO", "SUCESSO_CLARO"),
+        "PENDENTE": ("file-text", "ALERTA", "ALERTA_CLARO"),
+        "VENCIDA": ("alert-triangle", "ERRO", "ERRO_CLARO"),
+        "CANCELADO": ("file-text", "TEXTO_TERCIARIO", "FUNDO"),
     }
 
     def __init__(self, conta):
@@ -164,22 +165,33 @@ class DespesaLinha(QFrame):
 
         self.conta = conta
         status = _status_real(conta)
-        cor_faixa = getattr(tokens, self.COR_STATUS.get(status, "BORDA"))
 
         self.setObjectName("DespesaLinha")
         self.setStyleSheet(f"""
             #DespesaLinha {{
                 background:transparent;
                 border:none;
-                border-left:4px solid {cor_faixa};
                 border-bottom:1px solid {tokens.BORDA};
             }}
             #DespesaLinha:hover {{ background:{tokens.FUNDO}; }}
         """)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setContentsMargins(20, 12, 16, 12)
         layout.setSpacing(14)
+
+        nome_icone, cor_icone, fundo_icone = self.ICONE_STATUS.get(
+            status, self.ICONE_STATUS["PENDENTE"]
+        )
+        quadro = QLabel()
+        quadro.setFixedSize(40, 40)
+        quadro.setAlignment(Qt.AlignCenter)
+        quadro.setStyleSheet(
+            f"background:{getattr(tokens, fundo_icone)};"
+            f"border-radius:{tokens.RADIUS_SM + 2}px; border:none;"
+        )
+        quadro.setPixmap(icone_pixmap(nome_icone, cor=getattr(tokens, cor_icone), tamanho=20))
+        layout.addWidget(quadro)
 
         col = QVBoxLayout()
         col.setSpacing(2)
@@ -277,12 +289,14 @@ class DespesaLinha(QFrame):
         # espaço fixo pro botão Pagar, mesmo quando não tem: mantém os
         # valores alinhados na mesma coluna em todas as linhas
         area_pagar = QWidget()
-        area_pagar.setFixedWidth(96)
+        area_pagar.setFixedWidth(104)
         area_pagar.setStyleSheet("background:transparent;")
         lay_pagar = QHBoxLayout(area_pagar)
         lay_pagar.setContentsMargins(0, 0, 0, 0)
         if status in ("PENDENTE", "VENCIDA"):
-            bt_pagar = BotaoSecundario("Pagar", icone_nome="check")
+            bt_pagar = (BotaoPrimario if status == "VENCIDA" else BotaoSecundario)(
+                "Pagar", icone_nome="check"
+            )
             bt_pagar.setMinimumHeight(34)
             bt_pagar.clicked.connect(lambda: self.pagar_solicitado.emit(self.conta))
             lay_pagar.addWidget(bt_pagar)
@@ -429,14 +443,14 @@ class ContasPagar(QWidget):
         col_titulo = QVBoxLayout()
         col_titulo.setSpacing(0)
 
-        titulo = QLabel("Boletos")
+        titulo = QLabel("Contas a pagar")
         titulo.setStyleSheet(f"""
             background:transparent; font-size:{tokens.TAMANHO_LG}px;
             font-weight:800; color:{tokens.TEXTO};
         """)
 
         subtitulo = QLabel(
-            "Acompanhe despesas, vencimentos e pagamentos do estabelecimento."
+            "Boletos, despesas e vencimentos da loja"
         )
         subtitulo.setStyleSheet(f"""
             background:transparent; font-size:{tokens.TAMANHO_XS}px;
@@ -598,7 +612,11 @@ class ContasPagar(QWidget):
         lay_cartao.setContentsMargins(0, 4, 0, 4)
         lay_cartao.addWidget(self.area_rolagem)
 
-        layout.addWidget(cartao_lista, stretch=1)
+        corpo = QHBoxLayout()
+        corpo.setSpacing(16)
+        corpo.addWidget(cartao_lista, stretch=1)
+        corpo.addWidget(self._construir_painel_lateral())
+        layout.addLayout(corpo, stretch=1)
 
         # Recorte simples de "tempo real": sem servidor empurrando
         # nada, so recarrega sozinho enquanto a tela estiver visivel
@@ -607,6 +625,121 @@ class ContasPagar(QWidget):
         self._timer_auto_atualizacao = QTimer(self)
         self._timer_auto_atualizacao.setInterval(20_000)
         self._timer_auto_atualizacao.timeout.connect(self.carregar)
+
+    def _construir_painel_lateral(self):
+        """Resumo do mês (quanto já foi pago) e o que está em aberto por
+        categoria -- tudo calculado das contas já carregadas."""
+
+        painel = QWidget()
+        painel.setFixedWidth(320)
+        painel.setStyleSheet("background:transparent;")
+        lay = QVBoxLayout(painel)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(16)
+
+        def texto(tam, cor, peso=400):
+            t = QLabel()
+            t.setStyleSheet(
+                f"background:transparent; border:none; font-size:{tam}px;"
+                f"font-weight:{peso}; color:{cor};"
+            )
+            return t
+
+        self.card_mes = Card()
+        lm = QVBoxLayout(self.card_mes)
+        lm.setContentsMargins(18, 18, 18, 18)
+        lm.setSpacing(8)
+        self.lbl_mes_titulo = texto(tokens.TAMANHO_MD, tokens.TEXTO, 700)
+        lm.addWidget(self.lbl_mes_titulo)
+        sub_mes = texto(tokens.TAMANHO_SM, tokens.TEXTO_SECUNDARIO)
+        sub_mes.setText("Quanto já foi pago do que vence no mês")
+        lm.addWidget(sub_mes)
+        self.lbl_mes_valores = texto(tokens.TAMANHO_LG, tokens.TEXTO, 800)
+        lm.addWidget(self.lbl_mes_valores)
+        self.barra_mes = BarraProgresso(0, tokens.SUCESSO, altura=8)
+        lm.addWidget(self.barra_mes)
+        rodape = QHBoxLayout()
+        self.lbl_mes_pct = texto(tokens.TAMANHO_XS, tokens.SUCESSO, 700)
+        self.lbl_mes_falta = texto(tokens.TAMANHO_XS, tokens.TEXTO_TERCIARIO)
+        rodape.addWidget(self.lbl_mes_pct)
+        rodape.addStretch()
+        rodape.addWidget(self.lbl_mes_falta)
+        lm.addLayout(rodape)
+        lay.addWidget(self.card_mes)
+
+        self.card_categorias = Card()
+        self.lay_categorias = QVBoxLayout(self.card_categorias)
+        self.lay_categorias.setContentsMargins(18, 18, 18, 18)
+        self.lay_categorias.setSpacing(8)
+        lay.addWidget(self.card_categorias)
+
+        lay.addStretch()
+        return painel
+
+    def _atualizar_painel_lateral(self):
+
+        hoje = date.today()
+        inicio = hoje.replace(day=1)
+        fim = intervalo_mes(rotulo_mes(hoje))[1]
+        validas = [c for c in self.contas if c.get("status") != "CANCELADO"]
+
+        do_mes = [
+            c for c in validas
+            if _vencimento(c) and inicio <= _vencimento(c) <= fim
+        ]
+        total = sum(float(c.get("valor", 0) or 0) for c in do_mes)
+        pago = sum(
+            float(c.get("valor", 0) or 0) for c in do_mes if c.get("status") == "PAGO"
+        )
+        pct = (pago / total * 100) if total else 0
+
+        self.lbl_mes_titulo.setText(rotulo_mes(hoje).replace("/", " de "))
+        privacidade.definir_texto(
+            self.lbl_mes_valores, f"{formatar_moeda(pago)} de {formatar_moeda(total)}"
+        )
+        self.barra_mes.definir(pct)
+        self.lbl_mes_pct.setText(f"{pct:.0f}% pago")
+        privacidade.definir_texto(
+            self.lbl_mes_falta, f"faltam {formatar_moeda(total - pago)}"
+        )
+
+        # em aberto por categoria (pendentes + vencidas), as 5 maiores
+        por_categoria = {}
+        for c in validas:
+            if c.get("status") == "PAGO":
+                continue
+            nome = c.get("categoria") or "Sem categoria"
+            por_categoria[nome] = por_categoria.get(nome, 0.0) + float(c.get("valor", 0) or 0)
+        maiores = sorted(por_categoria.items(), key=lambda kv: -kv[1])[:5]
+
+        _limpar_layout(self.lay_categorias)
+
+        def rotulo(txt, tam, cor, peso):
+            t = QLabel(txt)
+            t.setStyleSheet(
+                f"background:transparent; border:none; font-size:{tam}px;"
+                f"font-weight:{peso}; color:{cor};"
+            )
+            return t
+
+        self.lay_categorias.addWidget(
+            rotulo("Em aberto por categoria", tokens.TAMANHO_MD, tokens.TEXTO, 700)
+        )
+        if not maiores:
+            self.lay_categorias.addWidget(
+                rotulo("Nada em aberto.", tokens.TAMANHO_SM, tokens.TEXTO_TERCIARIO, 400)
+            )
+            return
+        topo = maiores[0][1] or 1
+        for nome, valor in maiores:
+            linha = QHBoxLayout()
+            linha.addWidget(rotulo(nome, tokens.TAMANHO_SM, tokens.TEXTO_SECUNDARIO, 600))
+            linha.addStretch()
+            v = rotulo("", tokens.TAMANHO_SM, tokens.TEXTO, 700)
+            privacidade.definir_texto(v, formatar_moeda(valor))
+            linha.addWidget(v)
+            self.lay_categorias.addLayout(linha)
+            self.lay_categorias.addWidget(BarraProgresso(valor / topo * 100, tokens.PRIMARIA))
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -804,6 +937,7 @@ class ContasPagar(QWidget):
         self.card_pago.definir_legenda(f"total pago: {formatar_moeda(total_pago)}")
 
         self._cards_do_mes(contas_validas, _data_pagamento)
+        self._atualizar_painel_lateral()
 
         contagem = {
             "TODAS": len(contas_validas),
@@ -1016,8 +1150,13 @@ class ContasPagar(QWidget):
         cab = QWidget()
         cab.setStyleSheet(f"background:{tokens.FUNDO};")
         lay = QHBoxLayout(cab)
-        lay.setContentsMargins(20, 8, 16, 8)
+        lay.setContentsMargins(20, 9, 16, 9)
         lay.setSpacing(10)
+
+        ponto = QFrame()
+        ponto.setFixedSize(8, 8)
+        ponto.setStyleSheet(f"background:{cor}; border:none; border-radius:4px;")
+        lay.addWidget(ponto)
 
         lbl = QLabel(titulo.upper())
         lbl.setStyleSheet(f"""

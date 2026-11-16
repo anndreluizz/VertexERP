@@ -477,6 +477,17 @@ class LancarFiadoDialog(DialogoPadrao):
 
         layout.addLayout(linha_valores)
 
+        # aviso quando o novo saldo passa do limite de crédito
+        self.caixa_preview = caixa
+        self.lbl_preview_aviso = QLabel()
+        self.lbl_preview_aviso.setWordWrap(True)
+        self.lbl_preview_aviso.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px;
+            font-weight:600; color:{tokens.ALERTA_TEXTO};
+        """)
+        self.lbl_preview_aviso.hide()
+        layout.addWidget(self.lbl_preview_aviso)
+
         return caixa
 
     def _quantidade_atual(self):
@@ -501,6 +512,27 @@ class LancarFiadoDialog(DialogoPadrao):
 
         novo_saldo = self._saldo_atual + max(0.0, total)
         self.lbl_preview_novo_saldo.setText(formatar_moeda(novo_saldo))
+
+        limite = self.cliente.get("limite_credito")
+        passa = bool(limite) and novo_saldo > float(limite) + 0.009
+        self.caixa_preview.setStyleSheet(f"""
+            background:{tokens.ALERTA_CLARO if passa else tokens.SUCESSO_CLARO};
+            border-radius:{tokens.RADIUS_SM}px;
+        """)
+        self.lbl_preview_novo_saldo.setStyleSheet(f"""
+            background:transparent; font-size:{tokens.TAMANHO_SM}px; font-weight:800;
+            color:{tokens.ALERTA_TEXTO if passa else tokens.SECUNDARIA_HOVER};
+        """)
+        if passa:
+            self.lbl_preview_aviso.setText(
+                f"Passa do limite em {formatar_moeda(novo_saldo - float(limite))} "
+                f"(limite {formatar_moeda(float(limite))})."
+            )
+        self.lbl_preview_aviso.setVisible(passa)
+        if hasattr(self, "bt_confirmar"):
+            self.bt_confirmar.setText(
+                "Lançar fiado" + (f"  {formatar_moeda(total)}" if total > 0 else "")
+            )
 
     def _texto_banner(self):
         if self._tipo_registro == "divida":

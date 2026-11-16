@@ -259,6 +259,7 @@ class RegistrarPagamentoDialog(DialogoPadrao):
         self.bt_confirmar.setAutoDefault(False)
         self.bt_confirmar.clicked.connect(self.confirmar)
         self.definir_botoes(self.bt_confirmar)
+        self._atualizar_resta()  # texto do botão com o valor já preenchido
 
         self.ajustar_altura()
         self.selecionar_forma("DINHEIRO")
@@ -361,6 +362,23 @@ class RegistrarPagamentoDialog(DialogoPadrao):
         self.lbl_resta.setText(
             texto_resta(self._saldo_devedor, self.valor.text(), self.forma_pagamento)
         )
+
+        # caixa verde quando quita a dívida; o botão mostra o valor que vai confirmar
+        try:
+            pago = ler_moeda(self.valor.text())
+        except ValueError:
+            pago = None
+        quita = pago is not None and self._saldo_devedor - pago < 0.01
+        self.lbl_resta.setStyleSheet(f"""
+            background:{tokens.SUCESSO_CLARO if quita else tokens.FUNDO};
+            color:{tokens.SECUNDARIA_HOVER if quita else tokens.TEXTO};
+            border-radius:{tokens.RADIUS_SM}px; padding:10px 14px;
+            font-size:{tokens.TAMANHO_MD}px;
+        """)
+        if hasattr(self, "bt_confirmar"):
+            self.bt_confirmar.setText(
+                "Confirmar pagamento" + (f"  {formatar_moeda(pago)}" if pago and pago > 0 else "")
+            )
 
     def confirmar(self):
 

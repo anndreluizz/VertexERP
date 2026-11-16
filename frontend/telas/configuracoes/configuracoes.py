@@ -286,10 +286,10 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
         self.bt_descartar = QPushButton("Descartar")
         self.bt_descartar.setCursor(Qt.PointingHandCursor)
         self.bt_descartar.setStyleSheet(f"""
-            QPushButton {{ background:transparent; color:{tokens.TEXTO_CLARO}; border:1px solid {tokens.TEXTO_SIDEBAR_APAGADO};
+            QPushButton {{ background:{tokens.CARD}; color:{tokens.TEXTO}; border:1px solid {tokens.BORDA_FORTE};
                            border-radius:9px; padding:0 14px; font-weight:600;
                            font-size:{tokens.TAMANHO_MD}px; }}
-            QPushButton:hover {{ background:rgba(255,255,255,0.1); }}
+            QPushButton:hover {{ background:{tokens.FUNDO}; }}
         """)
         self.bt_descartar.setMinimumHeight(42)
         self.bt_descartar.clicked.connect(self._descartar)
@@ -551,13 +551,13 @@ class Configuracoes(PaginasMixin, ImpressoraMixin, LojasMixin, BackupMixin, QWid
         secao = self.paginas.currentIndex() if hasattr(self, "paginas") else 0
         self.barra_salvar.setVisible(secao in _SECOES_DO_RODAPE or self._alterado)
 
-        fundo = borda = tokens.SIDEBAR
-        cor_texto = tokens.TEXTO_CLARO
+        fundo = borda = tokens.PRIMARIA_CLARA
+        cor_texto = tokens.PRIMARIA
         if self._alterado:
             texto = "Você mudou configurações e ainda não salvou."
         else:
             texto = "Nenhuma alteração pendente."
-            cor_texto = tokens.TEXTO_SIDEBAR
+            cor_texto = tokens.TEXTO_SECUNDARIO
         self.barra_salvar.setStyleSheet(f"""
             QFrame#barraSalvar {{
                 background:{fundo}; border:1px solid {borda};

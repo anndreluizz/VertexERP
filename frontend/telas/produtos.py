@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
 )
 
+from design.seletor import Seletor
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.lista import BarraProgresso, FaixaAtencao, PainelDetalhe
@@ -291,7 +292,7 @@ class Produtos(QWidget):
 
         # categoria em lista (e não uma fileira de botões): loja com 20,
         # 30 categorias estourava a largura da tela
-        self.combo_categoria = QComboBox()
+        self.combo_categoria = Seletor()
         self.combo_categoria.setMinimumHeight(40)
         self.combo_categoria.setMinimumWidth(190)
         self.combo_categoria.setCursor(Qt.PointingHandCursor)
@@ -301,7 +302,7 @@ class Produtos(QWidget):
         )
         barra.addWidget(self.combo_categoria)
 
-        self.combo_ordenacao = QComboBox()
+        self.combo_ordenacao = Seletor()
         for rotulo, chave in ORDENACOES:
             self.combo_ordenacao.addItem(f"Ordenar: {rotulo}", chave)
         self.combo_ordenacao.setMinimumHeight(40)

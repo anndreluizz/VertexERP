@@ -26,6 +26,7 @@ from services.extrato_bancario_service import (
 from services.worker import rodar_em_thread
 from telas.conciliar_transacao_bancaria import ConciliarTransacaoDialog
 from widgets.tables.standard_table import StandardTable
+from design.seletor import Seletor
 from design import tokens
 from design.widgets import BotaoPrimario, BotaoSecundario
 from utils.formatacao import formatar_moeda
@@ -90,7 +91,7 @@ class ConciliacaoBancaria(QWidget):
 
         barra.addWidget(QLabel("Status:"))
 
-        self.combo_status = QComboBox()
+        self.combo_status = Seletor()
         self.combo_status.setMinimumHeight(38)
         for rotulo, _ in _FILTROS_STATUS:
             self.combo_status.addItem(rotulo)

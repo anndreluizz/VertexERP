@@ -44,6 +44,7 @@ from telas.relatorios import (
     LinhaBarra,
     NOMES_FORMA_PAGAMENTO,
 )
+from design.seletor import Seletor
 from design import tokens
 from design.icons import icone
 from utils.formatacao import formatar_moeda
@@ -411,7 +412,7 @@ class VisaoGeral(QWidget):
             filtro_layout.addWidget(botao)
 
         # meses fechados mais antigos ("Agosto/2026"...)
-        self.combo_outro_mes = QComboBox()
+        self.combo_outro_mes = Seletor()
         self.combo_outro_mes.addItem("Outro mês…")
         self.combo_outro_mes.addItems(meses_anteriores())
         self.combo_outro_mes.setMinimumHeight(34)

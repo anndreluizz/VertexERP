@@ -17,6 +17,7 @@ from services.relatorio_service import (
     comparativo_lojas,
 )
 from services.worker import rodar_em_thread
+from design.seletor import Seletor
 from design import tokens
 from design.charts import GraficoArea, GraficoPizza
 from design.widgets import CardKPI
@@ -52,7 +53,7 @@ class FinanceiroMixin:
 
         filtro_layout = QHBoxLayout()
 
-        self.combo_periodo = QComboBox()
+        self.combo_periodo = Seletor()
         self.combo_periodo.addItems(self._periodos_com_meses())
         self.combo_periodo.setCurrentText("Este mês")
         self.combo_periodo.setMinimumHeight(38)
@@ -78,7 +79,7 @@ class FinanceiroMixin:
             lambda: self._timer_atualizar_financeiro.start(300)
         )
 
-        self.combo_loja = QComboBox()
+        self.combo_loja = Seletor()
         self.combo_loja.setMinimumHeight(38)
         self.combo_loja.setCursor(Qt.PointingHandCursor)
         self.combo_loja.setStyleSheet(f"""

@@ -15,6 +15,7 @@ from services.relatorio_service import (
     sugestao_reposicao,
 )
 from services.worker import rodar_em_thread
+from design.seletor import Seletor
 from design import tokens
 from utils.formatacao import formatar_moeda
 from telas.relatorios.widgets import PainelSecao
@@ -81,7 +82,7 @@ class EstoqueMixin:
         filtro_abc = QHBoxLayout()
         filtro_abc.setSpacing(8)
 
-        self.combo_periodo_abc = QComboBox()
+        self.combo_periodo_abc = Seletor()
         self.combo_periodo_abc.addItems(self._periodos_com_meses())
         self.combo_periodo_abc.setCurrentText("Este mês")
         self.combo_periodo_abc.setMinimumHeight(36)
@@ -93,7 +94,7 @@ class EstoqueMixin:
             }}
         """)
 
-        self.combo_loja_abc = QComboBox()
+        self.combo_loja_abc = Seletor()
         self.combo_loja_abc.setMinimumHeight(36)
         self.combo_loja_abc.setCursor(Qt.PointingHandCursor)
         self.combo_loja_abc.setStyleSheet(self.combo_periodo_abc.styleSheet())
@@ -165,7 +166,7 @@ class EstoqueMixin:
         filtro_reposicao = QHBoxLayout()
         filtro_reposicao.setSpacing(8)
 
-        self.combo_loja_reposicao = QComboBox()
+        self.combo_loja_reposicao = Seletor()
         self.combo_loja_reposicao.setMinimumHeight(36)
         self.combo_loja_reposicao.setCursor(Qt.PointingHandCursor)
         self.combo_loja_reposicao.setStyleSheet(self.combo_periodo_abc.styleSheet())

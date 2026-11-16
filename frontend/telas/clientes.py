@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
 )
 
+from design.seletor import Seletor
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.lista import FaixaAtencao
@@ -705,7 +706,7 @@ class Clientes(QWidget):
             }}
         """
 
-        self.combo_prazo = QComboBox()
+        self.combo_prazo = Seletor()
         for dias in cliente_analise.PRAZOS_INADIMPLENCIA:
             self.combo_prazo.addItem(f"Atraso: {dias} dias", dias)
         self.combo_prazo.setCurrentIndex(
@@ -719,7 +720,7 @@ class Clientes(QWidget):
         self.combo_prazo.setStyleSheet(estilo_combo)
         self.combo_prazo.currentIndexChanged.connect(self.alterar_prazo_inadimplencia)
 
-        self.combo_ordenacao = QComboBox()
+        self.combo_ordenacao = Seletor()
         for rotulo, chave in ORDENACOES:
             self.combo_ordenacao.addItem(rotulo, chave)
         self.combo_ordenacao.setToolTip("Ordenar por")
@@ -729,7 +730,7 @@ class Clientes(QWidget):
         self.combo_ordenacao.setStyleSheet(estilo_combo)
         self.combo_ordenacao.currentIndexChanged.connect(self.alterar_ordenacao)
 
-        self.combo_loja_filtro = QComboBox()
+        self.combo_loja_filtro = Seletor()
         self.combo_loja_filtro.setMinimumHeight(40)
         self.combo_loja_filtro.setCursor(Qt.PointingHandCursor)
         self.combo_loja_filtro.setStyleSheet(estilo_combo)

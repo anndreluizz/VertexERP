@@ -30,6 +30,7 @@ from services.worker import rodar_em_thread, em_paralelo
 from telas.gerenciar_perfis import GerenciarPerfisDialog
 from telas.log_auditoria import LogAuditoriaDialog
 
+from design.seletor import Seletor
 from design import tokens
 from design.icons import icone
 from design.widgets import (
@@ -230,7 +231,7 @@ class NovoUsuarioDialog(DialogoPadrao):
         self.senha = self.painel_senha.senha
         self.confirmar = self.painel_senha.confirmar
 
-        self.perfil = QComboBox()
+        self.perfil = Seletor(campo=True)
         self.perfil.setStyleSheet(_estilo_combo())
         self.perfil.addItem("Vendedor (só as próprias vendas e caixa)", None)
         for perfil in perfis or []:
@@ -541,7 +542,7 @@ class GerenciarUsuariosDialog(DialogoPadrao):
 
         # perfil (troca na hora, sem caixinha extra)
         conteudo.addWidget(self._rotulo_painel("Perfil de acesso"))
-        self.combo_perfil = QComboBox()
+        self.combo_perfil = Seletor(campo=True)
         self.combo_perfil.setStyleSheet(_estilo_combo())
         self.combo_perfil.activated.connect(self._ao_escolher_perfil)
         conteudo.addWidget(self.combo_perfil)
@@ -549,7 +550,7 @@ class GerenciarUsuariosDialog(DialogoPadrao):
         # loja: preso a ela, so' ve e registra nela (ver resolver_loja_id)
         self.lbl_loja = self._rotulo_painel("Loja")
         conteudo.addWidget(self.lbl_loja)
-        self.combo_loja = QComboBox()
+        self.combo_loja = Seletor(campo=True)
         self.combo_loja.setStyleSheet(_estilo_combo())
         self.combo_loja.activated.connect(self._ao_escolher_loja)
         conteudo.addWidget(self.combo_loja)

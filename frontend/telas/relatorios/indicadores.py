@@ -23,6 +23,7 @@ from services.movimento_fiado_service import listar_movimentos
 from services.user_service import listar_usuarios
 from services import cliente_analise
 from services.worker import rodar_em_thread, em_paralelo
+from design.seletor import Seletor
 from design import tokens
 from design.charts import GraficoHeatmap
 from utils.formatacao import formatar_moeda
@@ -134,7 +135,7 @@ class IndicadoresMixin:
         filtro_layout = QHBoxLayout()
         filtro_layout.setSpacing(8)
 
-        self.combo_periodo_indicadores = QComboBox()
+        self.combo_periodo_indicadores = Seletor()
         self.combo_periodo_indicadores.addItems(self._periodos_com_meses())
         self.combo_periodo_indicadores.setCurrentText("Este mês")
         self.combo_periodo_indicadores.setMinimumHeight(36)
@@ -146,7 +147,7 @@ class IndicadoresMixin:
             }}
         """)
 
-        self.combo_loja_indicadores = QComboBox()
+        self.combo_loja_indicadores = Seletor()
         self.combo_loja_indicadores.setMinimumHeight(36)
         self.combo_loja_indicadores.setCursor(Qt.PointingHandCursor)
         self.combo_loja_indicadores.setStyleSheet(

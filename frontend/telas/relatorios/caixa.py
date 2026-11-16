@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 from services.caixa_service import entradas_caixa, historico_caixa
 from services.comprovante_service import salvar_pdf
 from services.worker import rodar_em_thread
+from design.seletor import Seletor
 from design import tokens
 from design.widgets import BotaoSecundario, CardKPI
 from utils.formatacao import formatar_moeda
@@ -42,7 +43,7 @@ class CaixaMixin:
         cabecalho_caixa.addWidget(titulo)
         cabecalho_caixa.addStretch()
 
-        self.combo_periodo_caixa = QComboBox()
+        self.combo_periodo_caixa = Seletor()
         self.combo_periodo_caixa.addItems(self._periodos_com_meses())
         self.combo_periodo_caixa.setCurrentText("Este mês")
         self.combo_periodo_caixa.setMinimumHeight(34)
@@ -56,7 +57,7 @@ class CaixaMixin:
         self.combo_periodo_caixa.currentIndexChanged.connect(self._atualizar_entradas)
         cabecalho_caixa.addWidget(self.combo_periodo_caixa)
 
-        self.combo_loja_caixa = QComboBox()
+        self.combo_loja_caixa = Seletor()
         self.combo_loja_caixa.setMinimumHeight(34)
         self.combo_loja_caixa.setCursor(Qt.PointingHandCursor)
         self.combo_loja_caixa.setStyleSheet(f"""

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from design.seletor import Seletor
 from design import tokens
 from design.widgets import Badge, BotaoSecundario, CardKPI, SecaoCard, pedir_texto, tabela_lista
 from services.bi_service import informar_dinheiro_guardado, resumo
@@ -136,7 +137,7 @@ class InteligenciaNegocios(QWidget):
         filtros = QHBoxLayout()
         filtros.setSpacing(10)
 
-        self.combo_periodo = QComboBox()
+        self.combo_periodo = Seletor()
         self.combo_periodo.addItems(PERIODOS[:-1] + meses_anteriores() + PERIODOS[-1:])
         self.combo_periodo.setCurrentText("Mês atual")
         self.combo_periodo.setStyleSheet(estilo_campo)
@@ -151,7 +152,7 @@ class InteligenciaNegocios(QWidget):
             campo.setStyleSheet(estilo_campo)
             campo.setVisible(False)
 
-        self.combo_loja = QComboBox()
+        self.combo_loja = Seletor()
         self.combo_loja.addItem("Todas as lojas", None)
         self.combo_loja.setStyleSheet(estilo_campo)
 

@@ -477,6 +477,11 @@ class Vendas(QWidget):
 
     def _ao_carregar(self, resultado):
 
+        # nada mudou desde a última carga: não refaz a tabela toda
+        if resultado == getattr(self, "_ultima_carga", None):
+            return
+        self._ultima_carga = resultado
+
         vendas, resumo, lojas = resultado
 
         self.nomes_loja = {l["id"]: l["nome"] for l in lojas}

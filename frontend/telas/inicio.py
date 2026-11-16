@@ -340,6 +340,11 @@ class Inicio(QWidget):
         QMessageBox.critical(self, "Erro", f"Não foi possível carregar o Início.\n{erro}")
 
     def _ao_carregar(self, resultado):
+        # nada mudou (e a hora é a mesma, por causa da saudação): não refaz a tela
+        chave = (resultado, datetime.now().strftime("%Y%m%d%H"))
+        if chave == getattr(self, "_ultima_carga", None):
+            return
+        self._ultima_carga = chave
         try:
             (usuario, dados, vendas, produtos, contas, clientes, movimentos, caixa) = resultado
             agora = datetime.now()

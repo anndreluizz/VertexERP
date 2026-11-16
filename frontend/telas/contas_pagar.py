@@ -1204,7 +1204,9 @@ class ContasPagar(QWidget):
 
     def nova_despesa(self):
 
-        dialogo = CadastroDespesaDialog(parent=self)
+        from telas.cadastros_etapas import nova_despesa_assistente
+
+        dialogo = nova_despesa_assistente(self)
 
         if dialogo.exec() == dialogo.DialogCode.Accepted:
             self.carregar()

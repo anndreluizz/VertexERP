@@ -1363,7 +1363,9 @@ class Clientes(QWidget):
 
     def novo_cliente(self):
 
-        tela = CadastroClienteDialog(parent=self)
+        from telas.cadastros_etapas import novo_cliente_assistente
+
+        tela = novo_cliente_assistente(self)
 
         if tela.exec() != QDialog.Accepted:
             return

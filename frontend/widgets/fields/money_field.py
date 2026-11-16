@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QDoubleSpinBox
+from PySide6.QtWidgets import QAbstractSpinBox, QDoubleSpinBox
 
 
 class MoneyField(QDoubleSpinBox):
@@ -15,6 +15,9 @@ class MoneyField(QDoubleSpinBox):
         self.setSingleStep(1)
 
         self.setPrefix("R$ ")
+
+        # valor se digita: sem as setinhas de subir/descer
+        self.setButtonSymbols(QAbstractSpinBox.NoButtons)
 
         self.setMinimumHeight(34)
 

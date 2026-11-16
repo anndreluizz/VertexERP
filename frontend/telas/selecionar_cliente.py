@@ -462,7 +462,9 @@ class SelecionarClienteDialog(DialogoPadrao):
 
     def novo_cliente(self):
 
-        dialogo = CadastroClienteDialog(parent=self)
+        from telas.cadastros_etapas import novo_cliente_assistente
+
+        dialogo = novo_cliente_assistente(self)
 
         if dialogo.exec() != QDialog.Accepted:
             return

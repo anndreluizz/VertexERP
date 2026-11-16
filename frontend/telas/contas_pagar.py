@@ -799,7 +799,14 @@ class ContasPagar(QWidget):
         )
 
     def _ao_carregar_sucesso(self, contas):
+        # nada mudou desde a última carga (a tela recarrega ao abrir e a
+        # cada 20 s): não refaz a lista toda. A data entra porque "vencida"
+        # depende do dia de hoje.
+        chave = (contas, date.today())
+        if chave == getattr(self, "_ultima_carga", None):
+            return
         try:
+            self._ultima_carga = chave
             self.contas = contas
             self._carregar_categorias()
             self._atualizar_kpis()

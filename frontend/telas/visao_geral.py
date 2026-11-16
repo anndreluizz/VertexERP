@@ -692,6 +692,11 @@ class VisaoGeral(QWidget):
         )
 
     def _ao_carregar_sucesso(self, resultado):
+        # nada mudou (e o dia é o mesmo): não recalcula nem redesenha tudo
+        chave = (resultado, datetime.now().date())
+        if chave == getattr(self, "_ultima_carga", None):
+            return
+        self._ultima_carga = chave
         self.vendas, self.produtos, self.contas_pagar, self.movimentos_caixa = resultado
         self._atualizar_tudo()
 

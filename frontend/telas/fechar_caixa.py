@@ -703,6 +703,10 @@ class FecharCaixaWindow(DialogoPadrao):
             texto, extra = f"- {formatar_moeda(abs(diferenca))}", "Faltando na gaveta"
 
         self._pintar_cartao(self.cartao_diferenca, cor, fundo, cor)
+        self.observacoes_input.setPlaceholderText(
+            "Ex.: diferença por troco errado, sangria não registrada..."
+            if abs(diferenca) < 0.01 else
+            f"Explique a diferença de {formatar_moeda(abs(diferenca))} (troco errado, sangria não registrada...)")
         self.lbl_diferenca.setText(texto)
         self.cartao_diferenca.lbl_extra.setText(extra)
 

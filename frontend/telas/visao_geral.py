@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QPainter, QPen, QColor, QLinearGradient, QPainterPath
 from PySide6.QtWidgets import (
     QWidget,
@@ -69,12 +69,14 @@ class GraficoDesempenho(QWidget):
 
         self.setMinimumHeight(220)
         self.pontos = []
+        self.anterior = []
         self.rotulos = []
 
-    def definir_dados(self, rotulos, valores):
+    def definir_dados(self, rotulos, valores, anterior=None):
 
         self.rotulos = rotulos
         self.pontos = valores
+        self.anterior = anterior or []
 
         self.update()
 
@@ -94,7 +96,7 @@ class GraficoDesempenho(QWidget):
         area_largura = largura - margem_esq - margem_dir
         area_altura = altura - margem_topo - margem_baixo
 
-        maior_valor = max(self.pontos) if self.pontos else 0
+        maior_valor = max(list(self.pontos) + list(self.anterior), default=0)
 
         if maior_valor <= 0:
             maior_valor = 1
@@ -150,9 +152,9 @@ class GraficoDesempenho(QWidget):
         caminho_area.lineTo(ultimo_x, margem_topo + area_altura)
         caminho_area.closeSubpath()
 
-        cor_area_inicio = QColor(tokens.SECUNDARIA)
-        cor_area_inicio.setAlpha(90)
-        cor_area_fim = QColor(tokens.SECUNDARIA)
+        cor_area_inicio = QColor(tokens.PRIMARIA)
+        cor_area_inicio.setAlpha(70)
+        cor_area_fim = QColor(tokens.PRIMARIA)
         cor_area_fim.setAlpha(0)
 
         gradiente = QLinearGradient(0, margem_topo, 0, altura - margem_baixo)
@@ -161,10 +163,28 @@ class GraficoDesempenho(QWidget):
 
         painter.fillPath(caminho_area, gradiente)
 
-        pen_linha = QPen(QColor(tokens.SECUNDARIA))
-        pen_linha.setWidth(2)
+        # período anterior: tracejado cinza, por posição (1º dia com 1º dia...)
+        if len(self.anterior) == n:
+            caminho_ant = QPainterPath()
+            for i, valor in enumerate(self.anterior):
+                x, y = coord(i, valor)
+                caminho_ant.moveTo(x, y) if i == 0 else caminho_ant.lineTo(x, y)
+            pen_ant = QPen(QColor(tokens.GRAFICO_NEUTRO))
+            pen_ant.setWidth(2)
+            pen_ant.setStyle(Qt.DashLine)
+            painter.setPen(pen_ant)
+            painter.drawPath(caminho_ant)
+
+        pen_linha = QPen(QColor(tokens.PRIMARIA))
+        pen_linha.setWidth(3)
         painter.setPen(pen_linha)
         painter.drawPath(caminho_linha)
+
+        # ponto final em destaque
+        ult_x, ult_y = coord(n - 1, self.pontos[-1])
+        painter.setBrush(QColor(tokens.CARD))
+        painter.drawEllipse(QPoint(int(ult_x), int(ult_y)), 5, 5)
+        painter.setBrush(Qt.NoBrush)
 
         # eixo X (rotulos)
         painter.setPen(QColor(tokens.TEXTO_TERCIARIO))
@@ -445,8 +465,14 @@ class VisaoGeral(QWidget):
         # ======================
 
         self.painel_grafico = PainelSecao(
-            "📈", "Desempenho de Vendas"
+            "📈", "Desempenho de vendas"
         )
+        legenda = QLabel("Linha cheia: este período  ·  tracejada: período anterior")
+        legenda.setStyleSheet(
+            f"background:transparent; border:none; font-size:{tokens.TAMANHO_XS}px;"
+            f" color:{tokens.TEXTO_TERCIARIO};"
+        )
+        self.painel_grafico.corpo.addWidget(legenda)
         self.grafico = GraficoDesempenho()
         self.painel_grafico.corpo.addWidget(self.grafico)
 
@@ -743,50 +769,47 @@ class VisaoGeral(QWidget):
             variacao(ticket_medio, ticket_medio_ant),
         )
 
-        self._atualizar_grafico(vendas_periodo, inicio, fim)
+        self._atualizar_grafico(
+            vendas_periodo, inicio, fim, vendas_periodo_ant, inicio_ant, fim_ant)
         self._atualizar_transacoes(vendas_periodo)
         self._atualizar_top_produtos(vendas_periodo)
         self._atualizar_mapa_horarios(vendas_periodo)
 
-    def _atualizar_grafico(self, vendas_periodo, inicio, fim):
+    @staticmethod
+    def _totais_do_periodo(vendas, inicio, fim):
+        """(rótulos, totais): por hora se o período é 1 dia, senão por dia."""
 
         dias_no_periodo = (fim - inicio).days + 1
 
         if dias_no_periodo <= 1:
-
             totais = [0.0] * 24
-
-            for venda in vendas_periodo:
+            for venda in vendas:
                 data = _parse_data(venda.get("data", ""))
                 if data:
-                    totais[data.hour] += float(
-                        venda.get("valor_total", 0)
-                    )
+                    totais[data.hour] += float(venda.get("valor_total", 0))
+            return [f"{h:02d}h" for h in range(24)], totais
 
-            rotulos = [f"{h:02d}h" for h in range(24)]
+        totais_por_dia = {}
+        dia = inicio
+        while dia <= fim:
+            totais_por_dia[dia] = 0.0
+            dia += timedelta(days=1)
 
-        else:
+        for venda in vendas:
+            data = _parse_data(venda.get("data", ""))
+            if data and data.date() in totais_por_dia:
+                totais_por_dia[data.date()] += float(venda.get("valor_total", 0))
 
-            totais_por_dia = {}
-            dia = inicio
+        return [d.strftime("%d/%m") for d in totais_por_dia], list(totais_por_dia.values())
 
-            while dia <= fim:
-                totais_por_dia[dia] = 0.0
-                dia += timedelta(days=1)
+    def _atualizar_grafico(self, vendas_periodo, inicio, fim, vendas_ant=None, inicio_ant=None, fim_ant=None):
 
-            for venda in vendas_periodo:
-                data = _parse_data(venda.get("data", ""))
-                if data and data.date() in totais_por_dia:
-                    totais_por_dia[data.date()] += float(
-                        venda.get("valor_total", 0)
-                    )
+        rotulos, totais = self._totais_do_periodo(vendas_periodo, inicio, fim)
+        anterior = None
+        if vendas_ant is not None:
+            anterior = self._totais_do_periodo(vendas_ant, inicio_ant, fim_ant)[1]
 
-            rotulos = [
-                d.strftime("%d/%m") for d in totais_por_dia
-            ]
-            totais = list(totais_por_dia.values())
-
-        self.grafico.definir_dados(rotulos, totais)
+        self.grafico.definir_dados(rotulos, totais, anterior)
 
     def _atualizar_transacoes(self, vendas_periodo):
 

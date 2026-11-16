@@ -261,3 +261,72 @@ class PainelDetalhe(QFrame):
 
         self._v.addStretch()
         self.show()
+
+
+def pagina_rolavel(layout_pai):
+    """Tudo que for adicionado ao layout devolvido rola junto com a página
+    (cards e filtros somem ao descer a lista); o que fica em `layout_pai`
+    -- cabeçalho, rodapé -- continua fixo. Devolve (rolagem, layout)."""
+    from PySide6.QtWidgets import QScrollArea
+
+    rolagem = QScrollArea()
+    rolagem.setWidgetResizable(True)
+    rolagem.setFrameShape(QFrame.NoFrame)
+    rolagem.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    rolagem.setStyleSheet(f"""
+        QScrollArea {{ border:none; background:transparent; }}
+        QScrollBar:vertical {{ background:transparent; width:10px; margin:0; }}
+        QScrollBar::handle:vertical {{
+            background:{tokens.BORDA_FORTE}; border-radius:5px; min-height:30px;
+        }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background:transparent; }}
+    """)
+    conteudo = QWidget()
+    conteudo.setStyleSheet("background:transparent;")
+    rolagem.setWidget(conteudo)
+    layout_pai.addWidget(rolagem, stretch=1)
+    layout = QVBoxLayout(conteudo)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(16)
+    return rolagem, layout
+
+
+class PainelFixo(QWidget):
+    """Põe um painel lateral (ficha rápida, resumo) ao lado de uma lista
+    que rola com a página, e o faz acompanhar a rolagem: o painel do item
+    selecionado não some lá em cima quando a lista é longa."""
+
+    def __init__(self, painel, rolagem, margem=8, altura_da_janela=False):
+        super().__init__()
+        self._painel, self._rolagem, self._margem = painel, rolagem, margem
+        # painel com área que estica (ex.: extrato do cliente): ocupa a
+        # altura visível da página, como ocupava quando a lista tinha rolagem própria
+        self._altura_da_janela = altura_da_janela
+        if altura_da_janela:
+            rolagem.viewport().installEventFilter(self)
+            self._ajustar_altura()
+        self.setStyleSheet("background:transparent;")
+        self._lay = QVBoxLayout(self)
+        self._lay.setContentsMargins(0, 0, 0, 0)
+        self._lay.addWidget(painel, 0, Qt.AlignTop)
+        self._lay.addStretch()
+        rolagem.verticalScrollBar().valueChanged.connect(self._acompanhar)
+
+    def eventFilter(self, obj, evento):
+        from PySide6.QtCore import QEvent
+
+        if evento.type() == QEvent.Resize:
+            self._ajustar_altura()
+        return super().eventFilter(obj, evento)
+
+    def _ajustar_altura(self):
+        self._painel.setFixedHeight(max(320, self._rolagem.viewport().height() - 2 * self._margem))
+
+    def _acompanhar(self, valor):
+        from PySide6.QtCore import QPoint
+
+        topo = self.mapTo(self._rolagem.widget(), QPoint(0, 0)).y() - self._lay.contentsMargins().top()
+        descida = max(0, valor - topo + self._margem)
+        limite = max(0, self.height() - self._painel.height())
+        self._lay.setContentsMargins(0, min(descida, limite), 0, 0)

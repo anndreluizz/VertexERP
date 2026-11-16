@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
 from design.seletor import Seletor
 from design import tokens
 from design.icons import icone, icone_pixmap
-from design.lista import FaixaAtencao
+from design.lista import FaixaAtencao, PainelFixo, pagina_rolavel
 from design.fonts import familia_titulo
 from design.widgets import Avatar, Badge, BotaoPrimario, BotaoSecundario, BotaoSucesso, CampoTexto, Card, CardKPI
 from services.worker import rodar_em_thread, em_paralelo
@@ -641,26 +641,7 @@ class Clientes(QWidget):
 
         # tudo abaixo do cabeçalho rola junto: os cards somem ao descer a
         # lista em vez de ficarem fixos ocupando a tela
-        rolagem_pagina = QScrollArea()
-        rolagem_pagina.setWidgetResizable(True)
-        rolagem_pagina.setFrameShape(QFrame.NoFrame)
-        rolagem_pagina.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        rolagem_pagina.setStyleSheet(f"""
-            QScrollArea {{ border:none; background:transparent; }}
-            QScrollBar:vertical {{ background:transparent; width:10px; margin:0; }}
-            QScrollBar::handle:vertical {{
-                background:{tokens.BORDA_FORTE}; border-radius:5px; min-height:30px;
-            }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background:transparent; }}
-        """)
-        conteudo_pagina = QWidget()
-        conteudo_pagina.setStyleSheet("background:transparent;")
-        rolagem_pagina.setWidget(conteudo_pagina)
-        layout.addWidget(rolagem_pagina, stretch=1)
-        layout = QVBoxLayout(conteudo_pagina)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
+        rolagem_pagina, layout = pagina_rolavel(layout)
 
         self.faixa_atencao = FaixaAtencao()
         layout.addWidget(self.faixa_atencao)
@@ -853,7 +834,7 @@ class Clientes(QWidget):
         )
 
         corpo.addWidget(self.card_lista, stretch=1)
-        corpo.addWidget(self.painel)
+        corpo.addWidget(PainelFixo(self.painel, rolagem_pagina, altura_da_janela=True))
 
         layout.addWidget(self.area_lista, stretch=1)
 

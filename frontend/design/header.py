@@ -9,15 +9,16 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from design import tokens
-from design.icons import icone
 from design.privacidade import privacidade
-from design.widgets import Avatar, BotaoPerigo, BotaoSucesso
+from design.icons import icone
+from design.widgets import Avatar, Badge, BotaoPerigo, BotaoPrimario, BotaoSecundario, BotaoSucesso
 from services.aprovacao_service import aprovar, listar_pendentes, rejeitar
 from services import notificacao_service
 
@@ -65,8 +66,9 @@ class _Popover(QWidget):
         externo.setContentsMargins(0, 0, 0, 0)
 
         self.corpo = QFrame()
+        self.corpo.setObjectName("popoverCorpo")
         self.corpo.setStyleSheet(f"""
-            QFrame {{
+            QFrame#popoverCorpo {{
                 background: {tokens.CARD};
                 border: 1px solid {tokens.BORDA};
                 border-radius: {tokens.RADIUS_MD}px;
@@ -152,19 +154,21 @@ class _CartaoAprovacao(QFrame):
 
         self.setStyleSheet(f"""
             QFrame {{
-                background: {tokens.FUNDO};
-                border-radius: {tokens.RADIUS_SM}px;
+                background: {tokens.ALERTA_CLARO};
+                border-radius: {tokens.RADIUS_SM + 2}px;
             }}
         """)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(6)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
 
-        lbl_data = QLabel(_formatar_data_hora(solicitacao.get("criado_em", "")))
+        lbl_data = QLabel(
+            "PEDIDO DE APROVAÇÃO · " + _tempo_relativo(solicitacao.get("criado_em", "")).upper()
+        )
         lbl_data.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px;
+            background:transparent; color:{tokens.ALERTA_TEXTO};
+            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
         """)
         layout.addWidget(lbl_data)
 
@@ -172,7 +176,7 @@ class _CartaoAprovacao(QFrame):
         lbl_desc.setWordWrap(True)
         lbl_desc.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO};
-            font-size:{tokens.TAMANHO_SM}px;
+            font-size:{tokens.TAMANHO_BASE}px; font-weight:600;
         """)
         layout.addWidget(lbl_desc)
 
@@ -224,59 +228,139 @@ class _CartaoAprovacao(QFrame):
         self._on_resolvido(self)
 
 
+# ---------------------------------------------------------------------
+# CENTRAL DE NOTIFICAÇÕES (sino)
+# ---------------------------------------------------------------------
+
+# assunto da notificação, deduzido do título (o backend não guarda tipo):
+# (palavra-chave, ícone, tom)
+_CATEGORIAS = (
+    ("caixa", "wallet", "pri"), ("conta", "file-text", "alerta"),
+    ("boleto", "file-text", "alerta"), ("vencimento", "calendar", "alerta"),
+    ("vence", "calendar", "alerta"), ("backup", "download", "erro"),
+    ("cliente", "users", "ok"), ("fiado", "users", "ok"),
+    ("estoque", "package", "alerta"), ("aprova", "lock", "pri"),
+)
+
+
+def _categoria(titulo):
+    t = (titulo or "").lower()
+    for chave, nome_icone, tom in _CATEGORIAS:
+        if chave in t:
+            return nome_icone, tom
+    return "bell", "pri"
+
+
+def _cores_do_tom(tom):
+    return {
+        "pri": (tokens.PRIMARIA_CLARA, tokens.PRIMARIA),
+        "ok": (tokens.SUCESSO_CLARO, tokens.SUCESSO),
+        "alerta": (tokens.ALERTA_CLARO, tokens.ALERTA),
+        "erro": (tokens.ERRO_CLARO, tokens.ERRO),
+    }[tom]
+
+
+def _minutos_desde(texto_iso):
+    try:
+        return max(0, int((datetime.now() - datetime.fromisoformat(texto_iso)).total_seconds() // 60))
+    except (ValueError, TypeError):
+        return None
+
+
+def _tempo_relativo(texto_iso):
+    m = _minutos_desde(texto_iso)
+    if m is None:
+        return ""
+    if m < 1:
+        return "agora"
+    if m < 60:
+        return f"há {m} min"
+    if m < 60 * 24:
+        return f"há {m // 60} h"
+    return f"há {m // (60 * 24)} d"
+
+
+def _grupo_do_dia(texto_iso):
+    m = _minutos_desde(texto_iso)
+    if m is None or m < 60 * 24:
+        return "Hoje"
+    return "Ontem" if m < 60 * 48 else "Antes"
+
+
 class _CartaoNotificacao(_BlocoClicavel):
-    """Uma notificação dentro do popover do sino -- clicar nela marca
-    como lida na hora (mesmo espírito de "abrir = ler" de qualquer
-    caixa de notificação). Lida vs não lida só muda a cor de fundo/
-    peso da fonte, nada mais chamativo que isso."""
+    """Uma notificação da central: ícone do assunto, título, texto, tempo
+    relativo e bolinha de não lida. Clicar marca como lida na hora."""
 
     def __init__(self, notificacao, on_lida, parent=None):
 
         super().__init__(parent)
 
+        self._notificacao = notificacao
         self._notificacao_id = notificacao["id"]
         self._lida = notificacao["lida"]
         self._on_lida = on_lida
 
         self._aplicar_estilo()
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(2)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(12)
 
-        peso = "normal" if self._lida else "700"
+        nome_icone, tom = _categoria(notificacao["titulo"])
+        fundo_tom, cor_tom = _cores_do_tom(tom)
+        if tom == "pri" and not self._lida:
+            fundo_tom = tokens.CARD  # senão some no fundo azul-claro de "não lida"
+        bola = QLabel()
+        bola.setFixedSize(38, 38)
+        bola.setAlignment(Qt.AlignCenter)
+        bola.setPixmap(icone(nome_icone, cor=cor_tom, tamanho=19).pixmap(19, 19))
+        bola.setStyleSheet(f"background:{fundo_tom}; border:none; border-radius:19px;")
+        layout.addWidget(bola, 0, Qt.AlignTop)
 
-        lbl_titulo = QLabel(notificacao["titulo"])
-        lbl_titulo.setWordWrap(True)
-        lbl_titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO};
-            font-size:{tokens.TAMANHO_SM}px; font-weight:{peso};
-        """)
-        layout.addWidget(lbl_titulo)
+        coluna = QVBoxLayout()
+        coluna.setSpacing(2)
+
+        self.lbl_titulo = QLabel(notificacao["titulo"])
+        self.lbl_titulo.setWordWrap(True)
+        coluna.addWidget(self.lbl_titulo)
 
         lbl_corpo = QLabel(notificacao["corpo"])
         lbl_corpo.setWordWrap(True)
         lbl_corpo.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO_SECUNDARIO};
-            font-size:{tokens.TAMANHO_XS}px;
+            font-size:{tokens.TAMANHO_SM}px;
         """)
-        layout.addWidget(lbl_corpo)
+        coluna.addWidget(lbl_corpo)
 
-        lbl_data = QLabel(_formatar_data_hora(notificacao.get("criado_em", "")))
-        lbl_data.setStyleSheet(f"""
+        lbl_tempo = QLabel(_tempo_relativo(notificacao.get("criado_em", "")))
+        lbl_tempo.setStyleSheet(f"""
             background:transparent; color:{tokens.TEXTO_TERCIARIO};
             font-size:{tokens.TAMANHO_XS}px;
         """)
-        layout.addWidget(lbl_data)
+        coluna.addWidget(lbl_tempo)
+        layout.addLayout(coluna, 1)
 
+        self.ponto = QLabel()
+        self.ponto.setFixedSize(10, 10)
+        self.ponto.setStyleSheet(f"background:{tokens.PRIMARIA}; border:none; border-radius:5px;")
+        layout.addWidget(self.ponto, 0, Qt.AlignTop)
+
+        self._pintar_titulo()
         self.clicked.connect(self._marcar_lida)
 
+    def _pintar_titulo(self):
+        self.ponto.setVisible(not self._lida)
+        self.lbl_titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_BASE}px; font-weight:{500 if self._lida else 700};
+        """)
+
     def _aplicar_estilo(self):
-        fundo = tokens.FUNDO if not self._lida else "transparent"
+        fundo = "transparent" if self._lida else tokens.PRIMARIA_CLARA
         self.setStyleSheet(f"""
             _CartaoNotificacao {{
                 background: {fundo};
-                border-radius: {tokens.RADIUS_SM}px;
+                border-radius: {tokens.RADIUS_SM + 2}px;
             }}
             _CartaoNotificacao:hover {{
                 background: {tokens.FUNDO};
@@ -294,15 +378,17 @@ class _CartaoNotificacao(_BlocoClicavel):
             return
 
         self._lida = True
+        self._notificacao["lida"] = True
         self._aplicar_estilo()
+        self._pintar_titulo()
         self._on_lida()
 
 
 class _AlertaNotificacao(QFrame):
-    """Caixinha no canto inferior direito da tela quando chega
-    notificação nova (o número no sino sozinho passava despercebido).
-    Janela própria, por cima das outras, pra aparecer mesmo com o Vertex
-    minimizado; some sozinha e clicar abre o sino."""
+    """Alerta no canto inferior direito da tela quando chega notificação
+    nova (o número no sino sozinho passava despercebido). Janela própria,
+    por cima das outras, pra aparecer mesmo com o Vertex minimizado; some
+    sozinha. "Ver" abre o sino, "Dispensar" fecha."""
 
     def __init__(self, titulo, corpo, ao_clicar):
         super().__init__(
@@ -311,39 +397,67 @@ class _AlertaNotificacao(QFrame):
         )
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WA_DeleteOnClose)
-        self.setCursor(Qt.PointingHandCursor)
-        self.setFixedWidth(340)
+        self.setFixedWidth(380)
+        self.setObjectName("alertaNotificacao")
         self._ao_clicar = ao_clicar
         self.setStyleSheet(f"""
-            _AlertaNotificacao {{
+            QFrame#alertaNotificacao {{
                 background: {tokens.CARD};
-                border: 1px solid {tokens.BORDA};
-                border-left: 4px solid {tokens.PRIMARIA};
-                border-radius: 10px;
+                border: 1px solid {tokens.BORDA_FORTE};
+                border-radius: {tokens.RADIUS_MD}px;
             }}
         """)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(4)
+        nome_icone, tom = _categoria(titulo)
+        fundo_tom, cor_tom = _cores_do_tom(tom)
 
-        lbl_titulo = QLabel(titulo)
-        lbl_titulo.setWordWrap(True)
-        lbl_titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO};
-            font-size:{tokens.TAMANHO_MD}px; font-weight:700;
-        """)
-        layout.addWidget(lbl_titulo)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(14, 12, 12, 12)
+        layout.setSpacing(12)
 
-        lbl_corpo = QLabel(corpo)
-        lbl_corpo.setWordWrap(True)
-        lbl_corpo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
-            font-size:{tokens.TAMANHO_BASE}px;
-        """)
-        layout.addWidget(lbl_corpo)
+        bola = QLabel()
+        bola.setFixedSize(40, 40)
+        bola.setAlignment(Qt.AlignCenter)
+        bola.setPixmap(icone(nome_icone, cor=cor_tom, tamanho=20).pixmap(20, 20))
+        bola.setStyleSheet(f"background:{fundo_tom}; border:none; border-radius:20px;")
+        layout.addWidget(bola, 0, Qt.AlignTop)
+
+        coluna = QVBoxLayout()
+        coluna.setSpacing(2)
+
+        def rotulo(texto, tamanho, cor, peso=400):
+            lbl = QLabel(texto)
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet(f"""
+                background:transparent; border:none; color:{cor};
+                font-size:{tamanho}px; font-weight:{peso};
+            """)
+            return lbl
+
+        coluna.addWidget(rotulo("Vertex · agora", tokens.TAMANHO_XS, tokens.TEXTO_TERCIARIO, 600))
+        coluna.addWidget(rotulo(titulo, tokens.TAMANHO_BASE, tokens.TEXTO, 700))
+        coluna.addWidget(rotulo(corpo, tokens.TAMANHO_SM, tokens.TEXTO_SECUNDARIO))
+
+        botoes = QHBoxLayout()
+        botoes.setSpacing(8)
+        self.bt_ver = BotaoPrimario("Ver")
+        self.bt_ver.setMinimumHeight(30)
+        self.bt_ver.clicked.connect(self._ver)
+        self.bt_dispensar = BotaoSecundario("Dispensar")
+        self.bt_dispensar.setMinimumHeight(30)
+        self.bt_dispensar.clicked.connect(self.close)
+        botoes.addWidget(self.bt_ver)
+        botoes.addWidget(self.bt_dispensar)
+        botoes.addStretch()
+        coluna.addSpacing(4)
+        coluna.addLayout(botoes)
+        layout.addLayout(coluna, 1)
 
         QTimer.singleShot(_ALERTA_MS, self.close)
+
+    def _ver(self):
+        self.close()
+        self._ao_clicar()
 
     def mostrar(self):
         self.adjustSize()
@@ -356,9 +470,194 @@ class _AlertaNotificacao(QFrame):
             )
         self.show()
 
-    def mousePressEvent(self, event):
-        self.close()
-        self._ao_clicar()
+
+class _Central(_Popover):
+    """Painel do sino: abas (Todas / Não lidas / Aprovações), pedidos de
+    aprovação no topo (admin) e as notificações agrupadas por dia."""
+
+    def __init__(self, header, notificacoes, pendentes):
+
+        super().__init__(largura=420)
+
+        self._header = header
+        self.notificacoes = notificacoes   # None = falhou ao carregar
+        self.pendentes = pendentes         # None = falhou; [] sem admin
+        self.aba = "todas"
+        self.layout_corpo.setContentsMargins(14, 14, 14, 10)
+        self.layout_corpo.setSpacing(10)
+        self._montar()
+
+    def _montar(self):
+
+        while self.layout_corpo.count():
+            item = self.layout_corpo.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.setParent(None)
+                widget.deleteLater()
+            elif item.layout():
+                self._esvaziar(item.layout())
+                item.layout().deleteLater()
+
+        admin = self._header._admin
+        nao_lidas = sum(1 for n in (self.notificacoes or []) if not n["lida"])
+        n_aprov = len(self.pendentes or [])
+
+        topo = QHBoxLayout()
+        topo.setSpacing(8)
+        titulo = QLabel("Notificações")
+        titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_LG}px; font-weight:700;
+        """)
+        topo.addWidget(titulo)
+        if nao_lidas:
+            topo.addWidget(Badge(f"{nao_lidas} novas", "info"), 0, Qt.AlignVCenter)
+        topo.addStretch()
+        if nao_lidas:
+            bt = QPushButton("Marcar todas como lidas")
+            bt.setCursor(Qt.PointingHandCursor)
+            bt.setStyleSheet(f"""
+                QPushButton {{ background:transparent; border:none; color:{tokens.PRIMARIA};
+                               font-size:{tokens.TAMANHO_SM}px; font-weight:600; }}
+                QPushButton:hover {{ text-decoration:underline; }}
+            """)
+            bt.clicked.connect(self._header._marcar_todas_notificacoes_lidas)
+            topo.addWidget(bt)
+        self.layout_corpo.addLayout(topo)
+
+        abas = QHBoxLayout()
+        abas.setSpacing(8)
+        opcoes = [("todas", "Todas"), ("nao", f"Não lidas  {nao_lidas}")]
+        if admin:
+            opcoes.append(("aprov", f"Aprovações  {n_aprov}"))
+        for chave, texto in opcoes:
+            ativo = chave == self.aba
+            chip = QPushButton(texto)
+            chip.setFixedHeight(32)
+            chip.setCursor(Qt.PointingHandCursor)
+            chip.setStyleSheet(f"""
+                QPushButton {{ padding:0 14px; border-radius:16px; font-size:{tokens.TAMANHO_SM}px;
+                    font-weight:{700 if ativo else 600};
+                    border:1px solid {tokens.PRIMARIA_CLARA if ativo else tokens.BORDA};
+                    background:{tokens.PRIMARIA_CLARA if ativo else tokens.CARD};
+                    color:{tokens.PRIMARIA if ativo else tokens.TEXTO_SECUNDARIO}; }}
+            """)
+            chip.clicked.connect(lambda _=False, c=chave: self._trocar_aba(c))
+            abas.addWidget(chip)
+        abas.addStretch()
+        self.layout_corpo.addLayout(abas)
+
+        lista = QWidget()
+        lista.setStyleSheet("background:transparent;")
+        lv = QVBoxLayout(lista)
+        lv.setContentsMargins(0, 0, 0, 0)
+        lv.setSpacing(2)
+
+        linhas = 0
+        if admin and self.aba in ("todas", "aprov"):
+            if self.pendentes is None:
+                lv.addWidget(self._aviso("Não foi possível carregar as aprovações.", erro=True))
+                linhas += 1
+            for solicitacao in self.pendentes or []:
+                lv.addWidget(_CartaoAprovacao(solicitacao, on_resolvido=self._ao_resolver))
+                linhas += 2
+
+        if self.aba != "aprov":
+            if self.notificacoes is None:
+                lv.addWidget(self._aviso("Não foi possível carregar as notificações.", erro=True))
+                linhas += 1
+            else:
+                itens = [n for n in self.notificacoes if self.aba == "todas" or not n["lida"]]
+                ultimo = None
+                for n in itens:
+                    grupo = _grupo_do_dia(n.get("criado_em", ""))
+                    if grupo != ultimo:
+                        lv.addSpacing(4)
+                        rot = QLabel(grupo.upper())
+                        rot.setStyleSheet(f"""
+                            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+                            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
+                        """)
+                        lv.addWidget(rot)
+                        ultimo = grupo
+                    lv.addWidget(_CartaoNotificacao(n, on_lida=self._ao_ler))
+                    linhas += 2
+                if not itens and not linhas:
+                    lv.addWidget(self._vazio())
+                    linhas += 4
+        elif not self.pendentes and self.pendentes is not None:
+            lv.addWidget(self._vazio("Nenhuma aprovação pendente.", "lock"))
+            linhas += 4
+
+        lv.addStretch()
+
+        rolagem = QScrollArea()
+        rolagem.setWidgetResizable(True)
+        rolagem.setFrameShape(QFrame.NoFrame)
+        rolagem.setStyleSheet("QScrollArea { background:transparent; border:none; }")
+        rolagem.setWidget(lista)
+        rolagem.setFixedHeight(max(150, min(440, 40 + 40 * max(1, linhas))))
+        self.layout_corpo.addWidget(rolagem)
+
+    @staticmethod
+    def _esvaziar(layout):
+        while layout.count():
+            widget = layout.takeAt(0).widget()
+            if widget:
+                widget.setParent(None)
+                widget.deleteLater()
+
+    @staticmethod
+    def _aviso(texto, erro=False):
+        lbl = QLabel(texto)
+        lbl.setWordWrap(True)
+        lbl.setStyleSheet(f"""
+            background:transparent; color:{tokens.ERRO if erro else tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px; padding: 4px 10px 12px 10px;
+        """)
+        return lbl
+
+    @staticmethod
+    def _vazio(texto="Tudo em dia por aqui.", nome_icone="bell"):
+        w = QWidget()
+        w.setStyleSheet("background:transparent;")
+        v = QVBoxLayout(w)
+        v.setContentsMargins(0, 28, 0, 28)
+        v.setSpacing(6)
+        bola = QLabel()
+        bola.setFixedSize(52, 52)
+        bola.setAlignment(Qt.AlignCenter)
+        bola.setPixmap(icone(nome_icone, cor=tokens.PRIMARIA, tamanho=24).pixmap(24, 24))
+        bola.setStyleSheet(f"background:{tokens.PRIMARIA_CLARA}; border-radius:26px;")
+        v.addWidget(bola, 0, Qt.AlignCenter)
+        for t, tam, cor, peso in (
+            (texto, tokens.TAMANHO_BASE, tokens.TEXTO, 600),
+            ("Quando algo precisar de você, aparece aqui.", tokens.TAMANHO_SM, tokens.TEXTO_TERCIARIO, 400),
+        ):
+            lbl = QLabel(t)
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setStyleSheet(f"background:transparent; color:{cor}; font-size:{tam}px; font-weight:{peso};")
+            v.addWidget(lbl)
+        return w
+
+    def _trocar_aba(self, chave):
+        self.aba = chave
+        self._montar()
+
+    def _ao_ler(self):
+        self._header._atualizar_contagem_notificacoes()
+        QTimer.singleShot(0, self._montar)  # depois do clique terminar
+
+    def _ao_resolver(self, cartao):
+        self.pendentes = [p for p in (self.pendentes or []) if p["id"] != cartao._solicitacao_id]
+        self._header._atualizar_contagem_aprovacoes()
+        QTimer.singleShot(0, self._montar)
+
+    def marcar_todas_lidas(self):
+        for n in self.notificacoes or []:
+            n["lida"] = True
+        self._montar()
 
 
 class Header(QFrame):
@@ -772,106 +1071,20 @@ class Header(QFrame):
 
     def _abrir_notificacoes(self):
 
-        popover = _Popover(largura=320)
-
-        cabecalho = QHBoxLayout()
-
-        titulo = QLabel("Notificações")
-        titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO};
-            font-size:{tokens.TAMANHO_MD}px; font-weight:700;
-        """)
-        cabecalho.addWidget(titulo)
-        cabecalho.addStretch()
-
-        if self._total_nao_lidas:
-            bt_marcar_todas = QPushButton("Marcar todas como lidas")
-            bt_marcar_todas.setCursor(Qt.PointingHandCursor)
-            bt_marcar_todas.setStyleSheet(f"""
-                QPushButton {{
-                    background:transparent; border:none;
-                    color:{tokens.PRIMARIA}; font-size:{tokens.TAMANHO_XS}px;
-                }}
-            """)
-            bt_marcar_todas.clicked.connect(self._marcar_todas_notificacoes_lidas)
-            cabecalho.addWidget(bt_marcar_todas)
-
-        cabecalho_widget = QWidget()
-        cabecalho_widget.setLayout(cabecalho)
-        cabecalho_widget.setStyleSheet("background:transparent;")
-        popover.layout_corpo.addWidget(cabecalho_widget)
-
-        self._popover_notificacoes = popover
-
         try:
-            notificacoes = notificacao_service.listar(limit=10)
+            notificacoes = notificacao_service.listar(limit=30)
         except Exception:
             notificacoes = None
 
-        if notificacoes is None:
-            erro = QLabel("Não foi possível carregar as notificações.")
-            erro.setWordWrap(True)
-            erro.setStyleSheet(f"""
-                background:transparent; color:{tokens.ERRO};
-                font-size:{tokens.TAMANHO_SM}px; padding: 4px 10px 12px 10px;
-            """)
-            popover.layout_corpo.addWidget(erro)
-        elif not notificacoes:
-            vazio = QLabel("Nenhuma notificação por enquanto.")
-            vazio.setWordWrap(True)
-            vazio.setStyleSheet(f"""
-                background:transparent; color:{tokens.TEXTO_TERCIARIO};
-                font-size:{tokens.TAMANHO_SM}px; padding: 4px 10px 12px 10px;
-            """)
-            popover.layout_corpo.addWidget(vazio)
-        else:
-            for notificacao in notificacoes:
-                popover.layout_corpo.addWidget(
-                    _CartaoNotificacao(
-                        notificacao, on_lida=self._atualizar_contagem_notificacoes
-                    )
-                )
+        pendentes = []
+        if self._admin:
+            try:
+                pendentes = listar_pendentes()
+            except Exception:
+                pendentes = None
 
-        if not self._admin:
-            popover.abrir_sob(self.bt_notificacoes)
-            return
-
-        subtitulo = QLabel("Aprovações pendentes")
-        subtitulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px; font-weight:700;
-            padding: 0 10px 6px 10px;
-        """)
-        popover.layout_corpo.addWidget(subtitulo)
-
-        try:
-            pendentes = listar_pendentes()
-        except Exception:
-            pendentes = None
-
-        if pendentes is None:
-            erro = QLabel("Não foi possível carregar as aprovações.")
-            erro.setWordWrap(True)
-            erro.setStyleSheet(f"""
-                background:transparent; color:{tokens.ERRO};
-                font-size:{tokens.TAMANHO_SM}px; padding: 4px 10px 12px 10px;
-            """)
-            popover.layout_corpo.addWidget(erro)
-        elif not pendentes:
-            vazio = QLabel("Nenhuma aprovação pendente no momento.")
-            vazio.setWordWrap(True)
-            vazio.setStyleSheet(f"""
-                background:transparent; color:{tokens.TEXTO_TERCIARIO};
-                font-size:{tokens.TAMANHO_SM}px; padding: 4px 10px 12px 10px;
-            """)
-            popover.layout_corpo.addWidget(vazio)
-        else:
-            for solicitacao in pendentes:
-                popover.layout_corpo.addWidget(
-                    _CartaoAprovacao(solicitacao, on_resolvido=self._ao_resolver_aprovacao)
-                )
-
-        popover.abrir_sob(self.bt_notificacoes)
+        self._popover_notificacoes = _Central(self, notificacoes, pendentes)
+        self._popover_notificacoes.abrir_sob(self.bt_notificacoes)
 
     def _marcar_todas_notificacoes_lidas(self):
 
@@ -883,7 +1096,7 @@ class Header(QFrame):
         self._atualizar_contagem_notificacoes()
 
         if self._popover_notificacoes is not None:
-            self._popover_notificacoes.close()
+            self._popover_notificacoes.marcar_todas_lidas()
 
     def _ao_resolver_aprovacao(self, cartao):
         """Chamado por um _CartaoAprovacao depois de aprovar/rejeitar

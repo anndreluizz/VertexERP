@@ -38,17 +38,13 @@ def test_valor_novo_chegando_com_olho_fechado_ja_vem_mascarado():
     assert card.lbl_valor.text() == "R$ ••••"
 
 
-def test_olhinho_aparece_so_em_card_de_dinheiro_e_alterna_todos():
+def test_card_nao_tem_olhinho_e_segue_o_do_topo():
     card = CardKPI("Faturamento", "dollar-sign", tokens.PRIMARIA)
     card.definir_valor("R$ 50,00")
-    card_qtd = CardKPI("Pedidos", "file-text", tokens.PRIMARIA)
-    card_qtd.definir_valor("12")
-    assert not card.bt_olho.isHidden()
-    assert card_qtd.bt_olho.isHidden()
+    assert not hasattr(card, "bt_olho")
 
-    card.bt_olho.click()
+    privacidade.alternar()  # o olhinho do topo (Header) chama isso
     assert privacidade.ocultos
     assert card.lbl_valor.text() == "R$ ••••"
-    assert card.bt_olho.toolTip() == "Mostrar valores"
-    card.bt_olho.click()
+    privacidade.alternar()
     assert card.lbl_valor.text() == "R$ 50,00"

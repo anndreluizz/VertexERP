@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from widgets.dialogs.message_dialog import perguntar
+from design.lista import PainelFixo, pagina_rolavel
 from design.seletor import Seletor
 from design import tokens
 from design.icons import icone, icone_pixmap
@@ -142,6 +143,10 @@ class Vendas(QWidget):
         layout.setSpacing(16)
 
         layout.addLayout(self._construir_cabecalho())
+
+        # tudo abaixo do título rola junto: filtros e cards somem ao descer
+        # a lista; a ficha da venda acompanha a rolagem
+        rolagem_pagina, layout = pagina_rolavel(layout)
         layout.addLayout(self._construir_filtros())
 
         kpis = QGridLayout()
@@ -173,7 +178,12 @@ class Vendas(QWidget):
         for coluna, largura in ((0, 72), (1, 92), (2, 90), (4, 100), (5, 125), (6, 115), (7, 120)):
             cab.setSectionResizeMode(coluna, QHeaderView.Fixed)
             self.tabela.setColumnWidth(coluna, largura)
-        corpo.addWidget(self.tabela, stretch=3)
+        # a tabela mostra todas as linhas (quem rola é a página)
+        self.tabela.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.tabela.model().rowsInserted.connect(self._ajustar_altura_tabela)
+        self.tabela.model().rowsRemoved.connect(self._ajustar_altura_tabela)
+        self._ajustar_altura_tabela()
+        corpo.addWidget(self.tabela, 3, Qt.AlignTop)
 
         lateral = QVBoxLayout()
         lateral.setSpacing(16)
@@ -183,12 +193,22 @@ class Vendas(QWidget):
         card_vendedoras.setVisible(self._financeiro)
         lateral.addWidget(card_vendedoras)
         lateral.addWidget(self._construir_card_detalhe(), stretch=1)
-        corpo.addLayout(lateral, stretch=2)
+        painel_lateral = QWidget()
+        painel_lateral.setLayout(lateral)
+        corpo.addWidget(PainelFixo(painel_lateral, rolagem_pagina, altura_da_janela=True), 2)
 
         layout.addLayout(corpo, stretch=1)
 
         # só carrega quando a tela é aberta (ver PrincipalWindow._exibir_pagina)
         self._periodo_rapido(0, carregar=False)
+
+    def _ajustar_altura_tabela(self, *_):
+        altura = (
+            self.tabela.horizontalHeader().height()
+            + self.tabela.verticalHeader().defaultSectionSize() * self.tabela.rowCount()
+            + 2
+        )
+        self.tabela.setFixedHeight(max(altura, 200))
 
     # ======================================
     # CONSTRUÇÃO
@@ -570,6 +590,7 @@ class Vendas(QWidget):
                 _NOMES_STATUS.get(venda["status"], venda["status"]),
                 _VARIANTE_STATUS.get(venda["status"], "alerta")))
             self.tabela.verticalHeader().setDefaultSectionSize(46)
+            self._ajustar_altura_tabela()
 
         self.tabela.blockSignals(False)
         self.tabela.clearSelection()

@@ -37,7 +37,7 @@ from telas.parcelamento import copiar_codigo_boleto
 from design.seletor import Seletor
 from design import tokens
 from design.icons import icone, icone_pixmap
-from design.lista import BarraProgresso, FaixaAtencao, _limpar as _limpar_layout
+from design.lista import BarraProgresso, FaixaAtencao, PainelFixo, pagina_rolavel, _limpar as _limpar_layout
 from design.privacidade import privacidade
 from design.widgets import Badge, BotaoPrimario, BotaoSecundario, CampoTexto, Card, CardKPI
 from utils.formatacao import formatar_moeda
@@ -481,6 +481,10 @@ class ContasPagar(QWidget):
 
         layout.addLayout(cabecalho)
 
+        # tudo abaixo do cabeçalho rola junto: faixa, cards e filtros somem
+        # ao descer a lista
+        rolagem_pagina, layout = pagina_rolavel(layout)
+
         self.faixa_atencao = FaixaAtencao()
         layout.addWidget(self.faixa_atencao)
 
@@ -595,12 +599,6 @@ class ContasPagar(QWidget):
         # KPIS + LISTA (rolam juntos)
         # ======================
 
-        self.area_rolagem = QScrollArea()
-        self.area_rolagem.setWidgetResizable(True)
-        self.area_rolagem.setStyleSheet(
-            "QScrollArea { border:none; background:transparent; }"
-        )
-
         conteudo_rolavel = QWidget()
         conteudo_rolavel.setStyleSheet("background:transparent;")
 
@@ -609,17 +607,15 @@ class ContasPagar(QWidget):
         self.lista_layout.setSpacing(0)
         self.lista_layout.setAlignment(Qt.AlignTop)
 
-        self.area_rolagem.setWidget(conteudo_rolavel)
-
         cartao_lista = Card()
         lay_cartao = QVBoxLayout(cartao_lista)
         lay_cartao.setContentsMargins(0, 4, 0, 4)
-        lay_cartao.addWidget(self.area_rolagem)
+        lay_cartao.addWidget(conteudo_rolavel)
 
         corpo = QHBoxLayout()
         corpo.setSpacing(16)
         corpo.addWidget(cartao_lista, stretch=1)
-        corpo.addWidget(self._construir_painel_lateral())
+        corpo.addWidget(PainelFixo(self._construir_painel_lateral(), rolagem_pagina))
         layout.addLayout(corpo, stretch=1)
 
         # Recorte simples de "tempo real": sem servidor empurrando

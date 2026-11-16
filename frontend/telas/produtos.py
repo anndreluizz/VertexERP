@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (
 from design.seletor import Seletor
 from design import tokens
 from design.icons import icone, icone_pixmap
-from design.lista import BarraProgresso, FaixaAtencao, PainelDetalhe
+from design.lista import BarraProgresso, FaixaAtencao, PainelDetalhe, PainelFixo, pagina_rolavel
 from design.teclado import tornar_acionavel
 from design.widgets import (
     Avatar, Badge, BotaoPrimario, BotaoSecundario, CampoTexto, CardKPI, estilo_checkbox,
@@ -234,26 +234,8 @@ class Produtos(QWidget):
         # lista); a tabela ocupa a altura toda das linhas e só o rodapé
         # fica fixo. Os widgets das linhas continuam sendo montados só
         # nas que aparecem (ver _montar_visiveis).
-        self.rolagem_pagina = QScrollArea()
-        self.rolagem_pagina.setWidgetResizable(True)
-        self.rolagem_pagina.setFrameShape(QFrame.NoFrame)
-        self.rolagem_pagina.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.rolagem_pagina.setStyleSheet(f"""
-            QScrollArea {{ border:none; background:transparent; }}
-            QScrollBar:vertical {{ background:transparent; width:10px; margin:0; }}
-            QScrollBar::handle:vertical {{
-                background:{tokens.BORDA_FORTE}; border-radius:5px; min-height:30px;
-            }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background:transparent; }}
-        """)
-        self._conteudo_pagina = QWidget()
-        self._conteudo_pagina.setStyleSheet("background:transparent;")
-        self.rolagem_pagina.setWidget(self._conteudo_pagina)
-        layout.addWidget(self.rolagem_pagina, stretch=1)
-        conteudo_layout = QVBoxLayout(self._conteudo_pagina)
-        conteudo_layout.setContentsMargins(0, 0, 0, 0)
-        conteudo_layout.setSpacing(16)
+        self.rolagem_pagina, conteudo_layout = pagina_rolavel(layout)
+        self._conteudo_pagina = self.rolagem_pagina.widget()
 
         # ======================
         # CARDS DE RESUMO
@@ -478,7 +460,7 @@ class Produtos(QWidget):
         corpo_tabela = QHBoxLayout()
         corpo_tabela.setSpacing(16)
         corpo_tabela.addWidget(self.tabela, stretch=1)
-        corpo_tabela.addWidget(self.painel_detalhe, 0, Qt.AlignTop)
+        corpo_tabela.addWidget(PainelFixo(self.painel_detalhe, self.rolagem_pagina))
         conteudo_layout.addLayout(corpo_tabela, stretch=1)
 
         self.painel_erro = PainelErro()

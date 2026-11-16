@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QTableWidgetItem,
     QVBoxLayout,
+    QPushButton,
     QWidget,
 )
 
@@ -214,6 +215,40 @@ def _criar_com_perfil(nome, email, senha, perfil_id):
 # ======================================
 # NOVO USUÁRIO
 # ======================================
+
+def _celula_usuario(nome, email, ativo):
+    """Avatar + nome em cima + e-mail embaixo (clique passa pra linha)."""
+    w = QWidget()
+    w.setAttribute(Qt.WA_TransparentForMouseEvents)
+    h = QHBoxLayout(w)
+    h.setContentsMargins(10, 0, 8, 0)
+    h.setSpacing(10)
+    h.addWidget(Avatar(nome.replace("  (você)", "") or "?", 34))
+    col = QVBoxLayout()
+    col.setSpacing(0)
+    col.addStretch()
+    for texto, tam, cor, peso in (
+        (nome, tokens.TAMANHO_BASE, tokens.TEXTO if ativo else tokens.TEXTO_TERCIARIO, 700),
+        (email, tokens.TAMANHO_XS, tokens.TEXTO_TERCIARIO, 400),
+    ):
+        lbl = QLabel(texto)
+        lbl.setStyleSheet(f"background:transparent; border:none; font-size:{tam}px;"
+                          f" font-weight:{peso}; color:{cor};")
+        col.addWidget(lbl)
+    col.addStretch()
+    h.addLayout(col, 1)
+    return w
+
+
+def _celula_badge(texto, variante):
+    w = QWidget()
+    w.setAttribute(Qt.WA_TransparentForMouseEvents)
+    h = QHBoxLayout(w)
+    h.setContentsMargins(8, 0, 8, 0)
+    h.addWidget(Badge(texto, variante), 0, Qt.AlignVCenter)
+    h.addStretch()
+    return w
+
 
 class NovoUsuarioDialog(DialogoPadrao):
 
@@ -421,6 +456,26 @@ class GerenciarUsuariosDialog(DialogoPadrao):
         bt_novo.clicked.connect(self.novo_usuario)
 
         barra.addWidget(self.busca, 1)
+        self._filtro_perfil = "todos"
+        self._chips = {}
+        for chave, rotulo in (("todos", "Todos"), ("admin", "Administradores"),
+                              ("vendedor", "Vendedores"), ("inativo", "Inativos")):
+            chip = QPushButton(rotulo)
+            chip.setCheckable(True)
+            chip.setChecked(chave == "todos")
+            chip.setFixedHeight(34)
+            chip.setCursor(Qt.PointingHandCursor)
+            chip.setStyleSheet(f"""
+                QPushButton {{ padding:0 16px; border-radius:17px; font-weight:600;
+                    font-size:{tokens.TAMANHO_SM}px; color:{tokens.TEXTO_SECUNDARIO};
+                    background:{tokens.CARD}; border:1px solid {tokens.BORDA}; }}
+                QPushButton:hover {{ background:{tokens.FUNDO}; }}
+                QPushButton:checked {{ font-weight:700; color:{tokens.PRIMARIA};
+                    background:{tokens.PRIMARIA_CLARA}; border-color:{tokens.PRIMARIA_CLARA}; }}
+            """)
+            chip.clicked.connect(lambda _=False, c=chave: self._escolher_chip(c))
+            self._chips[chave] = chip
+            barra.addWidget(chip)
         barra.addWidget(bt_novo)
         self.corpo.addLayout(barra)
 
@@ -428,9 +483,12 @@ class GerenciarUsuariosDialog(DialogoPadrao):
         self.tabela = tabela_lista(["Nome", "Perfil", "Situação"])
         cabecalho = self.tabela.horizontalHeader()
         cabecalho.setSectionResizeMode(0, QHeaderView.Stretch)
-        cabecalho.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        cabecalho.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.tabela.verticalHeader().setDefaultSectionSize(52)
+        # badges são widgets de célula: o ResizeToContents não os enxerga
+        cabecalho.setSectionResizeMode(1, QHeaderView.Fixed)
+        cabecalho.setSectionResizeMode(2, QHeaderView.Fixed)
+        self.tabela.setColumnWidth(1, 160)
+        self.tabela.setColumnWidth(2, 110)
+        self.tabela.verticalHeader().setDefaultSectionSize(58)
         self.tabela.itemSelectionChanged.connect(self._mostrar_selecionado)
 
         self.painel = QFrame()
@@ -730,24 +788,19 @@ class GerenciarUsuariosDialog(DialogoPadrao):
             nome = usuario.get("nome") or ""
             if usuario.get("id") == self.meu_id:
                 nome += "  (você)"
-            item_nome = QTableWidgetItem(nome)
-            item_nome.setToolTip(usuario.get("email") or "")
-            self.tabela.setItem(linha, 0, item_nome)
-
-            perfil = "Administrador" if usuario.get("admin") else (usuario.get("perfil_nome") or "Vendedor")
-            item_perfil = QTableWidgetItem(perfil)
-            if usuario.get("admin"):
-                item_perfil.setForeground(QColor(tokens.PRIMARIA))
-            self.tabela.setItem(linha, 1, item_perfil)
-
             ativo = usuario.get("ativo", True)
-            item_status = QTableWidgetItem("Ativo" if ativo else "Inativo")
-            item_status.setForeground(QColor(tokens.SECUNDARIA_HOVER if ativo else tokens.ERRO))
-            self.tabela.setItem(linha, 2, item_status)
+            perfil = "Administrador" if usuario.get("admin") else (usuario.get("perfil_nome") or "Vendedor")
 
-            if not ativo:
-                for coluna in (0, 1):
-                    self.tabela.item(linha, coluna).setForeground(QColor(tokens.TEXTO_TERCIARIO))
+            # itens vazios seguram a seleção da linha; quem desenha é o widget da célula
+            for coluna in range(3):
+                item = QTableWidgetItem("")
+                item.setToolTip(usuario.get("email") or "")
+                self.tabela.setItem(linha, coluna, item)
+            self.tabela.setCellWidget(linha, 0, _celula_usuario(nome, usuario.get("email") or "", ativo))
+            self.tabela.setCellWidget(linha, 1, _celula_badge(
+                perfil, "info" if usuario.get("admin") else "neutro"))
+            self.tabela.setCellWidget(linha, 2, _celula_badge(
+                "Ativo" if ativo else "Inativo", "sucesso" if ativo else "erro"))
 
             if usuario.get("id") == self._selecionar_id:
                 linha_selecionar = linha
@@ -760,12 +813,29 @@ class GerenciarUsuariosDialog(DialogoPadrao):
             self.tabela.selectRow(linha_selecionar)
         self._mostrar_selecionado()
 
+    def _escolher_chip(self, chave):
+        self._filtro_perfil = chave
+        for c, chip in self._chips.items():
+            chip.setChecked(c == chave)
+        self._filtrar(self.busca.text())
+
+    def _passa_no_chip(self, usuario):
+        chave = self._filtro_perfil
+        if chave == "admin":
+            return bool(usuario.get("admin"))
+        if chave == "vendedor":
+            return not usuario.get("admin") and usuario.get("ativo", True)
+        if chave == "inativo":
+            return not usuario.get("ativo", True)
+        return True
+
     def _filtrar(self, texto):
 
         texto = (texto or "").strip().lower()
         for linha, usuario in enumerate(self.usuarios):
             alvo = f"{usuario.get('nome') or ''} {usuario.get('email') or ''}".lower()
-            self.tabela.setRowHidden(linha, texto not in alvo)
+            self.tabela.setRowHidden(
+                linha, texto not in alvo or not self._passa_no_chip(usuario))
 
     def _usuario_atual(self):
         linha = self.tabela.currentRow()

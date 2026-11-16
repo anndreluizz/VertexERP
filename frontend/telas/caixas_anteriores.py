@@ -7,7 +7,7 @@ from datetime import datetime
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog, QHBoxLayout, QLabel, QMessageBox, QTableWidgetItem, QVBoxLayout,
+    QDialog, QFrame, QHBoxLayout, QLabel, QMessageBox, QTableWidgetItem, QVBoxLayout,
 )
 
 from design import tokens
@@ -60,6 +60,46 @@ def _titulo(texto):
     return lbl
 
 
+def _cartao_numero(titulo):
+    """Cartão 'rótulo pequeno + valor grande + nota' (mesmo do Fechar caixa)."""
+    cartao = QFrame()
+    cartao.setObjectName("cartaoNumero")
+    lay = QVBoxLayout(cartao)
+    lay.setContentsMargins(14, 10, 14, 10)
+    lay.setSpacing(2)
+    cartao.lbl_titulo, cartao.lbl_valor, cartao.lbl_extra = QLabel(titulo.upper()), QLabel("—"), QLabel("")
+    for lbl in (cartao.lbl_titulo, cartao.lbl_valor, cartao.lbl_extra):
+        lay.addWidget(lbl)
+    _pintar_cartao(cartao, tokens.TEXTO, tokens.CARD, tokens.BORDA)
+    return cartao
+
+
+def _pintar_cartao(cartao, cor, fundo, borda):
+    cartao.setStyleSheet(
+        f"QFrame#cartaoNumero {{ background:{fundo}; border:1.5px solid {borda};"
+        f" border-radius:{tokens.RADIUS_MD}px; }}")
+    base = "background:transparent; border:none;"
+    cartao.lbl_titulo.setStyleSheet(
+        f"{base} font-size:{tokens.TAMANHO_XS}px; font-weight:800;"
+        f" color:{tokens.TEXTO_SECUNDARIO}; letter-spacing:0.5px;")
+    cartao.lbl_valor.setStyleSheet(
+        f"{base} font-size:{tokens.TAMANHO_XL}px; font-weight:800; color:{cor};")
+    cartao.lbl_extra.setStyleSheet(
+        f"{base} font-size:{tokens.TAMANHO_SM}px; font-weight:700; color:{cor};")
+
+
+def diferenca_do_caixa(previsto, contado):
+    """(cor, fundo, valor, nota) da diferença contado - previsto."""
+    if contado is None:
+        return tokens.TEXTO_SECUNDARIO, tokens.CARD, "—", "não contado"
+    dif = float(contado) - float(previsto or 0)
+    if abs(dif) < 0.01:
+        return tokens.SECUNDARIA_HOVER, tokens.SUCESSO_CLARO, formatar_moeda(0), "Confere"
+    if dif > 0:
+        return tokens.PRIMARIA, tokens.PRIMARIA_CLARA, f"+ {formatar_moeda(dif)}", "Sobrou na gaveta"
+    return tokens.ERRO, tokens.ERRO_CLARO, f"- {formatar_moeda(abs(dif))}", "Faltou na gaveta"
+
+
 class CaixasAnterioresDialog(QDialog):
 
     def __init__(self, parent=None, caixa_id=None):
@@ -103,6 +143,16 @@ class CaixasAnterioresDialog(QDialog):
         bt_fechar.clicked.connect(self.reject)
         topo.addWidget(bt_fechar)
         direita.addLayout(topo)
+
+        numeros = QHBoxLayout()
+        numeros.setSpacing(12)
+        self.cartao_previsto = _cartao_numero("Previsto na gaveta")
+        self.cartao_contado = _cartao_numero("Contado")
+        self.cartao_diferenca = _cartao_numero("Diferença")
+        for cartao in (self.cartao_previsto, self.cartao_contado, self.cartao_diferenca):
+            cartao.setVisible(False)
+            numeros.addWidget(cartao, 1)
+        direita.addLayout(numeros)
 
         self.lbl_resumo = QLabel()
         self.lbl_resumo.setWordWrap(True)
@@ -186,11 +236,21 @@ class CaixasAnterioresDialog(QDialog):
         self.lbl_resumo.setText(
             f"Aberto {_data(caixa['data_abertura'])} · fechado {_data(caixa.get('data_fechamento'))}\n"
             + "\n".join(grupos) + "\n"
-            f"Previsto na gaveta {formatar_moeda(resumo.get('total_previsto'))}  ·  "
-            f"Contado {formatar_moeda(contado) if contado is not None else 'não contado'}  ·  "
             f"Total geral do turno {formatar_moeda(resumo.get('total_geral'))}"
         )
         self.lbl_resumo.setVisible(True)
+
+        previsto = resumo.get("total_previsto")
+        cor, fundo, texto, nota = diferenca_do_caixa(previsto, contado)
+        self.cartao_previsto.lbl_valor.setText(formatar_moeda(previsto))
+        self.cartao_previsto.lbl_extra.setText("troco + entradas − sangrias")
+        self.cartao_contado.lbl_valor.setText(formatar_moeda(contado) if contado is not None else "—")
+        self.cartao_contado.lbl_extra.setText("informado ao fechar")
+        _pintar_cartao(self.cartao_diferenca, cor, fundo, cor)
+        self.cartao_diferenca.lbl_valor.setText(texto)
+        self.cartao_diferenca.lbl_extra.setText(nota)
+        for cartao in (self.cartao_previsto, self.cartao_contado, self.cartao_diferenca):
+            cartao.setVisible(True)
 
         vendas, outros = separar_movimentos(movimentos)
         total_vendas = sum(float(m.get("valor") or 0) for m in vendas)

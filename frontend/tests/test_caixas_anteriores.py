@@ -33,7 +33,7 @@ def test_mostra_caixa_escolhido(_qapp, monkeypatch):
     assert dialogo.tabela_vendas.rowCount() == 1
     assert dialogo.tabela_recebimentos.rowCount() == 2
     assert "R$ 150,00" in dialogo.lbl_recebimentos.text()
-    assert "não contado" in dialogo.lbl_resumo.text()
+    assert dialogo.cartao_diferenca.lbl_extra.text() == "não contado"
     assert dialogo.bt_imprimir.isEnabled()
 
 
@@ -58,3 +58,10 @@ def test_relatorios_duplo_clique_abre_caixa_fechado():
         abrir.assert_not_called()
         rel._ao_duplo_clique_caixa(1, 3)
         abrir.assert_called_once_with(7)
+
+
+def test_diferenca_do_caixa():
+    assert tela.diferenca_do_caixa(100, None)[2:] == ("—", "não contado")
+    assert tela.diferenca_do_caixa(100, 100)[3] == "Confere"
+    assert tela.diferenca_do_caixa(100, 90)[2].startswith("- ")
+    assert tela.diferenca_do_caixa(100, 110)[2].startswith("+ ")

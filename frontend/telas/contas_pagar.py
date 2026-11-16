@@ -143,6 +143,7 @@ class DespesaLinha(QFrame):
     categoria, vencimento em texto ("Vence amanhã"), valor e o botão
     Pagar à mão. Mesmos sinais/menu do antigo DespesaCard."""
 
+    ficha_solicitada = Signal(dict)
     editar_solicitado = Signal(dict)
     excluir_solicitado = Signal(dict)
     pagar_solicitado = Signal(dict)
@@ -328,9 +329,12 @@ class DespesaLinha(QFrame):
             QGuiApplication.clipboard().setText(texto)
             QToolTip.showText(QCursor.pos(), "Pix copiado! Cole no app do banco.")
 
-    def mouseDoubleClickEvent(self, event):
-        self.editar_solicitado.emit(self.conta)
-        super().mouseDoubleClickEvent(event)
+    def mouseReleaseEvent(self, event):
+        # clicar na conta abre a ficha (editar fica dentro dela); os
+        # botões da linha consomem o próprio clique
+        if event.button() == Qt.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.ficha_solicitada.emit(self.conta)
+        super().mouseReleaseEvent(event)
 
     def _construir_menu(self):
 
@@ -1129,6 +1133,7 @@ class ContasPagar(QWidget):
             for conta in contas_grupo:
 
                 linha = DespesaLinha(conta)
+                linha.ficha_solicitada.connect(self.abrir_ficha)
                 linha.editar_solicitado.connect(self.editar_despesa)
                 linha.excluir_solicitado.connect(self.excluir_despesa)
                 linha.pagar_solicitado.connect(self.pagar_despesa)
@@ -1203,6 +1208,15 @@ class ContasPagar(QWidget):
 
         if dialogo.exec() == dialogo.DialogCode.Accepted:
             self.carregar()
+
+    def abrir_ficha(self, conta):
+
+        from telas.ficha_boleto import FichaBoleto
+
+        ficha = FichaBoleto(conta, parent=self)
+
+        if ficha.exec() == ficha.DialogCode.Accepted and ficha.acao:
+            getattr(self, ficha.acao)(conta)
 
     def editar_despesa(self, conta):
 

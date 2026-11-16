@@ -249,6 +249,7 @@ class PrincipalWindow(QMainWindow):
         self.header.solicitou_logout.connect(self._fazer_logout)
         self.header.solicitou_trocar_senha.connect(self._abrir_trocar_senha)
         self.header.tema_alternado.connect(self._alternar_tema)
+        self.header.solicitou_configuracoes.connect(lambda: self._navegar("config"))
         self.abas.anexar(self.header)
 
         self.faixa_backup = FaixaAvisoBackup()

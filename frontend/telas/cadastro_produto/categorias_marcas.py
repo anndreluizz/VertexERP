@@ -58,24 +58,19 @@ class CategoriasMarcasMixin:
 
     def criar_nova_categoria(self):
 
-        nome, ok = QInputDialog.getText(
-            self,
-            "Nova Categoria",
-            "Nome da nova categoria:"
-        )
+        from telas.cadastros_etapas import nova_categoria_assistente
 
-        if not ok or not nome.strip():
+        dialogo = nova_categoria_assistente(self)
+
+        if dialogo.exec() != dialogo.DialogCode.Accepted or not dialogo.nome_criado:
             return
 
-        nome = nome.strip().upper()
+        nome = dialogo.nome_criado
 
-        rodar_em_thread(
-            self,
-            _criar_categoria_com_nome,
-            nome,
-            ao_sucesso=self._ao_criar_categoria_sucesso,
-            ao_erro=self._ao_criar_categoria_erro,
-        )
+        if self.categoria.findText(nome) < 0:
+            self.categoria.addItem(nome)
+
+        self.categoria.setCurrentText(nome)
 
     def _ao_criar_categoria_sucesso(self, resultado):
 

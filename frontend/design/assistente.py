@@ -18,6 +18,7 @@ from design import tokens
 from design.icons import icone, icone_pixmap
 from design.seletor import Seletor
 from design.widgets import BotaoPrimario, BotaoSecundario, BotaoSucesso, CampoTexto
+from services.worker import rodar_em_thread
 
 _ESTILO_CAMPO = (
     f"border:1.5px solid {tokens.BORDA_CAMPO}; border-radius:{tokens.RADIUS_SM}px;"
@@ -64,6 +65,18 @@ def campo_dinheiro():
     c.setDecimals(2)
     c.setMaximum(999999.99)
     c.setPrefix("R$ ")
+    c.setMinimumHeight(44)
+    c.setButtonSymbols(QAbstractSpinBox.NoButtons)
+    c.setStyleSheet(f"QDoubleSpinBox {{ {_ESTILO_CAMPO} }} QDoubleSpinBox:focus {{ border-color:{tokens.PRIMARIA}; }}")
+    return c
+
+
+def campo_percentual():
+    """Percentual (0 a 999), sem as setinhas de subir/descer."""
+    c = QDoubleSpinBox()
+    c.setDecimals(2)
+    c.setRange(0, 999)
+    c.setSuffix(" %")
     c.setMinimumHeight(44)
     c.setButtonSymbols(QAbstractSpinBox.NoButtons)
     c.setStyleSheet(f"QDoubleSpinBox {{ {_ESTILO_CAMPO} }} QDoubleSpinBox:focus {{ border-color:{tokens.PRIMARIA}; }}")
@@ -629,6 +642,27 @@ class AssistenteDialogo(QDialog):
     def liberar(self):
         """O salvamento falhou: deixa tentar de novo."""
         self.bt_proximo.setEnabled(True)
+
+    # rodar_em_thread só aceita métodos de um QObject como retorno (função
+    # solta rodaria na thread errada): estes dois repassam pro que a etapa quiser
+    def executar(self, func, *args, ao_sucesso, ao_erro=None):
+        self._retorno_ok, self._retorno_erro = ao_sucesso, ao_erro
+        rodar_em_thread(
+            self, func, *args,
+            ao_sucesso=self._ao_sucesso_thread, ao_erro=self._ao_erro_thread,
+        )
+
+    def _ao_sucesso_thread(self, resultado):
+        self._retorno_ok(resultado)
+
+    def _ao_erro_thread(self, erro):
+        if self._retorno_erro:
+            self._retorno_erro(erro)
+            return
+        from PySide6.QtWidgets import QMessageBox
+
+        QMessageBox.critical(self, "Erro", str(erro))
+        self.liberar()
 
     def aguardar_salvamento(self, botao_salvar):
         """O salvamento do diálogo por trás é assíncrono: reabilita o botão

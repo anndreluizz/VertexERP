@@ -577,7 +577,9 @@ class Fornecedores(QWidget):
         return self.fornecedores_exibidos[linha]
 
     def novo_fornecedor(self):
-        dialog = CadastroFornecedorDialog(parent=self)
+        from telas.cadastros_etapas import novo_fornecedor_assistente
+
+        dialog = novo_fornecedor_assistente(self)
         if dialog.exec():
             self.carregar()
 

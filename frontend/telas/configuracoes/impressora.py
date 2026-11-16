@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 from services import preferencias_service
 from services import impressora_termica_service
 
+from design.seletor import Seletor
 from design import tokens
 from design.widgets import (
     BotaoSecundario, BotaoSucesso,
@@ -102,7 +103,7 @@ class ImpressoraMixin:
         layout_usb = QVBoxLayout(self.impressora_bloco_usb)
         layout_usb.setContentsMargins(0, 0, 0, 0)
         layout_usb.setSpacing(0)
-        self.impressora_usb = QComboBox()
+        self.impressora_usb = Seletor(campo=True)
         self.impressora_usb.setEditable(True)
         self.impressora_usb.setMinimumHeight(42)
         self.impressora_usb.setStyleSheet(f"""
@@ -132,7 +133,7 @@ class ImpressoraMixin:
 
         # ---- papel ----
 
-        self.impressora_largura_papel = QComboBox()
+        self.impressora_largura_papel = Seletor(campo=True)
         self.impressora_largura_papel.addItem("80mm", 80)
         self.impressora_largura_papel.addItem("58mm", 58)
         self.impressora_largura_papel.setMinimumHeight(42)
@@ -148,7 +149,7 @@ class ImpressoraMixin:
 
         # ---- vias ----
 
-        self.impressora_vias = QComboBox()
+        self.impressora_vias = Seletor(campo=True)
         self.impressora_vias.addItem("1 via", 1)
         self.impressora_vias.addItem("2 vias (cliente + loja)", 2)
         self.impressora_vias.setMinimumHeight(42)

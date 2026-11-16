@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from widgets.dialogs.message_dialog import perguntar
+from design.seletor import Seletor
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import (
@@ -380,7 +381,7 @@ class ImportarNFeDialog(DialogoPadrao):
         )
 
         # categoria dos produtos que a nota cria; vazio = sem categoria
-        self.categoria = QComboBox()
+        self.categoria = Seletor(campo=True)
         self.categoria.setEditable(True)
         self.categoria.setMinimumHeight(42)
         self.categoria.setMinimumWidth(160)

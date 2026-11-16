@@ -20,6 +20,7 @@ from services.worker import rodar_em_thread, em_paralelo
 from services import api
 from widgets.dialogs.pesquisa_window import PesquisaWindow
 from widgets.tables.standard_table import StandardTable
+from design.seletor import Seletor
 from design import tokens
 
 
@@ -144,7 +145,7 @@ class AjusteEstoque(QWidget):
         lbl_tipo.setStyleSheet(_estilo_rotulo())
         col_tipo.addWidget(lbl_tipo)
 
-        self.tipo = QComboBox()
+        self.tipo = Seletor(campo=True)
         self.tipo.addItems(["Entrada", "Saída"])
         self.tipo.setMinimumHeight(38)
         self.tipo.setStyleSheet(_estilo_campo())

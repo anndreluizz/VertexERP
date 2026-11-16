@@ -40,6 +40,7 @@ from telas.gerenciar_categorias_despesa import (
 from telas.gerenciar_centros_custo import GerenciarCentrosCustoDialog
 from telas.gerenciar_plano_contas import GerenciarPlanoContasDialog
 
+from design.seletor import Seletor
 from design import tokens
 from design.widgets import (
     BotaoPerigo, BotaoSecundario, CampoTexto, DialogoPadrao, campo_rotulado,
@@ -774,7 +775,7 @@ class CadastroDespesaDialog(DialogoPadrao):
             self.ajustar_altura()
 
     def _combo(self):
-        combo = QComboBox()
+        combo = Seletor(campo=True)
         combo.setMinimumHeight(44)
         combo.setCursor(Qt.PointingHandCursor)
         combo.setStyleSheet(f"""

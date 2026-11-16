@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from widgets.dialogs.message_dialog import perguntar
+from design.seletor import Seletor
 from design import tokens
 from design.widgets import BotaoPrimario, BotaoSecundario, CampoTexto
 from services.venda_service import registrar_devolucao
@@ -137,7 +138,7 @@ class DevolucaoDialog(QDialog):
         lbl_forma.setStyleSheet(f"background:transparent; color:{tokens.TEXTO};")
         linha_forma.addWidget(lbl_forma)
 
-        self.forma = QComboBox()
+        self.forma = Seletor(campo=True)
         self.forma.setMinimumHeight(38)
         for valor, rotulo in _FORMAS:
             if valor == "PRAZO" and not venda.get("cliente_id"):

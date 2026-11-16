@@ -15,6 +15,7 @@ from services import preferencias_service
 from services import loja_service
 from services.worker import rodar_em_thread
 
+from design.seletor import Seletor
 from design import tokens
 from design.widgets import (
     BotaoPrimario, BotaoSecundario, BotaoSucesso, CampoTexto,
@@ -52,7 +53,7 @@ class LojasMixin:
         linha_terminal = QHBoxLayout()
         linha_terminal.setSpacing(10)
 
-        self.combo_loja_terminal = QComboBox()
+        self.combo_loja_terminal = Seletor(campo=True)
         self.combo_loja_terminal.setMinimumHeight(44)
         self.combo_loja_terminal.setCursor(Qt.PointingHandCursor)
         self.combo_loja_terminal.setStyleSheet(f"""

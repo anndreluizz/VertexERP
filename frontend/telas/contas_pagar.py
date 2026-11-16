@@ -34,6 +34,7 @@ from telas.cadastro_despesa import CadastroDespesaDialog
 from telas.pagamento_despesa import PagamentoDespesaDialog
 from telas.parcelamento import copiar_codigo_boleto
 
+from design.seletor import Seletor
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.lista import FaixaAtencao
@@ -507,7 +508,7 @@ class ContasPagar(QWidget):
         self.pesquisa.textChanged.connect(self._renderizar_lista)
         linha_busca.addWidget(self.pesquisa, stretch=1)
 
-        self.combo_categoria = QComboBox()
+        self.combo_categoria = Seletor()
         self.combo_categoria.setMinimumHeight(40)
         self.combo_categoria.setMinimumWidth(180)
         self.combo_categoria.setCursor(Qt.PointingHandCursor)
@@ -516,7 +517,7 @@ class ContasPagar(QWidget):
         linha_busca.addWidget(self.combo_categoria)
 
         # período em lista (eram 5 botões numa segunda fileira)
-        self.combo_periodo = QComboBox()
+        self.combo_periodo = Seletor()
         for chave, rotulo in self.FILTROS_PERIODO:
             self.combo_periodo.addItem(rotulo, chave)
             if chave == "MES":  # meses fechados logo depois do "Este mes"
@@ -530,7 +531,7 @@ class ContasPagar(QWidget):
         )
         linha_busca.addWidget(self.combo_periodo)
 
-        self.combo_loja_filtro = QComboBox()
+        self.combo_loja_filtro = Seletor()
         self.combo_loja_filtro.setMinimumHeight(40)
         self.combo_loja_filtro.setCursor(Qt.PointingHandCursor)
         self.combo_loja_filtro.setStyleSheet(estilo_combo)

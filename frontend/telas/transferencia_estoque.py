@@ -20,6 +20,7 @@ from services.estoque_service import listar_transferencias, transferir_estoque
 from services.worker import rodar_em_thread, em_paralelo
 from widgets.dialogs.pesquisa_window import PesquisaWindow
 from widgets.tables.standard_table import StandardTable
+from design.seletor import Seletor
 from design import tokens
 
 
@@ -144,7 +145,7 @@ class TransferenciaEstoque(QWidget):
         lbl_destino.setStyleSheet(_estilo_rotulo())
         col_destino.addWidget(lbl_destino)
 
-        self.loja_destino = QComboBox()
+        self.loja_destino = Seletor(campo=True)
         self.loja_destino.setMinimumHeight(38)
         self.loja_destino.setStyleSheet(_estilo_campo())
         col_destino.addWidget(self.loja_destino)

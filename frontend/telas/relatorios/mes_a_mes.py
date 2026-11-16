@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 
 from services.relatorio_service import mes_a_mes
 from services.worker import rodar_em_thread
+from design.seletor import Seletor
 from design import tokens
 from utils.formatacao import formatar_moeda
 
@@ -79,7 +80,7 @@ class MesAMesMixin:
                 padding:0 12px; background:{tokens.CARD}; color:{tokens.TEXTO};
             }}
         """
-        self.combo_ano_mes = QComboBox()
+        self.combo_ano_mes = Seletor()
         ano = date.today().year
         for a in range(ano, ano - 3, -1):
             self.combo_ano_mes.addItem(str(a), a)
@@ -89,7 +90,7 @@ class MesAMesMixin:
         self.combo_ano_mes.currentIndexChanged.connect(self._atualizar_mes_a_mes)
         cabecalho.addWidget(self.combo_ano_mes)
 
-        self.combo_loja_mes = QComboBox()
+        self.combo_loja_mes = Seletor()
         self.combo_loja_mes.setMinimumHeight(34)
         self.combo_loja_mes.setCursor(Qt.PointingHandCursor)
         self.combo_loja_mes.setStyleSheet(estilo_combo)

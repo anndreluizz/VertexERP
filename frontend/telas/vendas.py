@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from widgets.dialogs.message_dialog import perguntar
+from design.seletor import Seletor
 from design import tokens
 from design.icons import icone, icone_pixmap
 from design.widgets import BotaoPerigo, BotaoPrimario, BotaoSecundario, Card, CardKPI
@@ -232,7 +233,7 @@ class Vendas(QWidget):
             filtros.addWidget(bt)
 
         # mes fechado: preenche as datas de/ate
-        self.combo_mes = QComboBox()
+        self.combo_mes = Seletor()
         self.combo_mes.setMinimumHeight(38)
         self.combo_mes.addItem("Mês…")
         self.combo_mes.addItems(meses_recentes())
@@ -253,7 +254,7 @@ class Vendas(QWidget):
         filtros.addWidget(lbl_ate)
         filtros.addWidget(self.data_fim)
 
-        self.filtro_vendedora = QComboBox()
+        self.filtro_vendedora = Seletor()
         self.filtro_vendedora.setMinimumHeight(38)
         self.filtro_vendedora.setMinimumWidth(200)
         self.filtro_vendedora.addItem("Todas as vendedoras", None)
@@ -261,7 +262,7 @@ class Vendas(QWidget):
         filtros.addWidget(self.filtro_vendedora)
 
         # so' aparece com mais de uma loja (ver _ao_carregar)
-        self.filtro_loja = QComboBox()
+        self.filtro_loja = Seletor()
         self.filtro_loja.setMinimumHeight(38)
         self.filtro_loja.addItem("Todas as lojas", None)
         self.filtro_loja.setVisible(False)

@@ -27,6 +27,7 @@ from services.produto_service import (
 )
 from services.worker import rodar_em_thread
 from widgets.tables.standard_table import StandardTable
+from design.seletor import Seletor
 from design.alteracoes import ProtegeAlteracoes
 from design import tokens
 from design.icons import icone, icone_pixmap
@@ -167,7 +168,7 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
 
         self.nome = self._input("Ex.: Mochila Preta Escolar")
 
-        self.categoria = QComboBox()
+        self.categoria = Seletor(campo=True)
         self.categoria.setEditable(True)
         self.categoria.setMinimumHeight(44)
         self.categoria.setStyleSheet(self._estilo_input("QComboBox"))
@@ -178,7 +179,7 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
             "menu", "Gerenciar categorias (editar/excluir)", self.gerenciar_categorias,
         )
 
-        self.marca = QComboBox()
+        self.marca = Seletor(campo=True)
         self.marca.setEditable(False)
         self.marca.setMinimumHeight(44)
         self.marca.setStyleSheet(self._estilo_input("QComboBox"))

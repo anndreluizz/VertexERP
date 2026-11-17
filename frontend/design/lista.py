@@ -323,10 +323,25 @@ class PainelFixo(QWidget):
     def _ajustar_altura(self):
         self._painel.setFixedHeight(max(320, self._rolagem.viewport().height() - 2 * self._margem))
 
-    def _acompanhar(self, valor):
+    def _acompanhar(self, valor=None):
+        """Desce o painel junto com a rolagem. So' MOVE o widget: mexer nas
+        margens do layout a cada passo da rolagem refazia o layout da pagina
+        inteira (todas as linhas da lista) e deixava a rolagem pesada."""
         from PySide6.QtCore import QPoint
 
-        topo = self.mapTo(self._rolagem.widget(), QPoint(0, 0)).y() - self._lay.contentsMargins().top()
+        if valor is None:
+            valor = self._rolagem.verticalScrollBar().value()
+        topo = self.mapTo(self._rolagem.widget(), QPoint(0, 0)).y()
         descida = max(0, valor - topo + self._margem)
         limite = max(0, self.height() - self._painel.height())
-        self._lay.setContentsMargins(0, min(descida, limite), 0, 0)
+        self._painel.move(self._painel.x(), min(descida, limite))
+
+    # o layout poe o painel em y=0 sempre que recalcula (janela redimensionada,
+    # conteudo do painel mudou): depois disso volta pra posicao da rolagem
+    def event(self, evento):
+        from PySide6.QtCore import QEvent
+
+        resultado = super().event(evento)
+        if evento.type() in (QEvent.LayoutRequest, QEvent.Resize):
+            self._acompanhar()
+        return resultado

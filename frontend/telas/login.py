@@ -1,11 +1,10 @@
 import math
 import os
 import sys
-import tempfile
 from datetime import datetime
 
-from PySide6.QtCore import QEvent, QPointF, Qt, QTimer, QVariantAnimation
-from PySide6.QtGui import QColor, QCursor, QLinearGradient, QPainter, QRadialGradient
+from PySide6.QtCore import QEvent, QPointF, Qt, QTimer
+from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
     QWidget,
     QLabel,
@@ -14,7 +13,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QVBoxLayout,
     QHBoxLayout,
-    QFrame,
     QMessageBox,
     QApplication,
 )
@@ -23,10 +21,9 @@ from requests.exceptions import ConnectionError
 
 from widgets.dialogs.message_dialog import perguntar
 from design import tokens
-from design.animations import fade_in, slide_up
 from design.fonts import familia_titulo
-from design.icons import icone, icone_pixmap
-from design.widgets import BotaoPrimario
+from design.icons import icone
+from design.login_visual import BotaoEntrar, Fundo, Onda
 from services import api
 from services.api import login, me, configuracoes
 from services.preferencias_service import carregar_tema_escuro, salvar_tema_escuro
@@ -34,91 +31,6 @@ from services.worker import rodar_em_thread, em_paralelo
 from utils.acessibilidade import movimento_reduzido
 from telas.verificar_2fa import Verificar2FADialog
 from telas.principal import PrincipalWindow
-
-
-class _PainelAnimado(QFrame):
-    """Painel de marca com um gradiente que "respira" bem devagar e
-    formas suaves flutuando ao fundo -- só decoração (roda por baixo
-    dos widgets de conteúdo, que continuam layoutados normalmente por
-    cima via QVBoxLayout, sem saber que o fundo é animado). Pensado
-    pra dar uma sensação de profundidade/movimento discreta, sem virar
-    distração numa tela de login de um sistema de gestão."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-        self._fase = 0.0
-
-        self._anim = QVariantAnimation(self)
-        self._anim.setDuration(11000)
-        self._anim.setStartValue(0.0)
-        self._anim.setEndValue(1.0)
-        self._anim.setLoopCount(-1)
-        self._anim.valueChanged.connect(self._ao_animar)
-
-        # decorativa e roda pra sempre (loop infinito) -- com "Mostrar
-        # animacoes" desligado no Windows, nem comeca (fica parada na
-        # fase inicial, ainda com o gradiente estatico de paintEvent)
-        if not movimento_reduzido():
-            self._anim.start()
-
-    def parar_animacao(self):
-        self._anim.stop()
-
-    def _ao_animar(self, valor):
-        # mesmo caso de widgets/nav_card.py::_ao_animar_sombra e
-        # design/widgets.py::_BotaoAnimado._ao_animar: stop() chamado
-        # antes da animacao ter rodado alguma vez (ou no meio do loop
-        # infinito, ao trocar de tela apos o login) pode emitir
-        # valueChanged(None) -- sem essa guarda, float(None) estoura
-        # TypeError e derruba o processo bem na transicao pro sistema.
-        if valor is None:
-            return
-
-        self._fase = float(valor)
-        self.update()
-
-    def paintEvent(self, event):
-
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        largura = self.width()
-        altura = self.height()
-
-        # gradiente principal -- o ponto final oscila bem devagar num
-        # raio pequeno, dando a impressão de um gradiente "vivo" sem
-        # trocar de cor de verdade (continua reconhecivelmente azul)
-        onda = math.sin(self._fase * 2 * math.pi)
-        x2 = largura * (0.85 + onda * 0.15)
-        y2 = altura * (0.85 - onda * 0.1)
-
-        gradiente = QLinearGradient(0, 0, x2, y2)
-        gradiente.setColorAt(0, QColor(tokens.PRIMARIA))
-        gradiente.setColorAt(1, QColor(tokens.SIDEBAR))
-
-        painter.fillRect(self.rect(), gradiente)
-
-        self._desenhar_forma(painter, largura * 0.86, altura * 0.12, 260, 0.0)
-        self._desenhar_forma(painter, largura * 0.1, altura * 0.6, 300, 0.33)
-        self._desenhar_forma(painter, largura * 0.7, altura * 0.95, 220, 0.66)
-        self._desenhar_forma(painter, largura * 0.3, altura * 0.08, 180, 0.5)
-
-    def _desenhar_forma(self, painter, x_base, y_base, raio, deslocamento_fase):
-        """Um círculo com borda suave (gradiente radial que desaparece
-        pra transparente) balançando devagar em volta de um ponto --
-        dá profundidade sem competir com o texto por cima."""
-
-        fase_local = (self._fase + deslocamento_fase) % 1.0
-        deslocamento = math.sin(fase_local * 2 * math.pi) * 34
-
-        gradiente = QRadialGradient(x_base, y_base + deslocamento, raio)
-        gradiente.setColorAt(0.0, QColor(255, 255, 255, 26))
-        gradiente.setColorAt(1.0, QColor(255, 255, 255, 0))
-
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(gradiente)
-        painter.drawEllipse(QPointF(x_base, y_base + deslocamento), raio, raio)
 
 
 def _saudacao():
@@ -130,16 +42,10 @@ def _saudacao():
     return "Boa noite"
 
 
-def _icone_check_arquivo():
-    """O ::indicator:checked do QCheckBox só aceita imagem por caminho
-    de arquivo (não QPixmap) -- grava o ícone 'check' branco uma vez
-    numa pasta temporária e devolve o caminho com barras '/', que é o
-    que o url() do stylesheet do Qt espera mesmo no Windows."""
-
-    caminho = os.path.join(tempfile.gettempdir(), "vertexerp_check_branco.png")
-    if not os.path.exists(caminho):
-        icone_pixmap("check", cor=tokens.TEXTO_CLARO, tamanho=14).save(caminho, "PNG")
-    return caminho.replace("\\", "/")
+def _primeiro_nome(email):
+    """'andre.lopes@loja.com' -> 'Andre' (so pra saudar; vazio se nao der)."""
+    nome = (email or "").split("@")[0].replace(".", " ").replace("_", " ").strip().title()
+    return nome.split()[0] if len(nome) >= 3 else ""
 
 
 def _buscar_info_principal():
@@ -153,6 +59,10 @@ def _buscar_info_principal():
 
 
 class LoginWindow(QWidget):
+    """Login: painel de marca vivo na esquerda (Fundo), formulario na direita.
+    O visual vem de design/login_visual.py; aqui fica so a montagem e a logica."""
+
+    MARGEM = 64
 
     def __init__(self):
         super().__init__()
@@ -161,243 +71,220 @@ class LoginWindow(QWidget):
         self.resize(1180, 720)
         self.setMinimumSize(1000, 680)
         # abre maximizada (ocupando a tela, com a barra de tarefas
-        # visível) -- os 3 lugares que criam a janela só chamam show(),
-        # e o estado definido aqui já vale pra esse show(). Ao sair do
-        # maximizado, volta pro tamanho de 1180x720 acima.
+        # visivel); ao sair do maximizado volta pro tamanho acima.
         self.setWindowState(Qt.WindowMaximized)
-        self.setStyleSheet(f"background:{tokens.SIDEBAR};")
+        self.setStyleSheet(f"background:{tokens.CARD};")
 
-        raiz = QVBoxLayout(self)
+        raiz = QHBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
+        raiz.setSpacing(0)
 
-        # Vertex 2.0: login no meio da tela, em cima do fundo animado
-        self._painel_marca = _PainelAnimado()
-        raiz.addWidget(self._painel_marca)
+        self._fundo = Fundo()
+        raiz.addWidget(self._fundo, 58)
 
-        fundo = QVBoxLayout(self._painel_marca)
-        fundo.setContentsMargins(40, 28, 40, 24)
-        fundo.setSpacing(0)
+        self._painel = QWidget()
+        self._painel.setMinimumWidth(500)
+        raiz.addWidget(self._painel, 42)
+        self._construir_formulario()
 
-        topo = QHBoxLayout()
-        topo.setSpacing(12)
-        self._logo = QWidget()
-        self._logo.setStyleSheet("background:transparent;")
-        linha_logo = QHBoxLayout(self._logo)
-        linha_logo.setContentsMargins(0, 0, 0, 0)
-        linha_logo.setSpacing(12)
-        marca = QLabel("V")
-        marca.setFixedSize(40, 40)
-        marca.setAlignment(Qt.AlignCenter)
-        marca.setStyleSheet("""
-            background: rgba(255, 255, 255, 0.16);
-            color: white; border-radius: 12px;
-            font-size: 19px; font-weight: 800;
-        """)
-        nome = QLabel("Vertex ERP")
-        nome.setStyleSheet(f"background:transparent; color:white; font-size:20px; "
-                           f"font-weight:700; font-family:'{familia_titulo()}';")
-        linha_logo.addWidget(marca)
-        linha_logo.addWidget(nome)
-        topo.addWidget(self._logo)
-        topo.addStretch()
-        topo.addWidget(self._construir_bt_tema())
-        fundo.addLayout(topo)
+        self._onda = Onda(self)
+        self._onda.setGeometry(self.rect())
+        self._onda_timer = QTimer(self)
+        self._onda_timer.setInterval(16)
+        self._onda_timer.timeout.connect(self._andar_onda)
+        self._onda_destino = None
 
-        fundo.addStretch(2)
-        self._cartao = self._construir_painel_formulario()
-        fundo.addWidget(self._cartao, 0, Qt.AlignHCenter)
-        fundo.addSpacing(22)
-
-        frase = QLabel("Sua loja organizada, do caixa ao fiado.")
-        frase.setAlignment(Qt.AlignCenter)
-        frase.setStyleSheet("background:transparent; color: rgba(255, 255, 255, 0.75); font-size:15px;")
-        fundo.addWidget(frase)
-        fundo.addStretch(3)
-
-        rodape = QHBoxLayout()
-        endereco = api.URL.split("://", 1)[-1]
-        lbl_servidor = QLabel(f"Servidor: {endereco}")
-        lbl_servidor.setStyleSheet("background:transparent; color: rgba(255, 255, 255, 0.55); font-size:12px;")
-        bt_config_servidor = self._link(
-            "Configurar servidor", "rgba(255, 255, 255, 0.7)", tokens.TEXTO_CLARO,
-            tamanho=tokens.TAMANHO_SM, peso=500,
-        )
-        bt_config_servidor.setIcon(icone("settings", cor=tokens.TEXTO_SIDEBAR, tamanho=14))
-        bt_config_servidor.clicked.connect(self.configurar_servidor)
-        rodape.addWidget(lbl_servidor)
-        rodape.addStretch()
-        rodape.addWidget(bt_config_servidor)
-        fundo.addLayout(rodape)
+        self._tremor_timer = QTimer(self)
+        self._tremor_timer.setInterval(16)
+        self._tremor_timer.timeout.connect(self._andar_tremor)
+        self._tremor_i = 0
 
         self.usuario.setFocus()
 
-        # entrada: logo aparece, cartao sobe e aparece (espera o layout
-        # posicionar o cartao, senao o slide_up parte da posicao 0,0)
-        fade_in(self._logo, duracao=500)
-        QTimer.singleShot(60, self._animar_entrada)
-
-    def _animar_entrada(self):
-        fade_in(self._cartao, duracao=520)
-        slide_up(self._cartao, distancia=36, duracao=620)
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        onda = getattr(self, "_onda", None)
+        if onda is not None:
+            onda.setGeometry(self.rect())
 
     def closeEvent(self, event):
         # getattr defensivo: em testes a janela pode ser criada via
-        # __new__ (pulando o __init__), sem _painel_marca nenhum
-        painel = getattr(self, "_painel_marca", None)
-        if painel is not None:
-            painel.parar_animacao()
+        # __new__ (pulando o __init__), sem _fundo nenhum
+        fundo = getattr(self, "_fundo", None)
+        if fundo is not None:
+            fundo.parar_animacao()
         super().closeEvent(event)
 
     # ======================================
-    # CARTAO DO FORMULARIO (no meio)
+    # FORMULARIO (direita)
     # ======================================
 
-    def _construir_painel_formulario(self):
+    def _rotulo(self, texto):
+        lbl = QLabel(texto)
+        lbl.setStyleSheet(
+            f"background:transparent;color:{tokens.TEXTO_SECUNDARIO};"
+            f"font-size:{tokens.TAMANHO_SM}px;font-weight:700;"
+        )
+        return lbl
 
-        painel = QFrame()
-        painel.setObjectName("cartaoLogin")
-        painel.setFixedWidth(452)
-        painel.setStyleSheet(f"QFrame#cartaoLogin {{ background:{tokens.CARD}; border-radius:22px; }}")
+    def _campo(self, placeholder, nome_icone):
+        campo = QLineEdit()
+        campo.setPlaceholderText(placeholder)
+        campo.setFixedHeight(52)
+        campo.addAction(icone(nome_icone, tokens.TEXTO_TERCIARIO, 19), QLineEdit.LeadingPosition)
+        campo.setStyleSheet(
+            f"QLineEdit{{border:1.5px solid {tokens.BORDA_CAMPO};border-radius:{tokens.RADIUS_MD}px;"
+            f"padding:0 14px;background:{tokens.CARD};color:{tokens.TEXTO};font-size:{tokens.TAMANHO_MD}px;}}"
+            f"QLineEdit:focus{{border:2px solid {tokens.PRIMARIA};}}"
+        )
+        return campo
 
-        layout = QVBoxLayout(painel)
-        layout.setContentsMargins(40, 36, 40, 32)
-        layout.setSpacing(0)
+    def _link(self, texto, cor, cor_hover, tamanho=None, peso=700):
+        bt = QPushButton(texto)
+        bt.setCursor(Qt.PointingHandCursor)
+        bt.setAutoDefault(False)
+        bt.setStyleSheet(
+            f"QPushButton{{border:none;background:transparent;padding:2px 0;color:{cor};"
+            f"font-size:{tamanho or tokens.TAMANHO_BASE}px;font-weight:{peso};}}"
+            f"QPushButton:hover{{color:{cor_hover};text-decoration:underline;}}"
+        )
+        return bt
+
+    def _construir_formulario(self):
+        self._lay = QVBoxLayout(self._painel)
+        self._lay.setContentsMargins(self.MARGEM, 0, self.MARGEM, 0)
+        self._lay.setSpacing(0)
+        lay = self._lay
+
+        topo = QHBoxLayout()
+        topo.setContentsMargins(0, 26, 0, 0)
+        topo.addStretch()
+        topo.addWidget(self._construir_bt_tema())
+        lay.addLayout(topo)
+        lay.addStretch(3)
 
         saudacao = QLabel(_saudacao().upper())
-        saudacao.setStyleSheet(f"""
-            background:transparent; color:{tokens.PRIMARIA};
-            font-size:{tokens.TAMANHO_XS}px; font-weight:800;
-            letter-spacing: 1px;
-        """)
-        layout.addWidget(saudacao)
-        layout.addSpacing(8)
+        saudacao.setStyleSheet(
+            f"background:transparent;color:{tokens.PRIMARIA};font-size:{tokens.TAMANHO_XS}px;"
+            f"font-weight:800;letter-spacing:1.5px;"
+        )
+        lay.addWidget(saudacao)
+        lay.addSpacing(8)
 
-        titulo = QLabel("Entrar no Vertex")
-        titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO};
-            font-size:30px; font-weight:700; font-family:'{familia_titulo()}';
-        """)
-        layout.addWidget(titulo)
-        layout.addSpacing(6)
+        self._titulo = QLabel("Entrar no Vertex")
+        self._titulo.setStyleSheet(
+            f"background:transparent;color:{tokens.TEXTO};font-size:36px;"
+            f"font-weight:800;font-family:'{familia_titulo()}';"
+        )
+        lay.addWidget(self._titulo)
+        lay.addSpacing(6)
 
-        subtitulo = QLabel("Use o e-mail e a senha cadastrados na loja.")
-        subtitulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
-            font-size:{tokens.TAMANHO_MD}px;
-        """)
-        layout.addWidget(subtitulo)
-        layout.addSpacing(28)
-        layout.addWidget(self._rotulo_campo("E-mail"))
-        layout.addSpacing(8)
-        layout.addWidget(self._construir_campo_email())
-        layout.addSpacing(18)
+        self._subtitulo = QLabel("Use o e-mail e a senha cadastrados na loja.")
+        self._subtitulo.setStyleSheet(
+            f"background:transparent;color:{tokens.TEXTO_SECUNDARIO};font-size:{tokens.TAMANHO_MD}px;"
+        )
+        lay.addWidget(self._subtitulo)
+        lay.addSpacing(30)
 
-        layout.addWidget(self._rotulo_campo("Senha"))
-        layout.addSpacing(8)
-        layout.addWidget(self._construir_campo_senha())
-        layout.addSpacing(16)
+        lay.addWidget(self._rotulo("E-mail"))
+        lay.addSpacing(8)
+        self.usuario = self._campo("voce@sualoja.com.br", "mail")
+        lay.addWidget(self.usuario)
+        lay.addSpacing(18)
 
-        linha_opcoes = QHBoxLayout()
+        lay.addWidget(self._rotulo("Senha"))
+        lay.addSpacing(8)
+        self.senha = self._campo("Sua senha", "lock")
+        self.senha.setEchoMode(QLineEdit.Password)
+        self._acao_ver = self.senha.addAction(icone("eye", tokens.TEXTO_TERCIARIO, 19), QLineEdit.TrailingPosition)
+        self._acao_ver.triggered.connect(self.alternar_ver_senha)
+        self.senha.installEventFilter(self)
+        lay.addWidget(self.senha)
 
+        # uma linha so' pra avisos (erro de login, Caps Lock): nao pula o layout
+        self._aviso = QLabel("")
+        self._aviso.setFixedHeight(26)
+        self._aviso.setContentsMargins(0, 6, 0, 0)
+        self._aviso.setStyleSheet(self._estilo_aviso(tokens.ERRO))
+        lay.addWidget(self._aviso)
+
+        opcoes = QHBoxLayout()
         self.manter_conectado = QCheckBox("Manter conectado")
         self.manter_conectado.setChecked(True)
         self.manter_conectado.setCursor(Qt.PointingHandCursor)
-        self.manter_conectado.setStyleSheet(f"""
-            QCheckBox {{
-                background:transparent; color:{tokens.TEXTO_SECUNDARIO};
-                font-size:{tokens.TAMANHO_BASE}px; spacing: 8px;
-            }}
-            QCheckBox::indicator {{
-                width: 18px; height: 18px;
-                border-radius: 5px;
-                border: 1.5px solid {tokens.BORDA_FORTE};
-                background: {tokens.CARD};
-            }}
-            QCheckBox::indicator:checked {{
-                border: 1.5px solid {tokens.PRIMARIA};
-                background: {tokens.PRIMARIA};
-                image: url("{_icone_check_arquivo()}");
-            }}
-        """)
-
-        bt_esqueceu = self._link("Esqueceu a senha?", tokens.PRIMARIA, tokens.PRIMARIA_HOVER)
+        self.manter_conectado.setStyleSheet(
+            f"background:transparent;color:{tokens.TEXTO_SECUNDARIO};font-size:{tokens.TAMANHO_SM}px;"
+        )
+        bt_esqueceu = self._link("Esqueceu a senha?", tokens.PRIMARIA, tokens.PRIMARIA_HOVER, tokens.TAMANHO_SM)
         bt_esqueceu.clicked.connect(self.esqueceu_senha)
+        opcoes.addWidget(self.manter_conectado)
+        opcoes.addStretch()
+        opcoes.addWidget(bt_esqueceu)
+        lay.addLayout(opcoes)
+        lay.addSpacing(22)
 
-        linha_opcoes.addWidget(self.manter_conectado)
-        linha_opcoes.addStretch()
-        linha_opcoes.addWidget(bt_esqueceu)
-
-        layout.addLayout(linha_opcoes)
-        layout.addSpacing(24)
-
-        self.botao = BotaoPrimario("Entrar")
-        self.botao.setMinimumHeight(48)
+        self.botao = BotaoEntrar()
         self.botao.clicked.connect(self.entrar)
+        lay.addWidget(self.botao)
+        lay.addSpacing(24)
 
-        layout.addWidget(self.botao)
-        layout.addSpacing(22)
-
-        linha_cadastro = QHBoxLayout()
-        linha_cadastro.setSpacing(4)
-        linha_cadastro.addStretch()
-        lbl_primeira = QLabel("Primeira vez aqui?")
-        lbl_primeira.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
-            font-size:{tokens.TAMANHO_BASE}px;
-        """)
-        bt_cadastrar = self._link("Cadastrar a loja", tokens.PRIMARIA, tokens.PRIMARIA_HOVER)
+        primeira = QHBoxLayout()
+        primeira.setSpacing(6)
+        primeira.addStretch()
+        lbl = QLabel("Primeira vez aqui?")
+        lbl.setStyleSheet(
+            f"background:transparent;color:{tokens.TEXTO_SECUNDARIO};font-size:{tokens.TAMANHO_BASE}px;"
+        )
+        bt_cadastrar = self._link("Cadastrar minha loja", tokens.PRIMARIA, tokens.PRIMARIA_HOVER)
         bt_cadastrar.clicked.connect(self.ir_para_cadastro)
-        linha_cadastro.addWidget(lbl_primeira)
-        linha_cadastro.addWidget(bt_cadastrar)
-        linha_cadastro.addStretch()
-        layout.addLayout(linha_cadastro)
+        primeira.addWidget(lbl)
+        primeira.addWidget(bt_cadastrar)
+        primeira.addStretch()
+        lay.addLayout(primeira)
+        lay.addStretch(4)
 
-        return painel
+        rodape = QHBoxLayout()
+        rodape.setContentsMargins(0, 0, 0, 22)
+        rodape.setSpacing(6)
+        endereco = api.URL.split("://", 1)[-1]
+        servidor = QLabel(f"Servidor: {endereco}")
+        servidor.setStyleSheet(
+            f"background:transparent;color:{tokens.TEXTO_TERCIARIO};font-size:{tokens.TAMANHO_XS}px;"
+        )
+        bt_config = self._link(
+            "Configurar servidor", tokens.TEXTO_SECUNDARIO, tokens.TEXTO, tokens.TAMANHO_XS, 600
+        )
+        bt_config.setIcon(icone("settings", tokens.TEXTO_SECUNDARIO, 14))
+        bt_config.clicked.connect(self.configurar_servidor)
+        rodape.addWidget(servidor)
+        rodape.addStretch()
+        rodape.addWidget(bt_config)
+        lay.addLayout(rodape)
 
-    def _rotulo_campo(self, texto):
+        self.usuario.textChanged.connect(self._ola)
+        self.usuario.returnPressed.connect(self.senha.setFocus)
+        self.senha.returnPressed.connect(self.entrar)
+        self.senha.textChanged.connect(lambda _: self._limpar_aviso())
 
-        lbl = QLabel(texto)
-        lbl.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO};
-            font-size:{tokens.TAMANHO_BASE}px; font-weight:600;
-        """)
-        return lbl
-
-    def _link(self, texto, cor, cor_hover, tamanho=None, peso=700):
-
-        bt = QPushButton(texto)
-        bt.setCursor(Qt.PointingHandCursor)
-        bt.setAutoDefault(False)
-        bt.setStyleSheet(f"""
-            QPushButton {{
-                background:transparent; border:none; padding:2px 0;
-                color:{cor}; font-size:{tamanho or tokens.TAMANHO_BASE}px;
-                font-weight:{peso};
-            }}
-            QPushButton:hover {{ color:{cor_hover}; text-decoration: underline; }}
-        """)
-        return bt
+    def _estilo_aviso(self, cor):
+        return (
+            f"background:transparent;color:{cor};font-size:{tokens.TAMANHO_SM}px;font-weight:600;"
+        )
 
     def _construir_bt_tema(self):
-
         escuro_atual = carregar_tema_escuro()
-        texto = "  Tema escuro" if not escuro_atual else "  Tema claro"
-        nome_icone = "moon" if not escuro_atual else "sun"
-
-        bt = QPushButton(texto)
-        bt.setIcon(icone(nome_icone, cor=tokens.TEXTO_SIDEBAR, tamanho=15))
+        bt = QPushButton()
+        bt.setFixedSize(40, 40)
+        bt.setIcon(icone("sun" if escuro_atual else "moon", tokens.TEXTO_SECUNDARIO, 19))
+        bt.setToolTip("Tema claro" if escuro_atual else "Tema escuro")
+        bt.setAccessibleName("Alternar tema claro/escuro")
         bt.setCursor(Qt.PointingHandCursor)
         bt.setAutoDefault(False)
-        bt.setStyleSheet(f"""
-            QPushButton {{
-                background:transparent; border:none;
-                color:{tokens.TEXTO_SIDEBAR}; font-size:{tokens.TAMANHO_SM}px;
-                padding: 6px 8px;
-            }}
-            QPushButton:hover {{ color:{tokens.TEXTO_CLARO}; }}
-        """)
+        bt.setStyleSheet(
+            f"QPushButton{{border:1px solid {tokens.BORDA};border-radius:20px;background:{tokens.CARD};}}"
+            f"QPushButton:hover{{background:{tokens.FUNDO};}}"
+        )
         bt.clicked.connect(self._alternar_tema)
-
         return bt
 
     def _alternar_tema(self):
@@ -429,114 +316,49 @@ class LoginWindow(QWidget):
 
         os.execv(sys.executable, comando)
 
-    def _construir_campo_email(self):
-
-        campo_email = QFrame()
-        self._estilizar_campo(campo_email, focado=False)
-        campo_email_layout = QHBoxLayout(campo_email)
-        campo_email_layout.setContentsMargins(14, 0, 14, 0)
-        campo_email_layout.setSpacing(8)
-
-        icone_lbl = QLabel()
-        icone_lbl.setPixmap(icone_pixmap("mail", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
-        icone_lbl.setStyleSheet("background:transparent;")
-
-        self.usuario = QLineEdit()
-        self.usuario.setPlaceholderText("voce@sualoja.com.br")
-        self.usuario.setMinimumHeight(46)
-        self.usuario.setStyleSheet(f"""
-            QLineEdit {{
-                background:transparent; border:none;
-                font-size:{tokens.TAMANHO_MD}px; color:{tokens.TEXTO};
-            }}
-        """)
-        self.usuario.installEventFilter(self)
-        self._campo_email_frame = campo_email
-
-        campo_email_layout.addWidget(icone_lbl)
-        campo_email_layout.addWidget(self.usuario)
-
-        return campo_email
-
-    def _construir_campo_senha(self):
-
-        campo_senha = QFrame()
-        self._estilizar_campo(campo_senha, focado=False)
-        campo_senha_layout = QHBoxLayout(campo_senha)
-        campo_senha_layout.setContentsMargins(14, 0, 8, 0)
-        campo_senha_layout.setSpacing(8)
-
-        icone_lbl = QLabel()
-        icone_lbl.setPixmap(icone_pixmap("lock", cor=tokens.TEXTO_TERCIARIO, tamanho=16))
-        icone_lbl.setStyleSheet("background:transparent;")
-
-        self.senha = QLineEdit()
-        self.senha.setPlaceholderText("••••••••")
-        self.senha.setMinimumHeight(46)
-        self.senha.setEchoMode(QLineEdit.Password)
-        self.senha.setStyleSheet(f"""
-            QLineEdit {{
-                background:transparent; border:none;
-                font-size:{tokens.TAMANHO_MD}px; color:{tokens.TEXTO};
-            }}
-        """)
-        self.senha.returnPressed.connect(self.entrar)
-        self.senha.installEventFilter(self)
-        self._campo_senha_frame = campo_senha
-
-        self.bt_ver_senha = QPushButton()
-        self.bt_ver_senha.setFixedSize(30, 30)
-        self.bt_ver_senha.setCursor(Qt.PointingHandCursor)
-        self.bt_ver_senha.setAutoDefault(False)
-        self.bt_ver_senha.setCheckable(True)
-        self.bt_ver_senha.setIcon(icone("eye", cor=tokens.TEXTO_TERCIARIO, tamanho=18))
-        self.bt_ver_senha.setToolTip("Mostrar senha")
-        self.bt_ver_senha.setAccessibleName("Mostrar senha")
-        self.bt_ver_senha.setStyleSheet("""
-            QPushButton { background:transparent; border:none; }
-        """)
-        self.bt_ver_senha.clicked.connect(self.alternar_ver_senha)
-
-        campo_senha_layout.addWidget(icone_lbl)
-        campo_senha_layout.addWidget(self.senha)
-        campo_senha_layout.addWidget(self.bt_ver_senha)
-
-        return campo_senha
-
-    def _estilizar_campo(self, campo_frame, focado):
-
-        cor_borda = tokens.PRIMARIA if focado else tokens.BORDA
-
-        # seletor por objectName (e não "QFrame"): QLabel herda de
-        # QFrame, então "QFrame { border... }" desenhava uma caixinha
-        # com borda em volta do ícone de e-mail/cadeado dentro do campo
-        campo_frame.setObjectName("CampoLogin")
-        campo_frame.setStyleSheet(f"""
-            #CampoLogin {{
-                background: {tokens.CARD if focado else tokens.FUNDO};
-                border: 1.5px solid {cor_borda};
-                border-radius: {tokens.RADIUS_MD}px;
-            }}
-        """)
+    def _ola(self, texto):
+        nome = _primeiro_nome(texto)
+        if nome:
+            self._titulo.setText(f"Olá, {nome}")
+            self._subtitulo.setText("Que bom te ver. Digite a senha para continuar.")
+        else:
+            self._titulo.setText("Entrar no Vertex")
+            self._subtitulo.setText("Use o e-mail e a senha cadastrados na loja.")
 
     def eventFilter(self, observado, evento):
-
-        # getattr defensivo: o campo de e-mail e' montado antes do de
-        # senha, entao um evento que chegue nesse meio-tempo veria
-        # self.senha ainda inexistente
-        if observado is getattr(self, "senha", None):
-            if evento.type() == QEvent.FocusIn:
-                self._estilizar_campo(self._campo_senha_frame, focado=True)
-            elif evento.type() == QEvent.FocusOut:
-                self._estilizar_campo(self._campo_senha_frame, focado=False)
-
-        elif observado is getattr(self, "usuario", None):
-            if evento.type() == QEvent.FocusIn:
-                self._estilizar_campo(self._campo_email_frame, focado=True)
-            elif evento.type() == QEvent.FocusOut:
-                self._estilizar_campo(self._campo_email_frame, focado=False)
-
+        # aviso de Caps Lock ao digitar a senha
+        if (
+            observado is getattr(self, "senha", None)
+            and evento.type() == QEvent.KeyPress
+            and evento.text()
+            and evento.text().isalpha()
+        ):
+            caps = evento.text().isupper() and not (evento.modifiers() & Qt.ShiftModifier)
+            if caps:
+                self._aviso.setStyleSheet(self._estilo_aviso(tokens.ALERTA_TEXTO))
+                self._aviso.setText("Caps Lock está ligado")
+            elif self._aviso.text().startswith("Caps"):
+                self._limpar_aviso(tudo=True)
         return super().eventFilter(observado, evento)
+
+    def _limpar_aviso(self, tudo=False):
+        # o aviso de Caps Lock so sai quando a pessoa desliga a tecla
+        if self._aviso.text() and (tudo or not self._aviso.text().startswith("Caps")):
+            self._aviso.setText("")
+
+    def _mostrar_erro(self, texto):
+        self._aviso.setStyleSheet(self._estilo_aviso(tokens.ERRO))
+        self._aviso.setText(texto)
+        self._tremor_i = 0
+        self._tremor_timer.start()
+
+    def _andar_tremor(self):
+        self._tremor_i += 1
+        dx = int(math.sin(self._tremor_i * 0.9) * 12 * max(0.0, 1 - self._tremor_i / 26))
+        self._lay.setContentsMargins(self.MARGEM + dx, 0, self.MARGEM - dx, 0)
+        if self._tremor_i > 26:
+            self._tremor_timer.stop()
+            self._lay.setContentsMargins(self.MARGEM, 0, self.MARGEM, 0)
 
     # ======================================
     # COMPORTAMENTO
@@ -552,20 +374,9 @@ class LoginWindow(QWidget):
 
     def alternar_ver_senha(self):
 
-        if self.bt_ver_senha.isChecked():
-            self.senha.setEchoMode(QLineEdit.Normal)
-            self.bt_ver_senha.setIcon(
-                icone("eye-off", cor=tokens.TEXTO_TERCIARIO, tamanho=18)
-            )
-            self.bt_ver_senha.setToolTip("Ocultar senha")
-            self.bt_ver_senha.setAccessibleName("Ocultar senha")
-        else:
-            self.senha.setEchoMode(QLineEdit.Password)
-            self.bt_ver_senha.setIcon(
-                icone("eye", cor=tokens.TEXTO_TERCIARIO, tamanho=18)
-            )
-            self.bt_ver_senha.setToolTip("Mostrar senha")
-            self.bt_ver_senha.setAccessibleName("Mostrar senha")
+        mostrar = self.senha.echoMode() == QLineEdit.Password
+        self.senha.setEchoMode(QLineEdit.Normal if mostrar else QLineEdit.Password)
+        self._acao_ver.setIcon(icone("eye-off" if mostrar else "eye", tokens.TEXTO_TERCIARIO, 19))
 
     def esqueceu_senha(self):
 
@@ -585,30 +396,18 @@ class LoginWindow(QWidget):
     def entrar(self):
 
         if not self.usuario.text().strip():
-
-            QMessageBox.warning(
-                self,
-                "Atenção",
-                "Informe o e-mail.",
-            )
+            self._mostrar_erro("Informe o e-mail.")
+            self.usuario.setFocus()
             return
 
         if not self.senha.text():
-
-            QMessageBox.warning(
-                self,
-                "Atenção",
-                "Informe a senha.",
-            )
+            self._mostrar_erro("Digite a senha para entrar.")
+            self.senha.setFocus()
             return
 
         if not self.botao.isEnabled():
             # ja tem um login em andamento -- clique duplo (ou Enter
             # depois de clicar) so' faria bater no backend duas vezes.
-            # Antes disso ser desnecessario: a chamada sincrona
-            # travava a janela inteira, entao um segundo clique era
-            # fisicamente impossivel de acontecer no meio; assincrono,
-            # vira possivel de verdade.
             return
 
         self._definir_entrando(True)
@@ -625,18 +424,18 @@ class LoginWindow(QWidget):
         )
 
     def _ao_login_finalizado(self):
-        self._definir_entrando(False)
+        # depois de um login ok o botao fica no "Bem-vindo!" ate a tela abrir
+        if getattr(self.botao, "estado", "idle") != "ok":
+            self._definir_entrando(False)
 
     def _definir_entrando(self, entrando: bool):
 
-        self.botao.setEnabled(not entrando)
+        if hasattr(self.botao, "definir"):
+            self.botao.definir("carregando" if entrando else "idle")
+        else:
+            self.botao.setEnabled(not entrando)
         self.usuario.setEnabled(not entrando)
         self.senha.setEnabled(not entrando)
-
-        if entrando:
-            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-        else:
-            QApplication.restoreOverrideCursor()
 
     def _ao_login_sucesso(self, resultado):
 
@@ -663,15 +462,15 @@ class LoginWindow(QWidget):
 
         else:
 
-            QMessageBox.warning(
-                self,
-                "Erro",
-                erro,
-            )
+            self._mostrar_erro(erro or "E-mail ou senha incorretos. Confira e tente de novo.")
 
     def _abrir_principal(self):
 
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        if hasattr(self.botao, "definir"):
+            self.botao.texto_ok = "Bem-vindo!"
+            self.botao.definir("ok")
 
         rodar_em_thread(
             self,
@@ -685,6 +484,7 @@ class LoginWindow(QWidget):
         QApplication.restoreOverrideCursor()
 
     def _ao_buscar_info_principal_erro(self, erro):
+        self._definir_entrando(False)
         QMessageBox.critical(
             self,
             "Erro",
@@ -696,6 +496,32 @@ class LoginWindow(QWidget):
         info_usuario, config = resultado
 
         self.principal = PrincipalWindow(info_usuario, config)
+
+        if not self.isVisible() or movimento_reduzido():
+            self._mostrar_principal()
+            return
+
+        # revelacao: um circulo cresce do botao e cobre a tela; quando
+        # cobriu, troca pra janela principal
+        nome = ""
+        if isinstance(info_usuario, dict):
+            nome = (info_usuario.get("nome") or "").split(" ")[0]
+        self._onda.nome = nome or _primeiro_nome(self.usuario.text()) or "!"
+        centro = self.botao.mapTo(self, self.botao.rect().center())
+        self._onda.centro = QPointF(centro)
+        self._onda.p = 0.0
+        self._onda.show()
+        self._onda.raise_()
+        self._onda_timer.start()
+
+    def _andar_onda(self):
+        self._onda.p += 0.016 / 1.1
+        self._onda.update()
+        if self._onda.p > 1.15:
+            self._onda_timer.stop()
+            self._mostrar_principal()
+
+    def _mostrar_principal(self):
         self.principal.show()
         self.close()
 

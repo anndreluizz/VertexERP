@@ -806,7 +806,7 @@ class Clientes(QWidget):
         corpo.setContentsMargins(0, 0, 0, 0)
         corpo.setSpacing(16)
 
-        self.card_lista = Card()
+        self.card_lista = Card(sombra=False)
         lista_layout = QVBoxLayout(self.card_lista)
         lista_layout.setContentsMargins(0, 6, 0, 6)
 

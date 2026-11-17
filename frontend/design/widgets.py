@@ -37,7 +37,7 @@ class Card(QFrame):
     visual básica repetida em quase toda tela do sistema (stat cards,
     linhas de lista, painéis)."""
 
-    def __init__(self, parent=None, elevado=False):
+    def __init__(self, parent=None, elevado=False, sombra=True):
 
         super().__init__(parent)
 
@@ -49,22 +49,28 @@ class Card(QFrame):
             }}
         """)
 
-        sombra = QGraphicsDropShadowEffect(self)
-        sombra.setColor(QColor(tokens.SOMBRA_COR))
+        # sombra=False pra cartao que envolve LISTA LONGA: com o efeito de
+        # sombra o Qt redesenha o cartao inteiro (todas as linhas, nao so'
+        # as visiveis) numa imagem temporaria a cada passo da rolagem
+        if not sombra:
+            return
+
+        efeito = QGraphicsDropShadowEffect(self)
+        efeito.setColor(QColor(tokens.SOMBRA_COR))
 
         if elevado:
-            sombra.setBlurRadius(tokens.SOMBRA_ELEVADA_BLUR)
-            sombra.setOffset(0, tokens.SOMBRA_ELEVADA_Y)
+            efeito.setBlurRadius(tokens.SOMBRA_ELEVADA_BLUR)
+            efeito.setOffset(0, tokens.SOMBRA_ELEVADA_Y)
             cor = QColor(tokens.SOMBRA_COR)
             cor.setAlpha(tokens.SOMBRA_ELEVADA_ALPHA)
         else:
-            sombra.setBlurRadius(tokens.SOMBRA_CARD_BLUR)
-            sombra.setOffset(0, tokens.SOMBRA_CARD_Y)
+            efeito.setBlurRadius(tokens.SOMBRA_CARD_BLUR)
+            efeito.setOffset(0, tokens.SOMBRA_CARD_Y)
             cor = QColor(tokens.SOMBRA_COR)
             cor.setAlpha(tokens.SOMBRA_CARD_ALPHA)
 
-        sombra.setColor(cor)
-        self.setGraphicsEffect(sombra)
+        efeito.setColor(cor)
+        self.setGraphicsEffect(efeito)
 
 
 # ==========================================

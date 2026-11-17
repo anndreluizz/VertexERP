@@ -607,7 +607,7 @@ class ContasPagar(QWidget):
         self.lista_layout.setSpacing(0)
         self.lista_layout.setAlignment(Qt.AlignTop)
 
-        cartao_lista = Card()
+        cartao_lista = Card(sombra=False)
         lay_cartao = QVBoxLayout(cartao_lista)
         lay_cartao.setContentsMargins(0, 4, 0, 4)
         lay_cartao.addWidget(conteudo_rolavel)

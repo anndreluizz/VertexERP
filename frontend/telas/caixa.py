@@ -572,8 +572,12 @@ class Caixa(QWidget):
             rodar_em_thread(
                 self, historico_caixa,
                 ao_sucesso=self._ao_ultimo_fechamento_sucesso,
-                ao_erro=lambda _erro: None,
+                ao_erro=self._ao_ultimo_fechamento_erro,
             )
+
+    def _ao_ultimo_fechamento_erro(self, _erro):
+        # falha ao buscar o último fechamento é silenciosa: a seção só fica oculta
+        pass
 
     def _ao_ultimo_fechamento_sucesso(self, sessoes):
 

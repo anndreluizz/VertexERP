@@ -620,8 +620,11 @@ class Fornecedores(QWidget):
             fornecedor["id"],
             ao_sucesso=self._ao_excluir_sucesso,
             ao_erro=self._ao_excluir_erro,
-            ao_finalizar=lambda: self._definir_controles_carregando(False),
+            ao_finalizar=self._ao_excluir_finalizado,
         )
+
+    def _ao_excluir_finalizado(self):
+        self._definir_controles_carregando(False)
 
     def _ao_excluir_sucesso(self, response):
         if response.status_code == 200:

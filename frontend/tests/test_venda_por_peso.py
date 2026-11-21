@@ -90,3 +90,35 @@ def test_busca_de_produto_aceita_peso_antes_do_asterisco():
     assert parse(None, "0,350*carne") == (0.35, "carne")
     assert parse(None, "3*arroz") == (3, "arroz")
     assert parse(None, "arroz") == (1, "arroz")
+
+
+def test_nome_no_campo_do_pdv_com_peso_entra_direto_se_achou_um():
+    """"3,24*picanha": sem codigo, 1 produto com esse nome entra com o peso digitado."""
+    tela = _tela_pdv()
+    tela.campo_codigo.setText("3,24*picanha")
+    with mock.patch("telas.pdv.pdv.buscar_produto", return_value=None),             mock.patch("telas.pdv.pdv.pesquisar_produtos", return_value=[_PICANHA]):
+        tela.processar_codigo()
+    assert tela.itens[0]["quantidade"] == 3.24
+    assert tela.campo_codigo.text() == ""
+
+
+def test_nome_com_varios_achados_abre_a_busca_ja_preenchida():
+    tela = _tela_pdv()
+    tela.campo_codigo.setText("3,24*carne")
+    with mock.patch("telas.pdv.pdv.buscar_produto", return_value=None),             mock.patch("telas.pdv.pdv.pesquisar_produtos", return_value=[_PICANHA, _CAMISETA]),             mock.patch.object(type(tela), "_abrir_busca_com") as busca:
+        tela.processar_codigo()
+    busca.assert_called_once_with("3,24*carne")
+    assert tela.itens == []
+
+
+def test_busca_de_produto_nao_trunca_o_peso():
+    """Signal(dict, int) transformava 0,35 em 0 quando o peso vinha da busca (F1)."""
+    from telas.buscar_produto import BuscarProdutoDialog
+
+    recebido = []
+    with mock.patch("telas.buscar_produto.pesquisar_produtos", return_value=[]):
+        dialog = BuscarProdutoDialog(None, "0,350*carne")
+    dialog.produto_selecionado.connect(lambda produto, qtd: recebido.append(qtd))
+    dialog.produto_selecionado.emit(_PICANHA, 0.35)
+    assert recebido == [0.35]
+    assert dialog.busca.text() == "0,350*carne"

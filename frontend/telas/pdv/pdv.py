@@ -17,7 +17,7 @@ from services.worker import rodar_em_thread
 from services.produto_service import (
     cadastrar_produto,
 )
-from services.pdv_service import buscar_produto
+from services.pdv_service import buscar_produto, pesquisar_produtos
 from services.caixa_service import caixa_aberto
 from services.api import me
 from services import preferencias_service
@@ -301,6 +301,16 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
 
         produto = buscar_produto(codigo)
 
+        # nome em vez de codigo ("3,24*frango"): 1 achado entra direto, varios abrem a busca ja preenchida
+        if produto is None and not codigo.isdigit():
+            achados = pesquisar_produtos(codigo)
+            if len(achados) == 1:
+                produto = achados[0]
+            elif achados:
+                self._abrir_busca_com(self.campo_codigo.text().strip())
+                self.campo_codigo.clear()
+                return
+
         if produto is None:
             self._mostrar_status_busca(f"Produto não encontrado: {codigo}", erro=True)
             self.campo_codigo.selectAll()
@@ -344,7 +354,11 @@ class PDV(LayoutMixin, CarrinhoMixin, VendasSuspensasMixin, OrcamentoMixin, QWid
 
     def abrir_busca(self):
 
-        dialog = BuscarProdutoDialog(self)
+        self._abrir_busca_com("")
+
+    def _abrir_busca_com(self, texto_inicial):
+
+        dialog = BuscarProdutoDialog(self, texto_inicial)
         dialog.produto_selecionado.connect(
             self.adicionar_produto_ao_carrinho
         )

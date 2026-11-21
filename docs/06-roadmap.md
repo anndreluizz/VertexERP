@@ -22,7 +22,7 @@ Este documento não é um planejamento de produto — é um registro do estado a
 
 ## Problemas conhecidos, não corrigidos
 
-- **Pydantic v1 real, mas parte do código foi escrita como se fosse v2** — vale revisar o restante dos schemas (`app/schemas/*.py`) em busca de outros usos de API v2 que ainda não geraram erro por falta de cobertura de teste/uso.
+- (Resolvido) O projeto usa Pydantic v2 (`requirements.txt` fixa `pydantic==2.12.5`); as notas de "Pydantic v1" acima são de uma instalação antiga.
 - `datetime.utcnow()` está deprecated (aparece em warnings em quase todo `criar()`/`atualizar()` dos services) — a migração para `datetime.now(timezone.utc)` não foi feita.
 - Aviso do SQLAlchemy sobre relacionamento sobreposto entre `Produto.itens_venda` e `ItemVenda.produto` (faltando `back_populates`/`overlaps`) — não corrigido, é só um `SAWarning`, não quebra nada.
 - `POST /produtos/` tem um comentário `# TESTE TEMPORÁRIO` e removeu o `response_model` "pra descobrir onde está o erro de serialização" — parece uma investigação que ficou incompleta; vale revisar se ainda é necessário.

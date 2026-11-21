@@ -246,9 +246,10 @@ class ItemResultado(QWidget):
 
 class BuscarProdutoDialog(QDialog):
 
-    produto_selecionado = Signal(dict, int)
+    # quantidade: int (UN) ou float (peso/volume: "0,350*carne"). Signal(dict, int) truncava 0,35 para 0.
+    produto_selecionado = Signal(dict, object)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, texto_inicial=""):
 
         super().__init__(parent)
 
@@ -387,6 +388,9 @@ class BuscarProdutoDialog(QDialog):
         self.timer_busca = QTimer(self)
         self.timer_busca.setSingleShot(True)
         self.timer_busca.timeout.connect(self.executar_busca)
+
+        if texto_inicial:  # vindo do campo do PDV ("3,24*frango"): ja abre pesquisando
+            self.busca.setText(texto_inicial)
 
         self.busca.setFocus()
 

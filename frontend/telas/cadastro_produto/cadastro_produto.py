@@ -1,4 +1,3 @@
-from PySide6.QtWidgets import QMessageBox
 from PySide6.QtCore import Qt, QTimer, QDate
 from PySide6.QtGui import QKeySequence, QShortcut
 
@@ -73,6 +72,7 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
         self._pode_ter_variacoes = self.produto_pai_id is None
         self.imagem_bytes = None
         self.modo_venda = "UN"
+        self._tentou_salvar = False
 
         if produto:
             titulo_texto = "Editar produto"
@@ -749,12 +749,18 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
             faltam.append("preço da promoção")
 
         pronto = not faltam
+        erros = self._validar() if self._tentou_salvar else []
+        self._pintar_erros(erros)
+
         cor_fundo, cor_texto = (
-            (tokens.SUCESSO_CLARO, tokens.SUCESSO) if pronto
+            (tokens.ERRO_CLARO, tokens.ERRO) if erros
+            else (tokens.SUCESSO_CLARO, tokens.SUCESSO) if pronto
             else (tokens.ALERTA_CLARO, tokens.ALERTA_TEXTO)
         )
         self.lbl_faltam.setText(
-            "Pronto pra salvar." if pronto else "Falta: " + " e ".join(faltam) + "."
+            erros[0][2] if erros
+            else "Pronto pra salvar." if pronto
+            else "Falta: " + " e ".join(faltam) + "."
         )
         self.lbl_faltam.setStyleSheet(f"""
             background:{cor_fundo}; color:{cor_texto}; font-weight:600;
@@ -963,41 +969,59 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
     # VALIDAR E SALVAR
     # ==========================================
 
-    def salvar(self):
+    def _validar(self):
+        """[(campo, classe Qt, mensagem)] do que impede de salvar."""
+
+        erros = []
 
         if self.nome.text().strip() == "":
-            QMessageBox.warning(
-                self,
-                "Aviso",
-                "Informe o nome do produto."
-            )
-            self.nome.setFocus()
-            return
+            erros.append((self.nome, "QLineEdit", "Informe o nome do produto."))
 
         if self.preco_venda.value() <= 0:
-            QMessageBox.warning(
-                self,
-                "Aviso",
-                "Informe um preço de venda válido."
-            )
-            self.preco_venda.setFocus()
-            return
+            erros.append((
+                self.preco_venda, "QDoubleSpinBox", "Informe um preço de venda válido.",
+            ))
 
         if self.em_promocao_check.isChecked():
 
             if self.preco_promocional.value() <= 0:
-                QMessageBox.warning(
-                    self, "Aviso", "Informe um preço promocional válido."
-                )
-                self.preco_promocional.setFocus()
-                return
+                erros.append((
+                    self.preco_promocional, "QDoubleSpinBox",
+                    "Informe um preço promocional válido.",
+                ))
 
             if self.promocao_inicio.date() > self.promocao_fim.date():
-                QMessageBox.warning(
-                    self, "Aviso",
-                    "A data \"Válida de\" não pode ser depois de \"Até\"."
-                )
-                return
+                erros.append((
+                    self.promocao_fim, "QDateEdit",
+                    'A data "Válida de" não pode ser depois de "Até".',
+                ))
+
+        return erros
+
+    def _pintar_erros(self, erros):
+        """Campo inválido fica vermelho (sem caixa de mensagem); some
+        sozinho quando a pessoa corrige."""
+
+        com_erro = {campo for campo, _c, _m in erros}
+        for campo, classe in (
+            (self.nome, "QLineEdit"), (self.preco_venda, "QDoubleSpinBox"),
+            (self.preco_promocional, "QDoubleSpinBox"), (self.promocao_fim, "QDateEdit"),
+        ):
+            campo.setStyleSheet(self._estilo_input(classe, erro=campo in com_erro))
+
+    def salvar(self):
+
+        self._tentou_salvar = True
+        erros = self._validar()
+        self._atualizar_margem()
+
+        if erros:
+            if self.em_promocao_check.isChecked() and any(
+                campo in (self.preco_promocional, self.promocao_fim) for campo, _c, _m in erros
+            ):
+                self.secao_promo.abrir(True)
+            erros[0][0].setFocus()
+            return
 
         self.accept()
 

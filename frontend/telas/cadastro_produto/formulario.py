@@ -1,5 +1,5 @@
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QPainter, QPen
 
 from PySide6.QtWidgets import (
     QFrame,
@@ -21,6 +21,60 @@ from design.icons import icone, icone_pixmap
 from design.widgets import (
     Card,
 )
+
+
+class Interruptor(QCheckBox):
+    """QCheckBox desenhado como botão deslizante (mesma API: toggled,
+    isChecked, setEnabled...), com o texto ao lado."""
+
+    _LARG, _ALT = 40, 22
+
+    def __init__(self, texto=""):
+        super().__init__(texto)
+        self.setCursor(Qt.PointingHandCursor)
+        font = self.font()
+        font.setPixelSize(tokens.TAMANHO_SM)
+        font.setWeight(QFont.DemiBold)
+        self.setFont(font)
+
+    def hitButton(self, pos):
+        return self.rect().contains(pos)
+
+    def sizeHint(self):
+        texto = self.fontMetrics().horizontalAdvance(self.text())
+        return QSize(self._LARG + (10 + texto if self.text() else 0) + 2, 28)
+
+    def minimumSizeHint(self):
+        return self.sizeHint()
+
+    def paintEvent(self, _evento):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setOpacity(1.0 if self.isEnabled() else 0.5)
+
+        topo = (self.height() - self._ALT) / 2
+        trilho = QRectF(1, topo, self._LARG, self._ALT)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(tokens.SUCESSO if self.isChecked() else tokens.BORDA_FORTE))
+        p.drawRoundedRect(trilho, self._ALT / 2, self._ALT / 2)
+
+        bolinha = self._ALT - 6
+        x = trilho.right() - bolinha - 3 if self.isChecked() else trilho.left() + 3
+        p.setBrush(QColor("#FFFFFF"))
+        p.drawEllipse(QRectF(x, topo + 3, bolinha, bolinha))
+
+        if self.hasFocus():
+            p.setPen(QPen(QColor(tokens.PRIMARIA), 2))
+            p.setBrush(Qt.NoBrush)
+            p.drawRoundedRect(trilho.adjusted(-2, -2, 2, 2), self._ALT / 2 + 2, self._ALT / 2 + 2)
+
+        if self.text():
+            p.setPen(QColor(tokens.TEXTO))
+            p.setFont(self.font())
+            p.drawText(
+                QRectF(trilho.right() + 10, 0, self.width() - trilho.right() - 10, self.height()),
+                Qt.AlignVCenter | Qt.AlignLeft, self.text(),
+            )
 
 
 class _CabecalhoClicavel(QFrame):
@@ -164,15 +218,10 @@ class FormularioMixin:
 
     @staticmethod
     def _interruptor(texto, dica):
-        """Caixa de marcar dos cabeçalhos recolhíveis e do Destaque."""
-        check = QCheckBox(texto)
+        """Botão deslizante dos cabeçalhos recolhíveis e do Destaque."""
+        check = Interruptor(texto)
         check.setToolTip(dica)
         check.setAccessibleName(dica)
-        check.setCursor(Qt.PointingHandCursor)
-        check.setStyleSheet(
-            f"background:transparent; color:{tokens.TEXTO}; "
-            f"font-weight:600; font-size:{tokens.TAMANHO_SM}px;"
-        )
         return check
 
     def _botao_icone(self, icone_nome, dica, ao_clicar):
@@ -305,15 +354,15 @@ class FormularioMixin:
         """)
         return lbl
 
-    def _estilo_input(self, widget="QLineEdit"):
+    def _estilo_input(self, widget="QLineEdit", erro=False):
         return f"""
             {widget} {{
-                border: 1.5px solid {tokens.BORDA};
+                border: 1.5px solid {tokens.ERRO if erro else tokens.BORDA};
                 border-radius: {tokens.RADIUS_SM}px;
                 padding: 0 12px;
                 font-size: {tokens.TAMANHO_MD}px;
                 color: {tokens.TEXTO};
-                background: {tokens.CARD};
+                background: {tokens.ERRO_CLARO if erro else tokens.CARD};
             }}
             {widget}:focus {{
                 border: 1.5px solid {tokens.PRIMARIA};

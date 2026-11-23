@@ -5,6 +5,11 @@ from PySide6.QtWidgets import QMessageBox
 
 from telas.cadastro_cliente import CadastroClienteDialog
 from telas.ficha_cliente import FichaClienteDialog
+from telas.selecionar_cliente import _sem_acento, _so_digitos
+
+# ponytail: teto fixo de linhas montadas; paginar/rolagem lazy se alguem
+# precisar rolar a lista toda sem buscar
+MAX_LINHAS = 60
 
 from widgets.dialogs.message_dialog import perguntar
 from services.caixa_service import entradas_caixa
@@ -1185,22 +1190,23 @@ class Clientes(QWidget):
 
         if texto != "":
 
-            filtrados = []
+            # mesma regra do F2 do PDV: sem acento, e telefone/CPF
+            # acham com ou sem pontuacao
+            texto = _sem_acento(texto)
+            digitos = _so_digitos(texto)
 
-            for cliente in clientes:
+            def casa(c):
+                return (
+                    texto in _sem_acento(c.get("nome"))
+                    or texto in _sem_acento(c.get("telefone"))
+                    or texto in _sem_acento(c.get("cpf_cnpj"))
+                    or (len(digitos) >= 3 and (
+                        digitos in _so_digitos(c.get("telefone"))
+                        or digitos in _so_digitos(c.get("cpf_cnpj"))
+                    ))
+                )
 
-                nome = str(cliente.get("nome") or "").lower()
-                whatsapp = str(cliente.get("telefone") or "").lower()
-                cpf = str(cliente.get("cpf_cnpj") or "").lower()
-
-                if (
-                    texto in nome
-                    or texto in whatsapp
-                    or texto in cpf
-                ):
-                    filtrados.append(cliente)
-
-            clientes = filtrados
+            clientes = [c for c in clientes if casa(c)]
 
         clientes = self._ordenar(clientes)
 
@@ -1212,8 +1218,16 @@ class Clientes(QWidget):
             "1 cliente encontrado" if len(clientes) == 1
             else f"{len(clientes)} clientes encontrados"
         )
+        if len(clientes) > MAX_LINHAS:
+            self.lbl_contagem.setText(
+                self.lbl_contagem.text()
+                + f" · mostrando {MAX_LINHAS}, busque ou filtre pra ver os outros"
+            )
 
-        self.preencher_grid(clientes)
+        # cada linha custa ~7 ms pra montar (500 clientes = ~4 s de tela
+        # travada): so' as primeiras viram widget, a exportacao usa a
+        # lista completa acima
+        self.preencher_grid(clientes[:MAX_LINHAS])
 
     def _ordenar(self, clientes):
 

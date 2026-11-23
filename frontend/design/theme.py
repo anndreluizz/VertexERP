@@ -1,8 +1,34 @@
+import os
+import tempfile
+
 from PySide6.QtGui import QPalette, QColor
 
 from design import tokens
 from design.fonts import carregar_fonte_inter, fonte
 from design import teclado
+
+
+def _chevrons():
+    """(caminho do chevron pra baixo, pra cima) na cor do tema. O QSS só
+    aceita `image: url(arquivo)` e o ícone do Lucide usa currentColor,
+    então gera um SVG com a cor de verdade numa pasta temporária."""
+
+    pasta = os.path.join(tempfile.gettempdir(), "vertex_erp_icones")
+    os.makedirs(pasta, exist_ok=True)
+    cor = tokens.TEXTO_TERCIARIO
+    caminhos = []
+    for nome, caminho in (("baixo", "m6 9 6 6 6-6"), ("cima", "m18 15-6-6-6 6")):
+        arquivo = os.path.join(pasta, f"chevron-{nome}-{cor.lstrip('#')}.svg")
+        if not os.path.exists(arquivo):
+            with open(arquivo, "w", encoding="utf-8") as f:
+                f.write(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" '
+                    'viewBox="0 0 24 24" fill="none" stroke="%s" stroke-width="2.4" '
+                    'stroke-linecap="round" stroke-linejoin="round"><path d="%s"/></svg>'
+                    % (cor, caminho)
+                )
+        caminhos.append(arquivo.replace("\\", "/"))
+    return caminhos
 
 
 def aplicar_tema(app, escuro: bool = False):
@@ -44,6 +70,8 @@ def aplicar_tema(app, escuro: bool = False):
     )
 
     app.setPalette(paleta)
+
+    seta_baixo, seta_cima = _chevrons()
 
     app.setStyleSheet(f"""
         QWidget {{
@@ -92,6 +120,46 @@ def aplicar_tema(app, escuro: bool = False):
 
         QMessageBox {{
             background: {tokens.CARD};
+        }}
+
+        /* botao da setinha de combos/datas e botoes dos campos numericos:
+           sem isso o Qt desenha o desenho nativo (uma barra escura no canto
+           direito) por cima da borda que cada formulario define */
+        QComboBox::drop-down, QDateEdit::drop-down {{
+            subcontrol-origin: padding;
+            subcontrol-position: center right;
+            width: 34px;
+            border: none;
+            background: transparent;
+        }}
+        QComboBox::down-arrow, QDateEdit::down-arrow {{
+            image: url({seta_baixo});
+            width: 16px;
+            height: 16px;
+        }}
+        QAbstractSpinBox::up-button {{
+            subcontrol-origin: border;
+            subcontrol-position: top right;
+            width: 26px;
+            border: none;
+            background: transparent;
+        }}
+        QAbstractSpinBox::down-button {{
+            subcontrol-origin: border;
+            subcontrol-position: bottom right;
+            width: 26px;
+            border: none;
+            background: transparent;
+        }}
+        QAbstractSpinBox::up-arrow {{
+            image: url({seta_cima});
+            width: 12px;
+            height: 12px;
+        }}
+        QAbstractSpinBox::down-arrow {{
+            image: url({seta_baixo});
+            width: 12px;
+            height: 12px;
         }}
     """)
 

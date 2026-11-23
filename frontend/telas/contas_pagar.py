@@ -128,6 +128,10 @@ def _grupo_da_conta(conta):
 
 
 # (chave, título, cor do título) -- ordem de exibição
+# cada linha custa ~6 ms pra montar (300 contas = ~2 s por letra digitada);
+# so' as mais urgentes viram widget, o resto o usuario acha pela busca/filtros
+MAX_LINHAS = 80
+
 _GRUPOS = [
     ("VENCIDAS", "Vencidas", "ERRO"),
     ("HOJE", "Vencem hoje", "ERRO"),
@@ -404,6 +408,7 @@ class ContasPagar(QWidget):
         super().__init__()
 
         self.contas = []
+        self._linhas = {}
         self.filtro_status = "TODAS"
         self.filtro_periodo = "TODOS"
         self._carregando = False
@@ -808,6 +813,7 @@ class ContasPagar(QWidget):
         try:
             self._ultima_carga = chave
             self.contas = contas
+            self._descartar_linhas()
             self._carregar_categorias()
             self._atualizar_kpis()
             self._renderizar_lista()
@@ -1051,6 +1057,11 @@ class ContasPagar(QWidget):
 
         return True
 
+    def _descartar_linhas(self):
+        for linha in self._linhas.values():
+            linha.deleteLater()
+        self._linhas = {}
+
     def _renderizar_lista(self):
 
         while self.lista_layout.count():
@@ -1058,7 +1069,10 @@ class ContasPagar(QWidget):
             widget = item.widget()
             if widget:
                 widget.hide()
-                widget.deleteLater()
+                # as linhas ficam guardadas (montar uma custa ~6 ms); so'
+                # cabecalhos e avisos sao descartados
+                if not isinstance(widget, DespesaLinha):
+                    widget.deleteLater()
 
         if self.filtro_status == "TODAS":
             contas_filtradas = [
@@ -1114,6 +1128,7 @@ class ContasPagar(QWidget):
         # blocos por urgência: o que está vencido aparece primeiro e as
         # pagas por último (antes era só por data, e as pagas antigas
         # ficavam no topo, empurrando as vencidas pra baixo)
+        montadas = 0
         grupos = {}
         for conta in contas_filtradas:
             grupos.setdefault(_grupo_da_conta(conta), []).append(conta)
@@ -1135,17 +1150,37 @@ class ContasPagar(QWidget):
 
             for conta in contas_grupo:
 
-                linha = DespesaLinha(conta)
-                linha.ficha_solicitada.connect(self.abrir_ficha)
-                linha.editar_solicitado.connect(self.editar_despesa)
-                linha.excluir_solicitado.connect(self.excluir_despesa)
-                linha.pagar_solicitado.connect(self.pagar_despesa)
-                linha.duplicar_solicitado.connect(self.duplicar_despesa)
-                linha.ver_documento_solicitado.connect(self.ver_documento)
-                linha.ver_parcelamento_solicitado.connect(self.ver_parcelamento)
-                linha.ver_comprovante_solicitado.connect(self.ver_comprovante)
+                if montadas >= MAX_LINHAS:
+                    break
+
+                linha = self._linhas.get(conta["id"])
+                if linha is None:
+                    linha = DespesaLinha(conta)
+                    linha.ficha_solicitada.connect(self.abrir_ficha)
+                    linha.editar_solicitado.connect(self.editar_despesa)
+                    linha.excluir_solicitado.connect(self.excluir_despesa)
+                    linha.pagar_solicitado.connect(self.pagar_despesa)
+                    linha.duplicar_solicitado.connect(self.duplicar_despesa)
+                    linha.ver_documento_solicitado.connect(self.ver_documento)
+                    linha.ver_parcelamento_solicitado.connect(self.ver_parcelamento)
+                    linha.ver_comprovante_solicitado.connect(self.ver_comprovante)
+                    self._linhas[conta["id"]] = linha
 
                 self.lista_layout.addWidget(linha)
+                linha.show()
+                montadas += 1
+
+        if montadas < len(contas_filtradas):
+            aviso = QLabel(
+                f"Mostrando as {montadas} mais urgentes de {len(contas_filtradas)} contas. "
+                "Use a busca ou os filtros pra ver as outras."
+            )
+            aviso.setAlignment(Qt.AlignCenter)
+            aviso.setStyleSheet(f"""
+                color:{tokens.TEXTO_TERCIARIO}; font-size:{tokens.TAMANHO_SM}px;
+                padding:18px; background:transparent;
+            """)
+            self.lista_layout.addWidget(aviso)
 
     def _cabecalho_grupo(self, titulo, cor, contas):
         """Faixa do grupo: nome, quantidade e total juntos, à esquerda.

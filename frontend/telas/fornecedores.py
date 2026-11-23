@@ -62,6 +62,9 @@ def _rotulo(texto, tamanho, cor=None, peso=400):
     return lbl
 
 
+MAX_LINHAS = 60
+
+
 class Fornecedores(QWidget):
 
     voltar = Signal()
@@ -400,11 +403,14 @@ class Fornecedores(QWidget):
             )
 
         exibidos = [f for f in self.fornecedores if passa(f)]
-        self.preencher_tabela(exibidos)
+        # cada linha tem 3 widgets (~10 ms): so' as primeiras entram na
+        # tabela, o resto o usuario acha digitando mais
+        self.preencher_tabela(exibidos[:MAX_LINHAS])
 
         total = len(self.fornecedores)
         self.lbl_resumo.setText(
             f"{len(exibidos)} de {total} fornecedor{'es' if total != 1 else ''}"
+            + (f" · mostrando {MAX_LINHAS}, digite mais pra achar" if len(exibidos) > MAX_LINHAS else "")
         )
 
         if exibidos or self.painel_erro.isVisible():
@@ -428,6 +434,10 @@ class Fornecedores(QWidget):
     # ======================
 
     def preencher_tabela(self, fornecedores):
+
+        # a busca letra a letra costuma devolver a mesma lista: nao refaz
+        if fornecedores == self.fornecedores_exibidos and self.tabela.rowCount() == len(fornecedores):
+            return
 
         self.fornecedores_exibidos = fornecedores
 

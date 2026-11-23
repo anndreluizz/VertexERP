@@ -377,6 +377,7 @@ class PrincipalWindow(QMainWindow):
         if nome in (
             "pdv", "produtos", "vitrine", "vendas", "clientes", "fornecedores",
             "config", "relatorios", "contas_pagar", "visao_geral",
+            "ajuste_estoque", "transferencia_estoque",
         ):
             pagina.voltar.connect(self._fechar_atual)
 

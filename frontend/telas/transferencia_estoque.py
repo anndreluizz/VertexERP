@@ -1,14 +1,8 @@
 from datetime import datetime
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QComboBox,
-    QPushButton,
     QMessageBox,
     QDialog,
     QTableWidgetItem,
@@ -19,8 +13,8 @@ from services.loja_service import listar_lojas
 from services.estoque_service import listar_transferencias, transferir_estoque
 from services.worker import rodar_em_thread, em_paralelo
 from widgets.dialogs.pesquisa_window import PesquisaWindow
-from widgets.tables.standard_table import StandardTable
 from design.seletor import Seletor
+from telas.estoque_comum import estilo_combo, montar_pagina_movimento
 from design import tokens
 
 
@@ -36,29 +30,9 @@ def _buscar_dados_transferencia():
     return produtos_map, lojas_map, transferencias
 
 
-def _estilo_campo():
-    return f"""
-        QLineEdit, QComboBox {{
-            border: 1px solid {tokens.BORDA};
-            border-radius: {tokens.RADIUS_SM}px;
-            padding: 0 10px;
-            background: {tokens.CARD};
-            color: {tokens.TEXTO};
-        }}
-        QLineEdit:focus, QComboBox:focus {{
-            border: 1px solid {tokens.PRIMARIA};
-        }}
-    """
-
-
-def _estilo_rotulo():
-    return (
-        f"background:transparent; color:{tokens.TEXTO_SECUNDARIO}; "
-        f"font-size:{tokens.TAMANHO_XS}px; font-weight:700;"
-    )
-
-
 class TransferenciaEstoque(QWidget):
+
+    voltar = Signal()
 
     def __init__(self):
         super().__init__()
@@ -69,155 +43,20 @@ class TransferenciaEstoque(QWidget):
 
         self.setStyleSheet(f"background:{tokens.FUNDO};")
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(16)
-
-        titulo = QLabel("Transferência de Estoque")
-        titulo.setStyleSheet(
-            f"background:transparent; font-size:{tokens.TAMANHO_XL}px; "
-            f"font-weight:800; color:{tokens.TEXTO};"
+        self.bt_transferir = montar_pagina_movimento(
+            self,
+            icone_nome="store",
+            titulo="Transferência entre Lojas",
+            subtitulo="Dá saída na origem e entrada no destino ao mesmo tempo, com registro no histórico.",
+            titulo_formulario="Nova transferência",
+            rotulo_extra="Loja de destino",
+            widget_extra=self._criar_destino(),
+            rotulo_acao="Transferir",
+            rotulo_quantidade_dica=None,
+            placeholder_motivo="Ex.: reposição, redistribuição… (opcional)",
+            titulo_historico="Histórico de transferências",
+            colunas=["Data", "Produto", "Origem", "Destino", "Quantidade", "Motivo"],
         )
-        layout.addWidget(titulo)
-
-        subtitulo = QLabel(
-            "Mova produto de uma loja pra outra -- dá saída na origem e "
-            "entrada no destino ao mesmo tempo, tudo registrado no "
-            "histórico de movimentações."
-        )
-        subtitulo.setWordWrap(True)
-        subtitulo.setStyleSheet(
-            f"background:transparent; font-size:{tokens.TAMANHO_SM}px; "
-            f"color:{tokens.TEXTO_TERCIARIO};"
-        )
-        layout.addWidget(subtitulo)
-
-        # ==========================================
-        # PRODUTO
-        # ==========================================
-        col_produto = QVBoxLayout()
-        col_produto.setSpacing(4)
-
-        lbl_produto = QLabel("PRODUTO")
-        lbl_produto.setStyleSheet(_estilo_rotulo())
-        col_produto.addWidget(lbl_produto)
-
-        produto_layout = QHBoxLayout()
-        produto_layout.setSpacing(8)
-
-        self.produto = QLineEdit()
-        self.produto.setReadOnly(True)
-        self.produto.setPlaceholderText("Selecione um produto...")
-        self.produto.setMinimumHeight(38)
-        self.produto.setStyleSheet(_estilo_campo())
-
-        self.bt_produto = QPushButton("Pesquisar")
-        self.bt_produto.setMinimumHeight(38)
-        self.bt_produto.setCursor(Qt.PointingHandCursor)
-        self.bt_produto.setStyleSheet(f"""
-            QPushButton {{
-                background:{tokens.FUNDO};
-                color:{tokens.TEXTO};
-                border:1px solid {tokens.BORDA};
-                border-radius:{tokens.RADIUS_SM}px;
-                padding:0 16px;
-            }}
-            QPushButton:hover {{
-                background:{tokens.BORDA};
-            }}
-        """)
-
-        produto_layout.addWidget(self.produto, stretch=1)
-        produto_layout.addWidget(self.bt_produto)
-
-        col_produto.addLayout(produto_layout)
-        layout.addLayout(col_produto)
-
-        # ==========================================
-        # LOJA DESTINO / QUANTIDADE / MOTIVO
-        # ==========================================
-        dados_layout = QHBoxLayout()
-        dados_layout.setSpacing(12)
-
-        col_destino = QVBoxLayout()
-        col_destino.setSpacing(4)
-        lbl_destino = QLabel("LOJA DESTINO")
-        lbl_destino.setStyleSheet(_estilo_rotulo())
-        col_destino.addWidget(lbl_destino)
-
-        self.loja_destino = Seletor(campo=True)
-        self.loja_destino.setMinimumHeight(38)
-        self.loja_destino.setStyleSheet(_estilo_campo())
-        col_destino.addWidget(self.loja_destino)
-        dados_layout.addLayout(col_destino)
-
-        col_quantidade = QVBoxLayout()
-        col_quantidade.setSpacing(4)
-        lbl_quantidade = QLabel("QUANTIDADE")
-        lbl_quantidade.setStyleSheet(_estilo_rotulo())
-        col_quantidade.addWidget(lbl_quantidade)
-
-        self.quantidade = QLineEdit()
-        self.quantidade.setPlaceholderText("0")
-        self.quantidade.setMaximumWidth(120)
-        self.quantidade.setMinimumHeight(38)
-        self.quantidade.setStyleSheet(_estilo_campo())
-        col_quantidade.addWidget(self.quantidade)
-        dados_layout.addLayout(col_quantidade)
-
-        col_motivo = QVBoxLayout()
-        col_motivo.setSpacing(4)
-        lbl_motivo = QLabel("MOTIVO (opcional)")
-        lbl_motivo.setStyleSheet(_estilo_rotulo())
-        col_motivo.addWidget(lbl_motivo)
-
-        self.motivo = QLineEdit()
-        self.motivo.setPlaceholderText("Ex.: reposição, redistribuição...")
-        self.motivo.setMinimumHeight(38)
-        self.motivo.setStyleSheet(_estilo_campo())
-        col_motivo.addWidget(self.motivo)
-        dados_layout.addLayout(col_motivo, stretch=1)
-
-        col_botao = QVBoxLayout()
-        col_botao.setSpacing(4)
-        col_botao.addWidget(QLabel(""))  # alinha o botao com os campos
-
-        self.bt_transferir = QPushButton("Transferir")
-        self.bt_transferir.setMinimumHeight(38)
-        self.bt_transferir.setCursor(Qt.PointingHandCursor)
-        self.bt_transferir.setStyleSheet(f"""
-            QPushButton{{
-                background:{tokens.SECUNDARIA};
-                color:{tokens.TEXTO_CLARO};
-                font-weight:bold;
-                border-radius:{tokens.RADIUS_SM}px;
-                padding:0 18px;
-            }}
-            QPushButton:hover{{
-                background:{tokens.SECUNDARIA_HOVER};
-            }}
-        """)
-        col_botao.addWidget(self.bt_transferir)
-        dados_layout.addLayout(col_botao)
-
-        layout.addLayout(dados_layout)
-
-        # ==========================================
-        # HISTÓRICO
-        # ==========================================
-        lbl_historico = QLabel("HISTÓRICO DE TRANSFERÊNCIAS")
-        lbl_historico.setStyleSheet(
-            f"background:transparent; color:{tokens.TEXTO_SECUNDARIO}; "
-            f"font-size:{tokens.TAMANHO_XS}px; font-weight:700; "
-            f"margin-top:8px;"
-        )
-        layout.addWidget(lbl_historico)
-
-        self.tabela = StandardTable(
-            ["Data", "Produto", "Origem", "Destino", "Quantidade", "Motivo"]
-        )
-
-        layout.addWidget(self.tabela)
 
         # ==========================================
         # EVENTOS
@@ -226,6 +65,13 @@ class TransferenciaEstoque(QWidget):
         self.bt_transferir.clicked.connect(self.registrar_transferencia)
 
         self.carregar()
+
+    def _criar_destino(self):
+        self.loja_destino = Seletor(campo=True)
+        self.loja_destino.setMinimumHeight(44)
+        self.loja_destino.setStyleSheet(estilo_combo())
+        return self.loja_destino
+
 
     # ==========================================
     # PESQUISAR PRODUTO

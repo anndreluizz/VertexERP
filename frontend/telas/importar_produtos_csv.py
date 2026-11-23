@@ -3,14 +3,13 @@ muita variedade de mercadoria e sem nota fiscal (XML) pra usar o
 import de NF-e já existente em Fornecedores/Compras, cadastrar um por
 um em "Novo Produto" era o único jeito até aqui."""
 import csv
-import io
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QDialog,
     QFileDialog,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QStackedWidget,
     QTableWidget,
@@ -20,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from design import tokens
-from design.widgets import BotaoPrimario, BotaoSecundario
+from design.widgets import Badge, BotaoPrimario, BotaoSecundario, Card, DialogoPadrao
 from services.produto_service import importar_csv_confirmar, importar_csv_preview
 from services.worker import rodar_em_thread
 from utils.formatacao import formatar_moeda
@@ -48,76 +47,132 @@ def ler_texto_csv(dados):
         return dados.decode("cp1252")
 
 
-class ImportarProdutosCsvDialog(QDialog):
+class ImportarProdutosCsvDialog(DialogoPadrao):
 
     importado = Signal()
 
     def __init__(self, parent=None):
 
-        super().__init__(parent)
+        super().__init__(
+            "Importar produtos",
+            "Cadastre vários de uma vez com uma planilha CSV",
+            "file-text",
+            largura=DialogoPadrao.GRANDE,
+            parent=parent,
+        )
 
         self._itens_preview = []
-
-        self.setWindowTitle("Importar Produtos (CSV)")
-        self.resize(700, 520)
-        self.setStyleSheet(f"background:{tokens.FUNDO};")
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(14)
-
-        titulo = QLabel("Importar Produtos")
-        titulo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO};
-            font-size:{tokens.TAMANHO_XL}px; font-weight:800;
-        """)
-        layout.addWidget(titulo)
+        self.resize(DialogoPadrao.GRANDE, 620)
 
         self.paginas = QStackedWidget()
         self.pagina_selecao = self._criar_pagina_selecao()
         self.pagina_preview = self._criar_pagina_preview()
         self.paginas.addWidget(self.pagina_selecao)
         self.paginas.addWidget(self.pagina_preview)
-        layout.addWidget(self.paginas, stretch=1)
+        self.corpo.addWidget(self.paginas, stretch=1)
+
+        # rodapé único: na seleção "Selecionar arquivo", na conferência
+        # "Escolher outro arquivo" (à esquerda) e "Confirmar importação"
+        self.bt_escolher = BotaoPrimario("Selecionar arquivo CSV…", icone_nome="file-text")
+        self.bt_escolher.clicked.connect(self._escolher_arquivo)
+        self.definir_botoes(self.bt_escolher)
+
+        self.bt_confirmar = BotaoPrimario("Confirmar importação", icone_nome="check")
+        self.bt_confirmar.setMinimumWidth(220)
+        self.bt_confirmar.clicked.connect(self._confirmar)
+        self.rodape.addWidget(self.bt_confirmar)
+
+        self.bt_voltar = BotaoSecundario("Escolher outro arquivo")
+        self.bt_voltar.clicked.connect(lambda: self._mostrar_pagina(self.pagina_selecao))
+        self.rodape.insertWidget(0, self.bt_voltar)
+
+        self._mostrar_pagina(self.pagina_selecao)
+
+    def _mostrar_pagina(self, pagina):
+        selecao = pagina is self.pagina_selecao
+        self.paginas.setCurrentWidget(pagina)
+        self.bt_escolher.setVisible(selecao)
+        self.bt_confirmar.setVisible(not selecao)
+        self.bt_voltar.setVisible(not selecao)
 
     # ==========================================
     # PÁGINA 1: SELEÇÃO DO ARQUIVO
     # ==========================================
 
+    @staticmethod
+    def _passo(numero, titulo, texto, botao=None):
+        """Linha de passo: a ordem importa (baixar, preencher, selecionar)."""
+
+        cartao = Card(sombra=False)
+        linha = QHBoxLayout(cartao)
+        linha.setContentsMargins(18, 16, 18, 16)
+        linha.setSpacing(14)
+
+        bolinha = QLabel(str(numero))
+        bolinha.setFixedSize(34, 34)
+        bolinha.setAlignment(Qt.AlignCenter)
+        bolinha.setStyleSheet(f"""
+            background:{tokens.PRIMARIA_CLARA}; color:{tokens.PRIMARIA};
+            border-radius:17px; font-weight:800; font-size:{tokens.TAMANHO_BASE}px;
+        """)
+
+        col = QVBoxLayout()
+        col.setSpacing(2)
+        lbl_titulo = QLabel(titulo)
+        lbl_titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_MD}px; font-weight:800;
+        """)
+        lbl_texto = QLabel(texto)
+        lbl_texto.setWordWrap(True)
+        lbl_texto.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
+        col.addWidget(lbl_titulo)
+        col.addWidget(lbl_texto)
+
+        linha.addWidget(bolinha, 0, Qt.AlignTop)
+        linha.addLayout(col, 1)
+        if botao is not None:
+            linha.addWidget(botao, 0, Qt.AlignVCenter)
+        return cartao
+
     def _criar_pagina_selecao(self):
 
         pagina = QWidget()
         layout = QVBoxLayout(pagina)
-        layout.setSpacing(14)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
 
-        instrucoes = QLabel(
-            "Cadastre vários produtos de uma vez com uma planilha CSV "
-            "(Excel, Google Planilhas ou LibreOffice, salvando como "
-            "\"CSV\").\n\n"
-            "Não tem uma planilha ainda? Baixe o modelo abaixo, "
-            "preencha (uma linha por produto) e volte aqui pra "
-            "selecionar o arquivo preenchido.\n\n"
-            "Produtos com o mesmo código (ou código de barras) de um "
-            "já cadastrado são atualizados, não duplicados."
-        )
-        instrucoes.setWordWrap(True)
-        instrucoes.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
-            font-size:{tokens.TAMANHO_SM}px;
-        """)
-        layout.addWidget(instrucoes)
-
-        layout.addStretch()
-
-        bt_modelo = BotaoSecundario("Baixar Modelo CSV", icone_nome="download")
+        bt_modelo = BotaoSecundario("Baixar modelo CSV", icone_nome="download")
         bt_modelo.clicked.connect(self._baixar_modelo)
-        layout.addWidget(bt_modelo)
 
-        self.bt_escolher = BotaoPrimario(
-            "Selecionar Arquivo CSV...", icone_nome="file-text"
+        layout.addWidget(self._passo(
+            1, "Baixe o modelo",
+            "Planilha com as colunas certas e uma linha de exemplo.", bt_modelo,
+        ))
+        layout.addWidget(self._passo(
+            2, "Preencha uma linha por produto",
+            "Pode usar Excel, Google Planilhas ou LibreOffice. Salve como CSV.",
+        ))
+        layout.addWidget(self._passo(
+            3, "Selecione o arquivo preenchido",
+            "Você confere tudo na próxima tela antes de importar.",
+        ))
+
+        aviso = QLabel(
+            "Produto com o mesmo código (ou código de barras) de um já "
+            "cadastrado é atualizado, não duplicado."
         )
-        self.bt_escolher.clicked.connect(self._escolher_arquivo)
-        layout.addWidget(self.bt_escolher)
+        aviso.setWordWrap(True)
+        aviso.setStyleSheet(f"""
+            background:{tokens.ALERTA_CLARO}; color:{tokens.ALERTA_TEXTO};
+            font-size:{tokens.TAMANHO_SM}px; font-weight:600;
+            border-radius:{tokens.RADIUS_SM}px; padding:12px 14px;
+        """)
+        layout.addWidget(aviso)
+        layout.addStretch()
 
         return pagina
 
@@ -198,7 +253,7 @@ class ImportarProdutosCsvDialog(QDialog):
             return
 
         self._popular_preview(dados)
-        self.paginas.setCurrentWidget(self.pagina_preview)
+        self._mostrar_pagina(self.pagina_preview)
 
     # ==========================================
     # PÁGINA 2: CONFERÊNCIA E CONFIRMAÇÃO
@@ -208,17 +263,17 @@ class ImportarProdutosCsvDialog(QDialog):
 
         pagina = QWidget()
         layout = QVBoxLayout(pagina)
-        layout.setSpacing(10)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
 
-        self.lbl_resumo = QLabel()
-        self.lbl_resumo.setWordWrap(True)
-        self.lbl_resumo.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_SECUNDARIO};
-            font-size:{tokens.TAMANHO_SM}px;
-        """)
-        layout.addWidget(self.lbl_resumo)
+        # contagens em selos: dá pra bater o olho no que vai acontecer
+        self.linha_resumo = QHBoxLayout()
+        self.linha_resumo.setSpacing(8)
+        self.linha_resumo.addStretch()
+        layout.addLayout(self.linha_resumo)
 
         self.tabela_preview = QTableWidget()
+        self.tabela_preview.setMinimumHeight(320)
         self.tabela_preview.setColumnCount(4)
         self.tabela_preview.setHorizontalHeaderLabels(
             ["Linha", "Produto", "Preço de Venda", "Situação"]
@@ -226,7 +281,12 @@ class ImportarProdutosCsvDialog(QDialog):
         self.tabela_preview.verticalHeader().setVisible(False)
         self.tabela_preview.setEditTriggers(QTableWidget.NoEditTriggers)
         self.tabela_preview.setSelectionMode(QTableWidget.NoSelection)
-        self.tabela_preview.horizontalHeader().setStretchLastSection(True)
+        cab = self.tabela_preview.horizontalHeader()
+        cab.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        cab.setSectionResizeMode(1, QHeaderView.Stretch)
+        cab.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        cab.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        cab.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.tabela_preview.setStyleSheet(f"""
             QTableWidget {{
                 border: 1px solid {tokens.BORDA};
@@ -246,30 +306,23 @@ class ImportarProdutosCsvDialog(QDialog):
         """)
         layout.addWidget(self.tabela_preview, stretch=1)
 
-        botoes = QHBoxLayout()
-
-        bt_voltar = BotaoSecundario("Escolher Outro Arquivo")
-        bt_voltar.clicked.connect(
-            lambda: self.paginas.setCurrentWidget(self.pagina_selecao)
-        )
-        botoes.addWidget(bt_voltar)
-        botoes.addStretch()
-
-        self.bt_confirmar = BotaoPrimario("Confirmar Importação")
-        self.bt_confirmar.clicked.connect(self._confirmar)
-        botoes.addWidget(self.bt_confirmar)
-
-        layout.addLayout(botoes)
-
         return pagina
 
     def _popular_preview(self, dados):
 
-        self.lbl_resumo.setText(
-            f"{dados['total_novos']} produto(s) novo(s) · "
-            f"{dados['total_atualizados']} serão atualizados · "
-            f"{dados['total_com_erro']} com erro (não serão importados)"
-        )
+        while self.linha_resumo.count() > 1:
+            item = self.linha_resumo.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        for posicao, (texto, variante) in enumerate((
+            (f"{dados['total_novos']} novo(s)", "sucesso"),
+            (f"{dados['total_atualizados']} será(ão) atualizado(s)", "alerta"),
+            (
+                f"{dados['total_com_erro']} com erro, não serão importados",
+                "erro" if dados["total_com_erro"] else "neutro",
+            ),
+        )):
+            self.linha_resumo.insertWidget(posicao, Badge(texto, variante))
 
         itens = dados["itens"]
         self.tabela_preview.setRowCount(len(itens))
@@ -302,7 +355,7 @@ class ImportarProdutosCsvDialog(QDialog):
 
         validos = sum(1 for item in itens if not item["erro"])
         self.bt_confirmar.setEnabled(validos > 0)
-        self.bt_confirmar.setText(f"Confirmar Importação ({validos})")
+        self.bt_confirmar.setText(f"Confirmar importação ({validos})")
 
     def _confirmar(self):
 

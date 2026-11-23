@@ -8,7 +8,7 @@ Aplicativo desktop em PySide6 (Qt para Python), em `frontend/`. Não há build/e
 app.py
   └── telas/login.py (LoginWindow)
         ├── telas/verificar_2fa.py (Verificar2FADialog), se a conta tiver 2FA
-        ├── telas/conectar_servidor.py / cadastro_inicial.py / cadastrar_loja.py,
+        ├── telas/conectar_servidor.py / cadastro_inicial.py,
         │     fluxo de primeiro acesso (sem servidor configurado ainda / sem loja cadastrada)
         └── ao logar com sucesso, abre:
         telas/principal.py (PrincipalWindow)
@@ -53,7 +53,6 @@ O projeto está no meio de uma migração de padrão de UI. Ao mexer numa tela e
 - `telas/verificar_2fa.py` (`Verificar2FADialog`): segunda etapa de login quando a conta exige 2FA.
 - `telas/conectar_servidor.py` (`ConectarServidorDialog`): configurar endereço do backend (terminal remoto).
 - `telas/cadastro_inicial.py` (`CadastroInicialWindow`): primeiro acesso do sistema (sem usuário/loja ainda).
-- `telas/cadastrar_loja.py` (`CadastrarLojaDialog`): cadastro de uma nova loja (suporte multi-loja).
 
 **PDV e vendas**
 - `telas/pdv.py` (`PDV`, + `VendasSuspensasDialog` interno): tela de ponto de venda — busca produto, monta itens, suspende/retoma vendas em andamento, abre pagamento. Não usa `BaseCRUDWindow` (fluxo de criação, não listagem).

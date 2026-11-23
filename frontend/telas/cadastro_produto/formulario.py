@@ -1,10 +1,12 @@
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 
 from PySide6.QtWidgets import (
+    QFrame,
     QLabel,
     QLineEdit,
     QAbstractSpinBox,
+    QCheckBox,
     QDoubleSpinBox,
     QPushButton,
     QDateEdit,
@@ -19,6 +21,112 @@ from design.icons import icone, icone_pixmap
 from design.widgets import (
     Card,
 )
+
+
+class _CabecalhoClicavel(QFrame):
+    """Linha de cabeçalho que abre/fecha a seção (mouse ou Espaço)."""
+
+    clicado = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.StrongFocus)
+
+    def mousePressEvent(self, event):
+        self.clicado.emit()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Space:
+            self.clicado.emit()
+            return
+        super().keyPressEvent(event)
+
+
+class SecaoRecolhivel(Card):
+    """Cartão opcional do cadastro: começa fechado e o cabeçalho já diz o
+    estado ("Ligada: R$ 109,90"), então dá pra ver tudo sem rolar. O
+    interruptor (um QCheckBox já existente) mora no cabeçalho; ligar abre."""
+
+    def __init__(self, titulo, resumo, icone_nome, cor, interruptor=None):
+
+        super().__init__()
+
+        raiz = QVBoxLayout(self)
+        raiz.setContentsMargins(0, 0, 0, 0)
+        raiz.setSpacing(0)
+
+        self._cabecalho = _CabecalhoClicavel()
+        self._cabecalho.setStyleSheet("background:transparent; border:none;")
+        linha = QHBoxLayout(self._cabecalho)
+        linha.setContentsMargins(18, 14, 18, 14)
+        linha.setSpacing(12)
+
+        cor_rgb = QColor(cor)
+        chip = QLabel()
+        chip.setFixedSize(32, 32)
+        chip.setAlignment(Qt.AlignCenter)
+        chip.setStyleSheet(f"""
+            background: rgba({cor_rgb.red()}, {cor_rgb.green()}, {cor_rgb.blue()}, 0.12);
+            border-radius:{tokens.RADIUS_SM}px;
+        """)
+        chip.setPixmap(icone_pixmap(icone_nome, cor=cor, tamanho=16))
+
+        texto = QVBoxLayout()
+        texto.setSpacing(1)
+        lbl_titulo = QLabel(titulo)
+        lbl_titulo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO};
+            font-size:{tokens.TAMANHO_MD}px; font-weight:800;
+        """)
+        self._lbl_resumo = QLabel(resumo)
+        self._lbl_resumo.setStyleSheet(f"""
+            background:transparent; color:{tokens.TEXTO_TERCIARIO};
+            font-size:{tokens.TAMANHO_SM}px;
+        """)
+        texto.addWidget(lbl_titulo)
+        texto.addWidget(self._lbl_resumo)
+
+        self._seta = QLabel()
+        self._seta.setStyleSheet("background:transparent;")
+
+        linha.addWidget(chip)
+        linha.addLayout(texto, 1)
+        if interruptor is not None:
+            linha.addWidget(interruptor)
+        linha.addWidget(self._seta)
+        raiz.addWidget(self._cabecalho)
+
+        self._corpo = QWidget()
+        self._corpo.setStyleSheet("background:transparent;")
+        caixa = QVBoxLayout(self._corpo)
+        caixa.setContentsMargins(20, 16, 20, 18)
+        caixa.setSpacing(12)
+        divisor = QFrame()
+        divisor.setFixedHeight(1)
+        divisor.setStyleSheet(f"background:{tokens.BORDA};")
+        raiz.addWidget(divisor)
+        raiz.addWidget(self._corpo)
+        self._divisor = divisor
+
+        # quem monta a seção encaixa os campos aqui
+        self.corpo = caixa
+
+        self._cabecalho.clicado.connect(lambda: self.abrir(not self._corpo.isVisible()))
+        if interruptor is not None:
+            interruptor.toggled.connect(lambda ligado: ligado and self.abrir(True))
+        self.abrir(False)
+
+    def abrir(self, aberta):
+        self._corpo.setVisible(aberta)
+        self._divisor.setVisible(aberta)
+        self._seta.setPixmap(icone_pixmap(
+            "chevron-down" if aberta else "chevron-right",
+            cor=tokens.TEXTO_TERCIARIO, tamanho=18,
+        ))
+
+    def definir_resumo(self, texto):
+        self._lbl_resumo.setText(texto)
 
 
 class FormularioMixin:
@@ -53,6 +161,19 @@ class FormularioMixin:
         campo.setMinimumHeight(44)
         campo.setStyleSheet(self._estilo_input("QDateEdit"))
         return campo
+
+    @staticmethod
+    def _interruptor(texto, dica):
+        """Caixa de marcar dos cabeçalhos recolhíveis e do Destaque."""
+        check = QCheckBox(texto)
+        check.setToolTip(dica)
+        check.setAccessibleName(dica)
+        check.setCursor(Qt.PointingHandCursor)
+        check.setStyleSheet(
+            f"background:transparent; color:{tokens.TEXTO}; "
+            f"font-weight:600; font-size:{tokens.TAMANHO_SM}px;"
+        )
+        return check
 
     def _botao_icone(self, icone_nome, dica, ao_clicar):
         botao = QPushButton()

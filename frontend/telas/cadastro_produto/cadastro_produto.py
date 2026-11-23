@@ -40,7 +40,7 @@ from utils.maiusculas import forcar_maiusculas
 from telas.cadastro_produto.busca_externa import BuscaExternaMixin
 from telas.cadastro_produto.categorias_marcas import CategoriasMarcasMixin
 from telas.cadastro_produto.comum import _FOTO_ALTURA, _FOTO_LARGURA, _LARGURA_COLUNA_DIREITA
-from telas.cadastro_produto.formulario import FormularioMixin
+from telas.cadastro_produto.formulario import FormularioMixin, SecaoRecolhivel
 from telas.cadastro_produto.fotos import FotosMixin
 from telas.cadastro_produto.kit_variacoes import KitVariacoesMixin
 
@@ -52,6 +52,12 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
     lucro, margem e estoque. Tudo visível de uma vez (sem o antigo
     "Mais opções" recolhido); Enter continua andando pelos campos
     essenciais e cadastra no último."""
+
+    # texto de cada seção recolhível quando ainda não tem nada preenchido
+    _RESUMO_DETALHES = "Opcional. Marca, cor, tamanho, estoque mínimo e descrição."
+    _RESUMO_PROMO = "Desligada. Preço especial por um período, volta ao normal sozinho."
+    _RESUMO_VITRINE = "Fora do site. Mostra nome, preço, fotos e se tem estoque, nunca o custo."
+    _RESUMO_KIT = "Não é kit. O estoque baixado é o dos componentes, não o do kit."
 
     def __init__(self, produto=None, produto_pai=None):
         super().__init__()
@@ -252,9 +258,12 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
             linha_modo.addWidget(bt)
 
         self.lbl_margem = QLabel()
+        self.lbl_margem.setWordWrap(True)
+        self.lbl_margem.setMinimumHeight(40)
         self.lbl_margem.setStyleSheet(f"""
-            background:transparent; color:{tokens.TEXTO_TERCIARIO};
-            font-size:{tokens.TAMANHO_XS}px;
+            background:{tokens.FUNDO}; color:{tokens.TEXTO_SECUNDARIO};
+            font-size:{tokens.TAMANHO_SM}px; border-radius:{tokens.RADIUS_SM}px;
+            padding:0 12px;
         """)
 
         # O essencial fica junto no topo, na mesma ordem do Enter
@@ -268,7 +277,9 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
         grade_ident.addWidget(self._campo("Nome do produto", self.nome, obrigatorio=True), 1, 0, 1, 3)
         grade_ident.addWidget(self._campo(
             "Categoria", self._linha(self.categoria, self.bt_nova_categoria, self.bt_gerenciar_categorias),
-        ), 2, 0, 1, 3)
+        ), 2, 0, 1, 2)
+        # a unidade muda o estoque (inteiro x 3 casas), entao fica aqui
+        grade_ident.addWidget(self._campo("Vendido por", seletor_modo), 2, 2)
         grade_ident.addWidget(self._campo("Preço de venda (R$)", self.preco_venda, obrigatorio=True), 3, 0)
         grade_ident.addWidget(self._campo("Custo de compra (R$)", self.preco_custo), 3, 1)
         grade_ident.addWidget(self._campo(
@@ -283,18 +294,17 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
 
         # ---------- Detalhes (opcional) ----------
 
-        cartao_preco, corpo_preco = self._construir_cartao_secao(
-            "Detalhes", "Opcional -- dá pra cadastrar sem e completar depois.",
-            "file-text", tokens.SECUNDARIA,
+        self.secao_detalhes = SecaoRecolhivel(
+            "Detalhes", self._RESUMO_DETALHES, "file-text", tokens.SECUNDARIA,
         )
+        cartao_preco, corpo_preco = self.secao_detalhes, self.secao_detalhes.corpo
 
         grade_preco = QGridLayout()
         grade_preco.setHorizontalSpacing(14)
         grade_preco.setVerticalSpacing(14)
         grade_preco.addWidget(self._campo(
             "Marca", self._linha(self.marca, self.bt_nova_marca, self.bt_gerenciar_marcas),
-        ), 0, 0, 1, 2)
-        grade_preco.addWidget(self._campo("Vendido por", seletor_modo), 0, 2)
+        ), 0, 0, 1, 3)
         grade_preco.addWidget(self._campo("Coleção", self.colecao), 1, 0)
         grade_preco.addWidget(self._campo("Cor", self.cor), 1, 1)
         grade_preco.addWidget(self._campo("Tamanho", self.tamanho), 1, 2)
@@ -309,18 +319,16 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
 
         # ---------- Promoção ----------
 
-        cartao_promo, corpo_promo = self._construir_cartao_secao(
-            "Promoção", "Preço especial por um período -- volta sozinho ao normal depois.",
-            "trending-up", tokens.ALERTA,
+        self.em_promocao_check = self._interruptor("Ativar", "Ativar preço promocional")
+        self.em_promocao_check.toggled.connect(self._alternar_promocao)
+
+        self.secao_promo = SecaoRecolhivel(
+            "Promoção", self._RESUMO_PROMO, "trending-up", tokens.ALERTA,
+            interruptor=self.em_promocao_check,
         )
+        cartao_promo, corpo_promo = self.secao_promo, self.secao_promo.corpo
 
         linha_promocao_titulo = QHBoxLayout()
-        self.em_promocao_check = QCheckBox("Ativar preço promocional")
-        self.em_promocao_check.setStyleSheet(
-            f"background:transparent; color:{tokens.TEXTO}; "
-            f"font-weight:600; font-size:{tokens.TAMANHO_SM}px;"
-        )
-        self.em_promocao_check.toggled.connect(self._alternar_promocao)
 
         self.bt_historico_precos = QPushButton("Histórico de preços")
         self.bt_historico_precos.setCursor(Qt.PointingHandCursor)
@@ -334,7 +342,6 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
         self.bt_historico_precos.clicked.connect(self.ver_historico_precos)
         self.bt_historico_precos.setVisible(self.produto is not None)
 
-        linha_promocao_titulo.addWidget(self.em_promocao_check)
         linha_promocao_titulo.addStretch()
         linha_promocao_titulo.addWidget(self.bt_historico_precos)
         corpo_promo.addLayout(linha_promocao_titulo)
@@ -357,21 +364,17 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
 
         # ---------- Vitrine (site da loja) ----------
 
-        cartao_vitrine, corpo_vitrine = self._construir_cartao_secao(
-            "Vitrine virtual",
-            "Mostra o produto no site da loja (nome, preço, fotos e se "
-            "tem estoque -- nunca o custo).",
-            "store", tokens.SUCESSO,
+        self.vitrine_publicar_check = self._interruptor("Mostrar", "Mostrar na vitrine")
+        self.vitrine_destaque_check = self._interruptor(
+            "Destaque (banner e seção Destaques)", "Destaque na vitrine",
         )
 
-        self.vitrine_publicar_check = QCheckBox("Mostrar na vitrine")
-        self.vitrine_destaque_check = QCheckBox("Destaque (banner e seção Destaques)")
-        for check in (self.vitrine_publicar_check, self.vitrine_destaque_check):
-            check.setStyleSheet(
-                f"background:transparent; color:{tokens.TEXTO}; "
-                f"font-weight:600; font-size:{tokens.TAMANHO_SM}px;"
-            )
-            corpo_vitrine.addWidget(check)
+        self.secao_vitrine = SecaoRecolhivel(
+            "Vitrine virtual", self._RESUMO_VITRINE, "store", tokens.SUCESSO,
+            interruptor=self.vitrine_publicar_check,
+        )
+        cartao_vitrine, corpo_vitrine = self.secao_vitrine, self.secao_vitrine.corpo
+        corpo_vitrine.addWidget(self.vitrine_destaque_check)
         self.vitrine_destaque_check.setEnabled(False)
         self.vitrine_publicar_check.toggled.connect(self.vitrine_destaque_check.setEnabled)
 
@@ -379,20 +382,14 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
 
         # ---------- Kit / Combo ----------
 
-        cartao_kit, corpo_kit = self._construir_cartao_secao(
-            "Kit / Combo",
-            "Venda vários produtos como um só -- o estoque baixado é o dos "
-            "componentes, não o do kit.",
-            "package", tokens.ALERTA,
-        )
-
-        self.eh_kit_check = QCheckBox("Este produto é um kit/combo")
-        self.eh_kit_check.setStyleSheet(
-            f"background:transparent; color:{tokens.TEXTO}; "
-            f"font-weight:600; font-size:{tokens.TAMANHO_SM}px;"
-        )
+        self.eh_kit_check = self._interruptor("É kit", "Este produto é um kit/combo")
         self.eh_kit_check.toggled.connect(self._alternar_kit)
-        corpo_kit.addWidget(self.eh_kit_check)
+
+        self.secao_kit = SecaoRecolhivel(
+            "Kit / Combo", self._RESUMO_KIT, "package", tokens.ALERTA,
+            interruptor=self.eh_kit_check,
+        )
+        cartao_kit, corpo_kit = self.secao_kit, self.secao_kit.corpo
 
         self.painel_kit = QWidget()
         layout_painel_kit = QVBoxLayout(self.painel_kit)
@@ -435,12 +432,13 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
 
         if self._pode_ter_variacoes:
 
-            cartao_variacoes, corpo_variacoes = self._construir_cartao_secao(
+            cartao_variacoes = SecaoRecolhivel(
                 "Variações",
                 "Mesmo produto em cores/tamanhos diferentes, cada um com "
                 "código e estoque próprios.",
                 "package", tokens.SECUNDARIA,
             )
+            corpo_variacoes = cartao_variacoes.corpo
 
             self.tabela_variacoes = StandardTable(["Nome", "Cor", "Tamanho", "Estoque"])
             self.tabela_variacoes.setMaximumHeight(160)
@@ -556,6 +554,11 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
         self.lbl_resumo_lucro = self._linha_resumo(corpo_resumo, "Lucro por unidade")
         self.lbl_resumo_margem = self._linha_resumo(corpo_resumo, "Margem")
         self.lbl_resumo_estoque = self._linha_resumo(corpo_resumo, "Estoque")
+        self.lbl_resumo_valor_estoque = self._linha_resumo(corpo_resumo, "Valor em estoque")
+
+        self.lbl_faltam = QLabel()
+        self.lbl_faltam.setWordWrap(True)
+        corpo_resumo.addWidget(self.lbl_faltam)
 
         direita.addWidget(cartao_resumo)
         direita.addStretch()
@@ -616,6 +619,16 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
         self.estoque_minimo.valueChanged.connect(self._atualizar_margem)
         self.em_promocao_check.toggled.connect(self._atualizar_margem)
         self.preco_promocional.valueChanged.connect(self._atualizar_margem)
+        # cabeçalhos das seções recolhidas e "Falta: ..." do resumo
+        self.nome.textChanged.connect(self._atualizar_margem)
+        self.cor.textChanged.connect(self._atualizar_margem)
+        self.tamanho.textChanged.connect(self._atualizar_margem)
+        self.marca.currentIndexChanged.connect(self._atualizar_margem)
+        self.promocao_inicio.dateChanged.connect(self._atualizar_margem)
+        self.promocao_fim.dateChanged.connect(self._atualizar_margem)
+        self.vitrine_publicar_check.toggled.connect(self._atualizar_margem)
+        self.vitrine_destaque_check.toggled.connect(self._atualizar_margem)
+        self.eh_kit_check.toggled.connect(self._atualizar_margem)
 
         self._atualizar_estilo_favorito(False)
         self.selecionar_modo("UN")
@@ -668,6 +681,11 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
             font-size:{tokens.TAMANHO_SM}px; font-weight:700;
         """)
 
+        self.lbl_resumo_valor_estoque.setText(
+            formatar_moeda(estoque * custo) if estoque > 0 and custo > 0 else "—"
+        )
+        self._atualizar_secoes_e_pendencias(venda, promo)
+
         if preco_efetivo <= 0 or custo <= 0:
             self.lbl_margem.setText("Informe o custo pra ver o lucro e a margem.")
             self.lbl_resumo_lucro.setText("—")
@@ -691,6 +709,58 @@ class CadastroProdutoWindow(FormularioMixin, CategoriasMarcasMixin, KitVariacoes
                 background:transparent; color:{cor};
                 font-size:{tokens.TAMANHO_SM}px; font-weight:800;
             """)
+
+    def _atualizar_secoes_e_pendencias(self, venda, promo):
+        """Cabeçalho de cada seção recolhida diz o estado dela, e o
+        resumo avisa o que ainda falta pra salvar."""
+
+        detalhes = " · ".join(filter(None, [
+            self.marca.currentText() if self.marca.currentData() is not None else "",
+            self.cor.text().strip(), self.tamanho.text().strip(),
+        ]))
+        self.secao_detalhes.definir_resumo(detalhes or self._RESUMO_DETALHES)
+
+        if self.em_promocao_check.isChecked():
+            self.secao_promo.definir_resumo(
+                f"Ligada: {formatar_moeda(self.preco_promocional.value())}, de "
+                f"{self.promocao_inicio.date().toString('dd/MM')} até "
+                f"{self.promocao_fim.date().toString('dd/MM')}"
+                if promo else "Ligada. Falta o preço promocional."
+            )
+        else:
+            self.secao_promo.definir_resumo(self._RESUMO_PROMO)
+
+        self.secao_vitrine.definir_resumo(
+            ("No site, em destaque." if self.vitrine_destaque_check.isChecked()
+             else "No site da loja.")
+            if self.vitrine_publicar_check.isChecked() else self._RESUMO_VITRINE
+        )
+        self.secao_kit.definir_resumo(
+            "É um kit. Baixa o estoque dos componentes."
+            if self.eh_kit_check.isChecked() else self._RESUMO_KIT
+        )
+
+        faltam = []
+        if not self.nome.text().strip():
+            faltam.append("nome")
+        if venda <= 0:
+            faltam.append("preço de venda")
+        if self.em_promocao_check.isChecked() and not promo:
+            faltam.append("preço da promoção")
+
+        pronto = not faltam
+        cor_fundo, cor_texto = (
+            (tokens.SUCESSO_CLARO, tokens.SUCESSO) if pronto
+            else (tokens.ALERTA_CLARO, tokens.ALERTA_TEXTO)
+        )
+        self.lbl_faltam.setText(
+            "Pronto pra salvar." if pronto else "Falta: " + " e ".join(faltam) + "."
+        )
+        self.lbl_faltam.setStyleSheet(f"""
+            background:{cor_fundo}; color:{cor_texto}; font-weight:600;
+            font-size:{tokens.TAMANHO_SM}px; border-radius:{tokens.RADIUS_SM}px;
+            padding:10px 12px;
+        """)
 
     def keyPressEvent(self, event):
         """Enter anda pelos campos essenciais na ordem em que se

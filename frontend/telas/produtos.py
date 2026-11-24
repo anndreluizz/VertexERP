@@ -1415,9 +1415,7 @@ class Produtos(QWidget):
 
     def novo_produto(self):
 
-        from telas.cadastros_etapas import novo_produto_assistente
-
-        tela = novo_produto_assistente(self)
+        tela = CadastroProdutoWindow()
 
         if tela.exec() != QDialog.Accepted:
             return

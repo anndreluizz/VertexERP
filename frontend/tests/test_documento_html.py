@@ -78,3 +78,17 @@ def test_bloco_total_formata_rotulo_e_valor():
 
     assert "TOTAL" in html
     assert "R$ 10,00" in html
+
+
+def test_logo_da_loja_nao_sai_na_impressao():
+    from services.impressora_termica_service import gerar_comandos_comprovante
+
+    png = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06"
+           b"\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\xff\xff?\x00\x05"
+           b"\xfe\x02\xfe\xa7\x9a\xa0\xa0\x00\x00\x00\x00IEND\xaeB`\x82")
+
+    import base64
+    html = gerar_html_comprovante(DADOS_VENDA, CONFIG_LOJA, logo_bytes=png)
+    assert base64.b64encode(png).decode() not in html
+    assert (gerar_comandos_comprovante(DADOS_VENDA, CONFIG_LOJA, logo_bytes=png)
+            == gerar_comandos_comprovante(DADOS_VENDA, CONFIG_LOJA, logo_bytes=None))

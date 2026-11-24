@@ -296,11 +296,8 @@ def gerar_comandos_comprovante(dados, config_loja, logo_bytes=None, largura_pape
 
     partes.append(_alinhar(1))  # centro
 
-    if logo_bytes:
-        comando_logo = _comando_imagem(logo_bytes, min(pontos, pontos * 2 // 3))
-        if comando_logo:
-            partes.append(comando_logo)
-            partes.append(_linha())
+    # Logo da loja não sai no cupom (decisão do dono, 24/11); `logo_bytes`
+    # fica só por compatibilidade com os chamadores.
 
     nome_loja = config_loja.get("nome_loja") or "Vertex ERP"
     telefone_loja = config_loja.get("telefone")

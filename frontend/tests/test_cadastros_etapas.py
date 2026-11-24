@@ -18,35 +18,6 @@ def _sem_rede(monkeypatch):
         monkeypatch.setattr(modulo, "rodar_em_thread", lambda *a, **k: None)
 
 
-def test_produto_em_etapas_preenche_o_cadastro_e_aceita(_qapp, monkeypatch):
-    _sem_rede(monkeypatch)
-    from telas.cadastros_etapas import novo_produto_assistente
-
-    with mock.patch("services.preferencias_service.carregar", return_value={}):
-        a = novo_produto_assistente()
-
-    # etapa 1: sem nome não passa, e o erro é do campo do nome
-    a.avancar()
-    assert a._i == 0 and a._campos[1].erro.isVisibleTo(a)
-    assert not a._campos[0].erro.isVisibleTo(a)
-    a._campos[1].w.setText("Mochila preta")
-    a.avancar()
-    # etapa 2: preço obrigatório
-    a._campos[1].w.setValue(129.9)
-    a.avancar()
-    # etapa 3 (opcional) e revisão
-    a.avancar()
-    assert a._passos[a._i].get("revisao")
-
-    aceito = []
-    a.accepted.connect(lambda: aceito.append(True))
-    a.avancar()  # Cadastrar produto
-
-    assert aceito and a.result() == QDialog.Accepted
-    # o que o chamador lê vem do cadastro original
-    assert a.dados["nome"] == "MOCHILA PRETA" and a.dados["preco_venda"] == 129.9
-
-
 def test_cliente_em_etapas_so_o_nome_e_obrigatorio(_qapp, monkeypatch):
     _sem_rede(monkeypatch)
     from telas import cadastro_cliente

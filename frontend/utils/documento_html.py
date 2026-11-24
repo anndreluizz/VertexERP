@@ -15,10 +15,6 @@ pt (nunca px, que sai minúsculo no PDF por causa do DPI da
 impressora) e imagem sempre com width/height como atributo HTML (não
 CSS, que o QTextDocument ignora em <img>)."""
 
-import base64
-
-from PySide6.QtGui import QImage
-
 COR_PRIMARIA = "#2563EB"
 COR_TEXTO = "#1E293B"
 COR_TEXTO_SECUNDARIO = "#64748B"
@@ -30,35 +26,12 @@ COR_TEXTO_DESTAQUE = "#1E3A8A"
 ESTILO_BODY = f"font-family: Arial; font-size: 10pt; color:{COR_TEXTO};"
 
 
-def _logo_html(logo_bytes):
-
-    if not logo_bytes:
-        return ""
-
-    imagem = QImage.fromData(logo_bytes)
-    largura_original = imagem.width() or 1
-    altura_original = imagem.height() or 1
-
-    altura_alvo = 70
-    largura_alvo = round(largura_original * (altura_alvo / altura_original))
-
-    if largura_alvo > 200:
-        largura_alvo = 200
-        altura_alvo = round(altura_original * (largura_alvo / largura_original))
-
-    logo_b64 = base64.b64encode(logo_bytes).decode("ascii")
-
-    return (
-        f'<img src="data:image/png;base64,{logo_b64}" '
-        f'width="{largura_alvo}" height="{altura_alvo}" '
-        f'style="margin-bottom:6px;" />'
-    )
-
-
 def cabecalho_html(titulo_documento, config, logo_bytes=None):
-    """Barra fina colorida + logo (se tiver) + nome/endereço/telefone/
-    CNPJ da loja + faixa colorida com o título do documento (ex.:
-    "COMPROVANTE DE VENDA", "EXTRATO FINANCEIRO")."""
+    """Barra fina colorida + nome/endereço/telefone/CNPJ da loja +
+    faixa colorida com o título do documento (ex.: "COMPROVANTE DE
+    VENDA", "EXTRATO FINANCEIRO"). O logo da loja NÃO sai na impressão
+    (decisão do dono, 24/11); `logo_bytes` fica só por compatibilidade
+    com quem ainda passa o argumento."""
 
     nome_loja = config.get("nome_loja") or "Vertex ERP"
     endereco_loja = config.get("endereco") or ""
@@ -70,7 +43,6 @@ def cabecalho_html(titulo_documento, config, logo_bytes=None):
         <tr><td style="background:{COR_PRIMARIA}; height:4px; font-size:1px;">&nbsp;</td></tr>
     </table>
     <div style="text-align:center;">
-        {_logo_html(logo_bytes)}
         <h2 style="margin:2px 0;">{nome_loja}</h2>
         {f"<p style='margin:0; color:{COR_TEXTO_SECUNDARIO};'>{endereco_loja}</p>" if endereco_loja else ""}
         {f"<p style='margin:0; color:{COR_TEXTO_SECUNDARIO};'>WhatsApp: {telefone_loja}</p>" if telefone_loja else ""}
